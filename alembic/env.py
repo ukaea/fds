@@ -21,7 +21,7 @@ setup_logging()
 config.set_main_option("sqlalchemy.url", app_config.db_url)
 
 # Dynamically import all models to ensure they are registered with SQLModel.metadata
-models_dir = Path(__file__).parent.parent / "app" / "models"
+models_dir = Path.cwd() / "app" / "models"
 for f in models_dir.glob("*.py"):
     module_name = f.stem
     importlib.import_module(f"app.models.{module_name}")
