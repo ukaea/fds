@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
+from sqlmodel import Field, SQLModel, Relationship
 
-from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from .shot import Shot
@@ -15,12 +15,12 @@ class DeviceBase(SQLModel):
 class Device(DeviceBase, table=True):
     id: int | None = Field(default=None, primary_key=True, index=True)
     status: str | None = Field(index=True)
-
     shots: list["Shot"] = Relationship(back_populates="device")
 
 
 class DeviceRead(DeviceBase):
     id: int
+    status: str | None = None
 
 
 class DeviceCreate(DeviceBase):

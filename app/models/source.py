@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
+from sqlmodel import Field, SQLModel, Relationship
 
-from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from .shotsource import ShotSource
@@ -12,18 +12,16 @@ class SourceBase(SQLModel):
 
 
 class Source(SourceBase, table=True):
-    id: int | None = Field(default=None, primary_key=True, index=True)
-
+    id: int | None = Field(default=None, primary_key=True)
     shot_links: list["ShotSource"] = Relationship(back_populates="source")
-
-
-
-class SourceCreate(SourceBase):
-    pass
 
 
 class SourceRead(SourceBase):
     id: int
+
+
+class SourceCreate(SourceBase):
+    pass
 
 
 class SourceUpdate(SQLModel):
