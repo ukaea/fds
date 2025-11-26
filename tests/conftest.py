@@ -7,7 +7,7 @@ from sqlmodel import Session, SQLModel, StaticPool, create_engine
 from app.core.db import get_session
 from app.main import app
 
-from app.models import device, source, shot, shotsource, dataset # noqa: F401
+from app.models import dataset, datasetsource, device, shot, source  # noqa: F401
 
 
 @pytest.fixture(name="session")

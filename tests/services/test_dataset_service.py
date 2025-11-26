@@ -40,6 +40,7 @@ def test_create_dataset(
         name="core_profiles",
         level=2,
         data_url="s3://test-bucket/shot-101/core_profiles.zarr",
+        quality_flag="good",
         shot_id=shot.id,
     )
     dataset = dataset_service.create(dataset_create)
@@ -49,6 +50,7 @@ def test_create_dataset(
     assert dataset.name == "core_profiles"
     assert dataset.level == 2
     assert dataset.data_url == "s3://test-bucket/shot-101/core_profiles.zarr"
+    assert dataset.quality_flag == "good"
     assert dataset.shot_id == shot.id
 
 
@@ -167,16 +169,24 @@ def test_update_dataset(
     assert shot.id is not None
 
     created_dataset = dataset_service.create(
-        DatasetCreate(name="old_name", level=1, data_url="old_url", shot_id=shot.id)
+        DatasetCreate(
+            name="old_name",
+            level=1,
+            data_url="old_url",
+            shot_id=shot.id,
+            quality_flag="good",
+        )
     )
     assert created_dataset is not None
+    assert created_dataset.quality_flag == "good"
 
-    dataset_update = DatasetUpdate(name="new_name", level=2)
+    dataset_update = DatasetUpdate(name="new_name", level=2, quality_flag="bad")
     updated_dataset = dataset_service.update(created_dataset.id, dataset_update)
 
     assert updated_dataset is not None
     assert updated_dataset.name == "new_name"
     assert updated_dataset.level == 2
+    assert updated_dataset.quality_flag == "bad"
     assert updated_dataset.data_url == "old_url"  # Should remain unchanged
 
 

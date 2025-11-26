@@ -3,7 +3,7 @@ from sqlmodel import Field, SQLModel, Relationship
 
 
 if TYPE_CHECKING:
-    from .shotsource import ShotSource
+    from .datasetsource import DatasetSource
 
 
 class SourceBase(SQLModel):
@@ -13,7 +13,7 @@ class SourceBase(SQLModel):
 
 class Source(SourceBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    shot_links: list["ShotSource"] = Relationship(back_populates="source")
+    dataset_links: list["DatasetSource"] = Relationship(back_populates="source")
 
 
 class SourceRead(SourceBase):

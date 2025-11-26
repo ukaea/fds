@@ -4,7 +4,6 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from .device import Device
-    from .shotsource import ShotSource
     from .dataset import Dataset
 
 
@@ -17,7 +16,6 @@ class Shot(ShotBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
 
     device: "Device" = Relationship(back_populates="shots")
-    source_links: list["ShotSource"] = Relationship(back_populates="shot")
     datasets: list["Dataset"] = Relationship(back_populates="shot")
 
 
