@@ -4,6 +4,7 @@ from sqlmodel import Session
 from app.models.device import DeviceCreate
 from app.models.shot import Shot, ShotCreate
 from app.services.device_service import DeviceService
+from app.services.exceptions import DeviceNotFoundError
 from app.services.shot_service import ShotService
 
 
@@ -31,7 +32,7 @@ def test_create_shot(device_service: DeviceService, shot_service: ShotService):
 
 def test_create_shot_for_nonexistent_device(shot_service: ShotService):
     shot_create = ShotCreate(shot_number=102, device_id=999)  # Non-existent device
-    with pytest.raises(ValueError):
+    with pytest.raises(DeviceNotFoundError):
         shot_service.create(shot_create)
 
 
@@ -60,13 +61,13 @@ def test_get_shots_for_device(device_service: DeviceService, shot_service: ShotS
     shot_service.create(ShotCreate(shot_number=2001, device_id=device2.id))
 
     # Get shots for device 1
-    device1_shots = shot_service.get_shots_for_device(device1.id)
+    device1_shots = shot_service.get_multi_by_device(device1.id)
     assert len(device1_shots) == 2
     assert all(shot.device_id == device1.id for shot in device1_shots)
     assert {shot.shot_number for shot in device1_shots} == {1001, 1002}
 
     # Get shots for device 2
-    device2_shots = shot_service.get_shots_for_device(device2.id)
+    device2_shots = shot_service.get_multi_by_device(device2.id)
     assert len(device2_shots) == 1
     assert device2_shots[0].device_id == device2.id
     assert device2_shots[0].shot_number == 2001

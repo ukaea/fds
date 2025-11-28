@@ -1,29 +1,43 @@
-from collections.abc import Sequence
+from typing import Sequence
+
 from sqlmodel import Session, select
 
+from app.models.device import Device
 from app.models.shot import Shot, ShotCreate, ShotUpdate
 from app.services.base_service import BaseService
-from app.services.device_service import DeviceService
+from app.services.exceptions import DeviceNotFoundError
 
 
 class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
     def __init__(self, session: Session):
-        super().__init__(model=Shot, session=session)
+        super().__init__(Shot, session)
 
     def create(self, obj_in: ShotCreate) -> Shot:
-        # Ensure the device exists before creating the shot
-        device_service = DeviceService(self.session)
-        if not device_service.get(obj_in.device_id):
-            raise ValueError(f"Device with id {obj_in.device_id} not found")
+        """
+        Create a new shot, ensuring the device exists.
+        """
+        # Check if device exists
+        device = self.session.get(Device, obj_in.device_id)
+        if not device:
+            raise DeviceNotFoundError(f"Device with id {obj_in.device_id} not found")
 
-        return super().create(obj_in)
+        # Proceed with creation using parent method's logic
+        db_obj = self.model.model_validate(obj_in)
+        self.session.add(db_obj)
+        self.session.commit()
+        self.session.refresh(db_obj)
+        return db_obj
 
-    def get_shots_for_device(
-        self, device_id: int, offset: int = 0, limit: int = 100
-    ) -> Sequence[Shot]:
+    def get_multi_by_device(self, device_id: int, offset: int = 0, limit: int = 100) -> Sequence[Shot]:
+        """
+        Get multiple shots for a specific device with pagination.
+        """
         statement = (
-            select(Shot).where(Shot.device_id == device_id).offset(offset).limit(limit)
+            select(Shot)
+            .where(Shot.device_id == device_id)
+            .offset(offset)
+            .limit(limit)
         )
-        results = self.session.exec(statement)
-        device_shots = results.all()
-        return device_shots
+        result = self.session.exec(statement)
+        shots = result.all()
+        return shots
