@@ -7,6 +7,8 @@ from sqlmodel import Session, SQLModel, StaticPool, create_engine
 from app.core.db import get_session
 from app.main import app
 
+from app.models import dataset, datasetsource, device, shot, source  # noqa: F401
+
 
 @pytest.fixture(name="session")
 def session_fixture() -> Generator[Session, None, None]:
@@ -28,3 +30,4 @@ def client_fixture(session: Session) -> Generator[TestClient, None, None]:
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()
+
