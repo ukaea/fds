@@ -28,15 +28,14 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         self.session.refresh(db_obj)
         return db_obj
 
-    def get_multi_by_device(self, device_id: int, offset: int = 0, limit: int = 100) -> Sequence[Shot]:
+    def get_multi_by_device(
+        self, device_id: int, offset: int = 0, limit: int = 100
+    ) -> Sequence[Shot]:
         """
         Get multiple shots for a specific device with pagination.
         """
         statement = (
-            select(Shot)
-            .where(Shot.device_id == device_id)
-            .offset(offset)
-            .limit(limit)
+            select(Shot).where(Shot.device_id == device_id).offset(offset).limit(limit)
         )
         result = self.session.exec(statement)
         shots = result.all()

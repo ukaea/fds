@@ -62,9 +62,7 @@ def test_create_datasetsource_link(
     datasetsource_service: DatasetSourceService, setup_data
 ):
     _, dataset1, _, source1, _ = setup_data
-    link_create = DatasetSourceCreate(
-        dataset_id=dataset1.id, source_id=source1.id
-    )
+    link_create = DatasetSourceCreate(dataset_id=dataset1.id, source_id=source1.id)
     link = datasetsource_service.create(link_create)
     assert link is not None
     assert link.dataset_id == dataset1.id
@@ -75,9 +73,7 @@ def test_get_datasetsource_link(
     datasetsource_service: DatasetSourceService, setup_data
 ):
     _, dataset1, _, source1, _ = setup_data
-    link_create = DatasetSourceCreate(
-        dataset_id=dataset1.id, source_id=source1.id
-    )
+    link_create = DatasetSourceCreate(dataset_id=dataset1.id, source_id=source1.id)
     datasetsource_service.create(link_create)
 
     retrieved_link = datasetsource_service.get(
@@ -99,14 +95,10 @@ def test_delete_datasetsource_link(
     datasetsource_service: DatasetSourceService, setup_data
 ):
     _, dataset1, _, source1, _ = setup_data
-    link_create = DatasetSourceCreate(
-        dataset_id=dataset1.id, source_id=source1.id
-    )
+    link_create = DatasetSourceCreate(dataset_id=dataset1.id, source_id=source1.id)
     datasetsource_service.create(link_create)
 
-    deleted = datasetsource_service.delete(
-        dataset_id=dataset1.id, source_id=source1.id
-    )
+    deleted = datasetsource_service.delete(dataset_id=dataset1.id, source_id=source1.id)
     assert deleted is True
 
     retrieved_link = datasetsource_service.get(
@@ -122,9 +114,7 @@ def test_delete_datasetsource_link_not_found(
     assert deleted is False
 
 
-def test_get_links_for_dataset(
-    datasetsource_service: DatasetSourceService, setup_data
-):
+def test_get_links_for_dataset(datasetsource_service: DatasetSourceService, setup_data):
     _, dataset1, _, source1, source2 = setup_data
     datasetsource_service.create(
         DatasetSourceCreate(dataset_id=dataset1.id, source_id=source1.id)
@@ -138,9 +128,7 @@ def test_get_links_for_dataset(
     assert all(link.dataset_id == dataset1.id for link in links)
 
 
-def test_get_links_for_source(
-    datasetsource_service: DatasetSourceService, setup_data
-):
+def test_get_links_for_source(datasetsource_service: DatasetSourceService, setup_data):
     _, dataset1, dataset2, source1, _ = setup_data
     datasetsource_service.create(
         DatasetSourceCreate(dataset_id=dataset1.id, source_id=source1.id)

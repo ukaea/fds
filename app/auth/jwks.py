@@ -108,32 +108,32 @@ class JwksClient:
         except jwt.PyJWTError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Invalid token header: {e}"
+                detail=f"Invalid token header: {e}",
             )
-            
+
         kid = unverified_header.get("kid")
         if not kid:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token is missing 'kid' (Key ID) in header"
+                detail="Token is missing 'kid' (Key ID) in header",
             )
 
         jwks = await self.get_jwks()
         key = next((key for key in jwks["keys"] if key["kid"] == kid), None)
-        
+
         # If the key is not found, it might be because the IdP has rotated the keys.
         # We clear the cache and try fetching the JWKS again.
         if not key:
             self.cache.clear()
             jwks = await self.get_jwks()
             key = next((key for key in jwks["keys"] if key["kid"] == kid), None)
-        
+
         if not key:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Signing key not found for kid '{kid}'"
+                detail=f"Signing key not found for kid '{kid}'",
             )
-        
+
         # PyJWT can construct the public key directly from the JWK dictionary
         return jwt.PyJWK(key).key
 

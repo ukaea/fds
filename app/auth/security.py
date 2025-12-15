@@ -14,6 +14,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 class AuthenticatedUser(BaseModel):
     """Placeholder for user data extracted from the JWT."""
+
     id: str
     scopes: list[str] = []
 
@@ -38,7 +39,7 @@ async def get_current_user(
 
     try:
         key = await jwks_client.get_signing_key(auth.credentials)
-        
+
         # The issuer URL must match the 'iss' claim in the JWT exactly.
         # OIDC issuers often have a trailing slash.
         issuer = f"https://{config.OIDC_DOMAIN}/"
@@ -56,8 +57,10 @@ async def get_current_user(
         if isinstance(token_scopes_str, str):
             token_scopes = set(token_scopes_str.split())
         else:
-            token_scopes = set(token_scopes_str) # Assume it's an iterable if not string
-            
+            token_scopes = set(
+                token_scopes_str
+            )  # Assume it's an iterable if not string
+
         required_scopes = set(security_scopes.scopes)
 
         # Check if the token has all the required scopes

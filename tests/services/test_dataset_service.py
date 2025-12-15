@@ -62,7 +62,6 @@ def test_create_dataset_for_nonexistent_shot(dataset_service: DatasetService):
         dataset_service.create(dataset_create)
 
 
-
 def test_get_dataset(
     device_service: DeviceService,
     shot_service: ShotService,

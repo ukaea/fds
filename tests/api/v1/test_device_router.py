@@ -40,7 +40,7 @@ def test_read_device(client: TestClient, session: Session):
     response = client.get(f"/api/v1/devices/{device.id}")
     assert response.status_code == 200
     assert device.id is not None
-    
+
     data = response.json()
     assert data["name"] == "JET"
     assert data["id"] == device.id
@@ -83,8 +83,11 @@ def test_delete_device_not_found(client: TestClient):
     response = client.delete("/api/v1/devices/999")
     assert response.status_code == 404
 
+
 # Helper function for creating shots within device tests
-def create_a_shot_for_device_test(client: TestClient, device_id: int, shot_number: int = 1):
+def create_a_shot_for_device_test(
+    client: TestClient, device_id: int, shot_number: int = 1
+):
     response = client.post(
         f"/api/v1/devices/{device_id}/shots/",
         json={"shot_number": shot_number, "device_id": device_id},
@@ -95,7 +98,9 @@ def create_a_shot_for_device_test(client: TestClient, device_id: int, shot_numbe
 
 def test_read_device_include_shots(client: TestClient, session: Session):
     device_service = DeviceService(session)
-    device = device_service.create(DeviceCreate(name="Device with Shots", type="Tokamak"))
+    device = device_service.create(
+        DeviceCreate(name="Device with Shots", type="Tokamak")
+    )
     device_id = device.id
     assert device_id is not None
 

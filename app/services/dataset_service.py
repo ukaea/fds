@@ -22,6 +22,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         self, shot_id: int, offset: int = 0, limit: int = 100
     ) -> Sequence[Dataset]:
         statement = (
-            select(Dataset).where(Dataset.shot_id == shot_id).offset(offset).limit(limit)
+            select(Dataset)
+            .where(Dataset.shot_id == shot_id)
+            .offset(offset)
+            .limit(limit)
         )
         return self.session.exec(statement).all()

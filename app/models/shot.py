@@ -15,6 +15,7 @@ class AccessLevel(str, Enum):
     - RESTRICTED: Accessible to authenticated users with general permissions.
     - EMBARGOED: Accessible only to a specific list of users.
     """
+
     PUBLIC = "public"
     RESTRICTED = "restricted"
     EMBARGOED = "embargoed"

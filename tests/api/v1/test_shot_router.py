@@ -2,7 +2,9 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 
-def create_a_device(client: TestClient, name: str = "Test Device", device_type: str = "Tokamak"):
+def create_a_device(
+    client: TestClient, name: str = "Test Device", device_type: str = "Tokamak"
+):
     response = client.post(
         "/api/v1/devices/",
         json={"name": name, "type": device_type, "status": "Operational"},
@@ -51,7 +53,7 @@ def test_create_shot_mismatched_device_id(client: TestClient):
 
     response = client.post(
         f"/api/v1/devices/{device1_id}/shots/",
-        json={"shot_number": 1, "device_id": device2_id}, # Mismatched device_id
+        json={"shot_number": 1, "device_id": device2_id},  # Mismatched device_id
     )
     assert response.status_code == 400
 
@@ -142,7 +144,7 @@ def test_update_shot_wrong_device(client: TestClient):
     shot = create_a_shot(client, device1_id, 1)
 
     response = client.put(
-        f"/api/v1/devices/{device2_id}/shots/{shot['id']}", # Wrong device_id in path
+        f"/api/v1/devices/{device2_id}/shots/{shot['id']}",  # Wrong device_id in path
         json={"shot_number": 2},
     )
     assert response.status_code == 404
@@ -155,7 +157,7 @@ def test_delete_shot(client: TestClient, session: Session):
     shot_id = shot["id"]
 
     response = client.delete(f"/api/v1/devices/{device_id}/shots/{shot_id}")
-    assert response.status_code == 204 # No Content
+    assert response.status_code == 204  # No Content
 
     response = client.get(f"/api/v1/devices/{device_id}/shots/{shot_id}")
     assert response.status_code == 404
@@ -185,7 +187,9 @@ def test_read_shot_include_device(client: TestClient, session: Session):
     shot = create_a_shot(client, device_id, 500)
     shot_id = shot["id"]
 
-    response = client.get(f"/api/v1/devices/{device_id}/shots/{shot_id}?include_device=true")
+    response = client.get(
+        f"/api/v1/devices/{device_id}/shots/{shot_id}?include_device=true"
+    )
     assert response.status_code == 200
 
     data = response.json()
