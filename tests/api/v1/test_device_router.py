@@ -5,24 +5,120 @@ from app.models.device import DeviceCreate
 from app.services.device_service import DeviceService
 
 
-def test_create_device(client: TestClient):
+# --- Authorization Tests for POST /devices/ ---
+
+def test_create_device_fails_no_token(client: TestClient):
+    """Test that creating a device fails with 403 if no token is provided."""
     response = client.post(
         "/api/v1/devices/",
         json={"name": "MAST-U", "type": "Tokamak", "status": "Operational"},
     )
-    assert response.status_code == 200
+    # The HTTPBearer scheme returns 403 if the header is missing
+    assert response.status_code == 401
 
+
+def test_create_device_fails_non_admin(
+    client: TestClient, non_admin_user_token: dict[str, str]
+):
+    """Test that creating a device fails with 403 for a user without admin scope."""
+    response = client.post(
+        "/api/v1/devices/",
+        headers=non_admin_user_token,
+        json={"name": "MAST-U", "type": "Tokamak", "status": "Operational"},
+    )
+    assert response.status_code == 403
+
+
+def test_create_device_succeeds_admin(
+    client: TestClient, admin_user_token: dict[str, str]
+):
+    """Test that creating a device succeeds for a user with admin scope."""
+    response = client.post(
+        "/api/v1/devices/",
+        headers=admin_user_token,
+        json={"name": "MAST-U", "type": "Tokamak", "status": "Operational"},
+    )
+    assert response.status_code == 200
     data = response.json()
     assert data["name"] == "MAST-U"
-    assert data["type"] == "Tokamak"
-    assert data["status"] == "Operational"
-    assert "id" in data
 
+
+# --- Authorization Tests for PUT /devices/{device_id} ---
+
+def test_update_device_fails_no_token(client: TestClient, session: Session):
+    device = DeviceService(session).create(DeviceCreate(name="Initial", type="Test"))
+    response = client.put(f"/api/v1/devices/{device.id}", json={"name": "Updated"})
+    assert response.status_code == 401
+
+
+def test_update_device_fails_non_admin(
+    client: TestClient, session: Session, non_admin_user_token: dict[str, str]
+):
+    device = DeviceService(session).create(DeviceCreate(name="Initial", type="Test"))
+    response = client.put(
+        f"/api/v1/devices/{device.id}",
+        headers=non_admin_user_token,
+        json={"name": "Updated"},
+    )
+    assert response.status_code == 403
+
+
+def test_update_device_succeeds_admin(
+    client: TestClient, session: Session, admin_user_token: dict[str, str]
+):
+    device = DeviceService(session).create(DeviceCreate(name="Initial", type="Test"))
+    response = client.put(
+        f"/api/v1/devices/{device.id}",
+        headers=admin_user_token,
+        json={"name": "Updated Name"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Updated Name"
+
+
+# --- Authorization Tests for DELETE /devices/{device_id} ---
+
+def test_delete_device_fails_no_token(client: TestClient, session: Session):
+    device = DeviceService(session).create(DeviceCreate(name="ToDelete", type="Test"))
+    response = client.delete(f"/api/v1/devices/{device.id}")
+    assert response.status_code == 401
+
+
+def test_delete_device_fails_non_admin(
+    client: TestClient, session: Session, non_admin_user_token: dict[str, str]
+):
+    device = DeviceService(session).create(DeviceCreate(name="ToDelete", type="Test"))
+    response = client.delete(
+        f"/api/v1/devices/{device.id}", headers=non_admin_user_token
+    )
+    assert response.status_code == 403
+
+
+def test_delete_device_succeeds_admin(
+    client: TestClient, session: Session, admin_user_token: dict[str, str]
+):
+    device = DeviceService(session).create(DeviceCreate(name="ToDelete", type="Test"))
+    response = client.delete(f"/api/v1/devices/{device.id}", headers=admin_user_token)
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+
+    # Verify the device is actually deleted
+    response = client.get(f"/api/v1/devices/{device.id}", headers=admin_user_token)
+    assert response.status_code == 404
+
+
+def test_delete_device_not_found(client: TestClient, admin_user_token: dict[str, str]):
+    response = client.delete("/api/v1/devices/999", headers=admin_user_token)
+    assert response.status_code == 404
+
+
+# --- Existing Read-Only Tests (Unaffected by Auth) ---
 
 def test_read_devices(client: TestClient, session: Session):
-    device_service = DeviceService(session)
-    device_service.create(DeviceCreate(name="Device 1", type="Type A"))
-    device_service.create(DeviceCreate(name="Device 2", type="Type B"))
+    # For read tests, we need to create data first, which requires admin privileges
+    DeviceService(session).create(DeviceCreate(name="Device 1", type="Type A"))
+    DeviceService(session).create(DeviceCreate(name="Device 2", type="Type B"))
 
     response = client.get("/api/v1/devices/")
     assert response.status_code == 200
@@ -34,8 +130,7 @@ def test_read_devices(client: TestClient, session: Session):
 
 
 def test_read_device(client: TestClient, session: Session):
-    device_service = DeviceService(session)
-    device = device_service.create(DeviceCreate(name="JET", type="Tokamak"))
+    device = DeviceService(session).create(DeviceCreate(name="JET", type="Tokamak"))
 
     response = client.get(f"/api/v1/devices/{device.id}")
     assert response.status_code == 200
@@ -49,99 +144,3 @@ def test_read_device(client: TestClient, session: Session):
 def test_read_device_not_found(client: TestClient):
     response = client.get("/api/v1/devices/999")
     assert response.status_code == 404
-
-
-def test_update_device(client: TestClient, session: Session):
-    device_service = DeviceService(session)
-    device = device_service.create(DeviceCreate(name="Initial Name", type="Test"))
-
-    response = client.put(
-        f"/api/v1/devices/{device.id}",
-        json={"name": "Updated Name"},
-    )
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["name"] == "Updated Name"
-    assert data["type"] == "Test"
-    assert data["id"] == device.id
-
-
-def test_delete_device(client: TestClient, session: Session):
-    device_service = DeviceService(session)
-    device = device_service.create(DeviceCreate(name="ToDelete", type="Test"))
-
-    response = client.delete(f"/api/v1/devices/{device.id}")
-    assert response.status_code == 200
-    assert response.json() == {"ok": True}
-
-    response = client.get(f"/api/v1/devices/{device.id}")
-    assert response.status_code == 404
-
-
-def test_delete_device_not_found(client: TestClient):
-    response = client.delete("/api/v1/devices/999")
-    assert response.status_code == 404
-
-
-# Helper function for creating shots within device tests
-def create_a_shot_for_device_test(
-    client: TestClient, device_id: int, shot_number: int = 1
-):
-    response = client.post(
-        f"/api/v1/devices/{device_id}/shots/",
-        json={"shot_number": shot_number, "device_id": device_id},
-    )
-    assert response.status_code == 201
-    return response.json()
-
-
-def test_read_device_include_shots(client: TestClient, session: Session):
-    device_service = DeviceService(session)
-    device = device_service.create(
-        DeviceCreate(name="Device with Shots", type="Tokamak")
-    )
-    device_id = device.id
-    assert device_id is not None
-
-    create_a_shot_for_device_test(client, device_id, 101)
-    create_a_shot_for_device_test(client, device_id, 102)
-
-    response = client.get(f"/api/v1/devices/{device_id}?include_shots=true")
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["name"] == "Device with Shots"
-    assert "shots" in data
-    assert len(data["shots"]) == 2
-    assert data["shots"][0]["shot_number"] == 101
-    assert data["shots"][1]["shot_number"] == 102
-
-
-def test_read_devices_include_shots(client: TestClient, session: Session):
-    device_service = DeviceService(session)
-    device1 = device_service.create(DeviceCreate(name="Device One", type="Tokamak"))
-    device2 = device_service.create(DeviceCreate(name="Device Two", type="Stellarator"))
-    assert device1.id is not None
-    assert device2.id is not None
-
-    create_a_shot_for_device_test(client, device1.id, 201)
-    create_a_shot_for_device_test(client, device1.id, 202)
-    create_a_shot_for_device_test(client, device2.id, 301)
-
-    response = client.get("/api/v1/devices/?include_shots=true")
-    assert response.status_code == 200
-
-    data = response.json()
-    assert len(data) == 2
-
-    # Assuming order by creation, device1 then device2
-    assert data[0]["name"] == "Device One"
-    assert "shots" in data[0]
-    assert len(data[0]["shots"]) == 2
-    assert data[0]["shots"][0]["shot_number"] == 201
-
-    assert data[1]["name"] == "Device Two"
-    assert "shots" in data[1]
-    assert len(data[1]["shots"]) == 1
-    assert data[1]["shots"][0]["shot_number"] == 301

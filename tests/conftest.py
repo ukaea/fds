@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, StaticPool, create_engine
 
+from app.auth.security import get_token_claims
 from app.core.db import get_session
 from app.main import app
 
@@ -26,7 +27,34 @@ def client_fixture(session: Session) -> Generator[TestClient, None, None]:
         return session
 
     app.dependency_overrides[get_session] = get_session_override
-
     client = TestClient(app)
     yield client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def admin_user_token() -> Generator[dict[str, str], None, None]:
+    """
+    Fixture to override the get_token_claims dependency to return claims
+    for an admin user.
+    """
+    app.dependency_overrides[get_token_claims] = lambda: {
+        "sub": "test-admin-user",
+        "scp": "fds-admin",
+    }
+    yield {"Authorization": "Bearer fake-admin-token"}
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def non_admin_user_token() -> Generator[dict[str, str], None, None]:
+    """
+    Fixture to override the get_token_claims dependency to return claims
+    for a non-admin user.
+    """
+    app.dependency_overrides[get_token_claims] = lambda: {
+        "sub": "test-non-admin-user",
+        "scp": "some-other-scope",
+    }
+    yield {"Authorization": "Bearer fake-non-admin-token"}
     app.dependency_overrides.clear()

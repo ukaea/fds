@@ -1,6 +1,8 @@
 from typing import Annotated, Union
+
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.auth.security import require_admin
 from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.mappers import DeviceReadWithShots
 from app.services.device_service import DeviceService
@@ -16,7 +18,7 @@ def get_device_service(session: SessionDep) -> DeviceService:
 DeviceServiceDep = Annotated[DeviceService, Depends(get_device_service)]
 
 
-@router.post("/", response_model=DeviceRead)
+@router.post("/", response_model=DeviceRead, dependencies=[Depends(require_admin)])
 def create_device(
     *,
     device_service: DeviceServiceDep,
@@ -67,7 +69,7 @@ def read_device(
     return DeviceRead.model_validate(device)
 
 
-@router.put("/{device_id}", response_model=DeviceRead)
+@router.put("/{device_id}", response_model=DeviceRead, dependencies=[Depends(require_admin)])
 def update_device(
     *,
     device_service: DeviceServiceDep,
@@ -83,7 +85,7 @@ def update_device(
     return device
 
 
-@router.delete("/{device_id}")
+@router.delete("/{device_id}", dependencies=[Depends(require_admin)])
 def delete_device(*, device_service: DeviceServiceDep, device_id: int) -> dict:
     """
     Delete a device.

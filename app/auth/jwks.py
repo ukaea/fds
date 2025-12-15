@@ -1,7 +1,9 @@
+from typing import Annotated
+
 import httpx
 import jwt
 from cachetools import TTLCache
-from fastapi import HTTPException, status
+from fastapi import Depends, HTTPException, status
 
 from app.core.config import config
 
@@ -138,5 +140,18 @@ class JwksClient:
         return jwt.PyJWK(key).key
 
 
-# Create a single instance of the client for our application to use.
-jwks_client = JwksClient(domain=config.OIDC_DOMAIN)
+_jwks_client_instance: JwksClient | None = None
+
+
+def get_jwks_client() -> JwksClient:
+    """
+    Dependency provider for the JwksClient.
+    Creates a singleton instance of the client.
+    """
+    global _jwks_client_instance
+    if _jwks_client_instance is None:
+        _jwks_client_instance = JwksClient(domain=config.OIDC_DOMAIN)
+    return _jwks_client_instance
+
+
+JWKSClientDep = Annotated[JwksClient, Depends(get_jwks_client)]
