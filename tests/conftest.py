@@ -58,3 +58,10 @@ def non_admin_user_token() -> Generator[dict[str, str], None, None]:
     }
     yield {"Authorization": "Bearer fake-non-admin-token"}
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def mock_config(monkeypatch):
+    from app.core.config import config
+    monkeypatch.setattr(config, "OIDC_DOMAIN", "test-domain.com")
+    monkeypatch.setattr(config, "OIDC_AUDIENCE", "test-audience")
