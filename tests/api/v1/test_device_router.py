@@ -47,7 +47,7 @@ def test_create_device_succeeds_admin(
 
 def test_update_device_fails_no_token(client: TestClient, session: Session):
     device = DeviceService(session).create(DeviceCreate(name="Initial", type="Test"))
-    response = client.put(f"/api/v1/devices/{device.id}", json={"name": "Updated"})
+    response = client.put(f"/api/v1/devices/{device.name}", json={"name": "Updated"})
     assert response.status_code == 401
 
 
@@ -56,7 +56,7 @@ def test_update_device_fails_non_admin(
 ):
     device = DeviceService(session).create(DeviceCreate(name="Initial", type="Test"))
     response = client.put(
-        f"/api/v1/devices/{device.id}",
+        f"/api/v1/devices/{device.name}",
         headers=non_admin_user_token,
         json={"name": "Updated"},
     )
@@ -68,7 +68,7 @@ def test_update_device_succeeds_admin(
 ):
     device = DeviceService(session).create(DeviceCreate(name="Initial", type="Test"))
     response = client.put(
-        f"/api/v1/devices/{device.id}",
+        f"/api/v1/devices/{device.name}",
         headers=admin_user_token,
         json={"name": "Updated Name"},
     )
@@ -81,7 +81,7 @@ def test_update_device_succeeds_admin(
 
 def test_delete_device_fails_no_token(client: TestClient, session: Session):
     device = DeviceService(session).create(DeviceCreate(name="ToDelete", type="Test"))
-    response = client.delete(f"/api/v1/devices/{device.id}")
+    response = client.delete(f"/api/v1/devices/{device.name}")
     assert response.status_code == 401
 
 
@@ -90,7 +90,7 @@ def test_delete_device_fails_non_admin(
 ):
     device = DeviceService(session).create(DeviceCreate(name="ToDelete", type="Test"))
     response = client.delete(
-        f"/api/v1/devices/{device.id}", headers=non_admin_user_token
+        f"/api/v1/devices/{device.name}", headers=non_admin_user_token
     )
     assert response.status_code == 403
 
@@ -99,17 +99,17 @@ def test_delete_device_succeeds_admin(
     client: TestClient, session: Session, admin_user_token: dict[str, str]
 ):
     device = DeviceService(session).create(DeviceCreate(name="ToDelete", type="Test"))
-    response = client.delete(f"/api/v1/devices/{device.id}", headers=admin_user_token)
+    response = client.delete(f"/api/v1/devices/{device.name}", headers=admin_user_token)
     assert response.status_code == 200
     assert response.json() == {"ok": True}
 
     # Verify the device is actually deleted
-    response = client.get(f"/api/v1/devices/{device.id}", headers=admin_user_token)
+    response = client.get(f"/api/v1/devices/{device.name}", headers=admin_user_token)
     assert response.status_code == 404
 
 
 def test_delete_device_not_found(client: TestClient, admin_user_token: dict[str, str]):
-    response = client.delete("/api/v1/devices/999", headers=admin_user_token)
+    response = client.delete("/api/v1/devices/NonExistent", headers=admin_user_token)
     assert response.status_code == 404
 
 
@@ -132,7 +132,7 @@ def test_read_devices(client: TestClient, session: Session):
 def test_read_device(client: TestClient, session: Session):
     device = DeviceService(session).create(DeviceCreate(name="JET", type="Tokamak"))
 
-    response = client.get(f"/api/v1/devices/{device.id}")
+    response = client.get(f"/api/v1/devices/{device.name}")
     assert response.status_code == 200
     assert device.id is not None
 
@@ -142,5 +142,5 @@ def test_read_device(client: TestClient, session: Session):
 
 
 def test_read_device_not_found(client: TestClient):
-    response = client.get("/api/v1/devices/999")
+    response = client.get("/api/v1/devices/NonExistent")
     assert response.status_code == 404

@@ -12,6 +12,6 @@ app = FastAPI(title=config.app_name)
 
 app.include_router(device_router.router, prefix="/api/v1/devices", tags=["devices"])
 app.include_router(
-    shot_router.router, prefix="/api/v1/devices/{device_id}/shots", tags=["shots"]
+    shot_router.router, prefix="/api/v1/devices/{device_name}/shots", tags=["shots"]
 )
 app.include_router(source_router.router, prefix="/api/v1/sources", tags=["sources"])

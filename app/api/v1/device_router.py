@@ -49,18 +49,18 @@ def read_devices(
     return [DeviceRead.model_validate(d) for d in devices]
 
 
-@router.get("/{device_id}", response_model=Union[DeviceReadWithShots, DeviceRead])
+@router.get("/{device_name}", response_model=Union[DeviceReadWithShots, DeviceRead])
 def read_device(
     *,
     device_service: DeviceServiceDep,
-    device_id: int,
+    device_name: str,
     include_shots: bool = False,
 ) -> DeviceReadWithShots | DeviceRead:
     """
-    Retrieve a single device by ID.
+    Retrieve a single device by name.
     Set `include_shots=true` to include the device's shots in the response.
     """
-    device = device_service.get(device_id)
+    device = device_service.get_by_name(device_name)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
@@ -69,28 +69,32 @@ def read_device(
     return DeviceRead.model_validate(device)
 
 
-@router.put("/{device_id}", response_model=DeviceRead, dependencies=[Depends(require_admin)])
+@router.put("/{device_name}", response_model=DeviceRead, dependencies=[Depends(require_admin)])
 def update_device(
     *,
     device_service: DeviceServiceDep,
-    device_id: int,
+    device_name: str,
     device_in: DeviceUpdate,
 ) -> Device:
     """
-    Update a device.
+    Update a device by name.
     """
-    device = device_service.update(device_id, device_in)
-    if not device:
+    current_device = device_service.get_by_name(device_name)
+    if not current_device:
         raise HTTPException(status_code=404, detail="Device not found")
+        
+    device = device_service.update(current_device.id, device_in)
     return device
 
 
-@router.delete("/{device_id}", dependencies=[Depends(require_admin)])
-def delete_device(*, device_service: DeviceServiceDep, device_id: int) -> dict:
+@router.delete("/{device_name}", dependencies=[Depends(require_admin)])
+def delete_device(*, device_service: DeviceServiceDep, device_name: str) -> dict:
     """
-    Delete a device.
+    Delete a device by name.
     """
-    device = device_service.delete(device_id)
-    if not device:
+    current_device = device_service.get_by_name(device_name)
+    if not current_device:
         raise HTTPException(status_code=404, detail="Device not found")
+        
+    device_service.delete(current_device.id)
     return {"ok": True}

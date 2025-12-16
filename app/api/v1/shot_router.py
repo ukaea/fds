@@ -30,18 +30,23 @@ DeviceServiceDep = Annotated[DeviceService, Depends(get_device_service)]
 @router.post("/", response_model=ShotRead, status_code=status.HTTP_201_CREATED)
 def create_shot(
     *,
-    device_id: int,  # Path parameter from the parent router
+    device_name: str,  # Path parameter from the parent router
     shot_service: ShotServiceDep,
+    device_service: DeviceServiceDep,  # To resolve device_name to device_id
     shot_in: ShotCreate,
 ) -> Shot:
     """
     Create a new shot for a specific device.
     """
-    # Ensure the shot_in device_id matches the path device_id
-    if shot_in.device_id != device_id:
+    device = device_service.get_by_name(device_name)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    # Ensure the shot_in device_id matches the resolved device_id
+    if shot_in.device_id != device.id:
         raise HTTPException(
             status_code=400,
-            detail="The device_id in the request body must match the device_id in the path.",
+            detail="The device_id in the request body must match the device specified in the path.",
         )
 
     try:
@@ -54,7 +59,7 @@ def create_shot(
 @router.get("/", response_model=list[Union[ShotReadWithDevice, ShotRead]])
 def read_shots(
     *,
-    device_id: int,  # Path parameter from the parent router
+    device_name: str,  # Path parameter from the parent router
     shot_service: ShotServiceDep,
     device_service: DeviceServiceDep,  # To check if device exists
     offset: int = 0,
@@ -65,12 +70,12 @@ def read_shots(
     Retrieve all shots for a specific device.
     Set `include_device=true` to include the associated device in the response.
     """
-    device = device_service.get(device_id)
+    device = device_service.get_by_name(device_name)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
     shots = shot_service.get_multi_by_device(
-        device_id=device_id, offset=offset, limit=limit
+        device_id=device.id, offset=offset, limit=limit
     )
 
     if include_device:
@@ -81,7 +86,7 @@ def read_shots(
 @router.get("/{shot_id}", response_model=Union[ShotReadWithDevice, ShotRead])
 def read_shot(
     *,
-    device_id: int,  # Path parameter from the parent router
+    device_name: str,  # Path parameter from the parent router
     shot_service: ShotServiceDep,
     device_service: DeviceServiceDep,  # To check if device exists
     shot_id: int,
@@ -91,12 +96,12 @@ def read_shot(
     Retrieve a single shot by ID for a specific device.
     Set `include_device=true` to include the associated device in the response.
     """
-    device = device_service.get(device_id)
+    device = device_service.get_by_name(device_name)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
     shot = shot_service.get(shot_id)
-    if not shot or shot.device_id != device_id:
+    if not shot or shot.device_id != device.id:
         raise HTTPException(status_code=404, detail="Shot not found for this device")
 
     if include_device:
@@ -107,7 +112,7 @@ def read_shot(
 @router.put("/{shot_id}", response_model=ShotRead)
 def update_shot(
     *,
-    device_id: int,  # Path parameter from the parent router
+    device_name: str,  # Path parameter from the parent router
     shot_service: ShotServiceDep,
     device_service: DeviceServiceDep,  # To check if device exists
     shot_id: int,
@@ -116,12 +121,12 @@ def update_shot(
     """
     Update a shot for a specific device.
     """
-    device = device_service.get(device_id)
+    device = device_service.get_by_name(device_name)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
     current_shot = shot_service.get(shot_id)
-    if not current_shot or current_shot.device_id != device_id:
+    if not current_shot or current_shot.device_id != device.id:
         raise HTTPException(status_code=404, detail="Shot not found for this device")
 
     shot = shot_service.update(shot_id, shot_in)
@@ -133,7 +138,7 @@ def update_shot(
 @router.delete("/{shot_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_shot(
     *,
-    device_id: int,  # Path parameter from the parent router
+    device_name: str,  # Path parameter from the parent router
     shot_service: ShotServiceDep,
     device_service: DeviceServiceDep,  # To check if device exists
     shot_id: int,
@@ -141,12 +146,12 @@ def delete_shot(
     """
     Delete a shot for a specific device.
     """
-    device = device_service.get(device_id)
+    device = device_service.get_by_name(device_name)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
     shot = shot_service.get(shot_id)
-    if not shot or shot.device_id != device_id:
+    if not shot or shot.device_id != device.id:
         raise HTTPException(status_code=404, detail="Shot not found for this device")
 
     shot_service.delete(shot_id)

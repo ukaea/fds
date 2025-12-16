@@ -1,3 +1,4 @@
+import jwt
 import pytest
 from fastapi import HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
@@ -13,22 +14,16 @@ from app.auth.jwks import JwksClient
 
 @pytest.mark.asyncio
 async def test_get_token_claims_success(mocker):
-    # Setup
     mock_jwks_client = mocker.AsyncMock(spec=JwksClient)
     mock_jwks_client.get_signing_key.return_value = "mock_public_key"
 
     token = "valid_token"
     auth = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
-    # Mock jwt.decode
     mock_decode = mocker.patch("app.auth.security.jwt.decode")
     expected_claims = {"sub": "user123", "scope": "read write"}
     mock_decode.return_value = expected_claims
-
-    # Execute
     claims = await get_token_claims(jwks_client=mock_jwks_client, auth=auth)
-
-    # Assert
     assert claims == expected_claims
     mock_jwks_client.get_signing_key.assert_awaited_once_with(token)
     mock_decode.assert_called_once_with(
@@ -58,7 +53,7 @@ async def test_get_token_claims_invalid_token(mocker):
     auth = HTTPAuthorizationCredentials(scheme="Bearer", credentials="bad_token")
 
     mock_decode = mocker.patch("app.auth.security.jwt.decode")
-    mock_decode.side_effect = security.jwt.PyJWTError("Decode failed")
+    mock_decode.side_effect = jwt.PyJWTError("Decode failed")
     
     with pytest.raises(HTTPException) as exc:
         await get_token_claims(jwks_client=mock_jwks_client, auth=auth)
