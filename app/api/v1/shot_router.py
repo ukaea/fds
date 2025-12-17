@@ -1,16 +1,22 @@
-from typing import Annotated, Union
+from typing import Union
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.models.shot import Shot, ShotCreate, ShotRead, ShotUpdate
+from app.api.deps import DeviceServiceDep, ShotServiceDep
+from app.api.permissions import require_shot_admin
 from app.models.mappers import ShotReadWithDevice
+from app.models.shot import Shot, ShotCreate, ShotRead, ShotUpdate
 from app.services.exceptions import DeviceNotFoundError
-from app.api.deps import ShotServiceDep, DeviceServiceDep
-from app.api.permissions import DeviceAdminDep
 
 router = APIRouter()
 
 
-@router.post("/", response_model=ShotRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(DeviceAdminDep)])
+@router.post(
+    "/",
+    response_model=ShotRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_shot_admin)],
+)
 def create_shot(
     *,
     device_name: str,  # Path parameter from the parent router
@@ -92,7 +98,11 @@ def read_shot(
     return ShotRead.model_validate(shot)
 
 
-@router.put("/{shot_id}", response_model=ShotRead, dependencies=[Depends(DeviceAdminDep)])
+@router.put(
+    "/{shot_id}",
+    response_model=ShotRead,
+    dependencies=[Depends(require_shot_admin)],
+)
 def update_shot(
     *,
     device_name: str,  # Path parameter from the parent router
@@ -118,7 +128,11 @@ def update_shot(
     return shot
 
 
-@router.delete("/{shot_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(DeviceAdminDep)])
+@router.delete(
+    "/{shot_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_shot_admin)],
+)
 def delete_shot(
     *,
     device_name: str,  # Path parameter from the parent router
