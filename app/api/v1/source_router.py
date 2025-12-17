@@ -4,17 +4,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.models.source import Source, SourceCreate, SourceRead, SourceUpdate
-from app.services.source_service import SourceService
-from app.core.db import SessionDep
+from app.api.deps import SourceServiceDep
 
 router = APIRouter()
-
-
-def get_source_service(session: SessionDep) -> SourceService:
-    return SourceService(session)
-
-
-SourceServiceDep = Annotated[SourceService, Depends(get_source_service)]
 
 
 @router.post("/", response_model=SourceRead)

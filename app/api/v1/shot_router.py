@@ -4,30 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.shot import Shot, ShotCreate, ShotRead, ShotUpdate
 from app.models.mappers import ShotReadWithDevice
 from app.services.exceptions import DeviceNotFoundError
-from app.services.shot_service import ShotService
-from app.services.device_service import (
-    DeviceService,
-)  # Needed to check if device exists
-from app.core.db import SessionDep
+from app.api.deps import ShotServiceDep, DeviceServiceDep
+from app.api.permissions import DeviceAdminDep
 
 router = APIRouter()
 
 
-def get_shot_service(session: SessionDep) -> ShotService:
-    return ShotService(session)
-
-
-ShotServiceDep = Annotated[ShotService, Depends(get_shot_service)]
-
-
-def get_device_service(session: SessionDep) -> DeviceService:
-    return DeviceService(session)
-
-
-DeviceServiceDep = Annotated[DeviceService, Depends(get_device_service)]
-
-
-@router.post("/", response_model=ShotRead, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ShotRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(DeviceAdminDep)])
 def create_shot(
     *,
     device_name: str,  # Path parameter from the parent router
@@ -109,7 +92,7 @@ def read_shot(
     return ShotRead.model_validate(shot)
 
 
-@router.put("/{shot_id}", response_model=ShotRead)
+@router.put("/{shot_id}", response_model=ShotRead, dependencies=[Depends(DeviceAdminDep)])
 def update_shot(
     *,
     device_name: str,  # Path parameter from the parent router
@@ -135,7 +118,7 @@ def update_shot(
     return shot
 
 
-@router.delete("/{shot_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{shot_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(DeviceAdminDep)])
 def delete_shot(
     *,
     device_name: str,  # Path parameter from the parent router

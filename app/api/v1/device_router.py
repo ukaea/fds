@@ -1,21 +1,13 @@
-from typing import Annotated, Union
+from typing import Union
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.auth.security import require_admin
+from app.api.permissions import require_admin
 from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.mappers import DeviceReadWithShots
-from app.services.device_service import DeviceService
-from app.core.db import SessionDep
+from app.api.deps import DeviceServiceDep
 
 router = APIRouter()
-
-
-def get_device_service(session: SessionDep) -> DeviceService:
-    return DeviceService(session)
-
-
-DeviceServiceDep = Annotated[DeviceService, Depends(get_device_service)]
 
 
 @router.post("/", response_model=DeviceRead, dependencies=[Depends(require_admin)])

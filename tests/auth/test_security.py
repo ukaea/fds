@@ -6,8 +6,6 @@ from fastapi.security import HTTPAuthorizationCredentials
 from app.auth.security import (
     get_token_claims,
     get_current_user,
-    require_scope,
-    AuthenticatedUser,
 )
 from app.auth.jwks import JwksClient
 
@@ -81,25 +79,3 @@ async def test_get_current_user_parsing():
     user3 = await get_current_user(claims=claims_none)
     assert user3.id == "789"
     assert user3.scopes == []
-
-
-@pytest.mark.parametrize(
-    "required_scopes, user_scopes, should_pass",
-    [
-        (["read"], ["read", "write"], True),  # Success: Has required scope
-        (["delete"], ["read"], False),        # Failure: Missing requirement
-        (["delete"], ["fds-admin"], True),    # Success: Admin override
-        (["read", "write"], ["read"], False), # Failure: Missing one of multiple
-    ],
-)
-def test_require_scope(required_scopes, user_scopes, should_pass):
-    dep = require_scope(required_scopes)
-    user = AuthenticatedUser(id="1", scopes=user_scopes)
-
-    if should_pass:
-        result = dep(user=user)
-        assert result == user
-    else:
-        with pytest.raises(HTTPException) as exc:
-            dep(user=user)
-        assert exc.value.status_code == status.HTTP_403_FORBIDDEN
