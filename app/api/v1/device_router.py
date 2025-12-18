@@ -75,7 +75,7 @@ def update_device(
     if not current_device:
         raise HTTPException(status_code=404, detail="Device not found")
         
-    device = device_service.update(current_device.id, device_in)
+    device = device_service.update(db_obj=current_device, obj_in=device_in)
     return device
 
 

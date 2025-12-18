@@ -73,8 +73,11 @@ def test_update_device(session: Session):
     created_device = service.create(device_create)
     assert created_device.id is not None
 
+    db_device_to_update = service.get(created_device.id)
+    assert db_device_to_update is not None
+
     device_update = DeviceUpdate(name="Updated Test", status="Updated Status")
-    updated_device = service.update(created_device.id, device_update)
+    updated_device = service.update(db_obj=db_device_to_update, obj_in=device_update)
     assert updated_device is not None
     assert updated_device.name == "Updated Test"
     assert updated_device.type == "Initial"
@@ -83,13 +86,6 @@ def test_update_device(session: Session):
     db_device = session.get(Device, created_device.id)
     assert db_device is not None
     assert db_device.name == "Updated Test"
-
-
-def test_update_device_not_found(session: Session):
-    service = DeviceService(session)
-    device_update = DeviceUpdate(name="Non Existent")
-    updated_device = service.update(999, device_update)
-    assert updated_device is None
 
 
 def test_delete_device(session: Session):

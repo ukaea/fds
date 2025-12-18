@@ -177,22 +177,20 @@ def test_update_dataset(
         )
     )
     assert created_dataset is not None
+    assert created_dataset.id is not None
     assert created_dataset.quality_flag == "good"
 
+    db_dataset_to_update = dataset_service.get(created_dataset.id)
+    assert db_dataset_to_update is not None
+
     dataset_update = DatasetUpdate(name="new_name", level=2, quality_flag="bad")
-    updated_dataset = dataset_service.update(created_dataset.id, dataset_update)
+    updated_dataset = dataset_service.update(db_obj=db_dataset_to_update, obj_in=dataset_update)
 
     assert updated_dataset is not None
     assert updated_dataset.name == "new_name"
     assert updated_dataset.level == 2
     assert updated_dataset.quality_flag == "bad"
     assert updated_dataset.data_url == "old_url"  # Should remain unchanged
-
-
-def test_update_dataset_not_found(dataset_service: DatasetService):
-    dataset_update = DatasetUpdate(name="new_name")
-    updated_dataset = dataset_service.update(999, dataset_update)
-    assert updated_dataset is None
 
 
 def test_delete_dataset(

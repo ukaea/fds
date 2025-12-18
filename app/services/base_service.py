@@ -45,13 +45,10 @@ class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         self.session.refresh(db_obj)
         return db_obj
 
-    def update(self, id: Any, obj_in: UpdateSchemaType) -> ModelType | None:
+    def update(self, *, db_obj: ModelType, obj_in: UpdateSchemaType) -> ModelType:
         """
         Update an existing object.
         """
-        db_obj = self.session.get(self.model, id)
-        if not db_obj:
-            return None
         update_data = obj_in.model_dump(exclude_unset=True)
         db_obj.sqlmodel_update(update_data)
         self.session.add(db_obj)

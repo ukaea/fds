@@ -47,9 +47,10 @@ def update_source(
     """
     Update a source.
     """
-    source = source_service.update(source_id, source_in)
-    if not source:
+    db_source = source_service.get(source_id)
+    if not db_source:
         raise HTTPException(status_code=404, detail="Source not found")
+    source = source_service.update(db_obj=db_source, obj_in=source_in)
     return source
 
 

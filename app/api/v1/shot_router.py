@@ -122,9 +122,7 @@ def update_shot(
     if not current_shot or current_shot.device_id != device.id:
         raise HTTPException(status_code=404, detail="Shot not found for this device")
 
-    shot = shot_service.update(shot_id, shot_in)
-    if not shot:
-        raise HTTPException(status_code=404, detail="Shot not found")
+    shot = shot_service.update(db_obj=current_shot, obj_in=shot_in)
     return shot
 
 

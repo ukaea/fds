@@ -71,16 +71,13 @@ def test_get_sources_with_limit_and_offset(session: Session):
 def test_update_source(session: Session):
     service = SourceService(session)
     source = service.create(SourceCreate(name="Initial Name"))
+    assert source.id is not None
+    db_source = service.get(source.id)
+    assert db_source is not None
 
-    updated_source = service.update(source.id, SourceUpdate(name="Updated Name"))
+    updated_source = service.update(db_obj=db_source, obj_in=SourceUpdate(name="Updated Name"))
     assert updated_source is not None
     assert updated_source.name == "Updated Name"
-
-
-def test_update_source_not_found(session: Session):
-    service = SourceService(session)
-    updated_source = service.update(999, SourceUpdate(name="Non Existent"))
-    assert updated_source is None
 
 
 def test_delete_source(session: Session):
