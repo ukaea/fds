@@ -10,21 +10,20 @@ class DeviceBase(SQLModel):
     name: str = Field(index=True)
     type: str = Field(index=True)
     began_operations: str | None = None
+    status: str | None = Field(default=None, index=True)
 
 
 class Device(DeviceBase, table=True):
     id: int | None = Field(default=None, primary_key=True, index=True)
-    status: str | None = Field(index=True)
     shots: list["Shot"] = Relationship(back_populates="device")
 
 
 class DeviceRead(DeviceBase):
-    id: int
-    status: str | None = None
+    pass
 
 
 class DeviceCreate(DeviceBase):
-    status: str | None = None
+    pass
 
 
 class DeviceUpdate(SQLModel):

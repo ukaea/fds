@@ -1,12 +1,11 @@
 from collections.abc import Sequence
 from typing import Any, Generic, Type, TypeVar
 
-from pydantic import BaseModel
 from sqlmodel import Session, SQLModel, select
 
 ModelType = TypeVar("ModelType", bound=SQLModel)
-CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
-UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
+CreateSchemaType = TypeVar("CreateSchemaType", bound=SQLModel)
+UpdateSchemaType = TypeVar("UpdateSchemaType", bound=SQLModel)
 
 
 class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
