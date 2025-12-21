@@ -1,5 +1,5 @@
-from typing import TYPE_CHECKING
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -22,26 +22,26 @@ class AccessLevel(str, Enum):
 
 
 class ShotBase(SQLModel):
-    shot_number: int = Field(index=True)
-    device_id: int = Field(foreign_key="device.id")
+    id: str = Field(primary_key=True, index=True)
     access_level: AccessLevel = Field(default=AccessLevel.RESTRICTED, index=True)
+    device_id: int | None = Field(default=None, foreign_key="device.id", index=True)
 
 
 class Shot(ShotBase, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-
     device: "Device" = Relationship(back_populates="shots")
     datasets: list["Dataset"] = Relationship(back_populates="shot")
 
 
+class ShotCreate(SQLModel):
+    id: str
+    access_level: AccessLevel = AccessLevel.RESTRICTED
+    device_name: str | None = None
+
+
 class ShotRead(ShotBase):
-    id: int
+    pass
 
 
 class ShotUpdate(SQLModel):
-    shot_number: int | None = None
     access_level: AccessLevel | None = None
-
-
-class ShotCreate(ShotBase):
-    pass
+    device_name: str | None = None

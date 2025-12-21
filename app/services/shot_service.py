@@ -2,41 +2,144 @@ from typing import Sequence
 
 from sqlmodel import Session, select
 
-from app.models.device import Device
 from app.models.shot import Shot, ShotCreate, ShotUpdate
+from app.models.device import Device
 from app.services.base_service import BaseService
-from app.services.exceptions import DeviceNotFoundError
+from app.services.exceptions import (
+    DeviceNotFoundError, 
+    ShotContextError, 
+    ForbiddenError,
+    FDSValidationError,
+    ConflictError
+)
+from app.auth.security import AuthenticatedUser
+from app.auth.permissions import check_device_admin
 
 
 class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
     def __init__(self, session: Session):
         super().__init__(Shot, session)
 
-    def create(self, obj_in: ShotCreate) -> Shot:
+    def create(self, obj_in: ShotCreate, user: AuthenticatedUser, expected_device_name: str | None = None) -> Shot:
         """
-        Create a new shot, ensuring the device exists.
+        Create a new shot. Enforces device admin permissions and context consistency.
         """
-        # Check if device exists
-        device = self.session.get(Device, obj_in.device_id)
+        target_device_name = obj_in.device_name
+        
+        if expected_device_name:
+            if target_device_name and target_device_name != expected_device_name:
+                raise ConflictError(
+                    f"Device in context ({expected_device_name}) does not match device in body ({target_device_name})"
+                )
+            target_device_name = expected_device_name
+            
+        if not target_device_name:
+            raise FDSValidationError("Device name is required for shot creation.")
+        
+        # Permission check
+        check_device_admin(user, target_device_name)
+        
+        db_obj = Shot.model_validate(obj_in, update={"device_id": None})
+        
+        # Resolve device name to ID
+        statement = select(Device).where(Device.name == target_device_name)
+        device = self.session.exec(statement).first()
         if not device:
-            raise DeviceNotFoundError(f"Device with id {obj_in.device_id} not found")
-
-        # Proceed with creation using parent method's logic
-        db_obj = self.model.model_validate(obj_in)
+            raise DeviceNotFoundError(f"Device '{target_device_name}' not found")
+        db_obj.device_id = device.id
+        
         self.session.add(db_obj)
         self.session.commit()
         self.session.refresh(db_obj)
         return db_obj
 
+    def get_for_device(self, shot_id: str, device_name: str) -> Shot:
+        """
+        Retrieve a shot specifically for a device context.
+        Raises ShotContextError if mismatch.
+        """
+        shot = self.get(shot_id)
+        if not shot:
+            raise ShotContextError(f"Shot '{shot_id}' not found")
+        
+        if not shot.device or shot.device.name != device_name:
+            raise ShotContextError(f"Shot '{shot_id}' does not belong to device '{device_name}'")
+        
+        return shot
+
     def get_multi_by_device(
         self, device_id: int, offset: int = 0, limit: int = 100
     ) -> Sequence[Shot]:
-        """
-        Get multiple shots for a specific device with pagination.
-        """
         statement = (
             select(Shot).where(Shot.device_id == device_id).offset(offset).limit(limit)
         )
         result = self.session.exec(statement)
-        shots = result.all()
-        return shots
+        return result.all()
+
+    def update(
+        self, 
+        *, 
+        db_obj: Shot, 
+        obj_in: ShotUpdate, 
+        user: AuthenticatedUser,
+        expected_device_name: str | None = None
+    ) -> Shot:
+        """
+        Update a shot. Enforces ownership and permission checks.
+        """
+        # 1. Context check (Ownership)
+        if expected_device_name:
+            if not db_obj.device or db_obj.device.name != expected_device_name:
+                raise ShotContextError(f"Shot '{db_obj.id}' context mismatch")
+
+        # 2. Permission check for the CURRENT device
+        if db_obj.device:
+            check_device_admin(user, db_obj.device.name)
+        else:
+            # If for some reason it's orphaned, only fds-admin can touch it
+            if "fds-admin" not in user.scopes:
+                raise ForbiddenError("Only fds-admin can update orphaned shots")
+
+        update_data = obj_in.model_dump(exclude_unset=True)
+        
+        # 3. Handle device change
+        if "device_name" in update_data:
+            new_device_name = update_data.pop("device_name")
+            if new_device_name:
+                # Permission check for the TARGET device
+                check_device_admin(user, new_device_name)
+                
+                statement = select(Device).where(Device.name == new_device_name)
+                device = self.session.exec(statement).first()
+                if not device:
+                    raise DeviceNotFoundError(f"Device '{new_device_name}' not found")
+                db_obj.device_id = device.id
+            else:
+                db_obj.device_id = None
+        
+        db_obj.sqlmodel_update(update_data)
+        self.session.add(db_obj)
+        self.session.commit()
+        self.session.refresh(db_obj)
+        return db_obj
+
+    def delete_with_auth(self, shot_id: str, user: AuthenticatedUser, expected_device_name: str | None = None) -> bool:
+        """
+        Delete a shot with authentication and optional context check.
+        """
+        shot = self.get(shot_id)
+        if not shot:
+            return False
+            
+        if expected_device_name:
+            if not shot.device or shot.device.name != expected_device_name:
+                raise ShotContextError(f"Shot '{shot_id}' context mismatch")
+        
+        if shot.device:
+            check_device_admin(user, shot.device.name)
+        elif "fds-admin" not in user.scopes:
+            raise ForbiddenError("Only fds-admin can delete orphaned shots")
+
+        self.session.delete(shot)
+        self.session.commit()
+        return True

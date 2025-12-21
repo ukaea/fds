@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING
-from sqlmodel import Field, SQLModel, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 
 
 if TYPE_CHECKING:
@@ -7,8 +7,8 @@ if TYPE_CHECKING:
 
 
 class DeviceBase(SQLModel):
-    name: str = Field(index=True)
-    type: str = Field(index=True)
+    name: str = Field(index=True, unique=True)
+    type: str | None = Field(default=None, index=True)
     began_operations: str | None = None
     status: str | None = Field(default=None, index=True)
 
@@ -18,11 +18,11 @@ class Device(DeviceBase, table=True):
     shots: list["Shot"] = Relationship(back_populates="device")
 
 
-class DeviceRead(DeviceBase):
+class DeviceCreate(DeviceBase):
     pass
 
 
-class DeviceCreate(DeviceBase):
+class DeviceRead(DeviceBase):
     pass
 
 

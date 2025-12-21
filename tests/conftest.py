@@ -60,6 +60,33 @@ def non_admin_user_token() -> Generator[dict[str, str], None, None]:
     app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def mast_admin_user_token() -> Generator[dict[str, str], None, None]:
+    """
+    Fixture to override get_token_claims to return claims for a mast_admin user.
+    """
+    app.dependency_overrides[get_token_claims] = lambda: {
+        "sub": "test-mast-admin-user",
+        "scp": "mast_admin",
+    }
+    yield {"Authorization": "Bearer fake-mast-admin-token"}
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def jet_admin_user_token() -> Generator[dict[str, str], None, None]:
+    """
+    Fixture to override get_token_claims to return claims for a jet_admin user.
+    """
+    app.dependency_overrides[get_token_claims] = lambda: {
+        "sub": "test-jet-admin-user",
+        "scp": "jet_admin",
+    }
+    yield {"Authorization": "Bearer fake-jet-admin-token"}
+    app.dependency_overrides.clear()
+
+
+
 @pytest.fixture(autouse=True)
 def mock_config(monkeypatch):
     from app.core.config import config

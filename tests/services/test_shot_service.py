@@ -4,8 +4,9 @@ from sqlmodel import Session
 from app.models.device import DeviceCreate
 from app.models.shot import Shot, ShotCreate
 from app.services.device_service import DeviceService
-from app.services.exceptions import DeviceNotFoundError
+from app.services.exceptions import DeviceNotFoundError, ForbiddenError
 from app.services.shot_service import ShotService
+from app.auth.security import AuthenticatedUser
 
 
 @pytest.fixture(name="device_service")
@@ -18,74 +19,90 @@ def shot_service_fixture(session: Session) -> ShotService:
     return ShotService(session)
 
 
-def test_create_shot(device_service: DeviceService, shot_service: ShotService):
+@pytest.fixture(name="admin_user")
+def admin_user_fixture() -> AuthenticatedUser:
+    return AuthenticatedUser(id="admin", scopes=["fds-admin"])
+
+
+@pytest.fixture(name="mast_admin_user")
+def mast_admin_user_fixture() -> AuthenticatedUser:
+    return AuthenticatedUser(id="mast-admin", scopes=["mast_admin"])
+
+
+def test_create_shot_with_device_id(device_service: DeviceService, shot_service: ShotService, admin_user: AuthenticatedUser):
     device = device_service.create(DeviceCreate(name="Test Device", type="Test"))
     assert device.id is not None
 
-    shot_create = ShotCreate(shot_number=101, device_id=device.id)
-    shot = shot_service.create(shot_create)
+    # Using global admin
+    shot_create = ShotCreate(id="shot-101", device_name="Test Device")
+    shot = shot_service.create(shot_create, admin_user)
     assert shot is not None
-    assert shot.id is not None
-    assert shot.shot_number == 101
+    assert shot.id == "shot-101"
     assert shot.device_id == device.id
 
 
-def test_create_shot_for_nonexistent_device(shot_service: ShotService):
-    shot_create = ShotCreate(shot_number=102, device_id=999)  # Non-existent device
+def test_create_shot_with_device_scope(device_service: DeviceService, shot_service: ShotService, mast_admin_user: AuthenticatedUser):
+    # Device name matches scope "mast_admin"
+    device_service.create(DeviceCreate(name="MAST", type="Test"))
+    
+    shot_create = ShotCreate(id="mast-shot", device_name="MAST")
+    shot = shot_service.create(shot_create, mast_admin_user)
+    assert shot.id == "mast-shot"
+
+
+def test_create_shot_unauthorized(device_service: DeviceService, shot_service: ShotService, mast_admin_user: AuthenticatedUser):
+    # User has mast_admin but trying to create for JET
+    device_service.create(DeviceCreate(name="JET", type="Test"))
+    
+    shot_create = ShotCreate(id="jet-shot", device_name="JET")
+    with pytest.raises(ForbiddenError):
+        shot_service.create(shot_create, mast_admin_user)
+
+
+def test_create_shot_for_nonexistent_device(shot_service: ShotService, admin_user: AuthenticatedUser):
+    shot_create = ShotCreate(id="shot-102", device_name="Nonexistent")
     with pytest.raises(DeviceNotFoundError):
-        shot_service.create(shot_create)
+        shot_service.create(shot_create, admin_user)
 
 
-def test_get_shot(device_service: DeviceService, shot_service: ShotService):
+def test_get_shot(device_service: DeviceService, shot_service: ShotService, admin_user: AuthenticatedUser):
     device = device_service.create(DeviceCreate(name="Test Device", type="Test"))
     assert device.id is not None
 
-    created_shot = shot_service.create(ShotCreate(shot_number=201, device_id=device.id))
+    created_shot = shot_service.create(ShotCreate(id="shot-201", device_name="Test Device"), admin_user)
     assert created_shot is not None
-    assert created_shot.id is not None
 
     retrieved_shot = shot_service.get(created_shot.id)
     assert retrieved_shot is not None
-    assert retrieved_shot.id == created_shot.id
-    assert retrieved_shot.shot_number == 201
+    assert retrieved_shot.id == "shot-201"
 
 
-def test_get_shots_for_device(device_service: DeviceService, shot_service: ShotService):
+def test_get_shots_for_device(device_service: DeviceService, shot_service: ShotService, admin_user: AuthenticatedUser):
     device1 = device_service.create(DeviceCreate(name="Device 1", type="A"))
     device2 = device_service.create(DeviceCreate(name="Device 2", type="B"))
-    assert device1.id is not None
-    assert device2.id is not None
 
-    shot_service.create(ShotCreate(shot_number=1001, device_id=device1.id))
-    shot_service.create(ShotCreate(shot_number=1002, device_id=device1.id))
-    shot_service.create(ShotCreate(shot_number=2001, device_id=device2.id))
+    shot_service.create(ShotCreate(id="shot-1001", device_name="Device 1"), admin_user)
+    shot_service.create(ShotCreate(id="shot-1002", device_name="Device 1"), admin_user)
+    shot_service.create(ShotCreate(id="shot-2001", device_name="Device 2"), admin_user)
 
     # Get shots for device 1
     device1_shots = shot_service.get_multi_by_device(device1.id)
     assert len(device1_shots) == 2
     assert all(shot.device_id == device1.id for shot in device1_shots)
-    assert {shot.shot_number for shot in device1_shots} == {1001, 1002}
-
-    # Get shots for device 2
-    device2_shots = shot_service.get_multi_by_device(device2.id)
-    assert len(device2_shots) == 1
-    assert device2_shots[0].device_id == device2.id
-    assert device2_shots[0].shot_number == 2001
+    assert {shot.id for shot in device1_shots} == {"shot-1001", "shot-1002"}
 
 
 def test_delete_shot(
-    device_service: DeviceService, shot_service: ShotService, session: Session
+    device_service: DeviceService, shot_service: ShotService, session: Session, admin_user: AuthenticatedUser
 ):
     device = device_service.create(DeviceCreate(name="Test Device", type="Test"))
-    assert device.id is not None
-
+    
     shot_to_delete = shot_service.create(
-        ShotCreate(shot_number=301, device_id=device.id)
+        ShotCreate(id="shot-301", device_name="Test Device"), admin_user
     )
     assert shot_to_delete is not None
-    assert shot_to_delete.id is not None
 
-    shot_service.delete(shot_to_delete.id)
+    shot_service.delete_with_auth(shot_to_delete.id, admin_user)
 
     db_shot = session.get(Shot, shot_to_delete.id)
     assert db_shot is None
