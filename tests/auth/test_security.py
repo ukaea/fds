@@ -36,10 +36,10 @@ async def test_get_token_claims_success(mocker):
 @pytest.mark.asyncio
 async def test_get_token_claims_no_auth(mocker):
     mock_jwks_client = mocker.AsyncMock(spec=JwksClient)
-    
+
     with pytest.raises(HTTPException) as exc:
         await get_token_claims(jwks_client=mock_jwks_client, auth=None)
-    
+
     assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
     assert exc.value.detail == "Not authenticated"
 
@@ -52,10 +52,10 @@ async def test_get_token_claims_invalid_token(mocker):
 
     mock_decode = mocker.patch("app.auth.security.jwt.decode")
     mock_decode.side_effect = jwt.PyJWTError("Decode failed")
-    
+
     with pytest.raises(HTTPException) as exc:
         await get_token_claims(jwks_client=mock_jwks_client, auth=auth)
-    
+
     assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
     assert "Invalid token" in exc.value.detail
 

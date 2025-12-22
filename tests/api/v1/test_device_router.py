@@ -24,7 +24,9 @@ def test_create_device(client: TestClient, admin_user_token: dict[str, str]):
 def test_update_device(
     client: TestClient, session: Session, admin_user_token: dict[str, str]
 ):
-    device = DeviceService(session).create(DeviceCreate(name="Initial", type="Test"), user=admin_user)
+    device = DeviceService(session).create(
+        DeviceCreate(name="Initial", type="Test"), user=admin_user
+    )
     response = client.put(
         f"/api/v1/devices/{device.name}",
         headers=admin_user_token,
@@ -38,7 +40,9 @@ def test_update_device(
 def test_delete_device(
     client: TestClient, session: Session, admin_user_token: dict[str, str]
 ):
-    device = DeviceService(session).create(DeviceCreate(name="ToDelete", type="Test"), user=admin_user)
+    device = DeviceService(session).create(
+        DeviceCreate(name="ToDelete", type="Test"), user=admin_user
+    )
     response = client.delete(f"/api/v1/devices/{device.name}", headers=admin_user_token)
     assert response.status_code == 200
     assert response.json() == {"ok": True}
@@ -55,8 +59,12 @@ def test_delete_device_not_found(client: TestClient, admin_user_token: dict[str,
 
 def test_read_devices(client: TestClient, session: Session):
     # For read tests, we need to create data first, which requires admin privileges
-    DeviceService(session).create(DeviceCreate(name="Device 1", type="Type A"), user=admin_user)
-    DeviceService(session).create(DeviceCreate(name="Device 2", type="Type B"), user=admin_user)
+    DeviceService(session).create(
+        DeviceCreate(name="Device 1", type="Type A"), user=admin_user
+    )
+    DeviceService(session).create(
+        DeviceCreate(name="Device 2", type="Type B"), user=admin_user
+    )
 
     response = client.get("/api/v1/devices/")
     assert response.status_code == 200
@@ -68,7 +76,9 @@ def test_read_devices(client: TestClient, session: Session):
 
 
 def test_read_device(client: TestClient, session: Session):
-    device = DeviceService(session).create(DeviceCreate(name="JET", type="Tokamak"), user=admin_user)
+    device = DeviceService(session).create(
+        DeviceCreate(name="JET", type="Tokamak"), user=admin_user
+    )
 
     response = client.get(f"/api/v1/devices/{device.name}")
     assert response.status_code == 200

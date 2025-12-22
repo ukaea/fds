@@ -7,8 +7,9 @@ from app.services.exceptions import (
     UnauthorizedError,
     ResourceNotFoundError,
     FDSValidationError,
-    ConflictError
+    ConflictError,
 )
+
 
 def add_exception_handlers(app):
     @app.exception_handler(DeviceNotFoundError)

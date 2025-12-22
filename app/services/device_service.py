@@ -21,7 +21,9 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         check_is_admin(user)
         return super().create(obj_in)
 
-    def update(self, *, db_obj: Device, obj_in: DeviceUpdate, user: AuthenticatedUser) -> Device:
+    def update(
+        self, *, db_obj: Device, obj_in: DeviceUpdate, user: AuthenticatedUser
+    ) -> Device:
         """
         Update a device. Requires global admin privileges.
         """

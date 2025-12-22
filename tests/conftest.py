@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, StaticPool, create_engine
 
-from app.auth.security import get_token_claims
+from app.auth.security import AuthenticatedUser, get_token_claims
 from app.core.db import get_session
 from app.main import app
 
@@ -30,6 +30,16 @@ def client_fixture(session: Session) -> Generator[TestClient, None, None]:
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(name="admin_user")
+def admin_user_fixture() -> AuthenticatedUser:
+    return AuthenticatedUser(id="admin", scopes=["fds-admin"])
+
+
+@pytest.fixture(name="mast_admin_user")
+def mast_admin_user_fixture() -> AuthenticatedUser:
+    return AuthenticatedUser(id="mast-admin", scopes=["mast_admin"])
 
 
 @pytest.fixture
@@ -86,9 +96,9 @@ def jet_admin_user_token() -> Generator[dict[str, str], None, None]:
     app.dependency_overrides.clear()
 
 
-
 @pytest.fixture(autouse=True)
 def mock_config(monkeypatch):
     from app.core.config import config
+
     monkeypatch.setattr(config, "OIDC_DOMAIN", "test-domain.com")
     monkeypatch.setattr(config, "OIDC_AUDIENCE", "test-audience")

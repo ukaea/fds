@@ -65,15 +65,15 @@ def update_device(
     current_device = device_service.get_by_name(device_name)
     if not current_device:
         raise HTTPException(status_code=404, detail="Device not found")
-        
+
     device = device_service.update(db_obj=current_device, obj_in=device_in, user=user)
     return device
 
 
 @router.delete("/{device_name}")
 def delete_device(
-    *, 
-    device_service: DeviceServiceDep, 
+    *,
+    device_service: DeviceServiceDep,
     device_name: str,
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict:
@@ -83,6 +83,6 @@ def delete_device(
     current_device = device_service.get_by_name(device_name)
     if not current_device:
         raise HTTPException(status_code=404, detail="Device not found")
-        
+
     device_service.delete(current_device.id, user)
     return {"ok": True}

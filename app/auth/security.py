@@ -48,7 +48,9 @@ async def get_token_claims(
         )
 
 
-async def get_current_user(claims: dict = Depends(get_token_claims)) -> AuthenticatedUser:
+async def get_current_user(
+    claims: dict = Depends(get_token_claims),
+) -> AuthenticatedUser:
     """
     Dependency that takes decoded JWT claims and returns an AuthenticatedUser model.
     This is a simple transformation and easy to test.
@@ -60,5 +62,3 @@ async def get_current_user(claims: dict = Depends(get_token_claims)) -> Authenti
         scopes = list(token_scopes_str)  # Assume it's an iterable if not string
 
     return AuthenticatedUser(id=claims.get("sub", ""), scopes=scopes)
-
-
