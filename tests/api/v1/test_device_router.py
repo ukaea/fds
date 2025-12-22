@@ -9,9 +9,9 @@ from app.auth.security import AuthenticatedUser
 admin_user = AuthenticatedUser(id="test-admin", scopes=["fds-admin"])
 
 
-def test_create_device(client: TestClient, admin_user_token: dict[str, str]):
+def test_create_device(test_client: TestClient, admin_user_token: dict[str, str]):
     """Test that creating a device succeeds for a user with admin scope."""
-    response = client.post(
+    response = test_client.post(
         "/api/v1/devices/",
         headers=admin_user_token,
         json={"name": "MAST-U", "type": "Tokamak", "status": "Operational"},
@@ -22,12 +22,12 @@ def test_create_device(client: TestClient, admin_user_token: dict[str, str]):
 
 
 def test_update_device(
-    client: TestClient, session: Session, admin_user_token: dict[str, str]
+    test_client: TestClient, session: Session, admin_user_token: dict[str, str]
 ):
     device = DeviceService(session).create(
         DeviceCreate(name="Initial", type="Test"), user=admin_user
     )
-    response = client.put(
+    response = test_client.put(
         f"/api/v1/devices/{device.name}",
         headers=admin_user_token,
         json={"name": "Updated Name"},
@@ -38,26 +38,34 @@ def test_update_device(
 
 
 def test_delete_device(
-    client: TestClient, session: Session, admin_user_token: dict[str, str]
+    test_client: TestClient, session: Session, admin_user_token: dict[str, str]
 ):
     device = DeviceService(session).create(
         DeviceCreate(name="ToDelete", type="Test"), user=admin_user
     )
-    response = client.delete(f"/api/v1/devices/{device.name}", headers=admin_user_token)
+    response = test_client.delete(
+        f"/api/v1/devices/{device.name}", headers=admin_user_token
+    )
     assert response.status_code == 200
     assert response.json() == {"ok": True}
 
     # Verify the device is actually deleted
-    response = client.get(f"/api/v1/devices/{device.name}", headers=admin_user_token)
+    response = test_client.get(
+        f"/api/v1/devices/{device.name}", headers=admin_user_token
+    )
     assert response.status_code == 404
 
 
-def test_delete_device_not_found(client: TestClient, admin_user_token: dict[str, str]):
-    response = client.delete("/api/v1/devices/NonExistent", headers=admin_user_token)
+def test_delete_device_not_found(
+    test_client: TestClient, admin_user_token: dict[str, str]
+):
+    response = test_client.delete(
+        "/api/v1/devices/NonExistent", headers=admin_user_token
+    )
     assert response.status_code == 404
 
 
-def test_read_devices(client: TestClient, session: Session):
+def test_read_devices(test_client: TestClient, session: Session):
     # For read tests, we need to create data first, which requires admin privileges
     DeviceService(session).create(
         DeviceCreate(name="Device 1", type="Type A"), user=admin_user
@@ -66,7 +74,7 @@ def test_read_devices(client: TestClient, session: Session):
         DeviceCreate(name="Device 2", type="Type B"), user=admin_user
     )
 
-    response = client.get("/api/v1/devices/")
+    response = test_client.get("/api/v1/devices/")
     assert response.status_code == 200
 
     data = response.json()
@@ -75,12 +83,12 @@ def test_read_devices(client: TestClient, session: Session):
     assert data[1]["name"] == "Device 2"
 
 
-def test_read_device(client: TestClient, session: Session):
+def test_read_device(test_client: TestClient, session: Session):
     device = DeviceService(session).create(
         DeviceCreate(name="JET", type="Tokamak"), user=admin_user
     )
 
-    response = client.get(f"/api/v1/devices/{device.name}")
+    response = test_client.get(f"/api/v1/devices/{device.name}")
     assert response.status_code == 200
     assert device.id is not None
 
@@ -89,6 +97,6 @@ def test_read_device(client: TestClient, session: Session):
     assert data["type"] == "Tokamak"
 
 
-def test_read_device_not_found(client: TestClient):
-    response = client.get("/api/v1/devices/NonExistent")
+def test_read_device_not_found(test_client: TestClient):
+    response = test_client.get("/api/v1/devices/NonExistent")
     assert response.status_code == 404

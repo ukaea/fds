@@ -1,20 +1,26 @@
 from collections.abc import Sequence
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter
 
 from app.models.source import Source, SourceCreate, SourceRead, SourceUpdate
 from app.api.deps import SourceServiceDep
+from app.auth.security import get_current_user, AuthenticatedUser
+from fastapi import Depends, status
 
 router = APIRouter()
 
 
-@router.post("/", response_model=SourceRead)
-def create_source(source_in: SourceCreate, source_service: SourceServiceDep) -> Source:
+@router.post("/", response_model=SourceRead, status_code=status.HTTP_201_CREATED)
+def create_source(
+    *,
+    source_in: SourceCreate,
+    source_service: SourceServiceDep,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> Source:
     """
-    Create a new source.
+    Create a new source. Requires global admin.
     """
-    source = source_service.create(source_in)
+    source = source_service.create(source_in, user)
     return source
 
 
@@ -29,37 +35,48 @@ def read_sources(
     return sources
 
 
-@router.get("/{source_id}", response_model=SourceRead)
-def read_source(source_id: int, source_service: SourceServiceDep) -> Source:
+@router.get("/{name}", response_model=SourceRead)
+def read_source_by_name(name: str, source_service: SourceServiceDep) -> Source:
     """
-    Retrieve a single source by ID.
+    Retrieve a single source by its descriptive name.
     """
-    source = source_service.get(source_id)
+    source = source_service.get_by_name(name)
     if not source:
-        raise HTTPException(status_code=404, detail="Source not found")
+        from app.services.exceptions import ResourceNotFoundError
+
+        raise ResourceNotFoundError(f"Source {name} not found")
     return source
 
 
-@router.put("/{source_id}", response_model=SourceRead)
+@router.put("/{id}", response_model=SourceRead)
 def update_source(
-    source_id: int, source_in: SourceUpdate, source_service: SourceServiceDep
+    *,
+    id: int,
+    source_in: SourceUpdate,
+    source_service: SourceServiceDep,
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> Source:
     """
-    Update a source.
+    Update a source. Requires global admin.
     """
-    db_source = source_service.get(source_id)
+    db_source = source_service.get(id)
     if not db_source:
-        raise HTTPException(status_code=404, detail="Source not found")
-    source = source_service.update(db_obj=db_source, obj_in=source_in)
+        from app.services.exceptions import ResourceNotFoundError
+
+        raise ResourceNotFoundError(f"Source {id} not found")
+    source = source_service.update(db_obj=db_source, obj_in=source_in, user=user)
     return source
 
 
-@router.delete("/{source_id}")
-def delete_source(source_id: int, source_service: SourceServiceDep) -> dict:
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_source(
+    *,
+    id: int,
+    source_service: SourceServiceDep,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> None:
     """
-    Delete a source.
+    Delete a source. Requires global admin.
     """
-    source = source_service.delete(source_id)
-    if not source:
-        raise HTTPException(status_code=404, detail="Source not found")
-    return {"ok": True}
+    source_service.delete_with_auth(id, user)
+    return None

@@ -12,7 +12,7 @@ admin_user = AuthenticatedUser(id="test-admin", scopes=["fds-admin"])
 
 
 def test_create_shot_global_endpoint(
-    client: TestClient,
+    test_client: TestClient,
     session: Session,
     admin_user_token: dict,
 ):
@@ -22,7 +22,7 @@ def test_create_shot_global_endpoint(
 
     shot_data = {"id": "shot-12345", "device_name": "MAST", "access_level": "public"}
 
-    response = client.post(
+    response = test_client.post(
         "/api/v1/shots/",
         headers=admin_user_token,
         json=shot_data,
@@ -36,7 +36,7 @@ def test_create_shot_global_endpoint(
 
 
 def test_create_shot_nested_endpoint(
-    client: TestClient,
+    test_client: TestClient,
     session: Session,
     admin_user_token: dict,
 ):
@@ -48,7 +48,7 @@ def test_create_shot_nested_endpoint(
 
     shot_data = {"id": "shot-54321", "access_level": "public"}
 
-    response = client.post(
+    response = test_client.post(
         f"/api/v1/devices/{mast.name}/shots/",
         headers=admin_user_token,
         json=shot_data,
@@ -59,7 +59,7 @@ def test_create_shot_nested_endpoint(
 
 
 def test_create_shot_conflict(
-    client: TestClient,
+    test_client: TestClient,
     session: Session,
     admin_user_token: dict,
 ):
@@ -72,7 +72,7 @@ def test_create_shot_conflict(
 
     shot_data = {"id": "shot-conflict", "device_name": "JET"}
 
-    response = client.post(
+    response = test_client.post(
         f"/api/v1/devices/{mast.name}/shots/",
         headers=admin_user_token,
         json=shot_data,
@@ -82,12 +82,12 @@ def test_create_shot_conflict(
 
 
 def test_create_shot_missing_device(
-    client: TestClient,
+    test_client: TestClient,
     # session: Session,
     admin_user_token: dict,
 ):
     shot_data = {"id": "shot-no-device"}
-    response = client.post(
+    response = test_client.post(
         "/api/v1/shots/",
         headers=admin_user_token,
         json=shot_data,
@@ -96,7 +96,7 @@ def test_create_shot_missing_device(
 
 
 def test_update_shot_nested_device_change(
-    client: TestClient,
+    test_client: TestClient,
     session: Session,
     admin_user_token: dict,
 ):
@@ -120,7 +120,7 @@ def test_update_shot_nested_device_change(
 
     # Move from MAST to JET via nested endpoint
     update_data = {"device_name": "JET"}
-    response = client.put(
+    response = test_client.put(
         f"/api/v1/devices/{mast.name}/shots/{shot.id}",
         headers=admin_user_token,
         json=update_data,
@@ -132,7 +132,7 @@ def test_update_shot_nested_device_change(
     assert updated_shot.device_id == jet.id
 
     # Verify old nested path returns 404
-    response = client.get(
+    response = test_client.get(
         f"/api/v1/devices/{mast.name}/shots/{shot.id}",
         headers=admin_user_token,
     )
@@ -140,7 +140,7 @@ def test_update_shot_nested_device_change(
 
 
 def test_update_shot_nested_mismatch_404(
-    client: TestClient,
+    test_client: TestClient,
     session: Session,
     admin_user_token: dict,
 ):
@@ -158,7 +158,7 @@ def test_update_shot_nested_mismatch_404(
     session.commit()
 
     # Try to update via JET endpoint although it belongs to MAST
-    response = client.put(
+    response = test_client.put(
         f"/api/v1/devices/{jet.name}/shots/{shot.id}",
         headers=admin_user_token,
         json={"access_level": "restricted"},
@@ -167,7 +167,7 @@ def test_update_shot_nested_mismatch_404(
 
 
 def test_update_shot_global(
-    client: TestClient,
+    test_client: TestClient,
     session: Session,
     admin_user_token: dict,
 ):
@@ -186,7 +186,7 @@ def test_update_shot_global(
 
     # Move from MAST to JET via global endpoint
     update_data = {"device_name": "JET", "access_level": "restricted"}
-    response = client.put(
+    response = test_client.put(
         f"/api/v1/shots/{shot.id}",
         headers=admin_user_token,
         json=update_data,
@@ -199,7 +199,7 @@ def test_update_shot_global(
 
 
 def test_delete_shot(
-    client: TestClient,
+    test_client: TestClient,
     session: Session,
     admin_user_token: dict,
 ):
@@ -215,7 +215,7 @@ def test_delete_shot(
     )
     session.commit()
 
-    response = client.delete(
+    response = test_client.delete(
         f"/api/v1/devices/{mast.name}/shots/{shot.id}",
         headers=admin_user_token,
     )
@@ -226,7 +226,7 @@ def test_delete_shot(
 
 
 def test_read_shots_include_device(
-    client: TestClient,
+    test_client: TestClient,
     session: Session,
     admin_user_token: dict,
 ):
@@ -240,7 +240,7 @@ def test_read_shots_include_device(
     session.commit()
 
     # Default: device should be excluded
-    response = client.get(
+    response = test_client.get(
         f"/api/v1/devices/{mast.name}/shots/", headers=admin_user_token
     )
     assert response.status_code == 200
@@ -250,7 +250,7 @@ def test_read_shots_include_device(
     assert "device_id" not in data[0]
 
     # With include_device=True: device should be present
-    response = client.get(
+    response = test_client.get(
         f"/api/v1/devices/{mast.name}/shots/?include_device=true",
         headers=admin_user_token,
     )

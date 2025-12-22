@@ -1,8 +1,11 @@
 from collections.abc import Sequence
-
 from sqlmodel import Session, select
 
+from app.auth.security import AuthenticatedUser
+from app.auth.permissions import check_is_admin, check_device_admin
 from app.models.datasetsource import DatasetSource, DatasetSourceCreate
+from app.services.dataset_service import DatasetService
+from app.services.exceptions import ResourceNotFoundError
 
 
 class DatasetSourceService:
@@ -19,23 +22,56 @@ class DatasetSourceService:
         )
         return self.session.exec(statement).first()
 
-    def create(self, obj_in: DatasetSourceCreate) -> DatasetSource:
+    def create(
+        self, obj_in: DatasetSourceCreate, user: AuthenticatedUser
+    ) -> DatasetSource:
         """
-        Create a new dataset-source link.
+        Create a new provenance record (DatasetSource link).
+        Requires authorisation for the associated dataset.
         """
+        # 1. Validate Dataset & Auth
+        dataset_service = DatasetService(self.session)
+        dataset = dataset_service.get(obj_in.dataset_id)
+        if not dataset:
+            raise ResourceNotFoundError(f"Dataset {obj_in.dataset_id} not found")
+
+        if dataset.device_name:
+            check_device_admin(user, dataset.device_name)
+        else:
+            check_is_admin(user)
+
+        # 2. Validate Source
+        from app.services.source_service import SourceService
+
+        if not SourceService(self.session).get(obj_in.source_id):
+            raise ResourceNotFoundError(f"Source {obj_in.source_id} not found")
+
+        # 3. Create
         db_obj = DatasetSource.model_validate(obj_in)
         self.session.add(db_obj)
         self.session.commit()
         self.session.refresh(db_obj)
         return db_obj
 
-    def delete(self, *, dataset_id: int, source_id: int) -> bool:
+    def delete_with_auth(
+        self, *, dataset_id: int, source_id: int, user: AuthenticatedUser
+    ) -> bool:
         """
-        Delete a dataset-source link by its composite primary key.
+        Delete a provenance record with authorisation.
         """
         db_obj = self.get(dataset_id=dataset_id, source_id=source_id)
         if not db_obj:
-            return False
+            raise ResourceNotFoundError("Provenance record not found")
+
+        # Auth: Use associated dataset's context
+        dataset_service = DatasetService(self.session)
+        dataset = dataset_service.get(dataset_id)
+        # Auth check
+        if dataset and dataset.device_name:
+            check_device_admin(user, dataset.device_name)
+        else:
+            check_is_admin(user)
+
         self.session.delete(db_obj)
         self.session.commit()
         return True

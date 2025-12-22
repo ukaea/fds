@@ -21,7 +21,7 @@ def session_fixture() -> Generator[Session, None, None]:
         yield session
 
 
-@pytest.fixture(name="client")
+@pytest.fixture(name="test_client")
 def client_fixture(session: Session) -> Generator[TestClient, None, None]:
     def get_session_override():
         return session

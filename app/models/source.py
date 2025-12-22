@@ -17,7 +17,7 @@ class Source(SourceBase, table=True):
 
 
 class SourceRead(SourceBase):
-    id: int
+    pass
 
 
 class SourceCreate(SourceBase):

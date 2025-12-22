@@ -1,0 +1,225 @@
+from fastapi import APIRouter, Depends, status
+from app.api.deps import DatasetServiceDep
+from app.auth.security import get_current_user, AuthenticatedUser
+from app.models.dataset import DatasetCreate, DatasetRead, DatasetUpdate
+from app.services.exceptions import ResourceNotFoundError
+
+router = APIRouter()
+
+
+@router.post(
+    "/datasets/",
+    response_model=DatasetRead,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_dataset_global(
+    *,
+    dataset_service: DatasetServiceDep,
+    dataset_in: DatasetCreate,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> DatasetRead:
+    """
+    Create a global dataset.
+    """
+    return dataset_service.create(dataset_in, user)
+
+
+@router.get(
+    "/datasets/",
+    response_model=list[DatasetRead],
+    response_model_exclude_none=True,
+)
+def read_datasets_global(
+    *,
+    dataset_service: DatasetServiceDep,
+    offset: int = 0,
+    limit: int = 100,
+) -> list[DatasetRead]:
+    """
+    Retrieve global datasets.
+    """
+    return dataset_service.get_multi(offset=offset, limit=limit)
+
+
+@router.post(
+    "/devices/{device_name}/datasets/",
+    response_model=DatasetRead,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_dataset_device(
+    *,
+    device_name: str,
+    dataset_service: DatasetServiceDep,
+    dataset_in: DatasetCreate,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> DatasetRead:
+    """
+    Create a dataset for a specific device context.
+    """
+    dataset_in.device_name = device_name
+    return dataset_service.create(dataset_in, user)
+
+
+@router.post(
+    "/devices/{device_name}/shots/{shot_id}/datasets/",
+    response_model=DatasetRead,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_dataset_shot(
+    *,
+    device_name: str,
+    shot_id: str,
+    dataset_service: DatasetServiceDep,
+    dataset_in: DatasetCreate,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> DatasetRead:
+    """
+    Create a dataset for a specific shot context.
+    """
+    dataset_in.device_name = device_name
+    dataset_in.shot_id = shot_id
+    return dataset_service.create(dataset_in, user)
+
+
+@router.get(
+    "/devices/{device_name}/shots/{shot_id}/datasets/",
+    response_model=list[DatasetRead],
+    response_model_exclude_none=True,
+)
+def read_datasets_shot(
+    *,
+    device_name: str,
+    shot_id: str,
+    dataset_service: DatasetServiceDep,
+    offset: int = 0,
+    limit: int = 100,
+) -> list[DatasetRead]:
+    """
+    Retrieve all datasets for a specific shot.
+    """
+    return dataset_service.get_datasets_for_shot(shot_id, offset=offset, limit=limit)
+
+
+@router.get(
+    "/devices/{device_name}/shots/{shot_id}/datasets/{name}",
+    response_model=DatasetRead,
+    response_model_exclude_none=True,
+)
+def read_dataset_by_name(
+    *,
+    device_name: str,
+    shot_id: str,
+    name: str,
+    dataset_service: DatasetServiceDep,
+) -> DatasetRead:
+    """
+    Retrieve a specific dataset by its descriptive name within a shot context.
+    """
+    dataset = dataset_service.get_by_name_in_context(
+        name=name, device_name=device_name, shot_id=shot_id
+    )
+    if not dataset:
+        raise ResourceNotFoundError(f"Dataset {name} not found in this context")
+    return dataset
+
+
+@router.get(
+    "/datasets/{name}",
+    response_model=DatasetRead,
+    response_model_exclude_none=True,
+)
+def read_dataset_global_by_name(
+    *,
+    name: str,
+    dataset_service: DatasetServiceDep,
+) -> DatasetRead:
+    """
+    Retrieve a specific global dataset by its descriptive name.
+    """
+    dataset = dataset_service.get_by_name_in_context(name=name)
+    if not dataset:
+        raise ResourceNotFoundError(f"Global dataset {name} not found")
+    return dataset
+
+
+@router.get(
+    "/devices/{device_name}/datasets/",
+    response_model=list[DatasetRead],
+    response_model_exclude_none=True,
+)
+def read_datasets_device(
+    *,
+    device_name: str,
+    dataset_service: DatasetServiceDep,
+    offset: int = 0,
+    limit: int = 100,
+) -> list[DatasetRead]:
+    """
+    Retrieve datasets for a specific device (not tied to any shot).
+    """
+    return dataset_service.get_datasets_for_device(
+        device_name, offset=offset, limit=limit
+    )
+
+
+@router.get(
+    "/devices/{device_name}/datasets/{name}",
+    response_model=DatasetRead,
+    response_model_exclude_none=True,
+)
+def read_dataset_device_by_name(
+    *,
+    device_name: str,
+    name: str,
+    dataset_service: DatasetServiceDep,
+) -> DatasetRead:
+    """
+    Retrieve a specific device-level dataset by its descriptive name.
+    """
+    dataset = dataset_service.get_by_name_in_context(name=name, device_name=device_name)
+    if not dataset:
+        raise ResourceNotFoundError(
+            f"Dataset {name} not found for device {device_name}"
+        )
+    return dataset
+
+
+@router.patch(
+    "/datasets/{id}",
+    response_model=DatasetRead,
+    response_model_exclude_none=True,
+)
+def update_dataset(
+    *,
+    id: int,
+    dataset_in: DatasetUpdate,
+    dataset_service: DatasetServiceDep,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> DatasetRead:
+    """
+    Update a dataset. Requires appropriate tiered authorization.
+    """
+    db_obj = dataset_service.get(id)
+    if not db_obj:
+        raise ResourceNotFoundError(f"Dataset {id} not found")
+    return dataset_service.update(db_obj=db_obj, obj_in=dataset_in, user=user)
+
+
+@router.delete(
+    "/datasets/{id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_dataset(
+    *,
+    id: int,
+    dataset_service: DatasetServiceDep,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> None:
+    """
+    Delete a dataset by internal ID. Requires appropriate tiered authorization.
+    """
+    dataset_service.delete_with_auth(id, user)
+    return None
