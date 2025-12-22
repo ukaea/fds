@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from .device import Device
     from .dataset import Dataset
+    from .device import Device, DeviceRead
 
 
 class AccessLevel(str, Enum):
@@ -31,6 +31,14 @@ class Shot(ShotBase, table=True):
     device: "Device" = Relationship(back_populates="shots")
     datasets: list["Dataset"] = Relationship(back_populates="shot")
 
+    @property
+    def device_name(self) -> str | None:
+        """
+        Calculated property that provides the device name from the relationship,
+        avoiding the need for the client to handle internal integer IDs.
+        """
+        return self.device.name if self.device else None
+
 
 class ShotCreate(SQLModel):
     id: str
@@ -38,8 +46,11 @@ class ShotCreate(SQLModel):
     device_name: str | None = None
 
 
-class ShotRead(ShotBase):
-    pass
+class ShotRead(SQLModel):
+    id: str
+    access_level: AccessLevel
+    device_name: str | None = None
+    device: DeviceRead | None = None
 
 
 class ShotUpdate(SQLModel):

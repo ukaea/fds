@@ -7,6 +7,9 @@ from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
 from app.auth.security import AuthenticatedUser
 
+# Dummy admin user for test setup
+admin_user = AuthenticatedUser(id="test-admin", scopes=["fds-admin"])
+
 
 def test_create_shot_global_endpoint(
     client: TestClient,
@@ -14,7 +17,7 @@ def test_create_shot_global_endpoint(
     admin_user_token: dict,
 ):
     device_service = DeviceService(session)
-    mast = device_service.create(DeviceCreate(name="MAST", type="Tokamak"))
+    device_service.create(DeviceCreate(name="MAST", type="Tokamak"), user=admin_user)
     session.commit()
 
     shot_data = {"id": "shot-12345", "device_name": "MAST", "access_level": "public"}
@@ -28,6 +31,8 @@ def test_create_shot_global_endpoint(
     data = response.json()
     assert data["id"] == "shot-12345"
     assert data["access_level"] == "public"
+    assert "device_id" not in data
+    assert "device" not in data
 
 
 def test_create_shot_nested_endpoint(
@@ -36,7 +41,9 @@ def test_create_shot_nested_endpoint(
     admin_user_token: dict,
 ):
     device_service = DeviceService(session)
-    mast = device_service.create(DeviceCreate(name="MAST", type="Tokamak"))
+    mast = device_service.create(
+        DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
+    )
     session.commit()
 
     shot_data = {"id": "shot-54321", "access_level": "public"}
@@ -57,8 +64,10 @@ def test_create_shot_conflict(
     admin_user_token: dict,
 ):
     device_service = DeviceService(session)
-    mast = device_service.create(DeviceCreate(name="MAST", type="Tokamak"))
-    device_service.create(DeviceCreate(name="JET", type="Tokamak"))
+    mast = device_service.create(
+        DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
+    )
+    device_service.create(DeviceCreate(name="JET", type="Tokamak"), user=admin_user)
     session.commit()
 
     shot_data = {"id": "shot-conflict", "device_name": "JET"}
@@ -74,7 +83,7 @@ def test_create_shot_conflict(
 
 def test_create_shot_missing_device(
     client: TestClient,
-    session: Session,
+    # session: Session,
     admin_user_token: dict,
 ):
     shot_data = {"id": "shot-no-device"}
@@ -95,11 +104,17 @@ def test_update_shot_nested_device_change(
     shot_service = ShotService(session)
     admin_user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
 
-    mast = device_service.create(DeviceCreate(name="MAST", type="Tokamak"))
-    jet = device_service.create(DeviceCreate(name="JET", type="Tokamak"))
+    mast = device_service.create(
+        DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
+    )
+    jet = device_service.create(
+        DeviceCreate(name="JET", type="Tokamak"), user=admin_user
+    )
     shot = shot_service.create(
-        ShotCreate(id="shot-to-move", device_name="MAST", access_level=AccessLevel.PUBLIC),
-        user=admin_user
+        ShotCreate(
+            id="shot-to-move", device_name="MAST", access_level=AccessLevel.PUBLIC
+        ),
+        user=admin_user,
     )
     session.commit()
 
@@ -111,7 +126,7 @@ def test_update_shot_nested_device_change(
         json=update_data,
     )
     assert response.status_code == 200
-    
+
     # Verify it moved
     updated_shot = shot_service.get(shot.id)
     assert updated_shot.device_id == jet.id
@@ -133,11 +148,12 @@ def test_update_shot_nested_mismatch_404(
     shot_service = ShotService(session)
     admin_user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
 
-    mast = device_service.create(DeviceCreate(name="MAST", type="Tokamak"))
-    jet = device_service.create(DeviceCreate(name="JET", type="Tokamak"))
+    device_service.create(DeviceCreate(name="MAST", type="Tokamak"), user=admin_user)
+    jet = device_service.create(
+        DeviceCreate(name="JET", type="Tokamak"), user=admin_user
+    )
     shot = shot_service.create(
-        ShotCreate(id="shot-on-mast", device_name="MAST"),
-        user=admin_user
+        ShotCreate(id="shot-on-mast", device_name="MAST"), user=admin_user
     )
     session.commit()
 
@@ -159,11 +175,12 @@ def test_update_shot_global(
     shot_service = ShotService(session)
     admin_user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
 
-    mast = device_service.create(DeviceCreate(name="MAST", type="Tokamak"))
-    jet = device_service.create(DeviceCreate(name="JET", type="Tokamak"))
+    device_service.create(DeviceCreate(name="MAST", type="Tokamak"), user=admin_user)
+    jet = device_service.create(
+        DeviceCreate(name="JET", type="Tokamak"), user=admin_user
+    )
     shot = shot_service.create(
-        ShotCreate(id="shot-global-update", device_name="MAST"),
-        user=admin_user
+        ShotCreate(id="shot-global-update", device_name="MAST"), user=admin_user
     )
     session.commit()
 
@@ -175,7 +192,7 @@ def test_update_shot_global(
         json=update_data,
     )
     assert response.status_code == 200
-    
+
     updated_shot = shot_service.get(shot.id)
     assert updated_shot.device_id == jet.id
     assert updated_shot.access_level == AccessLevel.RESTRICTED
@@ -190,8 +207,12 @@ def test_delete_shot(
     shot_service = ShotService(session)
     admin_user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
 
-    mast = device_service.create(DeviceCreate(name="MAST", type="Tokamak"))
-    shot = shot_service.create(ShotCreate(id="shot-to-delete", device_name="MAST"), user=admin_user)
+    mast = device_service.create(
+        DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
+    )
+    shot = shot_service.create(
+        ShotCreate(id="shot-to-delete", device_name="MAST"), user=admin_user
+    )
     session.commit()
 
     response = client.delete(
@@ -202,3 +223,40 @@ def test_delete_shot(
 
     # Verify it's deleted
     assert shot_service.get(shot.id) is None
+
+
+def test_read_shots_include_device(
+    client: TestClient,
+    session: Session,
+    admin_user_token: dict,
+):
+    device_service = DeviceService(session)
+    shot_service = ShotService(session)
+
+    mast = device_service.create(
+        DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
+    )
+    shot_service.create(ShotCreate(id="shot-1", device_name="MAST"), user=admin_user)
+    session.commit()
+
+    # Default: device should be excluded
+    response = client.get(
+        f"/api/v1/devices/{mast.name}/shots/", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert "device" not in data[0]
+    assert "device_id" not in data[0]
+
+    # With include_device=True: device should be present
+    response = client.get(
+        f"/api/v1/devices/{mast.name}/shots/?include_device=true",
+        headers=admin_user_token,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert "device" in data[0]
+    assert data[0]["device"]["name"] == "MAST"
+    assert "device_id" not in data[0]
