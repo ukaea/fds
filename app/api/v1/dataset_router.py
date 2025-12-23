@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Request
+from fastapi.responses import JSONResponse
 from app.api.deps import DatasetServiceDep
 from app.auth.security import get_current_user, AuthenticatedUser
 from app.models.dataset import DatasetCreate, DatasetRead, DatasetUpdate
 from app.services.exceptions import ResourceNotFoundError
+from app.services.jsonld import map_dataset_to_dcat
 
 router = APIRouter()
 
@@ -117,19 +119,28 @@ def read_datasets_shot(
 )
 def read_dataset_by_name(
     *,
+    request: Request,
     device_name: str,
     shot_id: str,
     name: str,
     dataset_service: DatasetServiceDep,
-) -> DatasetRead:
+) -> DatasetRead | JSONResponse:
     """
     Retrieve a specific dataset by its descriptive name within a shot context.
+    Supports Content Negotiation:
+    - Accept: application/ld+json -> Returns DCAT Metadata
     """
     dataset = dataset_service.get_by_name_in_context(
         name=name, device_name=device_name, shot_id=shot_id
     )
     if not dataset:
         raise ResourceNotFoundError(f"Dataset {name} not found in this context")
+
+    # Content Negotiation
+    if "application/ld+json" in request.headers.get("accept", ""):
+        dcat_metadata = map_dataset_to_dcat(dataset, str(request.base_url).rstrip("/"))
+        return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
+
     return dataset_service.to_read_model(dataset)
 
 
@@ -140,15 +151,24 @@ def read_dataset_by_name(
 )
 def read_dataset_global_by_name(
     *,
+    request: Request,
     name: str,
     dataset_service: DatasetServiceDep,
-) -> DatasetRead:
+) -> DatasetRead | JSONResponse:
     """
     Retrieve a specific global dataset by its descriptive name.
+    Supports Content Negotiation:
+    - Accept: application/ld+json -> Returns DCAT Metadata
     """
     dataset = dataset_service.get_by_name_in_context(name=name)
     if not dataset:
         raise ResourceNotFoundError(f"Global dataset {name} not found")
+
+    # Content Negotiation
+    if "application/ld+json" in request.headers.get("accept", ""):
+        dcat_metadata = map_dataset_to_dcat(dataset, str(request.base_url).rstrip("/"))
+        return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
+
     return dataset_service.to_read_model(dataset)
 
 
@@ -180,18 +200,27 @@ def read_datasets_device(
 )
 def read_dataset_device_by_name(
     *,
+    request: Request,
     device_name: str,
     name: str,
     dataset_service: DatasetServiceDep,
-) -> DatasetRead:
+) -> DatasetRead | JSONResponse:
     """
     Retrieve a specific device-level dataset by its descriptive name.
+    Supports Content Negotiation:
+    - Accept: application/ld+json -> Returns DCAT Metadata
     """
     dataset = dataset_service.get_by_name_in_context(name=name, device_name=device_name)
     if not dataset:
         raise ResourceNotFoundError(
             f"Dataset {name} not found for device {device_name}"
         )
+
+    # Content Negotiation
+    if "application/ld+json" in request.headers.get("accept", ""):
+        dcat_metadata = map_dataset_to_dcat(dataset, str(request.base_url).rstrip("/"))
+        return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
+
     return dataset_service.to_read_model(dataset)
 
 
