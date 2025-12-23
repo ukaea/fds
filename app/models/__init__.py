@@ -1,3 +1,4 @@
+from .common import AccessLevel
 from .device import Device, DeviceRead, DeviceCreate, DeviceUpdate
 from .shot import Shot, ShotRead, ShotCreate, ShotUpdate
 from .dataset import Dataset, DatasetRead, DatasetCreate, DatasetUpdate
@@ -31,4 +32,5 @@ __all__ = [
     "SourceUpdate",
     "DatasetSource",
     "DatasetSourceCreate",
+    "AccessLevel",
 ]

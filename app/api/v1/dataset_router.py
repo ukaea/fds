@@ -22,7 +22,8 @@ def create_dataset_global(
     """
     Create a global dataset.
     """
-    return dataset_service.create(dataset_in, user)
+    dataset = dataset_service.create(dataset_in, user)
+    return dataset_service.to_read_model(dataset)
 
 
 @router.get(
@@ -39,7 +40,8 @@ def read_datasets_global(
     """
     Retrieve global datasets.
     """
-    return dataset_service.get_multi(offset=offset, limit=limit)
+    datasets = dataset_service.get_multi(offset=offset, limit=limit)
+    return [dataset_service.to_read_model(d) for d in datasets]
 
 
 @router.post(
@@ -59,7 +61,8 @@ def create_dataset_device(
     Create a dataset for a specific device context.
     """
     dataset_in.device_name = device_name
-    return dataset_service.create(dataset_in, user)
+    dataset = dataset_service.create(dataset_in, user)
+    return dataset_service.to_read_model(dataset)
 
 
 @router.post(
@@ -81,7 +84,8 @@ def create_dataset_shot(
     """
     dataset_in.device_name = device_name
     dataset_in.shot_id = shot_id
-    return dataset_service.create(dataset_in, user)
+    dataset = dataset_service.create(dataset_in, user)
+    return dataset_service.to_read_model(dataset)
 
 
 @router.get(
@@ -100,7 +104,10 @@ def read_datasets_shot(
     """
     Retrieve all datasets for a specific shot.
     """
-    return dataset_service.get_datasets_for_shot(shot_id, offset=offset, limit=limit)
+    datasets = dataset_service.get_datasets_for_shot(
+        shot_id, offset=offset, limit=limit
+    )
+    return [dataset_service.to_read_model(d) for d in datasets]
 
 
 @router.get(
@@ -123,7 +130,7 @@ def read_dataset_by_name(
     )
     if not dataset:
         raise ResourceNotFoundError(f"Dataset {name} not found in this context")
-    return dataset
+    return dataset_service.to_read_model(dataset)
 
 
 @router.get(
@@ -142,7 +149,7 @@ def read_dataset_global_by_name(
     dataset = dataset_service.get_by_name_in_context(name=name)
     if not dataset:
         raise ResourceNotFoundError(f"Global dataset {name} not found")
-    return dataset
+    return dataset_service.to_read_model(dataset)
 
 
 @router.get(
@@ -160,9 +167,10 @@ def read_datasets_device(
     """
     Retrieve datasets for a specific device (not tied to any shot).
     """
-    return dataset_service.get_datasets_for_device(
+    datasets = dataset_service.get_datasets_for_device(
         device_name, offset=offset, limit=limit
     )
+    return [dataset_service.to_read_model(d) for d in datasets]
 
 
 @router.get(
@@ -184,7 +192,7 @@ def read_dataset_device_by_name(
         raise ResourceNotFoundError(
             f"Dataset {name} not found for device {device_name}"
         )
-    return dataset
+    return dataset_service.to_read_model(dataset)
 
 
 @router.patch(
@@ -205,7 +213,8 @@ def update_dataset(
     db_obj = dataset_service.get(id)
     if not db_obj:
         raise ResourceNotFoundError(f"Dataset {id} not found")
-    return dataset_service.update(db_obj=db_obj, obj_in=dataset_in, user=user)
+    dataset = dataset_service.update(db_obj=db_obj, obj_in=dataset_in, user=user)
+    return dataset_service.to_read_model(dataset)
 
 
 @router.delete(

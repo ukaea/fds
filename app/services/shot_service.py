@@ -17,6 +17,7 @@ from app.services.exceptions import (
 )
 from app.auth.security import AuthenticatedUser
 from app.auth.permissions import check_device_admin
+from app.auth.access_control import get_effective_access_level
 
 
 class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
@@ -184,6 +185,9 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         from app.models.shot import ShotRead
 
         read_model = ShotRead.model_validate(shot)
+        read_model.effective_access_level = get_effective_access_level(
+            shot, self.session
+        )
         if not include_device:
             read_model.device = None
         return read_model

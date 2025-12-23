@@ -1,6 +1,8 @@
 from typing import TYPE_CHECKING
 from sqlmodel import Field, Relationship, SQLModel
 
+from .common import AccessLevel
+
 
 if TYPE_CHECKING:
     from .shot import Shot
@@ -11,6 +13,7 @@ class DeviceBase(SQLModel):
     type: str | None = Field(default=None, index=True)
     began_operations: str | None = None
     status: str | None = Field(default=None, index=True)
+    access_level: AccessLevel | None = Field(default=None, index=True)
 
 
 class Device(DeviceBase, table=True):
@@ -23,7 +26,7 @@ class DeviceCreate(DeviceBase):
 
 
 class DeviceRead(DeviceBase):
-    pass
+    effective_access_level: AccessLevel | None = None
 
 
 class DeviceUpdate(SQLModel):

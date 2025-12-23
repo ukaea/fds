@@ -3,11 +3,12 @@ from sqlmodel import Session, select
 
 from app.auth.security import AuthenticatedUser
 from app.auth.permissions import check_is_admin, check_device_admin
-from app.models.dataset import Dataset, DatasetCreate, DatasetUpdate
+from app.models.dataset import Dataset, DatasetCreate, DatasetUpdate, DatasetRead
 from app.services.base_service import BaseService
 from app.services.shot_service import ShotService
 from app.services.device_service import DeviceService
 from app.services.exceptions import ResourceNotFoundError, ForbiddenError, ConflictError
+from app.auth.access_control import get_effective_access_level
 
 
 class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
@@ -130,3 +131,13 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             .limit(limit)
         )
         return self.session.exec(statement).all()
+
+    def to_read_model(self, dataset: Dataset) -> DatasetRead:
+        """
+        Converts a Dataset ORM object to a DatasetRead DTO, including the effective access level.
+        """
+        read_model = DatasetRead.model_validate(dataset)
+        read_model.effective_access_level = get_effective_access_level(
+            dataset, self.session
+        )
+        return read_model

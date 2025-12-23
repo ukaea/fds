@@ -2,6 +2,8 @@ from typing import TYPE_CHECKING
 
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
+from .common import AccessLevel
+
 if TYPE_CHECKING:
     from .shot import Shot
     from .datasetsource import DatasetSource
@@ -13,6 +15,7 @@ class DatasetBase(SQLModel):
     data_url: str
     quality_flag: str | None = Field(default=None, index=True)
     device_name: str | None = Field(default=None, index=True)
+    access_level: AccessLevel | None = Field(default=None, index=True)
 
 
 class Dataset(DatasetBase, table=True):
@@ -34,6 +37,7 @@ class DatasetCreate(DatasetBase):
 
 class DatasetRead(DatasetBase):
     shot_id: str | None = None
+    effective_access_level: AccessLevel | None = None
 
 
 class DatasetUpdate(SQLModel):

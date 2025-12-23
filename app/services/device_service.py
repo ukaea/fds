@@ -1,9 +1,10 @@
 from sqlmodel import Session, select
 
-from app.models.device import Device, DeviceCreate, DeviceUpdate
+from app.models.device import Device, DeviceCreate, DeviceUpdate, DeviceRead
 from app.services.base_service import BaseService
 from app.auth.security import AuthenticatedUser
 from app.auth.permissions import check_is_admin
+from app.auth.access_control import get_effective_access_level
 
 
 class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
@@ -41,3 +42,13 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         self.session.delete(db_obj)
         self.session.commit()
         return True
+
+    def to_read_model(self, device: Device) -> DeviceRead:
+        """
+        Converts a Device ORM object to a DeviceRead DTO, including the effective access level.
+        """
+        read_model = DeviceRead.model_validate(device)
+        read_model.effective_access_level = get_effective_access_level(
+            device, self.session
+        )
+        return read_model

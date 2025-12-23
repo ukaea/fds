@@ -18,7 +18,7 @@ def create_device(
     Create a new device.
     """
     device = device_service.create(device_in, user)
-    return device
+    return device_service.to_read_model(device)
 
 
 @router.get("/", response_model=list[DeviceRead])
@@ -32,7 +32,7 @@ def read_devices(
     Retrieve all devices.
     """
     devices = device_service.get_multi(offset=offset, limit=limit)
-    return [DeviceRead.model_validate(d) for d in devices]
+    return [device_service.to_read_model(d) for d in devices]
 
 
 @router.get("/{device_name}", response_model=DeviceRead)
@@ -48,7 +48,7 @@ def read_device(
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
-    return DeviceRead.model_validate(device)
+    return device_service.to_read_model(device)
 
 
 @router.put("/{device_name}", response_model=DeviceRead)
@@ -67,7 +67,7 @@ def update_device(
         raise HTTPException(status_code=404, detail="Device not found")
 
     device = device_service.update(db_obj=current_device, obj_in=device_in, user=user)
-    return device
+    return device_service.to_read_model(device)
 
 
 @router.delete("/{device_name}")

@@ -1,29 +1,16 @@
-from enum import Enum
 from typing import TYPE_CHECKING
-
 from sqlmodel import Field, Relationship, SQLModel
+
+from .common import AccessLevel
 
 if TYPE_CHECKING:
     from .dataset import Dataset
     from .device import Device, DeviceRead
 
 
-class AccessLevel(str, Enum):
-    """
-    Enum for the access level of a shot.
-    - PUBLIC: Accessible to anyone.
-    - RESTRICTED: Accessible to authenticated users with general permissions.
-    - EMBARGOED: Accessible only to a specific list of users.
-    """
-
-    PUBLIC = "public"
-    RESTRICTED = "restricted"
-    EMBARGOED = "embargoed"
-
-
 class ShotBase(SQLModel):
     id: str = Field(primary_key=True, index=True)
-    access_level: AccessLevel = Field(default=AccessLevel.RESTRICTED, index=True)
+    access_level: AccessLevel | None = Field(default=None, index=True)
     device_id: int | None = Field(default=None, foreign_key="device.id", index=True)
 
 
@@ -42,15 +29,16 @@ class Shot(ShotBase, table=True):
 
 class ShotCreate(SQLModel):
     id: str
-    access_level: AccessLevel = AccessLevel.RESTRICTED
+    access_level: AccessLevel | None = None
     device_name: str | None = None
 
 
 class ShotRead(SQLModel):
     id: str
-    access_level: AccessLevel
+    access_level: AccessLevel | None = None
+    effective_access_level: AccessLevel | None = None
     device_name: str | None = None
-    device: DeviceRead | None = None
+    device: "DeviceRead | None" = None
 
 
 class ShotUpdate(SQLModel):
