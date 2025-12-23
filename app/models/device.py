@@ -1,14 +1,14 @@
 from typing import TYPE_CHECKING
 from sqlmodel import Field, Relationship, SQLModel
 
-from .common import AccessLevel
+from .common import AccessLevel, DescriptiveMixin, TimestampMixin
 
 
 if TYPE_CHECKING:
     from .shot import Shot
 
 
-class DeviceBase(SQLModel):
+class DeviceBase(DescriptiveMixin, TimestampMixin, SQLModel):
     name: str = Field(index=True, unique=True)
     type: str | None = Field(default=None, index=True)
     began_operations: str | None = None
@@ -34,3 +34,7 @@ class DeviceUpdate(SQLModel):
     type: str | None = None
     began_operations: str | None = None
     status: str | None = None
+    access_level: AccessLevel | None = None
+    title: str | None = None
+    description: str | None = None
+    publisher: str | None = None
