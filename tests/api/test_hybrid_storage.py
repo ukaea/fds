@@ -1,0 +1,56 @@
+from fastapi.testclient import TestClient
+from sqlmodel import Session
+
+from app.models.device import Device
+from app.models.shot import Shot
+
+
+def test_hybrid_storage_fields(
+    test_client: TestClient, session: Session, admin_user_token: dict[str, str]
+):
+    # 1. Create Context (Device & Shot)
+    device = Device(name="test-device-hybrid", description="Hybrid Storage Test Device")
+    session.add(device)
+    session.commit()
+
+    shot = Shot(id="1001", device_name=device.name, device_id=device.id)
+    session.add(shot)
+    session.commit()
+
+    # 2. Create Dataset with Hybrid Storage fields
+    dataset_data = {
+        "name": "hybrid_dataset",
+        "level": 1,
+        "data_url": "s3://bucket/hybrid",
+        "device_name": device.name,
+        "shot_id": shot.id,
+        "media_type": "application/vnd.icechunk+zarr",
+        "format": "icechunk",
+        "title": "Hybrid Storage Dataset",
+    }
+
+    # We use the API to create it to ensure the Pydantic model accepts the fields
+    # Note: We must use the admin_user_token to be authorized
+    response = test_client.post(
+        f"/api/v1/devices/{device.name}/shots/{shot.id}/datasets/",
+        json=dataset_data,
+        headers=admin_user_token,
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["media_type"] == "application/vnd.icechunk+zarr"
+    assert data["format"] == "icechunk"
+
+    # 3. Retrieve content negotiation (JSON-LD)
+    # Note: Retrieval is by NAME, not ID
+    dataset_name = dataset_data["name"]
+    response = test_client.get(
+        f"/api/v1/devices/{device.name}/shots/{shot.id}/datasets/{dataset_name}",
+        headers={"Accept": "application/ld+json"},
+    )
+    assert response.status_code == 200
+    ld_data = response.json()
+
+    # 4. Verify JSON-LD mapping
+    assert ld_data["mediaType"] == "application/vnd.icechunk+zarr"
+    assert ld_data["format"] == "icechunk"

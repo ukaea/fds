@@ -21,6 +21,8 @@ METADATA_CONTEXT = {
     "dataset": {"@id": "dcat:dataset", "@type": "@id"},
     "service": {"@id": "dcat:service", "@type": "@id"},
     "catalog": {"@id": "dcat:catalog", "@type": "@id"},
+    "mediaType": "dcat:mediaType",
+    "format": "dct:format",
 }
 
 
@@ -85,6 +87,8 @@ def map_dataset_to_dcat(
         "keywords": dataset.keywords.split(",") if dataset.keywords else [],
         "license": dataset.license,
         "version": dataset.version,
+        "mediaType": dataset.media_type,
+        "format": dataset.format,
     }
 
     # Access Rights mapping

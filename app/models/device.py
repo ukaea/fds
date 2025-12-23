@@ -26,6 +26,7 @@ class DeviceCreate(DeviceBase):
 
 
 class DeviceRead(DeviceBase):
+    id: int
     effective_access_level: AccessLevel | None = None
 
 

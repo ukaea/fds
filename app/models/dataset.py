@@ -19,6 +19,8 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
     license: str | None = Field(default=None)
     version: str | None = Field(default=None, index=True)
     keywords: str | None = Field(default=None)  # Comma-separated list
+    media_type: str | None = Field(default=None)
+    format: str | None = Field(default=None)
 
 
 class Dataset(DatasetBase, table=True):
@@ -39,6 +41,7 @@ class DatasetCreate(DatasetBase):
 
 
 class DatasetRead(DatasetBase):
+    id: int
     shot_id: str | None = None
     effective_access_level: AccessLevel | None = None
 
@@ -57,3 +60,5 @@ class DatasetUpdate(SQLModel):
     license: str | None = None
     version: str | None = None
     keywords: str | None = None
+    media_type: str | None = None
+    format: str | None = None
