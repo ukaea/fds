@@ -1,13 +1,11 @@
 import pytest
-from sqlmodel import Session
 from sqlalchemy.exc import IntegrityError
-
-from app.models.source import Source, SourceCreate, SourceUpdate
-from app.services.source_service import SourceService
-from app.services.exceptions import ResourceNotFoundError
-
+from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
+from app.models.source import Source, SourceCreate, SourceUpdate
+from app.services.exceptions import ResourceNotFoundError
+from app.services.source_service import SourceService
 
 
 def test_create_source(session: Session, admin_user: AuthenticatedUser):

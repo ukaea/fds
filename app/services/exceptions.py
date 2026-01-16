@@ -38,3 +38,9 @@ class ConflictError(ValueError):
     """Raised when there is a conflict between provided identifiers (e.g. URL vs Body)."""
 
     pass
+
+
+class ConfigurationError(ValueError):
+    """Raised when the service is misconfigured (e.g. missing STS role)."""
+
+    pass

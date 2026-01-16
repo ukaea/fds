@@ -5,8 +5,8 @@ from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 from .common import AccessLevel, DescriptiveMixin, TimestampMixin
 
 if TYPE_CHECKING:
-    from .shot import Shot
     from .datasetsource import DatasetSource
+    from .shot import Shot
 
 
 class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):

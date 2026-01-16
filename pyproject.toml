@@ -13,6 +13,11 @@ dependencies = [
     "sqlmodel>=0.0.27",
 ]
 
+[project.optional-dependencies]
+s3 = [
+    "boto3>=1.42.25",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.1",

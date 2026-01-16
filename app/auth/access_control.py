@@ -1,9 +1,11 @@
 from typing import Union
+
 from sqlmodel import Session, select
+
 from app.models.common import AccessLevel
+from app.models.dataset import Dataset
 from app.models.device import Device
 from app.models.shot import Shot
-from app.models.dataset import Dataset
 
 DEFAULT_ACCESS_LEVEL = AccessLevel.RESTRICTED
 

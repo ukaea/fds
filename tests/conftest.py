@@ -7,7 +7,6 @@ from sqlmodel import Session, SQLModel, StaticPool, create_engine
 from app.auth.security import AuthenticatedUser, get_token_claims
 from app.core.db import get_session
 from app.main import app
-
 from app.models import dataset, datasetsource, device, shot, source  # noqa: F401
 
 

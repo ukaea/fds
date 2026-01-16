@@ -1,13 +1,14 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
+
 from app.services.exceptions import (
-    DeviceNotFoundError,
-    ShotContextError,
-    ForbiddenError,
-    UnauthorizedError,
-    ResourceNotFoundError,
-    FDSValidationError,
     ConflictError,
+    DeviceNotFoundError,
+    FDSValidationError,
+    ForbiddenError,
+    ResourceNotFoundError,
+    ShotContextError,
+    UnauthorizedError,
 )
 
 

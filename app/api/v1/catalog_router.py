@@ -1,6 +1,6 @@
-from typing import Any, Dict
+from typing import Any
 
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session, select
 
 from app.core.db import get_session
@@ -10,11 +10,11 @@ from app.services.jsonld import generate_context, map_device_to_dcat
 router = APIRouter()
 
 
-@router.get("/catalog", response_model=Dict[str, Any])
+@router.get("/catalog", response_model=dict[str, Any])
 def get_catalog(
     request: Request,
     session: Session = Depends(get_session),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Returns the root Data Catalog (DCAT) for the Fusion Data Service.
     This catalog aggregates all Devices (as sub-catalogs).

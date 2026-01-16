@@ -1,10 +1,10 @@
 from sqlmodel import Session, select
 
-from app.models.device import Device, DeviceCreate, DeviceUpdate, DeviceRead
-from app.services.base_service import BaseService
-from app.auth.security import AuthenticatedUser
-from app.auth.permissions import check_is_admin
 from app.auth.access_control import get_effective_access_level
+from app.auth.permissions import check_is_admin
+from app.auth.security import AuthenticatedUser
+from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
+from app.services.base_service import BaseService
 
 
 class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):

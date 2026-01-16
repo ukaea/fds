@@ -1,22 +1,16 @@
 import jwt
 from fastapi import Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, ValidationError
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import ValidationError
 
 from app.auth.exceptions import create_unauthorized_exception
 from app.auth.jwks import JWKSClientDep
 from app.core.config import config
+from app.models.user import AuthenticatedUser
 
 # This creates the security scheme. It simply looks for an
 # 'Authorization: Bearer <token>' header.
 bearer_scheme = HTTPBearer(auto_error=False)
-
-
-class AuthenticatedUser(BaseModel):
-    """Placeholder for user data extracted from the JWT."""
-
-    id: str
-    scopes: list[str] = []
 
 
 async def get_token_claims(

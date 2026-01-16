@@ -1,8 +1,8 @@
 from sqlmodel import Session
 
+from app.auth.security import AuthenticatedUser
 from app.models.device import Device, DeviceCreate, DeviceUpdate
 from app.services.device_service import DeviceService
-from app.auth.security import AuthenticatedUser
 
 
 def test_create_device(session: Session, admin_user: AuthenticatedUser):

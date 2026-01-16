@@ -15,6 +15,16 @@ class Config(BaseSettings):
     OIDC_DOMAIN: str = ""
     OIDC_AUDIENCE: str = ""
 
+    # Storage Provider Settings
+    # --- S3 (STS) ---
+    STS_ROLE_ARN: str = ""  # The role to assume for vending tokens
+    STS_ENDPOINT_URL: str | None = None  # Optional: for MinIO/Ceph
+    STS_REGION: str = "us-east-1"
+    STS_TOKEN_DURATION: int = 3600  # Default 1 hour
+
+    # --- Azure (Future) ---
+    # AZURE_TENANT_ID: str = ""
+
     @property
     def db_url(self) -> str:
         return f"sqlite:///./{self.db_name}"

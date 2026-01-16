@@ -1,7 +1,6 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, status
 
-from app.api.deps import ShotServiceDep
-from app.auth.security import get_current_user, AuthenticatedUser
+from app.api.deps import CurrentUserDep, ShotServiceDep
 from app.models.shot import (
     ShotCreate,
     ShotRead,
@@ -21,7 +20,7 @@ def create_shot_global(
     *,
     shot_service: ShotServiceDep,
     shot_in: ShotCreate,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> ShotRead:
     """
     Create a new shot. Device name must be in the payload.
@@ -40,7 +39,7 @@ def update_shot_global(
     shot_id: str,
     shot_in: ShotUpdate,
     shot_service: ShotServiceDep,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> ShotRead:
     """
     Update a shot globally.
@@ -61,7 +60,7 @@ def create_shot_nested(
     device_name: str,
     shot_service: ShotServiceDep,
     shot_in: ShotCreate,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> ShotRead:
     """
     Create a new shot for a specific device. URL device name takes precedence.
@@ -122,7 +121,7 @@ def update_shot_nested(
     shot_id: str,
     shot_in: ShotUpdate,
     shot_service: ShotServiceDep,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> ShotRead:
     """
     Update a shot nested under a device.
@@ -143,7 +142,7 @@ def delete_shot_nested(
     device_name: str,
     shot_service: ShotServiceDep,
     shot_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> None:
     """
     Delete a shot with authentication and optional context check.

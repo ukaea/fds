@@ -1,8 +1,8 @@
 from typing import TYPE_CHECKING
+
 from sqlmodel import Field, Relationship, SQLModel
 
 from .common import AccessLevel, DescriptiveMixin, TimestampMixin
-
 
 if TYPE_CHECKING:
     from .shot import Shot

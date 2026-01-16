@@ -1,18 +1,18 @@
 import pytest
 from sqlmodel import Session
 
+from app.auth.security import AuthenticatedUser
+from app.models.dataset import DatasetCreate
+from app.models.datasetsource import DatasetSourceCreate
 from app.models.device import DeviceCreate
 from app.models.shot import ShotCreate
-from app.models.dataset import DatasetCreate
 from app.models.source import SourceCreate
-from app.models.datasetsource import DatasetSourceCreate
-from app.services.device_service import DeviceService
-from app.services.shot_service import ShotService
 from app.services.dataset_service import DatasetService
-from app.services.source_service import SourceService
 from app.services.datasetsource_service import DatasetSourceService
-from app.auth.security import AuthenticatedUser
+from app.services.device_service import DeviceService
 from app.services.exceptions import ResourceNotFoundError
+from app.services.shot_service import ShotService
+from app.services.source_service import SourceService
 
 
 @pytest.fixture(name="device_service")

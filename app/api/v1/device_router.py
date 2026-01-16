@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from app.auth.security import get_current_user, AuthenticatedUser
+from app.api.deps import CurrentUserDep, DeviceServiceDep
 from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
-from app.api.deps import DeviceServiceDep
 from app.services.jsonld import map_device_to_dcat
 
 router = APIRouter()
@@ -14,7 +13,7 @@ def create_device(
     *,
     device_service: DeviceServiceDep,
     device_in: DeviceCreate,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> Device:
     """
     Create a new device.
@@ -67,7 +66,7 @@ def update_device(
     device_service: DeviceServiceDep,
     device_name: str,
     device_in: DeviceUpdate,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> Device:
     """
     Update a device by name.
@@ -85,7 +84,7 @@ def delete_device(
     *,
     device_service: DeviceServiceDep,
     device_name: str,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> dict:
     """
     Delete a device by name.

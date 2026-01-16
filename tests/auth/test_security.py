@@ -3,11 +3,11 @@ import pytest
 from fastapi import HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 
-from app.auth.security import (
-    get_token_claims,
-    get_current_user,
-)
 from app.auth.jwks import JwksClient
+from app.auth.security import (
+    get_current_user,
+    get_token_claims,
+)
 
 
 @pytest.mark.asyncio

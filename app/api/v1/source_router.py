@@ -1,11 +1,9 @@
 from collections.abc import Sequence
 
-from fastapi import APIRouter
+from fastapi import APIRouter, status
 
+from app.api.deps import CurrentUserDep, SourceServiceDep
 from app.models.source import Source, SourceCreate, SourceRead, SourceUpdate
-from app.api.deps import SourceServiceDep
-from app.auth.security import get_current_user, AuthenticatedUser
-from fastapi import Depends, status
 
 router = APIRouter()
 
@@ -15,7 +13,7 @@ def create_source(
     *,
     source_in: SourceCreate,
     source_service: SourceServiceDep,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> Source:
     """
     Create a new source. Requires global admin.
@@ -54,7 +52,7 @@ def update_source(
     id: int,
     source_in: SourceUpdate,
     source_service: SourceServiceDep,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> Source:
     """
     Update a source. Requires global admin.
@@ -73,7 +71,7 @@ def delete_source(
     *,
     id: int,
     source_service: SourceServiceDep,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> None:
     """
     Delete a source. Requires global admin.

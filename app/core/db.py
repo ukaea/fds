@@ -1,6 +1,8 @@
 from typing import Annotated
+
 from fastapi import Depends
 from sqlmodel import Session, create_engine
+
 from app.core.config import config
 
 engine = create_engine(config.db_url, connect_args={"check_same_thread": False})

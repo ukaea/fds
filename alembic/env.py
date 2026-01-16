@@ -4,11 +4,9 @@ from pathlib import Path
 from sqlmodel import SQLModel
 
 from alembic import context
-
 from app.core.config import config as app_config
 from app.core.db import engine
 from app.core.logging import setup_logging
-
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

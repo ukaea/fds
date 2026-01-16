@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, status, Request
+from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
-from app.api.deps import DatasetServiceDep
-from app.auth.security import get_current_user, AuthenticatedUser
+
+from app.api.deps import CurrentUserDep, DatasetServiceDep
 from app.models.dataset import DatasetCreate, DatasetRead, DatasetUpdate
 from app.services.exceptions import ResourceNotFoundError
 from app.services.jsonld import map_dataset_to_dcat
@@ -19,7 +19,7 @@ def create_dataset_global(
     *,
     dataset_service: DatasetServiceDep,
     dataset_in: DatasetCreate,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> DatasetRead:
     """
     Create a global dataset.
@@ -57,7 +57,7 @@ def create_dataset_device(
     device_name: str,
     dataset_service: DatasetServiceDep,
     dataset_in: DatasetCreate,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> DatasetRead:
     """
     Create a dataset for a specific device context.
@@ -79,7 +79,7 @@ def create_dataset_shot(
     shot_id: str,
     dataset_service: DatasetServiceDep,
     dataset_in: DatasetCreate,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> DatasetRead:
     """
     Create a dataset for a specific shot context.
@@ -234,7 +234,7 @@ def update_dataset(
     id: int,
     dataset_in: DatasetUpdate,
     dataset_service: DatasetServiceDep,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> DatasetRead:
     """
     Update a dataset. Requires appropriate tiered authorization.
@@ -254,7 +254,7 @@ def delete_dataset(
     *,
     id: int,
     dataset_service: DatasetServiceDep,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> None:
     """
     Delete a dataset by internal ID. Requires appropriate tiered authorization.

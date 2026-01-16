@@ -1,9 +1,9 @@
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
+from app.auth.security import AuthenticatedUser
 from app.models.device import DeviceCreate
 from app.services.device_service import DeviceService
-from app.auth.security import AuthenticatedUser
 
 # Dummy admin user for test setup
 admin_user = AuthenticatedUser(id="test-admin", scopes=["fds-admin"])
