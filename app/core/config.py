@@ -14,6 +14,7 @@ class Config(BaseSettings):
     # OIDC/JWT related settings
     OIDC_DOMAIN: str = ""
     OIDC_AUDIENCE: str = ""
+    OIDC_PROTOCOL: str = "https"
 
     # Storage Provider Settings
     # --- S3 (STS) ---

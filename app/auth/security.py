@@ -27,7 +27,7 @@ async def get_token_claims(
 
     try:
         key = await jwks_client.get_signing_key(auth.credentials)
-        issuer = f"https://{config.OIDC_DOMAIN}/"
+        issuer = f"{config.OIDC_PROTOCOL}://{config.OIDC_DOMAIN}"
         return jwt.decode(
             auth.credentials,
             key=key,

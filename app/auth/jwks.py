@@ -29,7 +29,9 @@ class JwksClient:
         if not self.domain:
             raise ValueError("OIDC_DOMAIN is not configured.")
 
-        discovery_url = f"https://{self.domain}/.well-known/openid-configuration"
+        discovery_url = (
+            f"{config.OIDC_PROTOCOL}://{self.domain}/.well-known/openid-configuration"
+        )
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(discovery_url, timeout=5)

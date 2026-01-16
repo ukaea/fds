@@ -1,0 +1,66 @@
+services:
+  fds:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OIDC_DOMAIN=localhost:8080/realms/fds
+      - OIDC_PROTOCOL=http
+      - OIDC_AUDIENCE=fds-client
+      - STS_ENDPOINT_URL=http://localhost:9000
+      - STS_ROLE_ARN=arn:aws:iam::123456789012:role/fds-role # Placeholder, will be configured in minio
+      - AWS_ACCESS_KEY_ID=fds-sa
+      - AWS_SECRET_ACCESS_KEY=fds-sa-secret
+      - AWS_DEFAULT_REGION=us-east-1
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      - idp
+      - minio
+
+  idp:
+    image: quay.io/keycloak/keycloak:23.0.0
+    ports:
+      - "8080:8080"
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    volumes:
+      - ./keycloak-realm.json:/opt/keycloak/data/import/realm.json
+    command: start-dev --import-realm
+
+  minio:
+    image: quay.io/minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+    command: server /data --console-address ":9001"
+
+  minio-setup:
+    image: quay.io/minio/mc:latest
+    depends_on:
+      - minio
+    volumes:
+      - ./minio-setup.sh:/minio-setup.sh
+    entrypoint: /bin/sh
+    command: /minio-setup.sh
+
+  data-generator:
+    image: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+    depends_on:
+      - minio
+      - minio-setup
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_DEFAULT_REGION=us-east-1
+      - MINIO_URL=http://localhost:9000
+    volumes:
+      - ./generate_data.py:/app/generate_data.py
+    network_mode: host
+    command: uv run /app/generate_data.py
