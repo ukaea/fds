@@ -14,3 +14,6 @@ wheels/
 
 # IDE
 .vscode
+
+# Demo Marimo artifacts
+__marimo__/
