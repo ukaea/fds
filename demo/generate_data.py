@@ -7,10 +7,11 @@
 #     "zarr",
 # ]
 # ///
-import xarray as xr
+import os
+
 import numpy as np
 import s3fs
-import os
+import xarray as xr
 
 # Configuration from environment
 minio_url = os.environ.get("MINIO_URL", "http://minio:9000")

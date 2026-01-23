@@ -17,11 +17,12 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import json
+
     import marimo as mo
     import requests
-    import xarray as xr
     import s3fs
-    import json
+    import xarray as xr
 
     return json, mo, requests, s3fs, xr
 
