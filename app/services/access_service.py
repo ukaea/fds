@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict
 from typing import Any
 from urllib.parse import urlparse
@@ -8,6 +9,8 @@ from app.core.storage.providers import get_provider_for_protocol
 from app.models.common import AccessLevel
 from app.models.dataset import Dataset
 from app.models.user import AuthenticatedUser
+
+logger = logging.getLogger(__name__)
 
 
 class AccessService:
@@ -36,9 +39,13 @@ class AccessService:
 
         if not allowed_urls:
             # Return empty dict if no access
+            logger.info(
+                "Access denied or no datasets found", extra={"user_id": user.id}
+            )
             return {}
 
         if "*" in allowed_urls:
+            logger.info("Granting global admin access", extra={"user_id": user.id})
             # Global Admin gets credentials for all protocols
             grouped_urls = {p: ["*"] for p in self.SUPPORTED_PROTOCOLS}
         else:
@@ -71,6 +78,16 @@ class AccessService:
             # az -> azure
             # gs -> gcp
             provider_key = self._get_provider_key(protocol)
+
+            logger.info(
+                "Vending credentials",
+                extra={
+                    "user_id": user.id,
+                    "protocol": protocol,
+                    "provider": provider_key,
+                    "resource_count": len(urls),
+                },
+            )
 
             creds = provider.generate_credentials(urls, session_name)
             credentials_map[provider_key] = creds

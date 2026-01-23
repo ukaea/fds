@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 import httpx
@@ -6,6 +7,8 @@ from cachetools import TTLCache
 from fastapi import Depends, HTTPException, status
 
 from app.core.config import config
+
+logger = logging.getLogger(__name__)
 
 
 class JwksClient:
@@ -38,6 +41,10 @@ class JwksClient:
                 response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
                 config_data = response.json()
                 self.jwks_uri = config_data.get("jwks_uri")
+                logger.info(
+                    "Discovered JWKS URI",
+                    extra={"jwks_uri": self.jwks_uri, "domain": self.domain},
+                )
 
                 if not self.jwks_uri:
                     raise HTTPException(
@@ -128,6 +135,9 @@ class JwksClient:
         # If the key is not found, it might be because the IdP has rotated the keys.
         # We clear the cache and try fetching the JWKS again.
         if not key:
+            logger.warning(
+                "Key ID not found in cache, rotating keys", extra={"kid": kid}
+            )
             self.cache.clear()
             jwks = await self.get_jwks()
             key = next((key for key in jwks["keys"] if key["kid"] == kid), None)
