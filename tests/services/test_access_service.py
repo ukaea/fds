@@ -53,14 +53,29 @@ def test_polyglot_routing_s3(session, access_service, mock_s3_provider):
 
 
 def test_admin_wildcard(access_service, mock_s3_provider):
-    # user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
+    user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
 
-    # Admin gets ["*"]
-    # But how does it know which *provider* to call if there are no URLs to inspect?
-    # Current implementation: It finds NO allowed_urls logic based on DB, but admin check returns ["*"].
-    # ISSUE: If resolve returns ["*"], grouping logic `urlparse("*")` fails scheme check.
-    # We need to test/fix this edge case in the service, or mock how admin works.
-    pass
+    # Act
+    access_service.generate_session_credentials(user)
+
+    # Assert
+    # AccessService iterates over SUPPORTED_PROTOCOLS used in the implementation
+    # Currently ["s3", "gs"]
+
+    # The mock is returned for ALL calls to get_provider_for_protocol
+    # So we expect it to be called once for "s3" and once for "gs" (if gs is in supported lists)
+    assert mock_s3_provider.generate_credentials.call_count >= 1
+
+    # Check that at least one call passed ["*"]
+    calls = mock_s3_provider.generate_credentials.call_args_list
+    # Each call is (args, kwargs). args[0] is the list of urls.
+
+    found_wildcard = False
+    for call in calls:
+        if call[0][0] == ["*"]:
+            found_wildcard = True
+
+    assert found_wildcard, "Provider should have been called with ['*']"
 
 
 # --- Test Provider Logic ---
