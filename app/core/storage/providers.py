@@ -1,7 +1,5 @@
 from typing import Any, Protocol
 
-from app.core.storage.gcs_provider import GCSCredentialProvider
-from app.core.storage.s3_provider import S3CredentialProvider
 from app.services.exceptions import ConfigurationError
 
 
@@ -18,8 +16,16 @@ class CredentialProvider(Protocol):
 
 def get_provider_for_protocol(protocol: str) -> CredentialProvider:
     if protocol == "s3":
+        from app.core.storage.s3_provider import S3CredentialProvider
+
         return S3CredentialProvider()
     elif protocol in ("gs", "gcs"):
+        from app.core.storage.gcs_provider import GCSCredentialProvider
+
         return GCSCredentialProvider()
+    elif protocol in ("az", "abfs"):
+        from app.core.storage.azure_provider import AzureCredentialProvider
+
+        return AzureCredentialProvider()
 
     raise ConfigurationError(f"No provider configured for protocol: {protocol}")

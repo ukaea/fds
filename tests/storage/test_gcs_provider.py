@@ -1,6 +1,10 @@
 from datetime import datetime
 
 import pytest
+
+# Skip if google-auth not installed
+pytest.importorskip("google.auth")
+
 from google.auth.exceptions import DefaultCredentialsError
 
 from app.core.storage.gcs_provider import GCSCredentialProvider

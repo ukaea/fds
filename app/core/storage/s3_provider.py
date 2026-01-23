@@ -56,7 +56,7 @@ class S3CredentialProvider:
                 RoleArn=config.STS_ROLE_ARN,
                 RoleSessionName=session_name,
                 Policy=policy_json,
-                DurationSeconds=config.STS_TOKEN_DURATION,
+                DurationSeconds=config.CREDENTIAL_TOKEN_DURATION,
             )
         except Exception as e:
             raise ConfigurationError(f"Failed to assume role: {e}")

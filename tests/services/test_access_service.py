@@ -1,7 +1,7 @@
 import pytest
 from sqlmodel import Session
 
-from app.core.storage.providers import S3CredentialProvider
+# Guard S3 imports - boto3 optional
 from app.models.common import AccessLevel
 from app.models.dataset import Dataset
 from app.models.user import AuthenticatedUser
@@ -67,6 +67,9 @@ def test_admin_wildcard(access_service, mock_s3_provider):
 
 
 def test_s3_provider_policy():
+    pytest.importorskip("boto3")
+    from app.core.storage.s3_provider import S3CredentialProvider
+
     provider = S3CredentialProvider()
 
     # Simple check
