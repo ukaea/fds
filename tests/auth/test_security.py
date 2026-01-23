@@ -29,7 +29,7 @@ async def test_get_token_claims_success(mocker):
         key="mock_public_key",
         algorithms=["RS256"],
         audience="test-audience",
-        issuer="https://test-domain.com/",
+        issuer="https://test-domain.com",
     )
 
 

@@ -57,7 +57,8 @@ def jwks_client_instance(test_oidc_domain):
 def mock_httpx_get_discovery_success(monkeypatch, test_oidc_domain):
     """Mocks httpx.AsyncClient.get for successful OIDC discovery."""
 
-    def mock_get(url, **kwargs):
+    async def mock_get(_, url, **kwargs):
+        url = str(url)  # Ensure URL is string for comparison
         expected_url = f"https://{test_oidc_domain}/.well-known/openid-configuration"
         if url == expected_url:
             return Response(200, json=MOCK_OIDC_DISCOVERY, request=Request("GET", url))
@@ -70,7 +71,8 @@ def mock_httpx_get_discovery_success(monkeypatch, test_oidc_domain):
 def mock_httpx_get_jwks_success(monkeypatch, test_oidc_domain):
     """Mocks httpx.AsyncClient.get for successful JWKS fetching."""
 
-    def mock_get(url, **kwargs):
+    async def mock_get(_, url, **kwargs):
+        url = str(url)
         expected_jwks_uri = f"https://{test_oidc_domain}/.well-known/jwks.json"
         if url == expected_jwks_uri:
             return Response(200, json=MOCK_JWKS, request=Request("GET", url))
@@ -110,7 +112,8 @@ async def test_discover_jwks_uri_http_error(
 ):
     """Test discovery fails with an HTTP error from IdP."""
 
-    def mock_get_error(url, **kwargs):
+    async def mock_get_error(_, url, **kwargs):
+        url = str(url)
         expected_url = f"https://{test_oidc_domain}/.well-known/openid-configuration"
         if url == expected_url:
             # Simulate a 500 error from the IdP
@@ -133,7 +136,8 @@ async def test_discover_jwks_uri_not_found_in_config(
 ):
     """Test discovery fails if jwks_uri is missing from OIDC config response."""
 
-    def mock_get_missing_jwks_uri(url, **kwargs):
+    async def mock_get_missing_jwks_uri(_, url, **kwargs):
+        url = str(url)
         expected_url = f"https://{test_oidc_domain}/.well-known/openid-configuration"
         if url == expected_url:
             # Simulate response missing "jwks_uri"
@@ -194,7 +198,8 @@ async def test_get_jwks_http_error(jwks_client_instance, monkeypatch, test_oidc_
         "jwks_uri"
     ]  # Pre-set for direct test
 
-    def mock_get_error(url, **kwargs):
+    async def mock_get_error(_, url, **kwargs):
+        url = str(url)
         expected_jwks_uri = f"https://{test_oidc_domain}/.well-known/jwks.json"
         if url == expected_jwks_uri:
             return Response(
