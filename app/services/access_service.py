@@ -11,7 +11,7 @@ from app.models.user import AuthenticatedUser
 
 
 class AccessService:
-    SUPPORTED_PROTOCOLS = ["s3"]
+    SUPPORTED_PROTOCOLS = ["s3", "gs"]
 
     def __init__(self, session: Session):
         self.session = session
@@ -22,11 +22,12 @@ class AccessService:
         Supports multiple storage backends (AWS, Azure, etc.) simultaneously.
 
         Returns:
-            Dict[str, Any]: A map of provider_key -> credentials object.
+            dict[str, Any]: A map of provider_key -> credentials object.
             Example:
             {
-                "aws": AWSCredentials(...),
-                "azure": AzureCredentials(...)
+                "aws": {"bucket": AWSCredentials(...)},
+                "azure": {"container": "sas_token..."},
+                "gcp": {"bucket": "token..."}
             }
         """
 
@@ -49,7 +50,7 @@ class AccessService:
                     protocol = parsed.scheme
                     if protocol:
                         grouped_urls[protocol].append(url)
-                except Exception:
+                except ValueError:
                     continue  # Skip invalid URLs
 
         # 3. Generate Credentials for each group
@@ -60,24 +61,19 @@ class AccessService:
             if not urls:
                 continue
 
-            try:
-                provider = get_provider_for_protocol(protocol)
-                # The provider returns a credential object (e.g. S3Credentials)
-                # We key the response by the protocol primarily, or we can use the provider class name.
-                # Let's use the protocol for now as the key, e.g. "s3".
+            provider = get_provider_for_protocol(protocol)
+            # The provider returns a credential object (e.g. S3Credentials)
+            # We key the response by the protocol primarily, or we can use the provider class name.
+            # Let's use the protocol for now as the key, e.g. "s3".
 
-                # Setup Refinement:
-                # s3 -> s3
-                # az -> azure
-                # gs -> gcp
-                provider_key = self._get_provider_key(protocol)
+            # Setup Refinement:
+            # s3 -> s3
+            # az -> azure
+            # gs -> gcp
+            provider_key = self._get_provider_key(protocol)
 
-                creds = provider.generate_credentials(urls, session_name)
-                credentials_map[provider_key] = creds
-            except Exception as e:
-                # Log error but don't fail entire request?
-                # For now, strict fail is safer to detect configs.
-                raise e
+            creds = provider.generate_credentials(urls, session_name)
+            credentials_map[provider_key] = creds
 
         return credentials_map
 

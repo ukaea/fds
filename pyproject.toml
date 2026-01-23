@@ -14,9 +14,15 @@ dependencies = [
     "sqlmodel>=0.0.27",
 ]
 
+
 [project.optional-dependencies]
 s3 = [
     "boto3>=1.42.25",
+]
+
+gcs = [
+    "google-auth>=2.37.0",
+    "requests>=2.31.0",
 ]
 
 [dependency-groups]
