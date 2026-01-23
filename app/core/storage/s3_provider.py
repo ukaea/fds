@@ -131,7 +131,12 @@ class S3CredentialProvider:
                         "Sid": "AllowListBucket",
                         "Effect": "Allow",
                         "Action": "s3:ListBucket",
-                        "Resource": "arn:aws:s3:::fds-data",
+                        "Resource": list(
+                            {
+                                f"arn:aws:s3:::{prefix.replace('s3://', '').split('/')[0]}"
+                                for prefix in allowed_prefixes
+                            }
+                        ),
                         "Condition": {
                             "StringLike": {
                                 "s3:prefix": [
