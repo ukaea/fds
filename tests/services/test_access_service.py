@@ -53,7 +53,7 @@ def test_polyglot_routing_s3(session, access_service, mock_s3_provider):
 
 
 def test_admin_wildcard(access_service, mock_s3_provider):
-    user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
+    # user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
 
     # Admin gets ["*"]
     # But how does it know which *provider* to call if there are no URLs to inspect?
