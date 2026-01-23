@@ -219,3 +219,98 @@ async def test_get_jwks_http_error(jwks_client_instance, monkeypatch, test_oidc_
         await jwks_client_instance.get_jwks()
     assert exc_info.value.status_code == 500
     assert "Error response 500" in exc_info.value.detail
+
+
+# --- Key Rotation Tests ---
+
+
+@pytest.mark.asyncio
+async def test_get_signing_key_key_rotation(
+    jwks_client_instance,
+    mock_httpx_get_discovery_success,
+    monkeypatch,
+    test_oidc_domain,
+):
+    """
+    Test that JwksClient refreshes the cache and retries if the signing key is not found
+    (simulating key rotation).
+    """
+    import jwt
+
+    # 1. Setup mocked token and header
+    token = "header.payload.signature"
+    kid_rotated = "test-kid-rotated-3"
+
+    # Mock jwt.get_unverified_header to return our target kid
+    monkeypatch.setattr(
+        jwt, "get_unverified_header", lambda t: {"kid": kid_rotated, "alg": "RS256"}
+    )
+
+    # Mock jwt.PyJWK so we don't need real RSA keys
+    class MockPyJWK:
+        def __init__(self, key_data):
+            self.key_data = key_data
+            self.key = "public_key_string"  # what .key returns
+
+    monkeypatch.setattr(jwt, "PyJWK", MockPyJWK)
+
+    # 2. Setup HTTP mocks for Rotation
+
+    MOCK_JWKS_ROTATED = {
+        "keys": MOCK_JWKS["keys"]
+        + [
+            {
+                "kid": kid_rotated,
+                "kty": "RSA",
+                "alg": "RS256",
+                "use": "sig",
+                "n": "new-n",
+                "e": "new-e",
+            }
+        ]
+    }
+
+    # We need a closure to track call count across the async calls
+    call_count = 0
+
+    async def mock_get_rotation(_, url, **kwargs):
+        nonlocal call_count
+        url = str(url)
+
+        # Discovery endpoint
+        if url == f"https://{test_oidc_domain}/.well-known/openid-configuration":
+            return Response(200, json=MOCK_OIDC_DISCOVERY, request=Request("GET", url))
+
+        # JWKS endpoint
+        if url == f"https://{test_oidc_domain}/.well-known/jwks.json":
+            call_count += 1
+            if call_count == 1:
+                return Response(200, json=MOCK_JWKS, request=Request("GET", url))
+            else:
+                return Response(
+                    200, json=MOCK_JWKS_ROTATED, request=Request("GET", url)
+                )
+
+        raise ValueError(f"Unexpected URL in mock: {url}")
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", mock_get_rotation)
+
+    # 3. Execution
+    # First ensure discovery happens
+    await jwks_client_instance._discover_jwks_uri()
+
+    # Populate cache with "stale" keys (Original MOCK_JWKS)
+    await jwks_client_instance.get_jwks()
+    assert call_count == 1
+
+    # Now ask for the key that is ONLY in the rotated set
+    # This should trigger:
+    # 1. Look in cache -> Fail
+    # 2. Clear cache
+    # 3. Fetch JWKS (call_count becomes 2) -> Get MOCK_JWKS_ROTATED
+    # 4. Find key -> Success
+
+    key_str = await jwks_client_instance.get_signing_key(token)
+
+    assert key_str == "public_key_string"
+    assert call_count == 2
