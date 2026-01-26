@@ -2,12 +2,12 @@ import logging
 import sys
 from typing import Any
 
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger import json
 
 from app.core.config import config
 
 
-class CustomJsonFormatter(jsonlogger.JsonFormatter):
+class CustomJsonFormatter(json.JsonFormatter):
     def add_fields(
         self,
         log_record: dict[str, Any],
