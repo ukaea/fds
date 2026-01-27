@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 from sqlmodel import Session, select
 
 from app.auth.access_control import get_effective_access_level
-from app.auth.permissions import check_device_admin
+from app.auth.permissions import check_device_admin, check_shot_operator
 from app.auth.security import AuthenticatedUser
 from app.models.device import Device
 from app.models.shot import Shot, ShotCreate, ShotUpdate
@@ -46,7 +46,8 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
             raise FDSValidationError("Device name is required for shot creation.")
 
         # Permission check
-        check_device_admin(user, target_device_name)
+        # Allow Shot Operators to create shots
+        check_shot_operator(user, target_device_name)
 
         db_obj = Shot.model_validate(obj_in, update={"device_id": None})
 
@@ -122,7 +123,8 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
 
         # 2. Permission check for the CURRENT device
         if db_obj.device:
-            check_device_admin(user, db_obj.device.name)
+            # Allow Shot Operators to update shots
+            check_shot_operator(user, db_obj.device.name)
         else:
             # If for some reason it's orphaned, only fds-admin can touch it
             if "fds-admin" not in user.scopes:
