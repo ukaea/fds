@@ -36,13 +36,14 @@ def create_dataset_global(
 def read_datasets_global(
     *,
     dataset_service: DatasetServiceDep,
+    user: CurrentUserDep,
     offset: int = 0,
     limit: int = 100,
 ) -> list[DatasetRead]:
     """
     Retrieve global datasets.
     """
-    datasets = dataset_service.get_multi(offset=offset, limit=limit)
+    datasets = dataset_service.get_multi(user=user, offset=offset, limit=limit)
     return [dataset_service.to_read_model(d) for d in datasets]
 
 
@@ -100,6 +101,7 @@ def read_datasets_shot(
     device_name: str,
     shot_id: str,
     dataset_service: DatasetServiceDep,
+    user: CurrentUserDep,
     offset: int = 0,
     limit: int = 100,
 ) -> list[DatasetRead]:
@@ -107,7 +109,7 @@ def read_datasets_shot(
     Retrieve all datasets for a specific shot.
     """
     datasets = dataset_service.get_datasets_for_shot(
-        shot_id, offset=offset, limit=limit
+        shot_id, user=user, offset=offset, limit=limit
     )
     return [dataset_service.to_read_model(d) for d in datasets]
 
@@ -124,6 +126,7 @@ def read_dataset_by_name(
     shot_id: str,
     name: str,
     dataset_service: DatasetServiceDep,
+    user: CurrentUserDep,
 ) -> DatasetRead | JSONResponse:
     """
     Retrieve a specific dataset by its descriptive name within a shot context.
@@ -131,7 +134,7 @@ def read_dataset_by_name(
     - Accept: application/ld+json -> Returns DCAT Metadata
     """
     dataset = dataset_service.get_by_name_in_context(
-        name=name, device_name=device_name, shot_id=shot_id
+        name=name, user=user, device_name=device_name, shot_id=shot_id
     )
     if not dataset:
         raise ResourceNotFoundError(f"Dataset {name} not found in this context")
@@ -154,13 +157,14 @@ def read_dataset_global_by_name(
     request: Request,
     name: str,
     dataset_service: DatasetServiceDep,
+    user: CurrentUserDep,
 ) -> DatasetRead | JSONResponse:
     """
     Retrieve a specific global dataset by its descriptive name.
     Supports Content Negotiation:
     - Accept: application/ld+json -> Returns DCAT Metadata
     """
-    dataset = dataset_service.get_by_name_in_context(name=name)
+    dataset = dataset_service.get_by_name_in_context(name=name, user=user)
     if not dataset:
         raise ResourceNotFoundError(f"Global dataset {name} not found")
 
@@ -181,6 +185,7 @@ def read_datasets_device(
     *,
     device_name: str,
     dataset_service: DatasetServiceDep,
+    user: CurrentUserDep,
     offset: int = 0,
     limit: int = 100,
 ) -> list[DatasetRead]:
@@ -188,7 +193,7 @@ def read_datasets_device(
     Retrieve datasets for a specific device (not tied to any shot).
     """
     datasets = dataset_service.get_datasets_for_device(
-        device_name, offset=offset, limit=limit
+        device_name, user=user, offset=offset, limit=limit
     )
     return [dataset_service.to_read_model(d) for d in datasets]
 
@@ -204,13 +209,16 @@ def read_dataset_device_by_name(
     device_name: str,
     name: str,
     dataset_service: DatasetServiceDep,
+    user: CurrentUserDep,
 ) -> DatasetRead | JSONResponse:
     """
     Retrieve a specific device-level dataset by its descriptive name.
     Supports Content Negotiation:
     - Accept: application/ld+json -> Returns DCAT Metadata
     """
-    dataset = dataset_service.get_by_name_in_context(name=name, device_name=device_name)
+    dataset = dataset_service.get_by_name_in_context(
+        name=name, user=user, device_name=device_name
+    )
     if not dataset:
         raise ResourceNotFoundError(
             f"Dataset {name} not found for device {device_name}"

@@ -5,7 +5,9 @@ from sqlmodel import Session, select
 from app.auth.access_control import get_effective_access_level
 from app.auth.permissions import check_device_admin, check_is_admin
 from app.auth.security import AuthenticatedUser
+from app.models.common import AccessLevel
 from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
+from app.models.user import ANONYMOUS_USER
 from app.services.base_service import BaseService
 from app.services.device_service import DeviceService
 from app.services.exceptions import ConflictError, ForbiddenError, ResourceNotFoundError
@@ -15,6 +17,47 @@ from app.services.shot_service import ShotService
 class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     def __init__(self, session: Session):
         super().__init__(model=Dataset, session=session)
+
+    def get_multi(
+        self,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        *,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> Sequence[Dataset]:
+        """
+        Global list of datasets. Filters by access level.
+        """
+        statement = select(self.model).offset(offset).limit(limit)
+        results = self.session.exec(statement).all()
+
+        accessible = []
+        for d in results:
+            try:
+                self.check_read_access(d, user)
+                accessible.append(d)
+            except ForbiddenError:
+                continue
+        return accessible
+
+    def check_read_access(self, dataset: Dataset, user: AuthenticatedUser) -> None:
+        """
+        Calculates effective access level (Inheritance: Dataset > Shot > Device)
+        and enforces read access.
+        """
+        effective_level = get_effective_access_level(dataset, self.session)
+
+        # Public is theoretically accessible to everyone
+        if effective_level == AccessLevel.PUBLIC:
+            return
+
+        # For restricted+, you must be authenticated
+        if user.is_anonymous:
+            raise ForbiddenError("Authentication required for this resource")
+
+        # FUTURE: If we have EMBARGOED or specific dataset-level scopes, add checks here.
+        # For now, being authenticated is enough to see RESTRICTED (assuming scopes
+        # like 'read' aren't granularly enforced per dataset yet, only device level for writes).
 
     def create(self, obj_in: DatasetCreate, user: AuthenticatedUser) -> Dataset:
         """
@@ -96,23 +139,34 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         return self.delete(id)
 
     def get_by_name_in_context(
-        self, name: str, device_name: str | None = None, shot_id: str | None = None
+        self,
+        name: str,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        device_name: str | None = None,
+        shot_id: str | None = None,
     ) -> Dataset | None:
         """
-        Retrieve a dataset by name within its context.
+        Retrieve a dataset by name within its context, enforcing read access.
         """
         statement = select(Dataset).where(
             Dataset.name == name,
             Dataset.device_name == device_name,
             Dataset.shot_id == shot_id,
         )
-        return self.session.exec(statement).first()
+        dataset = self.session.exec(statement).first()
+        if dataset:
+            self.check_read_access(dataset, user)
+        return dataset
 
     def get_datasets_for_device(
-        self, device_name: str, offset: int = 0, limit: int = 100
+        self,
+        device_name: str,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        offset: int = 0,
+        limit: int = 100,
     ) -> Sequence[Dataset]:
         """
-        Get datasets belonging to a device but not to a specific shot.
+        Get datasets belonging to a device (but not to a specific shot), filtering by access.
         """
         statement = (
             select(Dataset)
@@ -120,10 +174,24 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             .offset(offset)
             .limit(limit)
         )
-        return self.session.exec(statement).all()
+        results = self.session.exec(statement).all()
+
+        # Filter datasets that the user does not have access to
+        accessible = []
+        for d in results:
+            try:
+                self.check_read_access(d, user)
+                accessible.append(d)
+            except ForbiddenError:
+                continue
+        return accessible
 
     def get_datasets_for_shot(
-        self, shot_id: str, offset: int = 0, limit: int = 100
+        self,
+        shot_id: str,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        offset: int = 0,
+        limit: int = 100,
     ) -> Sequence[Dataset]:
         statement = (
             select(Dataset)
@@ -131,7 +199,17 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             .offset(offset)
             .limit(limit)
         )
-        return self.session.exec(statement).all()
+        results = self.session.exec(statement).all()
+
+        # Filter datasets that the user does not have access to
+        accessible = []
+        for d in results:
+            try:
+                self.check_read_access(d, user)
+                accessible.append(d)
+            except ForbiddenError:
+                continue
+        return accessible
 
     def to_read_model(self, dataset: Dataset) -> DatasetRead:
         """
