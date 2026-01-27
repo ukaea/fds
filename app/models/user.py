@@ -12,3 +12,10 @@ class AuthenticatedUser(BaseModel):
 
     def is_admin(self) -> bool:
         return "fds-admin" in self.scopes
+
+    @property
+    def is_anonymous(self) -> bool:
+        return self.id == "anonymous"
+
+
+ANONYMOUS_USER = AuthenticatedUser(id="anonymous", scopes=[])

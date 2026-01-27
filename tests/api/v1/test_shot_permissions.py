@@ -99,3 +99,25 @@ def test_create_shot_no_scopes(
 
     # cleanup
     app.dependency_overrides.clear()
+
+
+def test_create_shot_anonymous(
+    test_client: TestClient,
+    session: Session,
+    admin_user: AuthenticatedUser,
+):
+    # Setup: Create Device
+    DeviceService(session).create(
+        DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
+    )
+    session.commit()
+
+    # Act: Try to create shot WITHOUT token
+    # Note: No headers passed
+    response = test_client.post(
+        "/api/v1/devices/MAST/shots/",
+        json={"id": "shot-anon-fail", "access_level": "public"},
+    )
+
+    # Assert: Should be Forbidden (403) - NOT Unauthorized (401)
+    assert response.status_code == 403

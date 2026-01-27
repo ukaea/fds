@@ -8,8 +8,10 @@ from sqlmodel import Session, select
 from app.auth.access_control import get_effective_access_level
 from app.auth.permissions import check_device_admin, check_shot_operator
 from app.auth.security import AuthenticatedUser
+from app.models.common import AccessLevel
 from app.models.device import Device
 from app.models.shot import Shot, ShotCreate, ShotUpdate
+from app.models.user import ANONYMOUS_USER
 from app.services.base_service import BaseService
 from app.services.exceptions import (
     ConflictError,
@@ -23,6 +25,20 @@ from app.services.exceptions import (
 class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
     def __init__(self, session: Session):
         super().__init__(Shot, session)
+
+    def check_read_access(self, shot: Shot, user: AuthenticatedUser) -> None:
+        """
+        Enforces read access rules:
+        - PUBLIC: Allow anonymous.
+        - RESTRICTED: Allow authenticated.
+        - EMBARGOED: Allow authenticated (for now, usually requires specific scope).
+        """
+        level = get_effective_access_level(shot, self.session)
+        if level == AccessLevel.PUBLIC:
+            return
+
+        if user.is_anonymous:
+            raise ForbiddenError("Authentication required for this resource")
 
     def create(
         self,
@@ -63,7 +79,12 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         self.session.refresh(db_obj)
         return db_obj
 
-    def get_for_device(self, shot_id: str, device_name: str) -> Shot:
+    def get_for_device(
+        self,
+        shot_id: str,
+        device_name: str,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+    ) -> Shot:
         """
         Retrieve a shot specifically for a device context.
         Raises ShotContextError if mismatch.
@@ -77,6 +98,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
                 f"Shot '{shot_id}' does not belong to device '{device_name}'"
             )
 
+        self.check_read_access(shot, user)
         return shot
 
     def get_multi_by_device(
@@ -89,7 +111,11 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         return result.all()
 
     def get_multi_by_device_name(
-        self, device_name: str, offset: int = 0, limit: int = 100
+        self,
+        device_name: str,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        offset: int = 0,
+        limit: int = 100,
     ) -> Sequence[Shot]:
         """
         Retrieve all shots for a given device by its unique name.
@@ -102,8 +128,18 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
             .offset(offset)
             .limit(limit)
         )
-        result = self.session.exec(statement)
-        return result.all()
+        result = self.session.exec(statement).all()
+
+        # Filter permissions in python
+        accessible_shots = []
+        for s in result:
+            try:
+                self.check_read_access(s, user)
+                accessible_shots.append(s)
+            except ForbiddenError:
+                continue
+
+        return accessible_shots
 
     def update(
         self,

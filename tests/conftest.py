@@ -4,7 +4,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, StaticPool, create_engine
 
-from app.auth.security import AuthenticatedUser, get_token_claims
+from app.auth.security import (
+    AuthenticatedUser,
+    get_token_claims,
+)
 from app.core.db import get_session
 from app.main import app
 from app.models import dataset, datasetsource, device, shot, source  # noqa: F401
@@ -47,10 +50,11 @@ def admin_user_token() -> Generator[dict[str, str], None, None]:
     Fixture to override the get_token_claims dependency to return claims
     for an admin user.
     """
-    app.dependency_overrides[get_token_claims] = lambda: {
+    claims = {
         "sub": "test-admin-user",
         "scp": "fds-admin",
     }
+    app.dependency_overrides[get_token_claims] = lambda: claims
     yield {"Authorization": "Bearer fake-admin-token"}
     app.dependency_overrides.clear()
 
@@ -61,10 +65,11 @@ def non_admin_user_token() -> Generator[dict[str, str], None, None]:
     Fixture to override the get_token_claims dependency to return claims
     for a non-admin user.
     """
-    app.dependency_overrides[get_token_claims] = lambda: {
+    claims = {
         "sub": "test-non-admin-user",
         "scp": "some-other-scope",
     }
+    app.dependency_overrides[get_token_claims] = lambda: claims
     yield {"Authorization": "Bearer fake-non-admin-token"}
     app.dependency_overrides.clear()
 
@@ -74,10 +79,11 @@ def mast_admin_user_token() -> Generator[dict[str, str], None, None]:
     """
     Fixture to override get_token_claims to return claims for a mast_admin user.
     """
-    app.dependency_overrides[get_token_claims] = lambda: {
+    claims = {
         "sub": "test-mast-admin-user",
         "scp": "mast_admin",
     }
+    app.dependency_overrides[get_token_claims] = lambda: claims
     yield {"Authorization": "Bearer fake-mast-admin-token"}
     app.dependency_overrides.clear()
 
@@ -87,10 +93,11 @@ def jet_admin_user_token() -> Generator[dict[str, str], None, None]:
     """
     Fixture to override get_token_claims to return claims for a jet_admin user.
     """
-    app.dependency_overrides[get_token_claims] = lambda: {
+    claims = {
         "sub": "test-jet-admin-user",
         "scp": "jet_admin",
     }
+    app.dependency_overrides[get_token_claims] = lambda: claims
     yield {"Authorization": "Bearer fake-jet-admin-token"}
     app.dependency_overrides.clear()
 

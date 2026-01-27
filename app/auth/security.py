@@ -16,14 +16,13 @@ bearer_scheme = HTTPBearer(auto_error=False)
 async def get_token_claims(
     jwks_client: JWKSClientDep,
     auth: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-) -> dict:
+) -> dict | None:
     """
     Dependency that gets the bearer token, validates its signature, and
-    returns the decoded claims. This is the "hard" part that requires mocking
-    in tests.
+    returns the decoded claims. Returns None if no token provided.
     """
     if auth is None:
-        raise create_unauthorized_exception(authenticate_header="Bearer")
+        return None
 
     try:
         key = await jwks_client.get_signing_key(auth.credentials)
@@ -43,12 +42,17 @@ async def get_token_claims(
 
 
 async def get_current_user(
-    claims: dict = Depends(get_token_claims),
+    claims: dict | None = Depends(get_token_claims),
 ) -> AuthenticatedUser:
     """
     Dependency that takes decoded JWT claims and returns an AuthenticatedUser model.
-    This is a simple transformation and easy to test.
+    Returns ANONYMOUS_USER if no claims.
     """
+    if not claims:
+        from app.models.user import ANONYMOUS_USER
+
+        return ANONYMOUS_USER
+
     token_scopes_str = claims.get("scp", claims.get("scope", ""))
     if isinstance(token_scopes_str, str):
         scopes = token_scopes_str.split()

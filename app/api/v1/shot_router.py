@@ -78,6 +78,7 @@ def read_shots_nested(
     *,
     device_name: str,
     shot_service: ShotServiceDep,
+    user: CurrentUserDep,
     offset: int = 0,
     limit: int = 100,
     include_device: bool = False,
@@ -86,7 +87,7 @@ def read_shots_nested(
     Retrieve all shots for a specific device.
     """
     shots = shot_service.get_multi_by_device_name(
-        device_name=device_name, offset=offset, limit=limit
+        device_name=device_name, user=user, offset=offset, limit=limit
     )
 
     return [shot_service.to_read_model(s, include_device=include_device) for s in shots]
@@ -102,11 +103,12 @@ def read_shot_nested(
     device_name: str,
     shot_service: ShotServiceDep,
     shot_id: str,
+    user: CurrentUserDep,
 ) -> ShotRead:
     """
     Retrieve a shot specifically for a device context.
     """
-    shot = shot_service.get_for_device(shot_id, device_name)
+    shot = shot_service.get_for_device(shot_id, device_name, user)
     return shot_service.to_read_model(shot)
 
 
