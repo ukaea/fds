@@ -14,6 +14,34 @@ The Fusion Data Service (FDS) is a platform designed to provide scalable, FAIR-c
 - **High Performance Access**: Supports "Direct Cloud Access" patterns (presigned URLs) for massive parallel I/O, avoiding API bottlenecks.
 - **FAIR Compliance**: Aligned with DCAT (Data Catalog Vocabulary) standards.
 
+## Quick Start Demo
+
+A self-contained demo environment is available in the `demo/` directory. It includes FDS, Keycloak, MinIO, and a [Marimo](https://marimo.io/) notebook to demonstrate the authentication and data access workflow.
+
+### 1. Start the Environment
+
+```bash
+cd demo
+# Using Docker
+docker-compose up --build
+# OR using Podman
+podman-compose up --build
+```
+
+Services started:
+- **FDS API**: `http://localhost:8000`
+- **Keycloak**: `http://localhost:8080` (User/Pass: `admin`/`admin`)
+- **MinIO**: `http://localhost:9000` (User/Pass: `admin`/`password`)
+
+### 2. Run the Demonstration Notebook
+
+The `demonstration.py` notebook walks through the FDS workflow (Auth -> Registration -> Token Exchange -> Data Access).
+
+```bash
+# From the root of the repository
+uvx marimo edit demo/demonstration.py --sandbox
+```
+
 ## Local Development Setup
 
 This project uses `uv` for dependency management.
