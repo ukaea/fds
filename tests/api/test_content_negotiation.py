@@ -1,9 +1,9 @@
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models.common import AccessLevel
 from app.models.dataset import Dataset
 from app.models.device import Device
+from app.models.policy import AccessLevel
 
 
 def test_content_negotiation_device(test_client: TestClient, session: Session):

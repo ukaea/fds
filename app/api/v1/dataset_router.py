@@ -10,7 +10,7 @@ router = APIRouter()
 
 
 @router.post(
-    "/datasets/",
+    "/datasets",
     response_model=DatasetRead,
     response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
@@ -29,7 +29,7 @@ def create_dataset_global(
 
 
 @router.get(
-    "/datasets/",
+    "/datasets",
     response_model=list[DatasetRead],
     response_model_exclude_none=True,
 )
@@ -48,7 +48,7 @@ def read_datasets_global(
 
 
 @router.post(
-    "/devices/{device_name}/datasets/",
+    "/devices/{device_name}/datasets",
     response_model=DatasetRead,
     response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
@@ -69,7 +69,7 @@ def create_dataset_device(
 
 
 @router.post(
-    "/devices/{device_name}/shots/{shot_id}/datasets/",
+    "/devices/{device_name}/shots/{shot_id}/datasets",
     response_model=DatasetRead,
     response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
@@ -92,7 +92,7 @@ def create_dataset_shot(
 
 
 @router.get(
-    "/devices/{device_name}/shots/{shot_id}/datasets/",
+    "/devices/{device_name}/shots/{shot_id}/datasets",
     response_model=list[DatasetRead],
     response_model_exclude_none=True,
 )
@@ -177,7 +177,7 @@ def read_dataset_global_by_name(
 
 
 @router.get(
-    "/devices/{device_name}/datasets/",
+    "/devices/{device_name}/datasets",
     response_model=list[DatasetRead],
     response_model_exclude_none=True,
 )

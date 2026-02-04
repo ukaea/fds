@@ -134,7 +134,7 @@ def test_get_datasets(
         user=admin_user,
     )
 
-    datasets = dataset_service.get_multi()
+    datasets = dataset_service.get_multi(user=admin_user)
     assert len(datasets) == 2
 
 
@@ -183,11 +183,11 @@ def test_get_datasets_for_shot(
         user=admin_user,
     )
 
-    datasets_shot1 = dataset_service.get_datasets_for_shot(shot1.id)
+    datasets_shot1 = dataset_service.get_datasets_for_shot(shot1.id, user=admin_user)
     assert len(datasets_shot1) == 2
     assert all(ds.shot_id == shot1.id for ds in datasets_shot1)
 
-    datasets_shot2 = dataset_service.get_datasets_for_shot(shot2.id)
+    datasets_shot2 = dataset_service.get_datasets_for_shot(shot2.id, user=admin_user)
     assert len(datasets_shot2) == 1
     assert all(ds.shot_id == shot2.id for ds in datasets_shot2)
 

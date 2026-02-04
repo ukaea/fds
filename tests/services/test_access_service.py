@@ -1,11 +1,12 @@
 import pytest
 from sqlmodel import Session
 
-# Guard S3 imports - boto3 optional
-from app.models.common import AccessLevel
 from app.models.dataset import Dataset
-from app.models.user import AuthenticatedUser
-from app.services.access_service import AccessService
+from app.models.identity import AuthenticatedUser
+
+# Guard S3 imports - boto3 optional
+from app.models.policy import AccessLevel
+from app.services.file_access_service import FileAccessService
 
 
 # --- Test Service Logic (Polyglot) ---
@@ -15,14 +16,15 @@ def mock_s3_provider(mocker):
     mock_prov = mocker.Mock()
     # When initialized, S3CredentialProvider will be used, but we want to intercept the factory
     mocker.patch(
-        "app.services.access_service.get_provider_for_protocol", return_value=mock_prov
+        "app.services.file_access_service.get_provider_for_protocol",
+        return_value=mock_prov,
     )
     return mock_prov
 
 
 @pytest.fixture
 def access_service(session: Session, mock_s3_provider):
-    return AccessService(session=session)
+    return FileAccessService(session=session)
 
 
 def test_polyglot_routing_s3(session, access_service, mock_s3_provider):
@@ -36,7 +38,11 @@ def test_polyglot_routing_s3(session, access_service, mock_s3_provider):
     session.commit()
 
     # 2. Call Service
-    result = access_service.generate_session_credentials(user)
+    from app.models.file_access import CredentialRequest
+
+    # Must specify explicit request now (no implicit "select all")
+    req = CredentialRequest(data_urls=["s3://bucket/ds1"])
+    result = access_service.generate_session_credentials(user, req)
 
     # 3. Verify Routing
     # Should have called get_provider_for_protocol("s3") -> mock_s3_provider
@@ -48,34 +54,30 @@ def test_polyglot_routing_s3(session, access_service, mock_s3_provider):
     assert "s3://bucket/ds1" in args[0][0]
 
     # Verify Result Structure
-    assert "s3" in result
-    assert result["s3"] == mock_s3_provider.generate_credentials.return_value
+    # result is CredentialManifest. tokens is list[dict].
+    # Check if we have a token for s3
+    s3_tokens = [t for t in result.tokens if t["provider"] == "s3"]
+    assert len(s3_tokens) > 0
+    # Check that the token credentials match the mock return
+    assert (
+        s3_tokens[0]["credentials"]
+        == mock_s3_provider.generate_credentials.return_value
+    )
 
 
-def test_admin_wildcard(access_service, mock_s3_provider):
+def test_empty_request_returns_empty(access_service, mock_s3_provider):
     user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
 
     # Act
-    access_service.generate_session_credentials(user)
+    from app.models.file_access import CredentialRequest
+
+    result = access_service.generate_session_credentials(user, CredentialRequest())
 
     # Assert
-    # AccessService iterates over SUPPORTED_PROTOCOLS used in the implementation
-    # Currently ["s3", "gs"]
-
-    # The mock is returned for ALL calls to get_provider_for_protocol
-    # So we expect it to be called once for "s3" and once for "gs" (if gs is in supported lists)
-    assert mock_s3_provider.generate_credentials.call_count >= 1
-
-    # Check that at least one call passed ["*"]
-    calls = mock_s3_provider.generate_credentials.call_args_list
-    # Each call is (args, kwargs). args[0] is the list of urls.
-
-    found_wildcard = False
-    for call in calls:
-        if call[0][0] == ["*"]:
-            found_wildcard = True
-
-    assert found_wildcard, "Provider should have been called with ['*']"
+    # Empty request should return empty manifest, not wildcard
+    assert len(result.tokens) == 0
+    assert len(result.resource_map) == 0
+    assert mock_s3_provider.generate_credentials.call_count == 0
 
 
 # --- Test Provider Logic ---

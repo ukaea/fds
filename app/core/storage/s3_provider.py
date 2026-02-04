@@ -7,7 +7,7 @@ except ImportError:
     boto3 = None
 
 from app.core.config import config
-from app.models.auth import S3Credentials
+from app.models.file_access import S3Credentials
 from app.services.exceptions import ConfigurationError
 
 
@@ -59,7 +59,10 @@ class S3CredentialProvider:
                 DurationSeconds=config.CREDENTIAL_TOKEN_DURATION,
             )
         except Exception as e:
-            raise ConfigurationError(f"Failed to assume role: {e}")
+            # Re-raise with context but preserve original exception for debugging
+            raise ConfigurationError(
+                f"Failed to assume STS role '{config.STS_ROLE_ARN}': {e}"
+            ) from e
 
         # 3. Map to Model
         creds = response["Credentials"]
@@ -70,28 +73,31 @@ class S3CredentialProvider:
             expiration=creds["Expiration"],
         )
 
-        # 4. Return Map Structure
-        # For STS, one credential set covers ALL requested buckets/prefixes.
-        # So we map every requested bucket to the SAME credential object.
+        # 4. Return Bucket-Keyed Credential Map
+        # STS credentials are bucket-agnostic (one token works for all allowed buckets).
+        # However, we return a dict[bucket_name -> credentials] to maintain a consistent
+        # interface with other providers (GCS, Azure) that may require per-bucket tokens.
+        # Clients extract credentials via: list(result.values())[0]
+        #
+        # TODO: Multi-Endpoint Support
+        # Current limitation: assumes single STS endpoint (config.STS_ENDPOINT_URL).
+        # Future work: support multiple S3-compatible endpoints (AWS, MinIO, Ceph)
+        # by mapping buckets to their respective STS endpoints and role ARNs.
+
+        if "*" in allowed_prefixes:
+            raise ConfigurationError(
+                "Wildcard access '*' is not supported by S3Provider."
+            )
 
         buckets = set()
-        if "*" in allowed_prefixes:
-            # Special case: Global admin, cannot map easily to buckets without knowning them.
-            # We return a wildcard key or 'global'.
-            # Clients handling '*' requests likely know what to do or are admins.
-            # Let's assume '*' maps to 'fds-data' primarily or we return a special key.
-            # However, for consistency, we should try to extract buckets.
-            buckets.add("fds-data")  # Default bucket assumption for now
-        else:
-            for prefix in allowed_prefixes:
-                # s3://bucket/path -> bucket
-                bucket_name = prefix.replace("s3://", "").split("/")[0]
-                buckets.add(bucket_name)
+        for prefix in allowed_prefixes:
+            # Extract bucket name from s3://bucket/path
+            bucket_name = prefix.replace("s3://", "").split("/")[0]
+            buckets.add(bucket_name)
 
+        # Map each bucket to the same credential object (STS tokens are global)
         result = {}
         for bucket_name in buckets:
-            # For S3, we return the object model (serialized via Pydantic or as dict)
-            # The API response_model will handle serialization if we return objects.
             result[bucket_name] = credential_object
 
         return result
@@ -100,20 +106,8 @@ class S3CredentialProvider:
         """
         Constructs a JSON IAM Policy string.
         """
-        # Optimization: Full Access
         if "*" in allowed_prefixes:
-            return json.dumps(
-                {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Action": ["s3:GetObject", "s3:ListBucket"],
-                            "Resource": "*",
-                        }
-                    ],
-                }
-            )
+            raise ConfigurationError("Wildcard policy generation not supported.")
 
         return json.dumps(
             {
@@ -147,7 +141,8 @@ class S3CredentialProvider:
                         },
                     },
                 ],
-            }
+            },
+            separators=(",", ":"),
         )
 
     def _to_arn(self, data_url: str) -> str:

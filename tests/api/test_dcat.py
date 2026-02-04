@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models.common import AccessLevel
 from app.models.device import Device
+from app.models.policy import AccessLevel
 
 
 def test_metadata_persistence(session: Session):

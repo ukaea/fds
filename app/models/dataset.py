@@ -2,7 +2,8 @@ from typing import TYPE_CHECKING
 
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
-from .common import AccessLevel, DescriptiveMixin, TimestampMixin
+from .mixins import DescriptiveMixin, TimestampMixin
+from .policy import AccessLevel
 
 if TYPE_CHECKING:
     from .datasetsource import DatasetSource
@@ -21,6 +22,7 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
     keywords: str | None = Field(default=None)  # Comma-separated list
     media_type: str | None = Field(default=None)
     format: str | None = Field(default=None)
+    required_scope: str | None = Field(default=None)
 
 
 class Dataset(DatasetBase, table=True):

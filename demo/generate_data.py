@@ -39,4 +39,43 @@ print(f"Writing dataset to {s3_path}...")
 store = s3fs.S3Map(root=s3_path, s3=fs, check=False)
 ds.to_zarr(store=store, mode="w", consolidated=True)
 
+
+# ---------------------------------------------------------
+# Extended Multi-Token Demo Data Generation (Mega Shot 12345)
+# ---------------------------------------------------------
+print("Generating Mega Shot 12345 (60+ Datasets)...")
+shot_id = "12345"
+
+
+def create_dataset(name, path, title):
+    # Reuse random data
+    data = np.random.rand(10, 10)
+    ds = xr.Dataset(
+        {"val": (["x", "y"], data)}, coords={"x": np.arange(10), "y": np.arange(10)}
+    )
+    ds.attrs["title"] = title
+
+    s3_path_full = f"{bucket_name}/{path}"
+    print(f"Writing {name} to {s3_path_full}...")
+    store = s3fs.S3Map(root=s3_path_full, s3=fs, check=False)
+    # Using consolidated=True helps xarray read it efficiently
+    ds.to_zarr(store=store, mode="w", consolidated=True)
+
+
+# 50 Public Signals
+for i in range(50):
+    create_dataset(
+        f"signal_{i:02d}",
+        f"shots/{shot_id}/signals/signal_{i:02d}",
+        f"Public Signal {i}",
+    )
+
+# 10 Restricted Signals
+for i in range(10):
+    create_dataset(
+        f"restricted_{i:02d}",
+        f"shots/{shot_id}/restricted/data_{i:02d}",
+        f"Restricted Data {i}",
+    )
+
 print("Data generation complete.")

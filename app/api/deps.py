@@ -4,17 +4,17 @@ from fastapi import Depends
 
 from app.auth.security import get_current_user
 from app.core.db import SessionDep
-from app.models.user import AuthenticatedUser
-from app.services.access_service import AccessService
+from app.models.identity import AuthenticatedUser
 from app.services.dataset_service import DatasetService
 from app.services.datasetsource_service import DatasetSourceService
 from app.services.device_service import DeviceService
+from app.services.file_access_service import FileAccessService
 from app.services.shot_service import ShotService
 from app.services.source_service import SourceService
 
 
-def get_access_service(session: SessionDep) -> AccessService:
-    return AccessService(session)
+def get_file_access_service(session: SessionDep) -> FileAccessService:
+    return FileAccessService(session)
 
 
 def get_device_service(session: SessionDep) -> DeviceService:
@@ -37,7 +37,7 @@ def get_datasetsource_service(session: SessionDep) -> DatasetSourceService:
     return DatasetSourceService(session)
 
 
-AccessServiceDep = Annotated[AccessService, Depends(get_access_service)]
+FileAccessServiceDep = Annotated[FileAccessService, Depends(get_file_access_service)]
 DeviceServiceDep = Annotated[DeviceService, Depends(get_device_service)]
 ShotServiceDep = Annotated[ShotService, Depends(get_shot_service)]
 SourceServiceDep = Annotated[SourceService, Depends(get_source_service)]

@@ -37,11 +37,8 @@ async def test_get_token_claims_success(mocker):
 async def test_get_token_claims_no_auth(mocker):
     mock_jwks_client = mocker.AsyncMock(spec=JwksClient)
 
-    with pytest.raises(HTTPException) as exc:
-        await get_token_claims(jwks_client=mock_jwks_client, auth=None)
-
-    assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
-    assert exc.value.detail == "Not authenticated"
+    result = await get_token_claims(jwks_client=mock_jwks_client, auth=None)
+    assert result is None
 
 
 @pytest.mark.asyncio

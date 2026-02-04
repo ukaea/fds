@@ -1,4 +1,4 @@
-from app.models.user import AuthenticatedUser
+from app.models.identity import AuthenticatedUser
 from app.services.exceptions import ForbiddenError
 
 

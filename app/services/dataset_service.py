@@ -5,9 +5,9 @@ from sqlmodel import Session, select
 from app.auth.access_control import get_effective_access_level
 from app.auth.permissions import check_device_admin, check_is_admin
 from app.auth.security import AuthenticatedUser
-from app.models.common import AccessLevel
 from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
-from app.models.user import ANONYMOUS_USER
+from app.models.identity import ANONYMOUS_USER
+from app.models.policy import AccessLevel
 from app.services.base_service import BaseService
 from app.services.device_service import DeviceService
 from app.services.exceptions import ConflictError, ForbiddenError, ResourceNotFoundError
@@ -47,17 +47,16 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         effective_level = get_effective_access_level(dataset, self.session)
 
-        # Public is theoretically accessible to everyone
-        if effective_level == AccessLevel.PUBLIC:
+        # Public AND Embargoed metadata is accessible to everyone (Discoverable)
+        if (
+            effective_level == AccessLevel.PUBLIC
+            or effective_level == AccessLevel.EMBARGOED
+        ):
             return
 
-        # For restricted+, you must be authenticated
+        # For restricted, you must be authenticated
         if user.is_anonymous:
             raise ForbiddenError("Authentication required for this resource")
-
-        # FUTURE: If we have EMBARGOED or specific dataset-level scopes, add checks here.
-        # For now, being authenticated is enough to see RESTRICTED (assuming scopes
-        # like 'read' aren't granularly enforced per dataset yet, only device level for writes).
 
     def create(self, obj_in: DatasetCreate, user: AuthenticatedUser) -> Dataset:
         """
@@ -95,7 +94,10 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
 
         # 2. Check for Name Collisions (within context)
         existing = self.get_by_name_in_context(
-            obj_in.name, obj_in.device_name, obj_in.shot_id
+            name=obj_in.name,
+            device_name=obj_in.device_name,
+            shot_id=obj_in.shot_id,
+            user=user,
         )
         if existing:
             raise ConflictError(f"Dataset {obj_in.name} already exists in this context")

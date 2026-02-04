@@ -1,7 +1,7 @@
-from .common import AccessLevel
 from .dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
 from .datasetsource import DatasetSource, DatasetSourceCreate
 from .device import Device, DeviceCreate, DeviceRead, DeviceUpdate
+from .policy import AccessLevel
 from .shot import Shot, ShotCreate, ShotRead, ShotUpdate
 from .source import Source, SourceCreate, SourceRead, SourceUpdate
 

@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from app.auth.exceptions import create_unauthorized_exception
 from app.auth.jwks import JWKSClientDep
 from app.core.config import config
-from app.models.user import AuthenticatedUser
+from app.models.identity import AuthenticatedUser
 
 # This creates the security scheme. It simply looks for an
 # 'Authorization: Bearer <token>' header.
@@ -49,7 +49,7 @@ async def get_current_user(
     Returns ANONYMOUS_USER if no claims.
     """
     if not claims:
-        from app.models.user import ANONYMOUS_USER
+        from app.models.identity import ANONYMOUS_USER
 
         return ANONYMOUS_USER
 

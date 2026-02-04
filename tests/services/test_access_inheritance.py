@@ -2,9 +2,9 @@ import pytest
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
-from app.models.common import AccessLevel
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
+from app.models.policy import AccessLevel
 from app.models.shot import ShotCreate
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
