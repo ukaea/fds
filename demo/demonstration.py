@@ -187,7 +187,7 @@ def _(mo):
     ### 3b. Registering the "Mega Shot" (Extended Demo)
 
     We also register a large number of datasets (simulating Shot 12345) to demonstrate multi-token vending.
-    These datasets correspond to what `demo/generate_mega_shot.py` created.
+    These datasets correspond to what `demo/generate_data.py` created.
     """)
     return
 
@@ -421,7 +421,9 @@ def _(
     MINIO_URL,
     headers,
     requests,
+    s3fs,
     time,
+    xr,
 ):
     # 1. Setup Dask Cluster (Reuse or Create)
     try:
@@ -437,9 +439,6 @@ def _(
 
     # 2. Worker Function
     def process_signal_mean(url, token_payload, endpoint):
-        import s3fs
-        import xarray as xr
-
         creds = list(token_payload["credentials"].values())[0]
         fs = s3fs.S3FileSystem(
             key=creds["access_key_id"],
@@ -499,6 +498,7 @@ def _(
         print(f"Average Mean Value: {sum(bench_results) / len(bench_results):.4f}")
 
     run_benchmark()
+
     return
 
 
