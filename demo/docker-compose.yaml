@@ -6,8 +6,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - OIDC_DOMAIN=localhost:8080/realms/fds
-      - OIDC_PROTOCOL=http
+      - TRUSTED_IDPS=[{"issuer":"http://localhost:8080/realms/fds","allowed_scopes":["*"]}]
       - OIDC_AUDIENCE=fds-client
       - STS_ENDPOINT_URL=http://localhost:9000
       - STS_ROLE_ARN=arn:aws:iam::123456789012:role/fds-role # Placeholder, will be configured in minio

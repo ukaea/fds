@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 class AuthenticatedUser(BaseModel):
     """
-    Placeholder for user data extracted from the JWT.
+    Canonical in-memory representation of an authenticated user.
     Decoupled from FastAPI to allow usage in CLI/Scripts.
     """
 

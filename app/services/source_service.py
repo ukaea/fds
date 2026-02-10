@@ -1,7 +1,7 @@
 from sqlmodel import Session, select
 
 from app.auth.permissions import check_is_admin
-from app.auth.security import AuthenticatedUser
+from app.models.identity import AuthenticatedUser
 from app.models.source import Source, SourceCreate, SourceUpdate
 from app.services.base_service import BaseService
 from app.services.exceptions import ResourceNotFoundError

@@ -1,4 +1,10 @@
+from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class TrustedIdP(BaseModel):
+    issuer: str
+    allowed_scopes: list[str] = ["*"]
 
 
 class Config(BaseSettings):
@@ -12,9 +18,10 @@ class Config(BaseSettings):
     db_name: str = "fds.db"
 
     # OIDC/JWT related settings
-    OIDC_DOMAIN: str = ""
     OIDC_AUDIENCE: str = ""
-    OIDC_PROTOCOL: str = "https"
+
+    # Multi-IdP Configuration
+    TRUSTED_IDPS: list[TrustedIdP] = []
 
     # Storage Provider Settings
     CREDENTIAL_TOKEN_DURATION: int = 3600  # Default 1 hour

@@ -13,142 +13,176 @@ logger = logging.getLogger(__name__)
 
 class JwksClient:
     """
-    A client for fetching and caching JSON Web Key Sets (JWKS) from an
-    OIDC provider.
+    A client for fetching and caching JSON Web Key Sets (JWKS) from
+    trusted OIDC providers.
     """
 
-    def __init__(self, domain: str):
-        self.domain = domain
-        self.jwks_uri = ""  # To be discovered from OIDC config
-        # Cache the JWKS for 10 minutes
-        self.cache = TTLCache(maxsize=1, ttl=600)
-        self._jwks_uri_discovered = False  # New flag to track discovery
+    def __init__(self):
+        # Cache key: issuer, value: jwks_data (dict)
+        # Increased maxsize to support multiple IdPs
+        self.cache = TTLCache(maxsize=10, ttl=600)
+        self.issuer_jwks_uris: dict[str, str] = {}
+        # Reuse a single client for connection pooling
+        self.client = httpx.AsyncClient()
 
-    async def _discover_jwks_uri(self):
+    async def close(self):
+        await self.client.aclose()
+
+    def _is_trusted_issuer(self, issuer: str) -> bool:
         """
-        Discovers the JWKS URI from the OIDC provider's well-known
-        configuration endpoint.
+        Checks if the issuer is in TRUSTED_IDPS.
         """
-        if not self.domain:
-            raise ValueError("OIDC_DOMAIN is not configured.")
+        for trusted in config.TRUSTED_IDPS:
+            if trusted.issuer == issuer:
+                return True
 
-        discovery_url = (
-            f"{config.OIDC_PROTOCOL}://{self.domain}/.well-known/openid-configuration"
-        )
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(discovery_url, timeout=5)
-                response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
-                config_data = response.json()
-                self.jwks_uri = config_data.get("jwks_uri")
-                logger.info(
-                    "Discovered JWKS URI",
-                    extra={"jwks_uri": self.jwks_uri, "domain": self.domain},
-                )
+        return False
 
-                if not self.jwks_uri:
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="JWKS URI not found in OIDC discovery configuration.",
-                    )
-                self._jwks_uri_discovered = True  # Set flag after successful discovery
-        except httpx.RequestError as exc:
+    async def _discover_jwks_uri(self, issuer: str) -> str:
+        """
+        Discovers the JWKS URI for a given issuer.
+        """
+        if not self._is_trusted_issuer(issuer):
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"An error occurred while requesting {exc.request.url!r}: {exc}",
-            )
-        except httpx.HTTPStatusError as exc:
-            raise HTTPException(
-                status_code=exc.response.status_code,  # Use actual status code from response
-                detail=f"Error response {exc.response.status_code} while requesting {exc.request.url!r}: {exc.response.text}",
-            )
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to discover JWKS URI: {e}",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Untrusted Issuer: {issuer}",
             )
 
-    async def get_jwks(self) -> dict:
-        """
-        Fetches and caches the JWKS from the provider.
-        """
-        if not self._jwks_uri_discovered:
-            await self._discover_jwks_uri()
-
-        if not self.jwks_uri:  # Should be set after discovery, but a safeguard
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="JWKS URI could not be discovered or is empty.",
-            )
-
-        cached_jwks = self.cache.get("jwks")
-        if cached_jwks:
-            return cached_jwks
+        discovery_url = f"{issuer.rstrip('/')}/.well-known/openid-configuration"
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(self.jwks_uri, timeout=5)
-                response.raise_for_status()
-                jwks_data = response.json()
-                self.cache["jwks"] = jwks_data  # Cache the fetched JWKS
-                return jwks_data
-        except httpx.RequestError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"An error occurred while requesting {exc.request.url!r}: {exc}",
+            response = await self.client.get(discovery_url, timeout=5)
+            response.raise_for_status()
+            config_data = response.json()
+            jwks_uri = config_data.get("jwks_uri")
+            if not jwks_uri:
+                raise Exception("jwks_uri not found in discovery doc")
+
+            logger.info(
+                "Discovered JWKS URI",
+                extra={"jwks_uri": jwks_uri, "issuer": issuer},
             )
-        except httpx.HTTPStatusError as exc:
+            return jwks_uri
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"IdP returned error during discovery for {issuer}",
+                extra={
+                    "status_code": e.response.status_code,
+                    "response_text": e.response.text,
+                    "issuer": issuer,
+                },
+            )
             raise HTTPException(
-                status_code=exc.response.status_code,  # Use actual status code from response
-                detail=f"Error response {exc.response.status_code} while requesting {exc.request.url!r}: {exc.response.text}",
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Identity Provider returned an error during discovery.",
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Discovery failed for {issuer}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Failed to connect to Identity Provider during discovery.",
             )
         except Exception as e:
+            logger.error(f"Discovery failed for {issuer}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to fetch JWKS from {self.jwks_uri}: {e}",
+                detail=f"Failed to discover JWKS URI for {issuer}",
+            )
+
+    async def get_jwks(self, issuer: str) -> dict:
+        """
+        Fetches and caches the JWKS for a specific issuer.
+        """
+        # Check cache first
+        if issuer in self.cache:
+            return self.cache[issuer]
+
+        # Resolve JWKS URI if not known
+        if issuer not in self.issuer_jwks_uris:
+            self.issuer_jwks_uris[issuer] = await self._discover_jwks_uri(issuer)
+
+        jwks_uri = self.issuer_jwks_uris[issuer]
+
+        try:
+            response = await self.client.get(jwks_uri, timeout=5)
+            response.raise_for_status()
+            jwks_data = response.json()
+            self.cache[issuer] = jwks_data
+            return jwks_data
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"IdP returned error fetching JWKS from {jwks_uri}",
+                extra={
+                    "status_code": e.response.status_code,
+                    "response_text": e.response.text,
+                    "issuer": issuer,
+                },
+            )
+            # Retrieve specific details if available, but sanitize for client
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Identity Provider returned an error.",
+            )
+        except httpx.RequestError as e:
+            logger.error(
+                f"Network error fetching JWKS from {jwks_uri}: {e}",
+                extra={"issuer": issuer},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Failed to connect to Identity Provider.",
+            )
+        except Exception as e:
+            # Fallback for parsing errors or other unexpected issues
+            logger.error(f"Unexpected error fetching JWKS from {jwks_uri}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal error processing JWKS.",
             )
 
     async def get_signing_key(self, token: str) -> str:
         """
         Finds the appropriate signing key for a given JWT.
-        It gets the unverified header of the token to find the Key ID (kid),
-        then searches the JWKS for a matching key.
         """
         try:
             unverified_header = jwt.get_unverified_header(token)
+            # We also need the payload to get the issuer
+            unverified_payload = jwt.decode(token, options={"verify_signature": False})
         except jwt.PyJWTError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Invalid token header: {e}",
+                detail=f"Invalid token format: {e}",
             )
 
         kid = unverified_header.get("kid")
-        if not kid:
+        issuer = unverified_payload.get("iss")
+
+        if not kid or not issuer:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token is missing 'kid' (Key ID) in header",
+                detail="Token is missing 'kid' or 'iss'",
             )
 
-        jwks = await self.get_jwks()
-        key = next((key for key in jwks["keys"] if key["kid"] == kid), None)
+        jwks = await self.get_jwks(issuer)
+        key = next((key for key in jwks["keys"] if key.get("kid") == kid), None)
 
-        # If the key is not found, it might be because the IdP has rotated the keys.
-        # We clear the cache and try fetching the JWKS again.
         if not key:
+            # Refresh cache (key rotation)
             logger.warning(
-                "Key ID not found in cache, rotating keys", extra={"kid": kid}
+                "Key ID not found, refreshing cache",
+                extra={"kid": kid, "issuer": issuer},
             )
-            self.cache.clear()
-            jwks = await self.get_jwks()
-            key = next((key for key in jwks["keys"] if key["kid"] == kid), None)
+            # Remove from cache to force refresh
+            self.cache.pop(issuer, None)
+            jwks = await self.get_jwks(issuer)
+            key = next((key for key in jwks["keys"] if key.get("kid") == kid), None)
 
         if not key:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Signing key not found for kid '{kid}'",
+                detail=f"Signing key not found for kid '{kid}' from issuer '{issuer}'",
             )
 
-        # PyJWT can construct the public key directly from the JWK dictionary
         return jwt.PyJWK(key).key
 
 
@@ -158,11 +192,10 @@ _jwks_client_instance: JwksClient | None = None
 def get_jwks_client() -> JwksClient:
     """
     Dependency provider for the JwksClient.
-    Creates a singleton instance of the client.
     """
     global _jwks_client_instance
     if _jwks_client_instance is None:
-        _jwks_client_instance = JwksClient(domain=config.OIDC_DOMAIN)
+        _jwks_client_instance = JwksClient()
     return _jwks_client_instance
 
 

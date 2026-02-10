@@ -4,9 +4,8 @@ from sqlmodel import Session, select
 
 from app.auth.access_control import get_effective_access_level
 from app.auth.permissions import check_device_admin, check_is_admin
-from app.auth.security import AuthenticatedUser
 from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
-from app.models.identity import ANONYMOUS_USER
+from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.services.base_service import BaseService
 from app.services.device_service import DeviceService

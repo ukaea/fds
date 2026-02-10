@@ -22,6 +22,7 @@ def test_create_shot_as_operator_success(
     app.dependency_overrides[get_token_claims] = lambda: {
         "sub": "operator-user",
         "scp": "shot-operator:MAST",
+        "iss": "https://test-idp.com",
     }
 
     # Act: Try to create shot for MAST

@@ -8,6 +8,7 @@ from app.auth.security import (
     AuthenticatedUser,
     get_token_claims,
 )
+from app.core.config import TrustedIdP, config
 from app.core.db import get_session
 from app.main import app
 from app.models import dataset, datasetsource, device, shot, source  # noqa: F401
@@ -53,6 +54,7 @@ def admin_user_token() -> Generator[dict[str, str], None, None]:
     claims = {
         "sub": "test-admin-user",
         "scp": "fds-admin",
+        "iss": "https://test-idp.com",
     }
     app.dependency_overrides[get_token_claims] = lambda: claims
     yield {"Authorization": "Bearer fake-admin-token"}
@@ -68,6 +70,7 @@ def non_admin_user_token() -> Generator[dict[str, str], None, None]:
     claims = {
         "sub": "test-non-admin-user",
         "scp": "some-other-scope",
+        "iss": "https://test-idp.com",
     }
     app.dependency_overrides[get_token_claims] = lambda: claims
     yield {"Authorization": "Bearer fake-non-admin-token"}
@@ -82,6 +85,7 @@ def mast_admin_user_token() -> Generator[dict[str, str], None, None]:
     claims = {
         "sub": "test-mast-admin-user",
         "scp": "mast_admin",
+        "iss": "https://test-idp.com",
     }
     app.dependency_overrides[get_token_claims] = lambda: claims
     yield {"Authorization": "Bearer fake-mast-admin-token"}
@@ -96,6 +100,7 @@ def jet_admin_user_token() -> Generator[dict[str, str], None, None]:
     claims = {
         "sub": "test-jet-admin-user",
         "scp": "jet_admin",
+        "iss": "https://test-idp.com",
     }
     app.dependency_overrides[get_token_claims] = lambda: claims
     yield {"Authorization": "Bearer fake-jet-admin-token"}
@@ -104,7 +109,40 @@ def jet_admin_user_token() -> Generator[dict[str, str], None, None]:
 
 @pytest.fixture(autouse=True)
 def mock_config(monkeypatch):
-    from app.core.config import config
-
-    monkeypatch.setattr(config, "OIDC_DOMAIN", "test-domain.com")
     monkeypatch.setattr(config, "OIDC_AUDIENCE", "test-audience")
+
+    # Initialize TRUSTED_IDPS with a default test IdP that allows all scopes
+    # This ensures existing tests (which don't care about IdP) pass by default.
+    default_test_idp = TrustedIdP(issuer="https://test-idp.com", allowed_scopes=["*"])
+    monkeypatch.setattr(config, "TRUSTED_IDPS", [default_test_idp])
+
+
+@pytest.fixture
+def mock_jwks_client(mocker):
+    """Global mock for JWKS Client"""
+    client = mocker.AsyncMock()
+    client.get_signing_key.return_value = "mock_public_key"
+    return client
+
+
+@pytest.fixture
+def mock_jwt_decode(mocker):
+    """Global mock for jwt.decode"""
+    return mocker.patch("app.auth.security.jwt.decode")
+
+
+@pytest.fixture
+def mock_s3_provider(mocker):
+    # Mock the get_provider_for_protocol to return a mock S3 provider
+    mock_prov = mocker.Mock()
+    # When initialized, S3CredentialProvider will be used, but we want to intercept the factory
+    mocker.patch(
+        "app.services.file_access_service.get_provider_for_protocol",
+        return_value=mock_prov,
+    )
+    return mock_prov
+
+
+@pytest.fixture
+def mock_check_shot_operator(mocker):
+    return mocker.patch("app.services.file_access_service.check_shot_operator")

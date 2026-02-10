@@ -2,8 +2,8 @@ from sqlmodel import Session, select
 
 from app.auth.access_control import get_effective_access_level
 from app.auth.permissions import check_is_admin
-from app.auth.security import AuthenticatedUser
 from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
+from app.models.identity import AuthenticatedUser
 from app.services.base_service import BaseService
 
 

@@ -3,8 +3,8 @@ from collections.abc import Sequence
 from sqlmodel import Session, select
 
 from app.auth.permissions import check_device_admin, check_is_admin
-from app.auth.security import AuthenticatedUser
 from app.models.datasetsource import DatasetSource, DatasetSourceCreate
+from app.models.identity import AuthenticatedUser
 from app.services.dataset_service import DatasetService
 from app.services.exceptions import ResourceNotFoundError
 
