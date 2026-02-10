@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING
 
+from sqlalchemy import PrimaryKeyConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 from .mixins import DescriptiveMixin, TimestampMixin
@@ -11,14 +12,22 @@ if TYPE_CHECKING:
 
 
 class ShotBase(DescriptiveMixin, TimestampMixin, SQLModel):
-    id: str = Field(primary_key=True, index=True)
+    id: str = Field(index=True)
     access_level: AccessLevel | None = Field(default=None, index=True)
-    device_id: int | None = Field(default=None, foreign_key="device.id", index=True)
 
 
 class Shot(ShotBase, table=True):
+    __table_args__ = (PrimaryKeyConstraint("device_id", "id"),)
+    id: str = Field(primary_key=True)
+    device_id: int = Field(foreign_key="device.id", primary_key=True)
+
     device: "Device" = Relationship(back_populates="shots")
-    datasets: list["Dataset"] = Relationship(back_populates="shot")
+    datasets: list["Dataset"] = Relationship(
+        back_populates="shot",
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Shot.id==Dataset.shot_id, Shot.device_id==Dataset.device_id)",
+        },
+    )
 
     @property
     def device_name(self) -> str | None:

@@ -193,10 +193,19 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
     2. Manifest generation works.
     """
     # 1. Setup Data
+    # 1. Setup Data
+    # Create Device first
+    from app.models.device import Device
+
+    device = Device(name="test-device", type="tokamak")
+    session.add(device)
+    session.commit()
+    session.refresh(device)
+
     # Identify Shot ID
     shot_id = "12345"
     # Create Shot (AccessLevel.PUBLIC for simplicity)
-    shot = Shot(id=shot_id, access_level=AccessLevel.PUBLIC)
+    shot = Shot(id=shot_id, device_id=device.id, access_level=AccessLevel.PUBLIC)
     session.add(shot)
     session.commit()
 
@@ -206,6 +215,7 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
             name=f"signal_{i:02d}",
             level=1,
             shot_id=shot_id,
+            device_id=device.id,
             data_url=f"s3://fds-data/shots/{shot_id}/signals/signal_{i:02d}",
             access_level=AccessLevel.PUBLIC,
             media_type="application/x-zarr",
@@ -214,12 +224,15 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
 
     # Create 1 Dataset for a DIFFERENT shot (noise)
     other_shot_id = "999"
-    other_shot = Shot(id=other_shot_id, access_level=AccessLevel.PUBLIC)
+    other_shot = Shot(
+        id=other_shot_id, device_id=device.id, access_level=AccessLevel.PUBLIC
+    )
     session.add(other_shot)
     ds_noise = Dataset(
         name="noise",
         level=1,
         shot_id=other_shot_id,
+        device_id=device.id,
         data_url="s3://fds-data/shots/999/noise",
         access_level=AccessLevel.PUBLIC,
     )

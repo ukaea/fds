@@ -39,7 +39,9 @@ def test_access_inheritance_dataset_from_shot(
         user=admin_user,
     )
     dataset = dataset_service.create(
-        DatasetCreate(name="data", level=1, data_url="url", shot_id=shot.id),
+        DatasetCreate(
+            name="data", level=1, data_url="url", shot_id=shot.id, device_name="TOKAMAK"
+        ),
         user=admin_user,
     )
 
@@ -96,6 +98,7 @@ def test_access_override_at_dataset_level(
             level=1,
             data_url="url",
             shot_id=shot.id,
+            device_name="DEV",
             access_level=AccessLevel.EMBARGOED,
         ),
         user=admin_user,

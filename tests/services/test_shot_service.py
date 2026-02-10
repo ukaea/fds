@@ -88,7 +88,7 @@ def test_get_shot(
     )
     assert created_shot is not None
 
-    retrieved_shot = shot_service.get(created_shot.id)
+    retrieved_shot = shot_service.get(created_shot.id, device.id)
     assert retrieved_shot is not None
     assert retrieved_shot.id == "shot-201"
 
@@ -122,7 +122,7 @@ def test_delete_shot(
     session: Session,
     admin_user: AuthenticatedUser,
 ):
-    _device = device_service.create(
+    device = device_service.create(
         DeviceCreate(name="Test Device", type="Test"), user=admin_user
     )
 
@@ -131,7 +131,9 @@ def test_delete_shot(
     )
     assert shot_to_delete is not None
 
-    shot_service.delete_with_auth(shot_to_delete.id, admin_user)
+    shot_service.delete_with_auth(
+        shot_to_delete.id, admin_user, device_name="Test Device"
+    )
 
-    db_shot = session.get(Shot, shot_to_delete.id)
+    db_shot = session.get(Shot, (device.id, shot_to_delete.id))
     assert db_shot is None

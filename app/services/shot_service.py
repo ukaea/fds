@@ -17,7 +17,6 @@ from app.services.exceptions import (
     DeviceNotFoundError,
     FDSValidationError,
     ForbiddenError,
-    ShotContextError,
 )
 
 
@@ -64,41 +63,25 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         # Allow Shot Operators to create shots
         check_shot_operator(user, target_device_name)
 
-        db_obj = Shot.model_validate(obj_in, update={"device_id": None})
-
         # Resolve device name to ID
         statement = select(Device).where(Device.name == target_device_name)
         device = self.session.exec(statement).first()
         if not device:
             raise DeviceNotFoundError(f"Device '{target_device_name}' not found")
-        db_obj.device_id = device.id
+
+        db_obj = Shot.model_validate(obj_in, update={"device_id": device.id})
 
         self.session.add(db_obj)
         self.session.commit()
         self.session.refresh(db_obj)
         return db_obj
 
-    def get_for_device(
-        self,
-        shot_id: str,
-        device_name: str,
-        user: AuthenticatedUser = ANONYMOUS_USER,
-    ) -> Shot:
+    def get(self, shot_id: str, device_id: int) -> Shot | None:
         """
-        Retrieve a shot specifically for a device context.
-        Raises ShotContextError if mismatch.
+        Get a shot by its composite primary key (shot_id, device_id).
         """
-        shot = self.get(shot_id)
-        if not shot:
-            raise ShotContextError(f"Shot '{shot_id}' not found")
-
-        if not shot.device or shot.device.name != device_name:
-            raise ShotContextError(
-                f"Shot '{shot_id}' does not belong to device '{device_name}'"
-            )
-
-        self.check_read_access(shot, user)
-        return shot
+        statement = select(Shot).where(Shot.id == shot_id, Shot.device_id == device_id)
+        return self.session.exec(statement).first()
 
     def get_multi_by_device(
         self, device_id: int, offset: int = 0, limit: int = 100
@@ -129,7 +112,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         )
         result = self.session.exec(statement).all()
 
-        # Filter permissions in python
+        # Filter permissions
         accessible_shots = []
         for s in result:
             try:
@@ -146,41 +129,22 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         db_obj: Shot,
         obj_in: ShotUpdate,
         user: AuthenticatedUser,
-        expected_device_name: str | None = None,
     ) -> Shot:
         """
         Update a shot. Enforces ownership and permission checks.
         """
-        # 1. Context check (Ownership)
-        if expected_device_name:
-            if not db_obj.device or db_obj.device.name != expected_device_name:
-                raise ShotContextError(f"Shot '{db_obj.id}' context mismatch")
-
-        # 2. Permission check for the CURRENT device
+        # Permission check for the CURRENT device
         if db_obj.device:
-            # Allow Shot Operators to update shots
             check_shot_operator(user, db_obj.device.name)
-        else:
-            # If for some reason it's orphaned, only fds-admin can touch it
-            if "fds-admin" not in user.scopes:
-                raise ForbiddenError("Only fds-admin can update orphaned shots")
 
         update_data = obj_in.model_dump(exclude_unset=True)
 
-        # 3. Handle device change
+        # Handle device change - this is complex with composite PKs, effectively a move/copy
+        # For now, we disallow changing device_name/device_id via update as it changes the PK
         if "device_name" in update_data:
-            new_device_name = update_data.pop("device_name")
-            if new_device_name:
-                # Permission check for the TARGET device
-                check_device_admin(user, new_device_name)
-
-                statement = select(Device).where(Device.name == new_device_name)
-                device = self.session.exec(statement).first()
-                if not device:
-                    raise DeviceNotFoundError(f"Device '{new_device_name}' not found")
-                db_obj.device_id = device.id
-            else:
-                db_obj.device_id = None
+            raise ConflictError(
+                "Cannot change device context of an existing shot via update."
+            )
 
         db_obj.sqlmodel_update(update_data)
         self.session.add(db_obj)
@@ -192,23 +156,22 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         self,
         shot_id: str,
         user: AuthenticatedUser,
-        expected_device_name: str | None = None,
+        device_name: str,
     ) -> bool:
         """
-        Delete a shot with authentication and optional context check.
+        Delete a shot with authentication. Device name is now required to identify the shot.
         """
-        shot = self.get(shot_id)
+        # Resolve device name to ID
+        statement = select(Device).where(Device.name == device_name)
+        device = self.session.exec(statement).first()
+        if not device:
+            return False  # or raise DeviceNotFoundError
+
+        shot = self.get(shot_id, device.id)
         if not shot:
             return False
 
-        if expected_device_name:
-            if not shot.device or shot.device.name != expected_device_name:
-                raise ShotContextError(f"Shot '{shot_id}' context mismatch")
-
-        if shot.device:
-            check_device_admin(user, shot.device.name)
-        elif "fds-admin" not in user.scopes:
-            raise ForbiddenError("Only fds-admin can delete orphaned shots")
+        check_device_admin(user, device_name)
 
         self.session.delete(shot)
         self.session.commit()

@@ -48,18 +48,30 @@ def setup_data_fixture(
     source_service: SourceService,
     admin_user: AuthenticatedUser,
 ):
-    _device = device_service.create(
+    device_service.create(
         DeviceCreate(name="Test Device", type="Test"), user=admin_user
     )
     shot = shot_service.create(
         ShotCreate(id="shot-1", device_name="Test Device"), user=admin_user
     )
     dataset1 = dataset_service.create(
-        DatasetCreate(name="Data 1", level=1, data_url="url1", shot_id=shot.id),
+        DatasetCreate(
+            name="Data 1",
+            level=1,
+            data_url="url1",
+            shot_id=shot.id,
+            device_name="Test Device",
+        ),
         user=admin_user,
     )
     dataset2 = dataset_service.create(
-        DatasetCreate(name="Data 2", level=1, data_url="url2", shot_id=shot.id),
+        DatasetCreate(
+            name="Data 2",
+            level=1,
+            data_url="url2",
+            shot_id=shot.id,
+            device_name="Test Device",
+        ),
         user=admin_user,
     )
     source1 = source_service.create(SourceCreate(name="Source 1"), user=admin_user)

@@ -7,7 +7,7 @@ from app.models.device import DeviceCreate
 from app.models.shot import ShotCreate
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
-from app.services.exceptions import ConflictError, ForbiddenError, ResourceNotFoundError
+from app.services.exceptions import ForbiddenError, ResourceNotFoundError
 from app.services.shot_service import ShotService
 
 
@@ -49,6 +49,7 @@ def test_create_dataset(
         data_url="s3://test-bucket/shot-101/core_profiles.zarr",
         quality_flag="good",
         shot_id=shot.id,
+        device_name="Test Device",
     )
     dataset = dataset_service.create(dataset_create, user=admin_user)
 
@@ -64,11 +65,17 @@ def test_create_dataset(
 def test_create_dataset_for_nonexistent_shot(
     dataset_service: DatasetService, admin_user: AuthenticatedUser
 ):
+    device_service = DeviceService(dataset_service.session)
+    device_service.create(
+        DeviceCreate(name="Test Device", type="Test"), user=admin_user
+    )
+
     dataset_create = DatasetCreate(
         name="nonexistent_data",
         level=1,
         data_url="s3://nonexistent",
         shot_id="nonexistent-shot",
+        device_name="Test Device",
     )
     with pytest.raises(ResourceNotFoundError):
         dataset_service.create(dataset_create, user=admin_user)
@@ -92,7 +99,13 @@ def test_get_dataset(
     assert shot.id == "shot-101"
 
     created_dataset = dataset_service.create(
-        DatasetCreate(name="mag_diag", level=1, data_url="s3://url", shot_id=shot.id),
+        DatasetCreate(
+            name="mag_diag",
+            level=1,
+            data_url="s3://url",
+            shot_id=shot.id,
+            device_name="Test Device",
+        ),
         user=admin_user,
     )
     assert created_dataset is not None
@@ -126,11 +139,23 @@ def test_get_datasets(
     assert shot.id == "shot-101"
 
     dataset_service.create(
-        DatasetCreate(name="data1", level=1, data_url="url1", shot_id=shot.id),
+        DatasetCreate(
+            name="data1",
+            level=1,
+            data_url="url1",
+            shot_id=shot.id,
+            device_name="Test Device",
+        ),
         user=admin_user,
     )
     dataset_service.create(
-        DatasetCreate(name="data2", level=2, data_url="url2", shot_id=shot.id),
+        DatasetCreate(
+            name="data2",
+            level=2,
+            data_url="url2",
+            shot_id=shot.id,
+            device_name="Test Device",
+        ),
         user=admin_user,
     )
 
@@ -166,28 +191,44 @@ def test_get_datasets_for_shot(
 
     dataset_service.create(
         DatasetCreate(
-            name="shot1_data1", level=1, data_url="url_s1_d1", shot_id=shot1.id
+            name="shot1_data1",
+            level=1,
+            data_url="url_s1_d1",
+            shot_id=shot1.id,
+            device_name="Device 1",
         ),
         user=admin_user,
     )
     dataset_service.create(
         DatasetCreate(
-            name="shot1_data2", level=2, data_url="url_s1_d2", shot_id=shot1.id
+            name="shot1_data2",
+            level=2,
+            data_url="url_s1_d2",
+            shot_id=shot1.id,
+            device_name="Device 1",
         ),
         user=admin_user,
     )
     dataset_service.create(
         DatasetCreate(
-            name="shot2_data1", level=1, data_url="url_s2_d1", shot_id=shot2.id
+            name="shot2_data1",
+            level=1,
+            data_url="url_s2_d1",
+            shot_id=shot2.id,
+            device_name="Device 2",
         ),
         user=admin_user,
     )
 
-    datasets_shot1 = dataset_service.get_datasets_for_shot(shot1.id, user=admin_user)
+    datasets_shot1 = dataset_service.get_datasets_for_shot(
+        shot1.id, device1.id, user=admin_user
+    )
     assert len(datasets_shot1) == 2
     assert all(ds.shot_id == shot1.id for ds in datasets_shot1)
 
-    datasets_shot2 = dataset_service.get_datasets_for_shot(shot2.id, user=admin_user)
+    datasets_shot2 = dataset_service.get_datasets_for_shot(
+        shot2.id, device2.id, user=admin_user
+    )
     assert len(datasets_shot2) == 1
     assert all(ds.shot_id == shot2.id for ds in datasets_shot2)
 
@@ -254,7 +295,7 @@ def test_create_dataset_context_mismatch(
     dataset_create = DatasetCreate(
         name="bad_context", level=1, data_url="url", shot_id=shot.id, device_name="JET"
     )
-    with pytest.raises(ConflictError):
+    with pytest.raises(ResourceNotFoundError):
         dataset_service.create(dataset_create, user=admin_user)
 
 
@@ -282,6 +323,7 @@ def test_update_dataset(
             data_url="old_url",
             shot_id=shot.id,
             quality_flag="good",
+            device_name="Test Device",
         ),
         user=admin_user,
     )
@@ -322,7 +364,13 @@ def test_delete_dataset(
     assert shot.id == "shot-101"
 
     dataset_to_delete = dataset_service.create(
-        DatasetCreate(name="to_delete", level=1, data_url="url_del", shot_id=shot.id),
+        DatasetCreate(
+            name="to_delete",
+            level=1,
+            data_url="url_del",
+            shot_id=shot.id,
+            device_name="Test Device",
+        ),
         user=admin_user,
     )
     assert dataset_to_delete is not None

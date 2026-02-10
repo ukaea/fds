@@ -1,52 +1,14 @@
 from fastapi import APIRouter, status
 
-from app.api.deps import CurrentUserDep, ShotServiceDep
+from app.api.deps import CurrentUserDep, DeviceServiceDep, ShotServiceDep
 from app.models.shot import (
     ShotCreate,
     ShotRead,
     ShotUpdate,
 )
+from app.services.exceptions import DeviceNotFoundError, ResourceNotFoundError
 
 router = APIRouter()
-
-
-@router.post(
-    "/shots/",
-    response_model=ShotRead,
-    response_model_exclude_none=True,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_shot_global(
-    *,
-    shot_service: ShotServiceDep,
-    shot_in: ShotCreate,
-    user: CurrentUserDep,
-) -> ShotRead:
-    """
-    Create a new shot. Device name must be in the payload.
-    """
-    shot = shot_service.create(shot_in, user)
-    return shot_service.to_read_model(shot)
-
-
-@router.put(
-    "/shots/{shot_id}",
-    response_model=ShotRead,
-    response_model_exclude_none=True,
-)
-def update_shot_global(
-    *,
-    shot_id: str,
-    shot_in: ShotUpdate,
-    shot_service: ShotServiceDep,
-    user: CurrentUserDep,
-) -> ShotRead:
-    """
-    Update a shot globally.
-    """
-    db_obj = shot_service.get(shot_id)
-    shot = shot_service.update(db_obj=db_obj, obj_in=shot_in, user=user)
-    return shot_service.to_read_model(shot)
 
 
 @router.post(
@@ -55,7 +17,7 @@ def update_shot_global(
     response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
 )
-def create_shot_nested(
+def create_shot(
     *,
     device_name: str,
     shot_service: ShotServiceDep,
@@ -74,7 +36,7 @@ def create_shot_nested(
     response_model=list[ShotRead],
     response_model_exclude_none=True,
 )
-def read_shots_nested(
+def read_shots(
     *,
     device_name: str,
     shot_service: ShotServiceDep,
@@ -98,18 +60,29 @@ def read_shots_nested(
     response_model=ShotRead,
     response_model_exclude_none=True,
 )
-def read_shot_nested(
+def read_shot(
     *,
     device_name: str,
     shot_service: ShotServiceDep,
+    device_service: DeviceServiceDep,
     shot_id: str,
     user: CurrentUserDep,
 ) -> ShotRead:
     """
     Retrieve a shot specifically for a device context.
     """
-    shot = shot_service.get_for_device(shot_id, device_name, user)
-    return shot_service.to_read_model(shot)
+    device = device_service.get_by_name(device_name)
+    if not device:
+        raise DeviceNotFoundError(f"Device '{device_name}' not found")
+
+    shot = shot_service.get(shot_id, device.id)
+    if not shot:
+        raise ResourceNotFoundError(
+            f"Shot '{shot_id}' not found for device '{device_name}'"
+        )
+
+    shot_service.check_read_access(shot, user)
+    return shot_service.to_read_model(shot, include_device=True)
 
 
 @router.put(
@@ -117,21 +90,29 @@ def read_shot_nested(
     response_model=ShotRead,
     response_model_exclude_none=True,
 )
-def update_shot_nested(
+def update_shot(
     *,
     device_name: str,
     shot_id: str,
     shot_in: ShotUpdate,
     shot_service: ShotServiceDep,
+    device_service: DeviceServiceDep,
     user: CurrentUserDep,
 ) -> ShotRead:
     """
     Update a shot nested under a device.
     """
-    db_obj = shot_service.get(shot_id)
-    shot = shot_service.update(
-        db_obj=db_obj, obj_in=shot_in, user=user, expected_device_name=device_name
-    )
+    device = device_service.get_by_name(device_name)
+    if not device:
+        raise DeviceNotFoundError(f"Device '{device_name}' not found")
+
+    db_obj = shot_service.get(shot_id, device.id)
+    if not db_obj:
+        raise ResourceNotFoundError(
+            f"Shot '{shot_id}' not found for device '{device_name}'"
+        )
+
+    shot = shot_service.update(db_obj=db_obj, obj_in=shot_in, user=user)
     return shot_service.to_read_model(shot)
 
 
@@ -139,7 +120,7 @@ def update_shot_nested(
     "/devices/{device_name}/shots/{shot_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_shot_nested(
+def delete_shot(
     *,
     device_name: str,
     shot_service: ShotServiceDep,
@@ -149,5 +130,5 @@ def delete_shot_nested(
     """
     Delete a shot with authentication and optional context check.
     """
-    shot_service.delete_with_auth(shot_id, user, expected_device_name=device_name)
+    shot_service.delete_with_auth(shot_id, user, device_name=device_name)
     return None

@@ -1,5 +1,3 @@
-from typing import Union
-
 from sqlmodel import Session, select
 
 from app.models.dataset import Dataset
@@ -11,7 +9,7 @@ DEFAULT_ACCESS_LEVEL = AccessLevel.RESTRICTED
 
 
 def get_effective_access_level(
-    obj: Union[Dataset, Shot, Device], session: Session
+    obj: Dataset | Shot | Device, session: Session
 ) -> AccessLevel:
     """
     Calculates the effective access level for an object based on inheritance:
@@ -23,8 +21,8 @@ def get_effective_access_level(
         return obj.access_level
 
     # 2. Inherit from Shot (if applicable)
-    if isinstance(obj, Dataset) and obj.shot_id:
-        shot = session.get(Shot, obj.shot_id)
+    if isinstance(obj, Dataset) and obj.shot_id and obj.device_id:
+        shot = session.get(Shot, (obj.device_id, obj.shot_id))
         if shot:
             return get_effective_access_level(shot, session)
 

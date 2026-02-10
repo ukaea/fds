@@ -7,32 +7,7 @@ from app.models.shot import AccessLevel, ShotCreate
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
 
-# Dummy admin user for test setup
 admin_user = AuthenticatedUser(id="test-admin", scopes=["fds-admin"])
-
-
-def test_create_shot_global_endpoint(
-    test_client: TestClient,
-    session: Session,
-    admin_user_token: dict,
-):
-    device_service = DeviceService(session)
-    device_service.create(DeviceCreate(name="MAST", type="Tokamak"), user=admin_user)
-    session.commit()
-
-    shot_data = {"id": "shot-12345", "device_name": "MAST", "access_level": "public"}
-
-    response = test_client.post(
-        "/api/v1/shots/",
-        headers=admin_user_token,
-        json=shot_data,
-    )
-    assert response.status_code == 201
-    data = response.json()
-    assert data["id"] == "shot-12345"
-    assert data["access_level"] == "public"
-    assert "device_id" not in data
-    assert "device" not in data
 
 
 def test_create_shot_nested_endpoint(
@@ -81,20 +56,6 @@ def test_create_shot_conflict(
     assert "does match" or "conflict" in response.json()["detail"].lower()
 
 
-def test_create_shot_missing_device(
-    test_client: TestClient,
-    # session: Session,
-    admin_user_token: dict,
-):
-    shot_data = {"id": "shot-no-device"}
-    response = test_client.post(
-        "/api/v1/shots/",
-        headers=admin_user_token,
-        json=shot_data,
-    )
-    assert response.status_code == 422
-
-
 def test_update_shot_nested_device_change(
     test_client: TestClient,
     session: Session,
@@ -107,7 +68,7 @@ def test_update_shot_nested_device_change(
     mast = device_service.create(
         DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
     )
-    jet = device_service.create(
+    _jet = device_service.create(
         DeviceCreate(name="JET", type="Tokamak"), user=admin_user
     )
     shot = shot_service.create(
@@ -118,25 +79,18 @@ def test_update_shot_nested_device_change(
     )
     session.commit()
 
-    # Move from MAST to JET via nested endpoint
+    # Try to move from MAST to JET via nested endpoint - should fail
     update_data = {"device_name": "JET"}
     response = test_client.put(
         f"/api/v1/devices/{mast.name}/shots/{shot.id}",
         headers=admin_user_token,
         json=update_data,
     )
-    assert response.status_code == 200
+    assert response.status_code == 409
 
-    # Verify it moved
-    updated_shot = shot_service.get(shot.id)
-    assert updated_shot.device_id == jet.id
-
-    # Verify old nested path returns 404
-    response = test_client.get(
-        f"/api/v1/devices/{mast.name}/shots/{shot.id}",
-        headers=admin_user_token,
-    )
-    assert response.status_code == 404
+    # Verify it did NOT move
+    updated_shot = shot_service.get(shot.id, mast.id)
+    assert updated_shot.device_id == mast.id
 
 
 def test_update_shot_nested_mismatch_404(
@@ -166,38 +120,6 @@ def test_update_shot_nested_mismatch_404(
     assert response.status_code == 404
 
 
-def test_update_shot_global(
-    test_client: TestClient,
-    session: Session,
-    admin_user_token: dict,
-):
-    device_service = DeviceService(session)
-    shot_service = ShotService(session)
-    admin_user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
-
-    device_service.create(DeviceCreate(name="MAST", type="Tokamak"), user=admin_user)
-    jet = device_service.create(
-        DeviceCreate(name="JET", type="Tokamak"), user=admin_user
-    )
-    shot = shot_service.create(
-        ShotCreate(id="shot-global-update", device_name="MAST"), user=admin_user
-    )
-    session.commit()
-
-    # Move from MAST to JET via global endpoint
-    update_data = {"device_name": "JET", "access_level": "restricted"}
-    response = test_client.put(
-        f"/api/v1/shots/{shot.id}",
-        headers=admin_user_token,
-        json=update_data,
-    )
-    assert response.status_code == 200
-
-    updated_shot = shot_service.get(shot.id)
-    assert updated_shot.device_id == jet.id
-    assert updated_shot.access_level == AccessLevel.RESTRICTED
-
-
 def test_delete_shot(
     test_client: TestClient,
     session: Session,
@@ -222,7 +144,7 @@ def test_delete_shot(
     assert response.status_code == 204
 
     # Verify it's deleted
-    assert shot_service.get(shot.id) is None
+    assert shot_service.get(shot.id, mast.id) is None
 
 
 def test_read_shots_include_device(

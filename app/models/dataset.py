@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING
 
+from sqlalchemy import ForeignKeyConstraint
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
 from .mixins import DescriptiveMixin, TimestampMixin
@@ -27,14 +28,24 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
 
 class Dataset(DatasetBase, table=True):
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["device_id", "shot_id"],
+            ["shot.device_id", "shot.id"],
+        ),
         UniqueConstraint(
             "device_name", "shot_id", "name", name="idx_dataset_context_name"
         ),
     )
     id: int | None = Field(default=None, primary_key=True)
-    shot_id: str | None = Field(default=None, foreign_key="shot.id", index=True)
+    shot_id: str | None = Field(default=None, index=True)
+    device_id: int | None = Field(default=None, index=True)
 
-    shot: "Shot" = Relationship(back_populates="datasets")
+    shot: "Shot" = Relationship(
+        back_populates="datasets",
+        sa_relationship_kwargs={
+            "primaryjoin": "and_(Dataset.shot_id==Shot.id, Dataset.device_id==Shot.device_id)",
+        },
+    )
     source_links: list["DatasetSource"] = Relationship(back_populates="dataset")
 
 

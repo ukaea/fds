@@ -5,11 +5,18 @@ from sqlmodel import Session, select
 from app.auth.access_control import get_effective_access_level
 from app.auth.permissions import check_device_admin, check_is_admin
 from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
+from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.services.base_service import BaseService
 from app.services.device_service import DeviceService
-from app.services.exceptions import ConflictError, ForbiddenError, ResourceNotFoundError
+from app.services.exceptions import (
+    ConflictError,
+    DeviceNotFoundError,
+    FDSValidationError,
+    ForbiddenError,
+    ResourceNotFoundError,
+)
 from app.services.shot_service import ShotService
 
 
@@ -28,16 +35,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         Global list of datasets. Filters by access level.
         """
         statement = select(self.model).offset(offset).limit(limit)
-        results = self.session.exec(statement).all()
-
-        accessible = []
-        for d in results:
-            try:
-                self.check_read_access(d, user)
-                accessible.append(d)
-            except ForbiddenError:
-                continue
-        return accessible
+        datasets = self.session.exec(statement).all()
+        return self._filter_accessible_datasets(datasets, user)
 
     def check_read_access(self, dataset: Dataset, user: AuthenticatedUser) -> None:
         """
@@ -63,35 +62,40 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         # 1. Determine and Validate Context
         if obj_in.shot_id:
-            shot = ShotService(self.session).get(obj_in.shot_id)
-            if not shot:
-                raise ResourceNotFoundError(f"Shot {obj_in.shot_id} not found")
-
-            # If device_name is also provided, ensure it matches the shot's device
-            if obj_in.device_name and shot.device.name != obj_in.device_name:
-                raise ConflictError(
-                    f"Shot {obj_in.shot_id} does not belong to device {obj_in.device_name}"
+            if not obj_in.device_name:
+                raise FDSValidationError(
+                    "Device name is required when specifying a shot_id"
                 )
 
-            # Use shot's device_name if not provided
-            if not obj_in.device_name:
-                obj_in.device_name = shot.device.name
+            # Resolve device first
+            statement = select(Device).where(Device.name == obj_in.device_name)
+            device = self.session.exec(statement).first()
+            if not device:
+                raise DeviceNotFoundError(f"Device '{obj_in.device_name}' not found")
 
-            # Auth: Device Admin or Global Admin
+            # Check Shot Context
+            shot_service = ShotService(self.session)
+            shot = shot_service.get(obj_in.shot_id, device.id)
+            if not shot:
+                raise ResourceNotFoundError(
+                    f"Shot {obj_in.shot_id} not found for device {obj_in.device_name}"
+                )
+
+            # Auth: Device Admin
             check_device_admin(user, obj_in.device_name)
+
         elif obj_in.device_name:
             device = DeviceService(self.session).get_by_name(obj_in.device_name)
             if not device:
                 raise ResourceNotFoundError(f"Device {obj_in.device_name} not found")
 
-            # Auth: Device Admin or Global Admin
+            # Auth: Device Admin
             check_device_admin(user, obj_in.device_name)
         else:
             # Global dataset
-            # Auth: Global Admin only
             check_is_admin(user)
 
-        # 2. Check for Name Collisions (within context)
+        # 2. Check for Name Collisions
         existing = self.get_by_name_in_context(
             name=obj_in.name,
             device_name=obj_in.device_name,
@@ -101,8 +105,24 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         if existing:
             raise ConflictError(f"Dataset {obj_in.name} already exists in this context")
 
-        # Call the base class's create method
-        return super().create(obj_in)
+        # 3. Create DB Object
+        db_obj = Dataset.model_validate(obj_in)
+
+        # Populate derived fields
+        if obj_in.shot_id:
+            statement = select(Device).where(Device.name == obj_in.device_name)
+            device = self.session.exec(statement).first()
+            db_obj.device_id = device.id
+
+        elif obj_in.device_name:
+            statement = select(Device).where(Device.name == obj_in.device_name)
+            device = self.session.exec(statement).first()
+            db_obj.device_id = device.id
+
+        self.session.add(db_obj)
+        self.session.commit()
+        self.session.refresh(db_obj)
+        return db_obj
 
     def update(
         self, *, db_obj: Dataset, obj_in: DatasetUpdate, user: AuthenticatedUser
@@ -175,42 +195,28 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             .offset(offset)
             .limit(limit)
         )
-        results = self.session.exec(statement).all()
-
-        # Filter datasets that the user does not have access to
-        accessible = []
-        for d in results:
-            try:
-                self.check_read_access(d, user)
-                accessible.append(d)
-            except ForbiddenError:
-                continue
-        return accessible
+        datasets = self.session.exec(statement).all()
+        return self._filter_accessible_datasets(datasets, user)
 
     def get_datasets_for_shot(
         self,
         shot_id: str,
+        device_id: int,
         user: AuthenticatedUser = ANONYMOUS_USER,
         offset: int = 0,
         limit: int = 100,
     ) -> Sequence[Dataset]:
+        """
+        Get all datasets for a specific shot (scoped by device).
+        """
         statement = (
             select(Dataset)
-            .where(Dataset.shot_id == shot_id)
+            .where(Dataset.shot_id == shot_id, Dataset.device_id == device_id)
             .offset(offset)
             .limit(limit)
         )
-        results = self.session.exec(statement).all()
-
-        # Filter datasets that the user does not have access to
-        accessible = []
-        for d in results:
-            try:
-                self.check_read_access(d, user)
-                accessible.append(d)
-            except ForbiddenError:
-                continue
-        return accessible
+        datasets = self.session.exec(statement).all()
+        return self._filter_accessible_datasets(datasets, user)
 
     def to_read_model(self, dataset: Dataset) -> DatasetRead:
         """
@@ -221,3 +227,18 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             dataset, self.session
         )
         return read_model
+
+    def _filter_accessible_datasets(
+        self, datasets: Sequence[Dataset], user: AuthenticatedUser
+    ) -> list[Dataset]:
+        """
+        Helper to filter a list of datasets, returning only those the user can read.
+        """
+        accessible_datasets = []
+        for dataset in datasets:
+            try:
+                self.check_read_access(dataset, user)
+                accessible_datasets.append(dataset)
+            except ForbiddenError:
+                continue
+        return accessible_datasets

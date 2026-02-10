@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
-from app.api.deps import CurrentUserDep, DatasetServiceDep
+from app.api.deps import CurrentUserDep, DatasetServiceDep, DeviceServiceDep
 from app.models.dataset import DatasetCreate, DatasetRead, DatasetUpdate
 from app.services.exceptions import ResourceNotFoundError
 from app.services.jsonld import map_dataset_to_dcat
@@ -101,6 +101,7 @@ def read_datasets_shot(
     device_name: str,
     shot_id: str,
     dataset_service: DatasetServiceDep,
+    device_service: DeviceServiceDep,
     user: CurrentUserDep,
     offset: int = 0,
     limit: int = 100,
@@ -108,8 +109,12 @@ def read_datasets_shot(
     """
     Retrieve all datasets for a specific shot.
     """
+    device = device_service.get_by_name(device_name)
+    if not device:
+        raise ResourceNotFoundError(f"Device '{device_name}' not found")
+
     datasets = dataset_service.get_datasets_for_shot(
-        shot_id, user=user, offset=offset, limit=limit
+        shot_id, device.id, user=user, offset=offset, limit=limit
     )
     return [dataset_service.to_read_model(d) for d in datasets]
 
