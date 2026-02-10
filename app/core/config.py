@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,31 +11,48 @@ class Config(BaseSettings):
     # Configuration for Pydantic Settings
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    app_name: str = "fds"
-    debug: bool = False
-    db_user: str = ""
-    db_password: str = ""
-    db_name: str = "fds.db"
+    # Application Settings
+    app_name: str = Field(default="fds", validation_alias="FDS_APP_NAME")
+    debug: bool = Field(default=False, validation_alias="FDS_DEBUG")
 
-    # OIDC/JWT related settings
-    OIDC_AUDIENCE: str = ""
+    # Database Settings
+    db_user: str = Field(default="", validation_alias="FDS_DB_USER")
+    db_password: str = Field(default="", validation_alias="FDS_DB_PASSWORD")
+    db_name: str = Field(default="fds.db", validation_alias="FDS_DB_NAME")
+
+    # OIDC/JWT Settings
+    OIDC_AUDIENCE: str = Field(default="", validation_alias="FDS_OIDC_AUDIENCE")
 
     # Multi-IdP Configuration
-    TRUSTED_IDPS: list[TrustedIdP] = []
+    TRUSTED_IDPS: list[TrustedIdP] = Field(
+        default=[], validation_alias="FDS_TRUSTED_IDPS"
+    )
 
     # Storage Provider Settings
-    CREDENTIAL_TOKEN_DURATION: int = 3600  # Default 1 hour
+    CREDENTIAL_TOKEN_DURATION: int = Field(
+        default=3600, validation_alias="FDS_CREDENTIAL_TOKEN_DURATION"
+    )
 
     # --- S3 (STS) ---
-    STS_ROLE_ARN: str = ""  # The role to assume for vending tokens
-    STS_ENDPOINT_URL: str | None = None  # Optional: for MinIO/Ceph
-    STS_REGION: str = "us-east-1"
+    STS_ROLE_ARN: str = Field(default="", validation_alias="FDS_STS_ROLE_ARN")
+    STS_ENDPOINT_URL: str | None = Field(
+        default=None, validation_alias="FDS_STS_ENDPOINT_URL"
+    )
+    STS_REGION: str = Field(default="us-east-1", validation_alias="FDS_STS_REGION")
 
     # --- Azure ---
-    AZURE_STORAGE_ACCOUNT: str | None = None
-    AZURE_TENANT_ID: str | None = None
-    AZURE_CLIENT_ID: str | None = None
-    AZURE_CLIENT_SECRET: str | None = None
+    AZURE_STORAGE_ACCOUNT: str | None = Field(
+        default=None, validation_alias="FDS_AZURE_STORAGE_ACCOUNT"
+    )
+    AZURE_TENANT_ID: str | None = Field(
+        default=None, validation_alias="FDS_AZURE_TENANT_ID"
+    )
+    AZURE_CLIENT_ID: str | None = Field(
+        default=None, validation_alias="FDS_AZURE_CLIENT_ID"
+    )
+    AZURE_CLIENT_SECRET: str | None = Field(
+        default=None, validation_alias="FDS_AZURE_CLIENT_SECRET"
+    )
 
     @property
     def db_url(self) -> str:

@@ -118,7 +118,7 @@ def _(FDS_API_URL, headers, requests):
     print("Registering Device: tokamak-1...")
     # Note: Device router uses trailing slash
     resp = requests.post(f"{FDS_API_URL}/devices/", json=device_meta, headers=headers)
-    if resp.status_code in (201, 409):
+    if resp.status_code in (200, 201, 409):
         print("Device registered.")
     else:
         print(f"Device registration failed: {resp.status_code} {resp.text}")
