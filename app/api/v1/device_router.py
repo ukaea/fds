@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUserDep, DeviceServiceDep
@@ -8,7 +8,7 @@ from app.services.jsonld import map_device_to_dcat
 router = APIRouter()
 
 
-@router.post("/", response_model=DeviceRead)
+@router.post("/", response_model=DeviceRead, status_code=status.HTTP_201_CREATED)
 def create_device(
     *,
     device_service: DeviceServiceDep,

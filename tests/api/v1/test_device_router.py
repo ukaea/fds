@@ -16,7 +16,7 @@ def test_create_device(test_client: TestClient, admin_user_token: dict[str, str]
         headers=admin_user_token,
         json={"name": "MAST-U", "type": "Tokamak", "status": "Operational"},
     )
-    assert response.status_code == 200
+    assert response.status_code == 201
     data = response.json()
     assert data["name"] == "MAST-U"
 
