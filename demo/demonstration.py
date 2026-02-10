@@ -33,6 +33,7 @@ def _():
 def _(mo):
     mo.md(r"""
     # fds Demonstration: Zarr & Xarray with Marimo
+
     This notebook demonstrates how fds acts as a metadata and access service for scientific data.
     Workflow:
 
@@ -48,7 +49,6 @@ def _(mo):
 def _(mo):
     mo.md(r"""
     ## 1. Setup and Environment
-
 
     We'll define the URLs for our services. In the local demo environment, these point to the containers running in Podman/Docker.
     """)
@@ -110,6 +110,7 @@ def _(mo):
 @app.cell
 def _(FDS_API_URL, headers, requests):
     # 1. Register Device
+
     device_meta = {
         "name": "tokamak-1",
         "description": "Primary Demo Device",
@@ -127,7 +128,9 @@ def _(FDS_API_URL, headers, requests):
     shot_meta = {"id": "12345", "access_level": "public", "device_name": "tokamak-1"}
     print("Registering Shot: 12345...")
     # Note: Shot router uses trailing slash
-    resp = requests.post(f"{FDS_API_URL}/shots/", json=shot_meta, headers=headers)
+    resp = requests.post(
+        f"{FDS_API_URL}/devices/tokamak-1/shots/", json=shot_meta, headers=headers
+    )
     if resp.status_code in (201, 409):
         print("Shot 12345 registered.")
     else:
@@ -136,7 +139,9 @@ def _(FDS_API_URL, headers, requests):
     # 3. Register Shot 001 (for the single dataset demo)
     shot_001_meta = {"id": "001", "access_level": "public", "device_name": "tokamak-1"}
     print("Registering Shot: 001...")
-    resp = requests.post(f"{FDS_API_URL}/shots/", json=shot_001_meta, headers=headers)
+    resp = requests.post(
+        f"{FDS_API_URL}/devices/tokamak-1/shots/", json=shot_001_meta, headers=headers
+    )
     if resp.status_code in (201, 409):
         print("Shot 001 registered.")
     else:
@@ -285,7 +290,7 @@ def _(FDS_API_URL, headers, requests):
     # This shot has ~60 datasets, so we expect multiple tokens.
     creds_response = requests.post(
         f"{FDS_API_URL}/file-access/credentials",
-        json={"shot_id": "12345"},
+        json={"shot_id": "12345", "device_name": "tokamak-1"},
         headers=headers,
     )
 
@@ -299,7 +304,7 @@ def _(FDS_API_URL, headers, requests):
     # This supports the cell below that expects 's3_creds'
     creds_001_resp = requests.post(
         f"{FDS_API_URL}/file-access/credentials",
-        json={"shot_id": "001"},
+        json={"shot_id": "001", "device_name": "tokamak-1"},
         headers=headers,
     )
     creds_001_resp.raise_for_status()
@@ -460,7 +465,7 @@ def _(
         # Use a local variable name to avoid collision
         bench_resp = requests.post(
             f"{FDS_API_URL}/file-access/credentials",
-            json={"shot_id": "12345"},
+            json={"shot_id": "12345", "device_name": "tokamak-1"},
             headers=headers,
         )
         bench_resp.raise_for_status()
