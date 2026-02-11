@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from sqlmodel import Session, select
 
 from app.auth.permissions import check_device_admin, check_is_admin
-from app.models.datasetsource import DatasetSource, DatasetSourceCreate
+from app.models.datasetsource import DatasetSource, DatasetSourceLink
 from app.models.identity import AuthenticatedUser
 from app.services.dataset_service import DatasetService
 from app.services.exceptions import ResourceNotFoundError
@@ -24,7 +24,7 @@ class DatasetSourceService:
         return self.session.exec(statement).first()
 
     def create(
-        self, obj_in: DatasetSourceCreate, user: AuthenticatedUser
+        self, obj_in: DatasetSourceLink, user: AuthenticatedUser
     ) -> DatasetSource:
         """
         Create a new provenance record (DatasetSource link).

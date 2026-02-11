@@ -1,10 +1,13 @@
+from collections.abc import Sequence
+
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.auth.permissions import check_is_admin
 from app.models.identity import AuthenticatedUser
 from app.models.source import Source, SourceCreate, SourceUpdate
 from app.services.base_service import BaseService
-from app.services.exceptions import ResourceNotFoundError
+from app.services.exceptions import ConflictError, ResourceNotFoundError
 
 
 class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
@@ -16,7 +19,29 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
         Create a new source.
         """
         check_is_admin(user)
-        return super().create(obj_in)
+
+        device_id = None
+        if obj_in.device_name:
+            from app.services.device_service import DeviceService
+
+            device = DeviceService(self.session).get_by_name(obj_in.device_name)
+            if not device:
+                raise ResourceNotFoundError(f"Device '{obj_in.device_name}' not found")
+            device_id = device.id
+
+        # Convert to dict and exclude device_name since it's not in the Source table
+        source_data = obj_in.model_dump(exclude={"device_name"})
+        source_data["device_id"] = device_id
+
+        db_obj = Source.model_validate(source_data)
+        self.session.add(db_obj)
+        try:
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            raise ConflictError(f"Source with name '{obj_in.name}' already exists")
+        self.session.refresh(db_obj)
+        return db_obj
 
     def update(
         self, *, db_obj: Source, obj_in: SourceUpdate, user: AuthenticatedUser
@@ -43,3 +68,17 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
         """
         statement = select(Source).where(Source.name == name)
         return self.session.exec(statement).first()
+
+    def get_for_device(
+        self, device_id: int, offset: int = 0, limit: int = 100
+    ) -> Sequence[Source]:
+        """
+        Retrieve sources associated with a specific device.
+        """
+        statement = (
+            select(Source)
+            .where(Source.device_id == device_id)
+            .offset(offset)
+            .limit(limit)
+        )
+        return self.session.exec(statement).all()

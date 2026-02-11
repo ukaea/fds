@@ -1,3 +1,4 @@
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.auth.access_control import get_effective_access_level
@@ -5,6 +6,7 @@ from app.auth.permissions import check_is_admin
 from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.identity import AuthenticatedUser
 from app.services.base_service import BaseService
+from app.services.exceptions import ConflictError
 
 
 class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
@@ -20,7 +22,11 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         Create a new device. Requires global admin privileges.
         """
         check_is_admin(user)
-        return super().create(obj_in)
+        try:
+            return super().create(obj_in)
+        except IntegrityError as e:
+            self.session.rollback()
+            raise ConflictError(f"Device '{obj_in.name}' already exists") from e
 
     def update(
         self, *, db_obj: Device, obj_in: DeviceUpdate, user: AuthenticatedUser

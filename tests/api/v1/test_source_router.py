@@ -10,7 +10,7 @@ def test_create_source_admin(test_client: TestClient, admin_user_token: dict):
     assert response.status_code == 201
     data = response.json()
     assert data["name"] == "API Source"
-    assert "id" not in data
+    assert "id" in data
 
 
 def test_create_source_non_admin(test_client: TestClient, non_admin_user_token: dict):

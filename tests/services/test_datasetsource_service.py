@@ -3,7 +3,7 @@ from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
 from app.models.dataset import DatasetCreate
-from app.models.datasetsource import DatasetSourceCreate
+from app.models.datasetsource import DatasetSourceLink
 from app.models.device import DeviceCreate
 from app.models.shot import ShotCreate
 from app.models.source import SourceCreate
@@ -85,7 +85,7 @@ def test_create_datasetsource_link(
     admin_user: AuthenticatedUser,
 ):
     _, dataset1, _, source1, _ = setup_data
-    link_create = DatasetSourceCreate(dataset_id=dataset1.id, source_id=source1.id)
+    link_create = DatasetSourceLink(dataset_id=dataset1.id, source_id=source1.id)
     link = datasetsource_service.create(link_create, user=admin_user)
     assert link is not None
     assert link.dataset_id == dataset1.id
@@ -98,7 +98,7 @@ def test_get_datasetsource_link(
     admin_user: AuthenticatedUser,
 ):
     _, dataset1, _, source1, _ = setup_data
-    link_create = DatasetSourceCreate(dataset_id=dataset1.id, source_id=source1.id)
+    link_create = DatasetSourceLink(dataset_id=dataset1.id, source_id=source1.id)
     datasetsource_service.create(link_create, user=admin_user)
 
     retrieved_link = datasetsource_service.get(
@@ -122,7 +122,7 @@ def test_delete_datasetsource_link(
     admin_user: AuthenticatedUser,
 ):
     _, dataset1, _, source1, _ = setup_data
-    link_create = DatasetSourceCreate(dataset_id=dataset1.id, source_id=source1.id)
+    link_create = DatasetSourceLink(dataset_id=dataset1.id, source_id=source1.id)
     datasetsource_service.create(link_create, user=admin_user)
 
     deleted = datasetsource_service.delete_with_auth(
@@ -152,11 +152,11 @@ def test_get_links_for_dataset(
 ):
     _, dataset1, _, source1, source2 = setup_data
     datasetsource_service.create(
-        DatasetSourceCreate(dataset_id=dataset1.id, source_id=source1.id),
+        DatasetSourceLink(dataset_id=dataset1.id, source_id=source1.id),
         user=admin_user,
     )
     datasetsource_service.create(
-        DatasetSourceCreate(dataset_id=dataset1.id, source_id=source2.id),
+        DatasetSourceLink(dataset_id=dataset1.id, source_id=source2.id),
         user=admin_user,
     )
 
@@ -172,11 +172,11 @@ def test_get_links_for_source(
 ):
     _, dataset1, dataset2, source1, _ = setup_data
     datasetsource_service.create(
-        DatasetSourceCreate(dataset_id=dataset1.id, source_id=source1.id),
+        DatasetSourceLink(dataset_id=dataset1.id, source_id=source1.id),
         user=admin_user,
     )
     datasetsource_service.create(
-        DatasetSourceCreate(dataset_id=dataset2.id, source_id=source1.id),
+        DatasetSourceLink(dataset_id=dataset2.id, source_id=source1.id),
         user=admin_user,
     )
 
@@ -191,7 +191,7 @@ def test_create_datasetsource_with_metadata(
     admin_user: AuthenticatedUser,
 ):
     _, dataset1, _, source1, _ = setup_data
-    link_create = DatasetSourceCreate(
+    link_create = DatasetSourceLink(
         dataset_id=dataset1.id,
         source_id=source1.id,
         source_version="v1.2.3",

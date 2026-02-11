@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.auth.access_control import get_effective_access_level
@@ -120,7 +121,13 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             db_obj.device_id = device.id
 
         self.session.add(db_obj)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except IntegrityError as e:
+            self.session.rollback()
+            raise ConflictError(
+                f"Dataset '{obj_in.name}' already exists in this context"
+            ) from e
         self.session.refresh(db_obj)
         return db_obj
 

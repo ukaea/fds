@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any
 
 from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device, DeviceRead
@@ -26,20 +26,21 @@ METADATA_CONTEXT = {
 }
 
 
-def generate_context() -> Dict[str, Any]:
+def generate_context() -> dict[str, Any]:
     """
     Returns the JSON-LD @context for FDS metadata.
     """
     return METADATA_CONTEXT
 
 
-def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> Dict[str, Any]:
+def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, Any]:
     """
     Maps a Device to a dcat:Catalog.
     """
     device_uri = f"{base_url}/api/v1/devices/{device.name}"
 
     data = {
+        "@context": METADATA_CONTEXT,
         "@type": "dcat:Catalog",
         "@id": device_uri,
         "title": device.title or f"Device: {device.name}",
@@ -59,7 +60,7 @@ def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> Dict[str, 
 
 def map_dataset_to_dcat(
     dataset: Dataset | DatasetRead, base_url: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Maps a Dataset to a dcat:Dataset.
     """
@@ -72,6 +73,7 @@ def map_dataset_to_dcat(
     )
 
     data = {
+        "@context": METADATA_CONTEXT,
         "@type": "dcat:Dataset",
         "@id": dataset_uri,
         "title": dataset.title or dataset.name,
@@ -94,5 +96,41 @@ def map_dataset_to_dcat(
     # Access Rights mapping
     if dataset.access_level:
         data["accessRights"] = dataset.access_level.value
+
+    # PROV-O Mapping (Provenance)
+    # Check if the dataset object has source_links loaded
+    if hasattr(dataset, "source_links") and dataset.source_links:
+        activities = []
+        for link in dataset.source_links:
+            # Source Entity URI
+            source_uri = f"{base_url}/api/v1/sources/{link.source_id}"
+
+            # Create an Activity for the generation
+            activity = {
+                "@type": "prov:Activity",
+                "prov:type": link.activity_type,
+                "prov:used": {
+                    "@id": source_uri,
+                    "@type": "prov:Entity",
+                    "dct:title": link.source.name
+                    if link.source
+                    else f"Source {link.source_id}",
+                    "dct:description": link.source.description if link.source else None,
+                    "dcat:version": link.source_version,
+                },
+            }
+
+            # Add parameters if they exist
+            if link.parameters:
+                # We can map parameters to a generic value or specific property
+                # For now, let's just dump them as a value
+                activity["prov:value"] = link.parameters
+
+            activities.append(activity)
+
+        if len(activities) == 1:
+            data["prov:wasGeneratedBy"] = activities[0]
+        elif len(activities) > 1:
+            data["prov:wasGeneratedBy"] = activities
 
     return {k: v for k, v in data.items() if v is not None}

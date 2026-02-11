@@ -27,8 +27,12 @@ class DatasetSource(DatasetSourceBase, table=True):
     source: "Source" = Relationship(back_populates="dataset_links")
 
 
-class DatasetSourceCreate(DatasetSourceBase):
-    pass
+class DatasetSourceLink(SQLModel):
+    dataset_id: int | None = None
+    source_id: int
+    source_version: str | None = None
+    activity_type: str | None = None
+    parameters: dict | None = Field(default=None, sa_column=Column(JSON))
 
 
 class DatasetSourceRead(DatasetSourceBase):

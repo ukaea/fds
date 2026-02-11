@@ -118,34 +118,42 @@ def _(FDS_API_URL, headers, requests):
     }
     print("Registering Device: tokamak-1...")
     # Note: Device router uses trailing slash
-    resp = requests.post(f"{FDS_API_URL}/devices/", json=device_meta, headers=headers)
-    if resp.status_code in (201, 409):
+    resp_device = requests.post(
+        f"{FDS_API_URL}/devices/", json=device_meta, headers=headers
+    )
+    if resp_device.status_code in (201, 409):
         print("Device registered.")
     else:
-        print(f"Device registration failed: {resp.status_code} {resp.text}")
+        print(
+            f"Device registration failed: {resp_device.status_code} {resp_device.text}"
+        )
 
     # 2. Register Shot
     shot_meta = {"id": "12345", "access_level": "public", "device_name": "tokamak-1"}
     print("Registering Shot: 12345...")
     # Note: Shot router uses trailing slash
-    resp = requests.post(
+    resp_shot = requests.post(
         f"{FDS_API_URL}/devices/tokamak-1/shots/", json=shot_meta, headers=headers
     )
-    if resp.status_code in (201, 409):
+    if resp_shot.status_code in (201, 409):
         print("Shot 12345 registered.")
     else:
-        print(f"Shot 12345 registration failed: {resp.status_code} {resp.text}")
+        print(
+            f"Shot 12345 registration failed: {resp_shot.status_code} {resp_shot.text}"
+        )
 
     # 3. Register Shot 001 (for the single dataset demo)
     shot_001_meta = {"id": "001", "access_level": "public", "device_name": "tokamak-1"}
     print("Registering Shot: 001...")
-    resp = requests.post(
+    resp_shot_001 = requests.post(
         f"{FDS_API_URL}/devices/tokamak-1/shots/", json=shot_001_meta, headers=headers
     )
-    if resp.status_code in (201, 409):
+    if resp_shot_001.status_code in (201, 409):
         print("Shot 001 registered.")
     else:
-        print(f"Shot 001 registration failed: {resp.status_code} {resp.text}")
+        print(
+            f"Shot 001 registration failed: {resp_shot_001.status_code} {resp_shot_001.text}"
+        )
     return
 
 
@@ -189,7 +197,126 @@ def _(FDS_API_URL, headers, json, requests):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### 3.1. Semantic Metadata (JSON-LD)
+    ### 3.2. Linking Data to a Source (Provenance)
+
+    FDS tracks **Provenance** by linking Datasets to the Sources (instruments or codes) that produced them.
+    Here we register the **Thomson Scattering** diagnostic and link our dataset to it.
+    """)
+    return
+
+
+@app.cell
+def _(FDS_API_URL, headers, requests):
+    # 1. Create the Source (Diagnostic Instrument) linked to Tokamak-1
+    source_meta = {
+        "name": "thomson_scattering",
+        "description": "High-resolution Thomson Scattering system on Tokamak-1",
+    }
+
+    print("Creating Source: thomson_scattering on tokamak-1...")
+    # Use device-scoped endpoint
+    resp_source = requests.post(
+        f"{FDS_API_URL}/devices/tokamak-1/sources", json=source_meta, headers=headers
+    )
+
+    if resp_source.status_code == 201:
+        source_id = resp_source.json()["id"]
+        print(f"Source created with ID: {source_id}")
+    elif resp_source.status_code == 409:
+        # Fetch existing if it already exists
+        print("Source already exists.")
+        resp_get_source = requests.get(
+            f"{FDS_API_URL}/devices/tokamak-1/sources", headers=headers
+        )
+        if resp_get_source.status_code == 200:
+            # Find the source in the list
+            sources = resp_get_source.json()
+            found = next(
+                (s for s in sources if s["name"] == "thomson_scattering"), None
+            )
+            if found:
+                source_id = found["id"]
+            else:
+                print("Source exists but not found in device list (maybe global?)")
+                # Check global lookup
+                resp_global_source = requests.get(
+                    f"{FDS_API_URL}/sources/thomson_scattering", headers=headers
+                )
+                if resp_global_source.status_code == 200:
+                    print("Found source globally.")
+                    source_id = resp_global_source.json()["id"]
+                else:
+                    print(
+                        f"Could not fetch global source: {resp_global_source.status_code}"
+                    )
+                    source_id = None
+        else:
+            print(f"Could not fetch existing sources: {resp_get_source.status_code}")
+            source_id = None
+    else:
+        print(f"Failed to create source: {resp_source.status_code} {resp_source.text}")
+        source_id = None
+
+    # Verify Device-Source Link
+    if source_id:
+        print("Verifying Source is linked to Tokamak-1...")
+        resp_dev_sources = requests.get(
+            f"{FDS_API_URL}/devices/tokamak-1/sources", headers=headers
+        )
+        if resp_dev_sources.status_code == 200:
+            dev_sources = resp_dev_sources.json()
+            if any(s["id"] == source_id for s in dev_sources):
+                print("Verification Successful: Source found in Device source list.")
+            else:
+                print("Verification Failed: Source NOT found in Device source list.")
+        else:
+            print(f"Failed to list device sources: {resp_dev_sources.status_code}")
+
+    # 2. Link Dataset to Source
+    # We need the Dataset ID first.
+    # In a real app we'd have it from the creation step, but let's look it up to be safe.
+    resp_get_dataset = requests.get(
+        f"{FDS_API_URL}/regions/global/datasets/plasma-array-001", headers=headers
+    )
+    # Wait, the dataset was registered as a shot dataset: /devices/tokamak-1/shots/001/datasets/plasma-array-001
+    resp_get_dataset = requests.get(
+        f"{FDS_API_URL}/devices/tokamak-1/shots/001/datasets/plasma-array-001",
+        headers=headers,
+    )
+
+    if resp_get_dataset.status_code == 200:
+        dataset_id = resp_get_dataset.json()["id"]
+
+        if source_id and dataset_id:
+            link_meta = {
+                "source_id": source_id,
+                "activity_type": "MEASUREMENT",
+                "source_version": "hardware-config-2025-01",
+                "parameters": {"calibration_date": "2025-01-10", "lasers_fired": 4},
+            }
+
+            print(f"Linking Dataset {dataset_id} to Source {source_id}...")
+            resp_link = requests.post(
+                f"{FDS_API_URL}/datasets/{dataset_id}/sources",
+                json=link_meta,
+                headers=headers,
+            )
+
+            if resp_link.status_code == 201:
+                print("Provenance link created successfully.")
+                print(resp_link.json())
+            else:
+                print(f"Failed to link: {resp_link.status_code} {resp_link.text}")
+    else:
+        print(f"Dataset not found: {resp_get_dataset.status_code}")
+
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### 3.3. Semantic Metadata (JSON-LD)
 
     FDS supports Content Negotiation to satisfy FAIR principles. By requesting `application/ld+json`, we can retrieve the **JSON-LD** representation of the dataset, which maps our internal model to standard ontologies like **DCAT** and **PROV**.
     """)

@@ -11,7 +11,6 @@ from app.auth.security import (
 from app.core.config import TrustedIdP, config
 from app.core.db import get_session
 from app.main import app
-from app.models import dataset, datasetsource, device, shot, source  # noqa: F401
 
 
 @pytest.fixture(name="session")

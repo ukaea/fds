@@ -46,8 +46,8 @@ def test_delete_device(
     response = test_client.delete(
         f"/api/v1/devices/{device.name}", headers=admin_user_token
     )
-    assert response.status_code == 200
-    assert response.json() == {"ok": True}
+    assert response.status_code == 204
+    assert response.content == b""
 
     # Verify the device is actually deleted
     response = test_client.get(

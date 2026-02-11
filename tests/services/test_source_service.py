@@ -1,5 +1,4 @@
 import pytest
-from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
@@ -28,7 +27,9 @@ def test_create_duplicate_source_fails(session: Session, admin_user: Authenticat
     service = SourceService(session)
     service.create(SourceCreate(name="Unique Source"), user=admin_user)
 
-    with pytest.raises(IntegrityError):
+    from app.services.exceptions import ConflictError
+
+    with pytest.raises(ConflictError):
         service.create(SourceCreate(name="Unique Source"), user=admin_user)
 
 

@@ -4,6 +4,7 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from .datasetsource import DatasetSource
+    from .device import Device
 
 
 class SourceBase(SQLModel):
@@ -13,15 +14,19 @@ class SourceBase(SQLModel):
 
 class Source(SourceBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    device_id: int | None = Field(default=None, foreign_key="device.id", nullable=True)
+
+    device: "Device" = Relationship(back_populates="sources")
     dataset_links: list["DatasetSource"] = Relationship(back_populates="source")
 
 
 class SourceRead(SourceBase):
-    pass
+    id: int
+    device_id: int | None = None
 
 
 class SourceCreate(SourceBase):
-    pass
+    device_name: str | None = None
 
 
 class SourceUpdate(SQLModel):

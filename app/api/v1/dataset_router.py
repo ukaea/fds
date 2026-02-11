@@ -1,8 +1,18 @@
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
-from app.api.deps import CurrentUserDep, DatasetServiceDep, DeviceServiceDep
+from app.api.deps import (
+    CurrentUserDep,
+    DatasetServiceDep,
+    DatasetSourceServiceDep,
+    DeviceServiceDep,
+)
 from app.models.dataset import DatasetCreate, DatasetRead, DatasetUpdate
+from app.models.datasetsource import (
+    DatasetSource,
+    DatasetSourceLink,
+    DatasetSourceRead,
+)
 from app.services.exceptions import ResourceNotFoundError
 from app.services.jsonld import map_dataset_to_dcat
 
@@ -273,4 +283,63 @@ def delete_dataset(
     Delete a dataset by internal ID. Requires appropriate tiered authorization.
     """
     dataset_service.delete_with_auth(id, user)
+    return None
+
+
+@router.post(
+    "/datasets/{dataset_id}/sources",
+    response_model=DatasetSource,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_dataset_source_link(
+    *,
+    dataset_id: int,
+    link_in: DatasetSourceLink,
+    dataset_source_service: DatasetSourceServiceDep,
+    user: CurrentUserDep,
+) -> DatasetSource:
+    """
+    Link a dataset to a source (provenance).
+    """
+    # Force the dataset_id to match the path
+    link_in.dataset_id = dataset_id
+    return dataset_source_service.create(link_in, user)
+
+
+@router.get(
+    "/datasets/{dataset_id}/sources",
+    response_model=list[DatasetSourceRead],
+)
+def read_dataset_source_links(
+    *,
+    dataset_id: int,
+    dataset_source_service: DatasetSourceServiceDep,
+    offset: int = 0,
+    limit: int = 100,
+) -> list[DatasetSource]:
+    """
+    Retrieve all source links for a specific dataset.
+    """
+    return dataset_source_service.get_for_dataset(
+        dataset_id=dataset_id, offset=offset, limit=limit
+    )
+
+
+@router.delete(
+    "/datasets/{dataset_id}/sources/{source_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_dataset_source_link(
+    *,
+    dataset_id: int,
+    source_id: int,
+    dataset_source_service: DatasetSourceServiceDep,
+    user: CurrentUserDep,
+) -> None:
+    """
+    Remove a link between a dataset and a source.
+    """
+    dataset_source_service.delete_with_auth(
+        dataset_id=dataset_id, source_id=source_id, user=user
+    )
     return None

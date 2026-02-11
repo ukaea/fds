@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
-from app.api.deps import CurrentUserDep, DeviceServiceDep
+from app.api.deps import CurrentUserDep, DeviceServiceDep, SourceServiceDep
 from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
+from app.models.source import Source, SourceCreate, SourceRead
 from app.services.jsonld import map_device_to_dcat
 
 router = APIRouter()
@@ -79,13 +80,13 @@ def update_device(
     return device_service.to_read_model(device)
 
 
-@router.delete("/{device_name}")
+@router.delete("/{device_name}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_device(
     *,
-    device_service: DeviceServiceDep,
     device_name: str,
+    device_service: DeviceServiceDep,
     user: CurrentUserDep,
-) -> dict:
+) -> None:
     """
     Delete a device by name.
     """
@@ -94,4 +95,50 @@ def delete_device(
         raise HTTPException(status_code=404, detail="Device not found")
 
     device_service.delete(current_device.id, user)
-    return {"ok": True}
+    return None
+
+
+@router.post(
+    "/{device_name}/sources",
+    response_model=SourceRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_source_for_device(
+    *,
+    device_name: str,
+    source_in: SourceCreate,
+    source_service: SourceServiceDep,
+    user: CurrentUserDep,
+) -> Source:
+    """
+    Create a new source linked to a specific device. Requires global admin.
+    """
+    # Force the device_name to match the path
+    source_in.device_name = device_name
+    return source_service.create(source_in, user)
+
+
+@router.get(
+    "/{device_name}/sources",
+    response_model=list[SourceRead],
+)
+def read_sources_for_device(
+    *,
+    device_name: str,
+    source_service: SourceServiceDep,
+    device_service: DeviceServiceDep,
+    offset: int = 0,
+    limit: int = 100,
+) -> list[SourceRead]:
+    """
+    Retrieve sources associated with a specific device.
+    """
+    device = device_service.get_by_name(device_name)
+    if not device:
+        from app.services.exceptions import ResourceNotFoundError
+
+        raise ResourceNotFoundError(f"Device '{device_name}' not found")
+
+    return source_service.get_for_device(
+        device_id=device.id, offset=offset, limit=limit
+    )

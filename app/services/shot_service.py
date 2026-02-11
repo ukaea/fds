@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Sequence
 if TYPE_CHECKING:
     from app.models.shot import ShotRead
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.auth.access_control import get_effective_access_level
@@ -72,7 +73,13 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         db_obj = Shot.model_validate(obj_in, update={"device_id": device.id})
 
         self.session.add(db_obj)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except IntegrityError as e:
+            self.session.rollback()
+            raise ConflictError(
+                f"Shot '{obj_in.id}' already exists for device '{device.name}'"
+            ) from e
         self.session.refresh(db_obj)
         return db_obj
 

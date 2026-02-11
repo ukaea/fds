@@ -7,6 +7,7 @@ from .policy import AccessLevel
 
 if TYPE_CHECKING:
     from .shot import Shot
+    from .source import Source
 
 
 class DeviceBase(DescriptiveMixin, TimestampMixin, SQLModel):
@@ -20,6 +21,7 @@ class DeviceBase(DescriptiveMixin, TimestampMixin, SQLModel):
 class Device(DeviceBase, table=True):
     id: int | None = Field(default=None, primary_key=True, index=True)
     shots: list["Shot"] = Relationship(back_populates="device")
+    sources: list["Source"] = Relationship(back_populates="device")
 
 
 class DeviceCreate(DeviceBase):
