@@ -189,6 +189,36 @@ def _(FDS_API_URL, headers, json, requests):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    ### 3.1. Semantic Metadata (JSON-LD)
+
+    FDS supports Content Negotiation to satisfy FAIR principles. By requesting `application/ld+json`, we can retrieve the **JSON-LD** representation of the dataset, which maps our internal model to standard ontologies like **DCAT** and **PROV**.
+    """)
+    return
+
+
+@app.cell
+def _(FDS_API_URL, headers, json, requests):
+    # Request JSON-LD for the dataset we just registered
+    jsonld_url = f"{FDS_API_URL}/devices/tokamak-1/shots/001/datasets/plasma-array-001"
+
+    print(f"Requesting JSON-LD from: {jsonld_url}")
+    # Note bindings: We want 'application/ld+json'
+    ld_headers = headers.copy()
+    ld_headers["Accept"] = "application/ld+json"
+
+    jld_resp = requests.get(jsonld_url, headers=ld_headers)
+
+    if jld_resp.status_code == 200:
+        print("Successfully retrieved JSON-LD:")
+        print(json.dumps(jld_resp.json(), indent=2))
+    else:
+        print(f"Failed to retrieve JSON-LD: {jld_resp.status_code} {jld_resp.text}")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ### 3b. Registering the "Mega Shot" (Extended Demo)
 
     We also register a large number of datasets (simulating Shot 12345) to demonstrate multi-token vending.
