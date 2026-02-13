@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 @router.post(
-    "/devices/{device_name}/shots/",
+    "/devices/{device_name}/shots",
     response_model=ShotRead,
     response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
@@ -32,7 +32,7 @@ def create_shot(
 
 
 @router.get(
-    "/devices/{device_name}/shots/",
+    "/devices/{device_name}/shots",
     response_model=list[ShotRead],
     response_model_exclude_none=True,
 )
