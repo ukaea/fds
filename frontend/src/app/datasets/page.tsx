@@ -13,7 +13,7 @@ export default function DatasetsPage() {
   const [filterType, setFilterType] = useState<'all' | 'global' | 'device'>('all');
 
   // Filter devices based on search query
-  const filteredDevices = devices?.filter(device => 
+  const filteredDevices = devices?.filter(device =>
     device.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     device.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -43,8 +43,8 @@ export default function DatasetsPage() {
           <button
             onClick={() => setFilterType('all')}
             className={`px-4 py-2 rounded-lg transition-colors ${
-              filterType === 'all' 
-                ? 'bg-blue-500 text-white' 
+              filterType === 'all'
+                ? 'bg-blue-500 text-white'
                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
             }`}
           >
@@ -53,8 +53,8 @@ export default function DatasetsPage() {
           <button
             onClick={() => setFilterType('global')}
             className={`px-4 py-2 rounded-lg transition-colors ${
-              filterType === 'global' 
-                ? 'bg-emerald-500 text-white' 
+              filterType === 'global'
+                ? 'bg-emerald-500 text-white'
                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
             }`}
           >
@@ -63,8 +63,8 @@ export default function DatasetsPage() {
           <button
             onClick={() => setFilterType('device')}
             className={`px-4 py-2 rounded-lg transition-colors ${
-              filterType === 'device' 
-                ? 'bg-purple-500 text-white' 
+              filterType === 'device'
+                ? 'bg-purple-500 text-white'
                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
             }`}
           >

@@ -24,15 +24,15 @@ export async function PATCH(request: NextRequest) {
 
 async function proxyRequest(request: NextRequest) {
   const backendUrl = process.env.BACKEND_URL || 'http://127.0.0.1:8000/api';
-  
+
   // Extract the path after /api/v1/
   const path = request.nextUrl.pathname.replace('/api/v1', '/v1');
   const search = request.nextUrl.search;
-  
+
   const targetUrl = `${backendUrl}${path}${search}`;
-  
+
   console.log(`[API Proxy] ${request.method} ${request.nextUrl.pathname} -> ${targetUrl}`);
-  
+
   try {
     // Only forward necessary headers (avoid Next.js internal headers)
     const headers = new Headers();
@@ -40,20 +40,20 @@ async function proxyRequest(request: NextRequest) {
     if (contentType) {
       headers.set('content-type', contentType);
     }
-    
+
     // Forward the request to the backend
     const response = await fetch(targetUrl, {
       method: request.method,
       headers,
-      body: request.method !== 'GET' && request.method !== 'HEAD' 
-        ? await request.text() 
+      body: request.method !== 'GET' && request.method !== 'HEAD'
+        ? await request.text()
         : undefined,
       redirect: 'follow',
     });
 
     // Get the response body as text first
     const responseText = await response.text();
-    
+
     // Try to parse as JSON, fall back to text
     let responseData;
     try {
@@ -61,7 +61,7 @@ async function proxyRequest(request: NextRequest) {
     } catch {
       responseData = responseText;
     }
-    
+
     // Return JSON response
     return NextResponse.json(responseData, {
       status: response.status,

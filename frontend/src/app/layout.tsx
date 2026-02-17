@@ -31,13 +31,13 @@ export default function RootLayout({
                   <Link href="/" className="flex flex-col md:flex-row items-center md:gap-4 text-white hover:text-primary transition-colors group">
                     {/* Logo Image: Larger square logo (h-24) for clear visibility */}
                     <div className="relative h-16 w-16 md:h-24 md:w-24">
-                      <img 
-                        src="/Authority_WHITE_SML_AW.png" 
-                        alt="UKAEA Logo" 
+                      <img
+                        src="/Authority_WHITE_SML_AW.png"
+                        alt="UKAEA Logo"
                         className="object-contain h-full w-full"
                       />
                     </div>
-                    
+
                     {/* Text: Larger and clearer */}
                     <span className="text-xs md:text-3xl font-bold tracking-tight mt-1 md:mt-0">UKAEA Data</span>
                   </Link>
@@ -58,11 +58,11 @@ export default function RootLayout({
                 </div>
               </div>
             </nav>
-            
+
             <main className="flex-1 py-8">
                {children}
             </main>
-  
+
             <footer className="border-t border-white/10 py-8 mt-auto bg-slate-900/50">
               <div className="container mx-auto text-center text-sm text-slate-500">
                 &copy; {new Date().getFullYear()} UK Atomic Energy Authority. Powered by the Fusion Data Service.

@@ -7,7 +7,7 @@ export type UserRole = 'Admin' | 'Device Admin' | 'Shot Operator' | 'Viewer';
 
 /**
  * Determines the highest role/privilege level for a user based on their scopes
- * 
+ *
  * Hierarchy (highest to lowest):
  * 1. Admin - has 'fds-admin' scope (global admin, full access)
  * 2. Device Admin - has '{device_name}_admin' scope (admin for specific devices)

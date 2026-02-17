@@ -128,8 +128,8 @@ export default function DevicesPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {devices?.map((device) => (
-          <Link 
-            key={device.name} 
+          <Link
+            key={device.name}
             href={`/devices/${device.name}/shots`}
             className="card group overflow-hidden block"
           >
@@ -137,14 +137,14 @@ export default function DevicesPage() {
               <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                 <Server className="w-24 h-24" />
               </div>
-              
+
               <div className="flex items-center gap-3 mb-4">
                 <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
                   <Activity className="w-5 h-5" />
                 </div>
                 <h2 className="text-xl font-bold">{device.name}</h2>
               </div>
-              
+
               <p className="text-slate-400 mb-6 line-clamp-2">
                 {device.description || "No description available for this device."}
               </p>

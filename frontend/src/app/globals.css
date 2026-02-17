@@ -6,33 +6,33 @@
   /* HSL Color Palette - Premium Scientific Aesthetic */
   --background: 220 20% 10%;
   --foreground: 220 20% 97%;
-  
+
   --card: 220 20% 14%;
   --card-foreground: 220 20% 97%;
- 
+
   --popover: 220 20% 14%;
   --popover-foreground: 220 20% 97%;
- 
+
   /* Use UKAEA Secondary Blue (#0082CA) for Primary Actions in Dark Mode for better contrast */
   --primary: 202 100% 40%; /* UKAEA Secondary Blue #0082CA */
   --primary-foreground: 0 0% 100%;
- 
+
   --secondary: 215 25% 27%;
   --secondary-foreground: 210 40% 98%;
- 
+
   --muted: 215 25% 27%;
   --muted-foreground: 215 20% 65%;
- 
+
   --accent: 207 100% 17%; /* UKAEA Blue #002F56 as Accent/Backgrounds */
   --accent-foreground: 0 0% 100%;
- 
+
   --destructive: 0 62.8% 30.6%;
   --destructive-foreground: 210 40% 98%;
 
   --border: 215 25% 27%;
   --input: 215 25% 27%;
   --ring: 210 100% 50%;
- 
+
   --radius: 0.5rem;
 
   /* Typography */

@@ -27,7 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.accessToken = account.access_token
         token.idToken = account.id_token
       }
-      
+
       // Extract scopes from the token
       // Prefer scopes from the ID Token (profile) as it contains our mapped client roles
       if (profile && 'scope' in profile) {
@@ -40,7 +40,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       } else if (account?.scope) {
         token.scopes = account.scope.split(' ')
       }
-      
+
       return token
     },
     async session({ session, token }) {

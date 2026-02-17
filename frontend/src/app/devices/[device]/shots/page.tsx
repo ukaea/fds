@@ -11,9 +11,9 @@ import { ClientDate } from '@/components/client-date';
 export default function ShotListPage() {
   const params = useParams();
   const deviceName = params.device as string;
-  
+
   const { data: shots, error, isLoading } = useSWR<Shot[]>(
-    deviceName ? `${API_BASE}/devices/${deviceName}/shots/` : null, 
+    deviceName ? `${API_BASE}/devices/${deviceName}/shots/` : null,
     fetcher
   );
 
@@ -34,8 +34,8 @@ export default function ShotListPage() {
 
       <div className="space-y-4">
         {shots?.map((shot) => (
-          <Link 
-            key={shot.id} 
+          <Link
+            key={shot.id}
             href={`/devices/${deviceName}/shots/${shot.id}`}
             className="block card p-6 hover:bg-slate-800/50 transition-colors group"
           >
@@ -60,7 +60,7 @@ export default function ShotListPage() {
                     </div>
                 </div>
               </div>
-              
+
               <ChevronRight className="text-slate-600 group-hover:text-primary group-hover:translate-x-1 transition-all" />
             </div>
           </Link>

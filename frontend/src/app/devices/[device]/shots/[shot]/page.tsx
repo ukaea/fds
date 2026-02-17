@@ -11,9 +11,9 @@ export default function ShotDetailPage() {
   const params = useParams();
   const deviceName = params.device as string;
   const shotId = params.shot as string; // Note: Next.js params are strings
-  
+
   const { data: datasets, error, isLoading } = useSWR<Dataset[]>(
-    deviceName && shotId ? `${API_BASE}/devices/${deviceName}/shots/${shotId}/datasets` : null, 
+    deviceName && shotId ? `${API_BASE}/devices/${deviceName}/shots/${shotId}/datasets` : null,
     fetcher
   );
 
@@ -34,8 +34,8 @@ export default function ShotDetailPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {datasets?.map((dataset) => (
-          <Link 
-            key={dataset.name} 
+          <Link
+            key={dataset.name}
             href={`/devices/${deviceName}/shots/${shotId}/datasets/${dataset.name}`}
             className="card p-6 hover:border-primary/50 transition-all group"
           >
@@ -51,7 +51,7 @@ export default function ShotDetailPage() {
               </div>
               <ChevronRight className="text-slate-600 group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all" />
             </div>
-            
+
             <div className="mt-4 flex items-center gap-4 text-sm text-slate-400">
                 <div className="flex items-center gap-1">
                     <FileCode className="w-4 h-4" />
@@ -63,7 +63,7 @@ export default function ShotDetailPage() {
             </div>
           </Link>
         ))}
-         
+
          {!datasets && !isLoading && !error && (
             <div className="col-span-full py-12 text-center text-slate-500 border border-dashed border-slate-800 rounded-lg">
                 No datasets found for this shot.

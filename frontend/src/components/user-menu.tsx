@@ -27,15 +27,15 @@ export function UserMenu() {
   const handleSwitchAccount = async () => {
     // To get a "completely clear form", we must first logout from Keycloak to kill the session.
     // Flow: App -> Keycloak Logout -> App(?switch_account=true) -> Keycloak Login (Clean)
-    
+
     const keycloakUrl = process.env.NEXT_PUBLIC_KEYCLOAK_URL || "http://localhost:8080";
     const realm = "fds";
     // Redirect back to the app with a flag to trigger immediate login
     const switchRedirectUri = encodeURIComponent(`${window.location.origin}/?switch_account=true`);
-    
+
     // Construct Logout URL (Keycloak 18+ style)
     let logoutUrl = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/logout?post_logout_redirect_uri=${switchRedirectUri}`;
-    
+
     // Add id_token_hint if available (prevents "Confirm Logout" screen)
     if (session?.idToken) {
       logoutUrl += `&id_token_hint=${session.idToken}`;
@@ -43,7 +43,7 @@ export function UserMenu() {
 
     // Sign out locally first to clear NextAuth state
     await signOut({ redirect: false });
-    
+
     // Redirect to Keycloak to finish the job
     window.location.href = logoutUrl;
   };
@@ -57,7 +57,7 @@ export function UserMenu() {
     const roleColor = getRoleColor(role);
     // Use the helper, or fallback if not imported yet (though it is)
     const roleBg = getRoleBgColor ? getRoleBgColor(role) : "bg-slate-800";
-    
+
     return (
       <div className="flex items-center justify-end gap-4 ml-auto">
         <div className="flex items-center gap-2 justify-end">
@@ -68,7 +68,7 @@ export function UserMenu() {
             {role}
           </div>
         </div>
-        
+
         <div className="flex flex-col-reverse md:flex-row items-end md:items-center gap-1 md:gap-2 border-l border-slate-700 pl-4">
           <button
             onClick={handleSwitchAccount}
@@ -78,7 +78,7 @@ export function UserMenu() {
             <Users className="w-3 h-3" />
             Switch
           </button>
-          
+
           <button
             onClick={() => signOut()}
             className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1 whitespace-nowrap"

@@ -9,7 +9,7 @@ import { useSession, signIn } from "next-auth/react";
 export default function DatasetPage() {
   const params = useParams();
   const { device, shot, dataset } = params;
-  
+
   const { data: session, status } = useSession();
   const [accessValues, setAccessValues] = useState<{granted: boolean, token?: string}>({ granted: false });
 
@@ -21,9 +21,9 @@ export default function DatasetPage() {
 
       // Simulate API call to get credentials (now gated by auth)
       setTimeout(() => {
-          setAccessValues({ 
-              granted: true, 
-              token: "eyJh... (Real keycloak token would go here)" 
+          setAccessValues({
+              granted: true,
+              token: "eyJh... (Real keycloak token would go here)"
             });
       }, 800);
   };
@@ -36,7 +36,7 @@ export default function DatasetPage() {
             <ArrowLeft className="w-4 h-4 mr-1" /> Back to Datasets
          </Link>
          <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
-            <span>{device}</span> <ChevronRight className="w-3 h-3"/> 
+            <span>{device}</span> <ChevronRight className="w-3 h-3"/>
             <span>Shot {shot}</span> <ChevronRight className="w-3 h-3"/>
             <span className="text-white font-medium">{dataset}</span>
          </div>
@@ -47,21 +47,21 @@ export default function DatasetPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Left Column: Metadata & Controls */}
         <div className="space-y-6">
             <div className="card p-6">
                 <h3 className="text-lg font-bold mb-4 border-b border-slate-700 pb-2">Data Access</h3>
-                
+
                 {!accessValues.granted ? (
                     <div className="text-center py-6">
                         <Lock className="w-12 h-12 text-slate-600 mx-auto mb-3" />
                         <p className="text-slate-400 mb-4">You need temporary credentials to access this Icechunk store.</p>
-                        <button 
+                        <button
                             onClick={handleRequestAccess}
                             className="bg-primary hover:bg-blue-600 text-white font-bold py-2 px-4 rounded w-full transition-colors flex items-center justify-center gap-2"
                         >
-                            <Unlock className="w-4 h-4" /> 
+                            <Unlock className="w-4 h-4" />
                             {status === "authenticated" ? "Request Access" : "Sign In to Request Access"}
                         </button>
                     </div>
