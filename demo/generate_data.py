@@ -18,7 +18,7 @@ minio_url = os.environ.get("MINIO_URL", "http://minio:9000")
 access_key = os.environ.get("AWS_ACCESS_KEY_ID", "admin")
 secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "password")
 bucket_name = "fds-data"
-path = "shots/001/zarr_data"
+path = "MAST/shots/30420.zarr"
 
 print(f"Connecting to MinIO at {minio_url}...")
 fs = s3fs.S3FileSystem(
