@@ -205,64 +205,35 @@ def _(mo):
 
 @app.cell
 def _(FDS_API_URL, headers, requests):
-    # 1. Create the Source (Diagnostic Instrument/Code) linked to MAST
+    # 1. Create the Source (Code) as a Global Source
+    # EFIT is a general-purpose equilibrium reconstruction code used across many
+    # tokamaks (MAST, DIII-D, NSTX, KSTAR, etc.), so it belongs as a global source.
+    # Device-scoped sources are for physical hardware tied to a specific machine.
     source_meta = {
         "name": "efit",
-        "description": "EFIT equilibrium reconstruction on MAST",
+        "description": "EFIT equilibrium reconstruction code",
     }
 
-    print("Creating Source: efit on mast...")
+    print("Creating Global Source: efit...")
     resp_source = requests.post(
-        f"{FDS_API_URL}/devices/mast/sources", json=source_meta, headers=headers
+        f"{FDS_API_URL}/sources/", json=source_meta, headers=headers
     )
 
     if resp_source.status_code == 201:
         source_id = resp_source.json()["id"]
         print(f"Source created with ID: {source_id}")
     elif resp_source.status_code == 409:
-        print("Source already exists.")
-        resp_get_source = requests.get(
-            f"{FDS_API_URL}/devices/mast/sources", headers=headers
-        )
+        print("Source already exists, fetching...")
+        resp_get_source = requests.get(f"{FDS_API_URL}/sources/efit", headers=headers)
         if resp_get_source.status_code == 200:
-            sources = resp_get_source.json()
-            found = next((s for s in sources if s["name"] == "efit"), None)
-            if found:
-                source_id = found["id"]
-            else:
-                print("Source exists but not found in device list (maybe global?)")
-                resp_global_source = requests.get(
-                    f"{FDS_API_URL}/sources/efit", headers=headers
-                )
-                if resp_global_source.status_code == 200:
-                    print("Found source globally.")
-                    source_id = resp_global_source.json()["id"]
-                else:
-                    print(
-                        f"Could not fetch global source: {resp_global_source.status_code}"
-                    )
-                    source_id = None
+            source_id = resp_get_source.json()["id"]
+            print(f"Found existing source with ID: {source_id}")
         else:
-            print(f"Could not fetch existing sources: {resp_get_source.status_code}")
+            print(f"Could not fetch source: {resp_get_source.status_code}")
             source_id = None
     else:
         print(f"Failed to create source: {resp_source.status_code} {resp_source.text}")
         source_id = None
-
-    # Verify Device-Source Link
-    if source_id:
-        print("Verifying Source is linked to MAST...")
-        resp_dev_sources = requests.get(
-            f"{FDS_API_URL}/devices/mast/sources", headers=headers
-        )
-        if resp_dev_sources.status_code == 200:
-            dev_sources = resp_dev_sources.json()
-            if any(s["id"] == source_id for s in dev_sources):
-                print("Verification Successful: Source found in Device source list.")
-            else:
-                print("Verification Failed: Source NOT found in Device source list.")
-        else:
-            print(f"Failed to list device sources: {resp_dev_sources.status_code}")
 
     # 2. Link Dataset to Source
     resp_get_dataset = requests.get(
