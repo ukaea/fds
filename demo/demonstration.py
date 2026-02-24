@@ -109,51 +109,53 @@ def _(mo):
 
 @app.cell
 def _(FDS_API_URL, headers, requests):
-    # 1. Register Device
-
-    device_meta = {
+    # 1. Register Devices
+    tokamak_meta = {
         "name": "tokamak-1",
         "description": "Primary Demo Device",
         "type": "tokamak",
     }
-    print("Registering Device: tokamak-1...")
-    # Note: Device router uses trailing slash
-    resp_device = requests.post(
-        f"{FDS_API_URL}/devices/", json=device_meta, headers=headers
-    )
-    if resp_device.status_code in (201, 409):
-        print("Device registered.")
-    else:
-        print(
-            f"Device registration failed: {resp_device.status_code} {resp_device.text}"
-        )
+    mast_upgrade_meta = {
+        "name": "mast_upgrade",
+        "description": "MAST Upgrade",
+        "type": "tokamak",
+    }
 
-    # 2. Register Shot
-    shot_meta = {"id": "12345", "access_level": "public", "device_name": "tokamak-1"}
-    print("Registering Shot: 12345...")
-    # Note: Shot router uses trailing slash
-    resp_shot = requests.post(
-        f"{FDS_API_URL}/devices/tokamak-1/shots/", json=shot_meta, headers=headers
-    )
-    if resp_shot.status_code in (201, 409):
-        print("Shot 12345 registered.")
-    else:
-        print(
-            f"Shot 12345 registration failed: {resp_shot.status_code} {resp_shot.text}"
-        )
+    print("Registering Devices...")
+    for dev in [tokamak_meta, mast_upgrade_meta]:
+        resp = requests.post(f"{FDS_API_URL}/devices/", json=dev, headers=headers)
+        if resp.status_code in (201, 409):
+            print(f"Device {dev['name']} registered.")
+        else:
+            print(f"Device registration failed: {resp.status_code} {resp.text}")
 
-    # 3. Register Shot 001 (for the single dataset demo)
-    shot_001_meta = {"id": "001", "access_level": "public", "device_name": "tokamak-1"}
-    print("Registering Shot: 001...")
-    resp_shot_001 = requests.post(
-        f"{FDS_API_URL}/devices/tokamak-1/shots/", json=shot_001_meta, headers=headers
-    )
-    if resp_shot_001.status_code in (201, 409):
-        print("Shot 001 registered.")
-    else:
-        print(
-            f"Shot 001 registration failed: {resp_shot_001.status_code} {resp_shot_001.text}"
+    # 2. Register Shots
+    # Shot 30420 (Real Data) on tokamak-1
+    shot_30420 = {
+        "id": "30420",
+        "access_level": "public",
+        "device_name": "tokamak-1",
+    }
+    # Shot 50000 (Synthetic High-Throughput) on mast_upgrade
+    shot_50000 = {
+        "id": "50000",
+        "access_level": "public",
+        "device_name": "mast_upgrade",
+    }
+
+    print("Registering Shots...")
+    for shot in [shot_30420, shot_50000]:
+        resp = requests.post(
+            f"{FDS_API_URL}/devices/{shot['device_name']}/shots/",
+            json=shot,
+            headers=headers,
         )
+        if resp.status_code in (201, 409):
+            print(f"Shot {shot['id']} registered.")
+        else:
+            print(
+                f"Shot {shot['id']} registration failed: {resp.status_code} {resp.text}"
+            )
     return
 
 
@@ -170,23 +172,23 @@ def _(mo):
 @app.cell
 def _(FDS_API_URL, headers, json, requests):
     dataset_metadata = {
-        "name": "plasma-array-001",
+        "name": "plasma-summary",
         "level": 1,
-        "data_url": "s3://fds-data/shots/001/zarr_data/",
+        "data_url": "s3://fds-data/shots/30420/summary",  # Points to the summary subgroup
         "access_level": "public",
-        "title": "Consolidated Plasma Micrograph",
+        "title": "MAST Shot 30420 Summary",
         "media_type": "application/x-zarr",
     }
 
     ds_response = requests.post(
-        f"{FDS_API_URL}/devices/tokamak-1/shots/001/datasets",
+        f"{FDS_API_URL}/devices/tokamak-1/shots/30420/datasets",
         json=dataset_metadata,
         headers=headers,
     )
     # Note: If it already exists from a previous run, this might fail unless we handle it.
     # For a demo, we assume a fresh start or we can catch the 409 if fds returns one.
     if ds_response.status_code == 201:
-        print("Dataset registered in FDS catalog.")
+        print("Dataset 'plasma-summary' registered in FDS catalog.")
     else:
         print(f"Dataset status: {ds_response.status_code}")
 
@@ -209,11 +211,11 @@ def _(mo):
 def _(FDS_API_URL, headers, requests):
     # 1. Create the Source (Diagnostic Instrument) linked to Tokamak-1
     source_meta = {
-        "name": "thomson_scattering",
-        "description": "High-resolution Thomson Scattering system on Tokamak-1",
+        "name": "mast_summary",
+        "description": "Summary data synthesis for MAST",
     }
 
-    print("Creating Source: thomson_scattering on tokamak-1...")
+    print("Creating Source: mast_summary on tokamak-1...")
     # Use device-scoped endpoint
     resp_source = requests.post(
         f"{FDS_API_URL}/devices/tokamak-1/sources", json=source_meta, headers=headers
@@ -231,25 +233,11 @@ def _(FDS_API_URL, headers, requests):
         if resp_get_source.status_code == 200:
             # Find the source in the list
             sources = resp_get_source.json()
-            found = next(
-                (s for s in sources if s["name"] == "thomson_scattering"), None
-            )
+            found = next((s for s in sources if s["name"] == "mast_summary"), None)
             if found:
                 source_id = found["id"]
             else:
-                print("Source exists but not found in device list (maybe global?)")
-                # Check global lookup
-                resp_global_source = requests.get(
-                    f"{FDS_API_URL}/sources/thomson_scattering", headers=headers
-                )
-                if resp_global_source.status_code == 200:
-                    print("Found source globally.")
-                    source_id = resp_global_source.json()["id"]
-                else:
-                    print(
-                        f"Could not fetch global source: {resp_global_source.status_code}"
-                    )
-                    source_id = None
+                source_id = None
         else:
             print(f"Could not fetch existing sources: {resp_get_source.status_code}")
             source_id = None
@@ -257,30 +245,9 @@ def _(FDS_API_URL, headers, requests):
         print(f"Failed to create source: {resp_source.status_code} {resp_source.text}")
         source_id = None
 
-    # Verify Device-Source Link
-    if source_id:
-        print("Verifying Source is linked to Tokamak-1...")
-        resp_dev_sources = requests.get(
-            f"{FDS_API_URL}/devices/tokamak-1/sources", headers=headers
-        )
-        if resp_dev_sources.status_code == 200:
-            dev_sources = resp_dev_sources.json()
-            if any(s["id"] == source_id for s in dev_sources):
-                print("Verification Successful: Source found in Device source list.")
-            else:
-                print("Verification Failed: Source NOT found in Device source list.")
-        else:
-            print(f"Failed to list device sources: {resp_dev_sources.status_code}")
-
     # 2. Link Dataset to Source
-    # We need the Dataset ID first.
-    # In a real app we'd have it from the creation step, but let's look it up to be safe.
     resp_get_dataset = requests.get(
-        f"{FDS_API_URL}/regions/global/datasets/plasma-array-001", headers=headers
-    )
-    # Wait, the dataset was registered as a shot dataset: /devices/tokamak-1/shots/001/datasets/plasma-array-001
-    resp_get_dataset = requests.get(
-        f"{FDS_API_URL}/devices/tokamak-1/shots/001/datasets/plasma-array-001",
+        f"{FDS_API_URL}/devices/tokamak-1/shots/30420/datasets/plasma-summary",
         headers=headers,
     )
 
@@ -290,9 +257,9 @@ def _(FDS_API_URL, headers, requests):
         if source_id and dataset_id:
             link_meta = {
                 "source_id": source_id,
-                "activity_type": "MEASUREMENT",
-                "source_version": "hardware-config-2025-01",
-                "parameters": {"calibration_date": "2025-01-10", "lasers_fired": 4},
+                "activity_type": "SIMULATION",  # Summary data is often derived
+                "source_version": "v1.0",
+                "parameters": {"run_date": "2025-01-10"},
             }
 
             print(f"Linking Dataset {dataset_id} to Source {source_id}...")
@@ -304,7 +271,6 @@ def _(FDS_API_URL, headers, requests):
 
             if resp_link.status_code == 201:
                 print("Provenance link created successfully.")
-                print(resp_link.json())
             else:
                 print(f"Failed to link: {resp_link.status_code} {resp_link.text}")
     else:
@@ -326,7 +292,7 @@ def _(mo):
 @app.cell
 def _(FDS_API_URL, headers, json, requests):
     # Request JSON-LD for the dataset we just registered
-    jsonld_url = f"{FDS_API_URL}/devices/tokamak-1/shots/001/datasets/plasma-array-001"
+    jsonld_url = f"{FDS_API_URL}/devices/tokamak-1/shots/30420/datasets/plasma-summary"
 
     print(f"Requesting JSON-LD from: {jsonld_url}")
     # Note bindings: We want 'application/ld+json'
@@ -357,44 +323,44 @@ def _(mo):
 @app.cell
 def _(FDS_API_URL, headers, requests):
     # Register 50 Public Signals
-    print("Registering 50 Public Signals for Shot 12345...")
+    print("Registering 50 Public Signals for Shot 50000...")
     for i in range(50):
         meta = {
             "name": f"signal_{i:02d}",
             "level": 1,
-            "shot_id": "12345",
-            "device_name": "tokamak-1",
-            "data_url": f"s3://fds-data/shots/12345/signals/signal_{i:02d}",
+            "shot_id": "50000",
+            "device_name": "mast_upgrade",
+            "data_url": f"s3://fds-data/shots/50000/signals/signal_{i:02d}",
             "access_level": "public",
             "title": f"Public Signal {i}",
             "media_type": "application/x-zarr",
         }
         requests.post(
-            f"{FDS_API_URL}/devices/tokamak-1/shots/12345/datasets",
+            f"{FDS_API_URL}/devices/mast_upgrade/shots/50000/datasets",
             json=meta,
             headers=headers,
         )
 
     # Register 10 Restricted Signals
-    print("Registering 10 Restricted Signals for Shot 12345...")
+    print("Registering 10 Restricted Signals for Shot 50000...")
     for i in range(10):
         meta = {
             "name": f"restricted_{i:02d}",
             "level": 1,
-            "shot_id": "12345",
-            "device_name": "tokamak-1",
-            "data_url": f"s3://fds-data/shots/12345/restricted/data_{i:02d}",
+            "shot_id": "50000",
+            "device_name": "mast_upgrade",
+            "data_url": f"s3://fds-data/shots/50000/restricted/data_{i:02d}",
             "access_level": "restricted",
             "title": f"Restricted Data {i}",
             "media_type": "application/x-zarr",
         }
         requests.post(
-            f"{FDS_API_URL}/devices/tokamak-1/shots/12345/datasets",
+            f"{FDS_API_URL}/devices/mast_upgrade/shots/50000/datasets",
             json=meta,
             headers=headers,
         )
 
-    print("Mega Shot registration complete.")
+    print("MAST Upgrade Shot 50000 registration complete.")
     return
 
 
@@ -416,7 +382,7 @@ def _(MINIO_URL, s3fs, xr):
         client_kwargs={"endpoint_url": MINIO_URL},
     )
 
-    s3_path = "fds-data/shots/001/zarr_data/"
+    s3_path = "fds-data/shots/30420/summary"
     print(f"Attempting to open dataset at {s3_path} without credentials...")
     try:
         # 1. Map the store without credentials
@@ -443,34 +409,34 @@ def _(mo):
 
 @app.cell
 def _(FDS_API_URL, headers, requests):
-    # Request credentials for the entire Shot 12345
+    # Request credentials for the entire Shot 50000 (High-Throughput)
     # This shot has ~60 datasets, so we expect multiple tokens.
     creds_response = requests.post(
         f"{FDS_API_URL}/file-access/credentials",
-        json={"shot_id": "12345", "device_name": "tokamak-1"},
+        json={"shot_id": "50000", "device_name": "mast_upgrade"},
         headers=headers,
     )
 
     creds_response.raise_for_status()
     manifest = creds_response.json()
 
-    print(f"Received Manifest with {len(manifest['tokens'])} tokens.")
+    print(f"Received Manifest for Shot 50000 with {len(manifest['tokens'])} tokens.")
     print(f"Total resources mapped: {len(manifest['resource_map'])}")
 
-    # Also get credentials specifically for Shot 001 (Single Dataset Demo)
+    # Also get credentials specifically for Shot 30420 (Real Data Demo)
     # This supports the cell below that expects 's3_creds'
-    creds_001_resp = requests.post(
+    creds_real_resp = requests.post(
         f"{FDS_API_URL}/file-access/credentials",
-        json={"shot_id": "001", "device_name": "tokamak-1"},
+        json={"shot_id": "30420", "device_name": "tokamak-1"},
         headers=headers,
     )
-    creds_001_resp.raise_for_status()
-    manifest_001 = creds_001_resp.json()
+    creds_real_resp.raise_for_status()
+    manifest_real = creds_real_resp.json()
 
     # Extract the first token's credentials
-    token_001 = manifest_001["tokens"][0]
+    token_real = manifest_real["tokens"][0]
     # Get the credentials dictionary (first value in the map, regardless of bucket)
-    s3_creds = list(token_001["credentials"].values())[0]
+    s3_creds = list(token_real["credentials"].values())[0]
     return manifest, s3_creds
 
 
@@ -488,10 +454,10 @@ def _(mo):
 def _(MINIO_URL, manifest, s3fs, xr):
     # Let's say we want to load 5 specific signals and 1 restricted data
     datasets_to_load = [
-        "s3://fds-data/shots/12345/signals/signal_00",
-        "s3://fds-data/shots/12345/signals/signal_25",
-        "s3://fds-data/shots/12345/signals/signal_49",
-        "s3://fds-data/shots/12345/restricted/data_00",
+        "s3://fds-data/shots/50000/signals/signal_00",
+        "s3://fds-data/shots/50000/signals/signal_25",
+        "s3://fds-data/shots/50000/signals/signal_49",
+        "s3://fds-data/shots/50000/restricted/data_00",
     ]
 
     loaded_data = {}
@@ -555,10 +521,19 @@ def _(MINIO_URL, s3_creds, s3_path, s3fs, xr):
     )
 
     # 2. Open the Zarr store
-    store_single = s3fs.S3Map(root=s3_path, s3=fs_single, check=False)
+    # Note: Our s3_path input from previous cells was for unauth check.
+    # Here we are using Shot 30420 Summary
+    s3_path_real = "fds-data/shots/30420/summary"
+    store_single = s3fs.S3Map(root=s3_path_real, s3=fs_single, check=False)
 
-    print(f"Opening dataset at {s3_path}...")
+    print(f"Opening dataset at {s3_path_real}...")
     ds_single = xr.open_zarr(store=store_single, consolidated=True)
+
+    # Display dataset info
+    print(ds_single)
+    # Return 'ip' (plasma current) if available
+    if "ip" in ds_single:
+        print("\nPlasma Current (ip) Mean:", ds_single["ip"].mean().values)
 
     ds_single
     return
@@ -618,11 +593,11 @@ def _(
         start_time = time.time()
 
         # A. Request Credentials (Refetching to prove speed)
-        print("1. Requesting Credentials for Shot 12345...")
+        print("1. Requesting Credentials for Shot 50000...")
         # Use a local variable name to avoid collision
         bench_resp = requests.post(
             f"{FDS_API_URL}/file-access/credentials",
-            json={"shot_id": "12345", "device_name": "tokamak-1"},
+            json={"shot_id": "50000", "device_name": "mast_upgrade"},
             headers=headers,
         )
         bench_resp.raise_for_status()
