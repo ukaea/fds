@@ -15,5 +15,6 @@ wheels/
 # IDE
 .vscode
 
-# Demo Marimo artifacts
+# Demo Marimo artifacts and data
 __marimo__/
+minio-data/
