@@ -4,7 +4,9 @@ WORKDIR /app
 COPY uv.lock pyproject.toml /app/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev --extra s3
-ADD . /app
+COPY app /app/app
+COPY alembic /app/alembic
+COPY alembic.ini README.md /app/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra s3
 
