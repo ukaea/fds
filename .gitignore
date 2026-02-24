@@ -18,3 +18,4 @@ wheels/
 # Demo artifacts
 __marimo__/
 minio-data/
+source_data/

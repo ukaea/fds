@@ -7,11 +7,19 @@
 #     "zarr",
 # ]
 # ///
+"""Generate and upload demo data for FDS.
+
+- Shot 30421 (real MAST data): Uploaded from /source_data/30421/
+- Shot 50000 (synthetic data): Generated and uploaded programmatically
+"""
+
 import os
-import shutil
+from pathlib import Path
+
 import numpy as np
 import s3fs
 import xarray as xr
+import zarr
 
 # Configuration
 minio_url = os.environ.get("MINIO_URL", "http://localhost:9000")
@@ -19,44 +27,42 @@ access_key = os.environ.get("AWS_ACCESS_KEY_ID", "admin")
 secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "password")
 bucket_name = "fds-data"
 
-# Real Data Path (mounted in container or local)
-container_source_path = "/source_data/30420.zarr"
-local_source_path = "/Users/nathan/fair-mast/data/zarr/30420.zarr"
-
-if os.path.exists(container_source_path):
-    real_source_path = container_source_path
-elif os.path.exists(local_source_path):
-    real_source_path = local_source_path
-else:
-    real_source_path = None
-    print("WARNING: Could not find real data at /source_data or local path.")
-
-real_target_key = "shots/30420"
-
 print(f"Connecting to MinIO at {minio_url}...")
 fs = s3fs.S3FileSystem(
     key=access_key, secret=secret_key, client_kwargs={"endpoint_url": minio_url}
 )
 
 # ---------------------------------------------------------
-# 1. Upload Real MAST Data (Shot 30420)
+# 1. Upload Real MAST Data (Shot 30421)
 # ---------------------------------------------------------
-target_full_path = f"{bucket_name}/{real_target_key}"
-if fs.exists(target_full_path):
-    print(f"Real data already exists at {target_full_path}. Skipping upload.")
+source_dir = Path("/source_data/30421")
+real_target = f"{bucket_name}/shots/30421"
+
+if fs.exists(real_target):
+    print("Shot 30421 already exists in MinIO. Skipping upload.")
 else:
-    print(f"Uploading real data from {real_source_path} to {target_full_path}...")
-    if os.path.exists(real_source_path):
-        # s3fs.put with recursive=True is the standard way to upload a directory
-        fs.put(real_source_path, target_full_path, recursive=True)
-        print("Upload complete.")
-    else:
-        print(
-            f"WARNING: Source data not found at {real_source_path}. Is the volume mounted?"
+    if source_dir.exists():
+        print(f"Uploading Shot 30421 from {source_dir}...")
+        # Recursively upload all files
+        for local_file in sorted(source_dir.rglob("*")):
+            if local_file.is_file():
+                rel_path = local_file.relative_to(source_dir)
+                s3_key = f"{real_target}/{rel_path}"
+                fs.put(str(local_file), s3_key)
+        print("Shot 30421 uploaded successfully.")
+
+        # Consolidate metadata for the equilibrium subgroup
+        print("Consolidating metadata for level2/equilibrium...")
+        eq_store = s3fs.S3Map(
+            root=f"{real_target}/level2/equilibrium", s3=fs, check=False
         )
+        zarr.consolidate_metadata(eq_store)
+        print("Metadata consolidated.")
+    else:
+        print(f"WARNING: Source data not found at {source_dir}")
 
 # ---------------------------------------------------------
-# 2. Synthetic "Mega Shot" (Shot 50000 - MAST Upgrade)
+# 2. Generate Synthetic Data (Shot 50000)
 # ---------------------------------------------------------
 shot_id = "50000"
 synth_base_path = f"{bucket_name}/shots/{shot_id}"
@@ -64,7 +70,7 @@ synth_base_path = f"{bucket_name}/shots/{shot_id}"
 if fs.exists(synth_base_path):
     print(f"Synthetic data for Shot {shot_id} already exists. Skipping generation.")
 else:
-    print(f"Generating Shot {shot_id} (MAST Upgrade Demo)...")
+    print(f"Generating Shot {shot_id} (Synthetic Demo)...")
 
     def create_dataset(name, path, title):
         data = np.random.rand(10, 10)

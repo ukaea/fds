@@ -67,6 +67,6 @@ services:
       - MINIO_URL=http://localhost:9000
     volumes:
       - ./generate_data.py:/app/generate_data.py
-      - /Users/nathan/fair-mast/data/zarr:/source_data:ro
+      - ./source_data:/source_data:ro
     network_mode: host
     command: uv run /app/generate_data.py
