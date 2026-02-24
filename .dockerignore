@@ -5,6 +5,11 @@
 __pycache__
 *.pyc
 
+# Caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
 # IDEs
 .vscode
 .idea
@@ -13,9 +18,15 @@ __pycache__
 minio-data/
 demo/minio-data/
 
+# Demo
+demo/
+
 # Frontend
-frontend/node_modules
-frontend/.next
+frontend/
+
+# Tests (not needed in prod image)
+tests/
 
 # Git
 .git
+.gitignore
