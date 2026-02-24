@@ -17,3 +17,10 @@ export interface Dataset {
   data_url?: string;
   created_at?: string;
 }
+
+export interface Source {
+  id: number;
+  name: string;
+  description?: string;
+  device_id?: number;
+}
