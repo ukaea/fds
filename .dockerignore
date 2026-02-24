@@ -1,32 +1,16 @@
-
-# Environment
-.env
-.venv
-__pycache__
-*.pyc
-
-# Caches
+# Build context exclusions
+.git/
+.venv/
 .ruff_cache/
 .pytest_cache/
 .mypy_cache/
 
-# IDEs
-.vscode
-.idea
-
-# Data Volumes
-minio-data/
-demo/minio-data/
-
-# Demo
+# Demo environment (large data files)
 demo/
-
-# Frontend
 frontend/
-
-# Tests (not needed in prod image)
 tests/
 
-# Git
-.git
-.gitignore
+# Generated artifacts
+__pycache__/
+*.py[oc]
+*.egg-info
