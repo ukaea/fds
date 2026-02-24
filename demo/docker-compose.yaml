@@ -42,8 +42,6 @@ services:
     environment:
       - MINIO_ROOT_USER=admin
       - MINIO_ROOT_PASSWORD=password
-    volumes:
-      - ./minio-data:/data
     command: server /data --console-address ":9001"
 
   minio-setup:
@@ -67,6 +65,16 @@ services:
       - MINIO_URL=http://localhost:9000
     volumes:
       - ./generate_data.py:/app/generate_data.py
-      - /Users/nathan/fair-mast/data/zarr:/source_data:ro
     network_mode: host
     command: uv run /app/generate_data.py
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+    depends_on:
+      - fds
