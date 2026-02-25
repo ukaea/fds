@@ -41,6 +41,23 @@ real_target = f"{bucket_name}/shots/30421"
 if fs.exists(real_target):
     print("Shot 30421 already exists in MinIO. Skipping upload.")
 else:
+    if not source_dir.exists() or not any(source_dir.iterdir()):
+        print("Source data not found locally. Downloading via s3fs...")
+        source_dir.mkdir(parents=True, exist_ok=True)
+        # Use an anonymous filesystem for the public bucket
+        remote_fs = s3fs.S3FileSystem(
+            anon=True, client_kwargs={"endpoint_url": "https://s3.echo.stfc.ac.uk"}
+        )
+        try:
+            remote_fs.get(
+                "mast/level2/shots/30421.zarr/equilibrium",
+                str(source_dir / "equilibrium"),
+                recursive=True,
+            )
+            print("Download complete.")
+        except Exception as e:
+            print(f"Error downloading data: {e}")
+
     if source_dir.exists():
         print(f"Uploading Shot 30421 from {source_dir}...")
         # Recursively upload all files
@@ -52,10 +69,8 @@ else:
         print("Shot 30421 uploaded successfully.")
 
         # Consolidate metadata for the equilibrium subgroup
-        print("Consolidating metadata for level2/equilibrium...")
-        eq_store = s3fs.S3Map(
-            root=f"{real_target}/level2/equilibrium", s3=fs, check=False
-        )
+        print("Consolidating metadata for equilibrium...")
+        eq_store = s3fs.S3Map(root=f"{real_target}/equilibrium", s3=fs, check=False)
         zarr.consolidate_metadata(eq_store)
         print("Metadata consolidated.")
     else:

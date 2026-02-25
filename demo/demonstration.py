@@ -161,7 +161,7 @@ def _(mo):
     mo.md(r"""
     ## 3. Registering the Real Dataset
 
-    A Zarr v3 dataset from MAST Shot 30421 is stored at `s3://fds-data/shots/30421/level2/equilibrium`.
+    A Zarr v3 dataset from MAST Shot 30421 is stored at `s3://fds-data/shots/30421/equilibrium`.
     This was pre-loaded into MinIO. We'll now register it in FDS.
     """)
     return
@@ -172,7 +172,7 @@ def _(FDS_API_URL, headers, json, requests):
     dataset_metadata = {
         "name": "equilibrium",
         "level": 2,
-        "data_url": "s3://fds-data/shots/30421/level2/equilibrium",
+        "data_url": "s3://fds-data/shots/30421/equilibrium",
         "access_level": "public",
         "title": "MAST Shot 30421 EFit Equilibrium",
         "media_type": "application/x-zarr",
@@ -371,7 +371,7 @@ def _(MINIO_URL, s3fs, xr):
         client_kwargs={"endpoint_url": MINIO_URL},
     )
 
-    s3_path = "fds-data/shots/30421/level2/equilibrium"
+    s3_path = "fds-data/shots/30421/equilibrium"
     print(f"Attempting to open dataset at {s3_path} without credentials...")
     try:
         store_unauth = s3fs.S3Map(root=s3_path, s3=fs_unauth, check=False)
@@ -519,17 +519,7 @@ def _(mo):
 
 
 @app.cell
-def _(
-    Client,
-    FDS_API_URL,
-    LocalCluster,
-    MINIO_URL,
-    headers,
-    requests,
-    time,
-    xr,
-    zarr,
-):
+def _(Client, FDS_API_URL, LocalCluster, MINIO_URL, headers, requests, time):
     # 1. Setup Dask Cluster (Reuse or Create)
     try:
         client = Client.current()
