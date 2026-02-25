@@ -70,3 +70,26 @@ services:
       - ./source_data:/source_data
     network_mode: host
     command: uv run /app/generate_data.py
+
+  frontend:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - BACKEND_URL=http://fds:8000/api
+      - AUTH_TRUST_HOST=true
+      - AUTH_URL=http://localhost:3000
+      - AUTH_SECRET=demo-secret-change-me
+      - AUTH_KEYCLOAK_ID=fds-client
+      - AUTH_KEYCLOAK_SECRET=fds-client-secret
+      # Issuer MUST match what Keycloak puts in its tokens (the external/browser URL)
+      - AUTH_KEYCLOAK_ISSUER=http://localhost:8080/realms/fds
+      # Internal URLs for server-to-server communication within Docker network
+      - AUTH_KEYCLOAK_INTERNAL_URL=http://idp:8080/realms/fds
+      - AUTH_KEYCLOAK_METADATA_URL=http://idp:8080/realms/fds/.well-known/openid-configuration
+      - AUTH_KEYCLOAK_PUBLIC_URL=http://localhost:8080/realms/fds/protocol/openid-connect/auth
+    depends_on:
+      - fds
+      - idp

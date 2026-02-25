@@ -2,12 +2,18 @@
     "realm": "fds",
     "enabled": true,
     "roles": {
-        "realm": [
-            {
-                "name": "fds-admin",
-                "description": "Administrator role for fds"
-            }
-        ]
+        "client": {
+            "fds-client": [
+                {
+                    "name": "fds-admin",
+                    "description": "Administrator role for fds"
+                },
+                {
+                    "name": "mast_admin",
+                    "description": "Administrator role for MAST device"
+                }
+            ]
+        }
     },
     "groups": [],
     "users": [
@@ -24,9 +30,11 @@
                     "temporary": false
                 }
             ],
-            "realmRoles": [
-                "fds-admin"
-            ]
+            "clientRoles": {
+                "fds-client": [
+                    "fds-admin"
+                ]
+            }
         },
         {
             "username": "user",
@@ -41,6 +49,25 @@
                     "temporary": false
                 }
             ]
+        },
+        {
+            "username": "mast_admin",
+            "enabled": true,
+            "email": "mast_admin@example.com",
+            "firstName": "MAST",
+            "lastName": "Admin",
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "password",
+                    "temporary": false
+                }
+            ],
+            "clientRoles": {
+                "fds-client": [
+                    "mast_admin"
+                ]
+            }
         }
     ],
     "clients": [
@@ -52,7 +79,8 @@
             "clientAuthenticatorType": "client-secret",
             "directAccessGrantsEnabled": true,
             "redirectUris": [
-                "http://localhost:8000/*"
+                "http://localhost:8000/*",
+                "http://localhost:3000/*"
             ],
             "webOrigins": [
                 "*"
@@ -61,7 +89,9 @@
             "fullScopeAllowed": true,
             "defaultClientScopes": [
                 "profile",
-                "email",
+                "email"
+            ],
+            "optionalClientScopes": [
                 "fds-admin"
             ],
             "protocolMappers": [
@@ -74,6 +104,20 @@
                         "included.client.audience": "fds-client",
                         "id.token.claim": "false",
                         "access.token.claim": "true"
+                    }
+                },
+                {
+                    "name": "client-roles-to-scope",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-usermodel-client-role-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "uset.client.role.mappings": "true",
+                        "claim.name": "scope",
+                        "jsonType.label": "String",
+                        "multivalued": "true",
+                        "access.token.claim": "true",
+                        "id.token.claim": "true"
                     }
                 }
             ]
