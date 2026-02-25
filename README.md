@@ -18,7 +18,15 @@ The Fusion Data Service (FDS) is a platform designed to provide scalable, FAIR-c
 
 A self-contained demo environment is available in the `demo/` directory. It includes FDS, Keycloak, MinIO, and a [Marimo](https://marimo.io/) notebook to demonstrate the authentication and data access workflow.
 
-### 1. Start the Environment
+### 1. Download Demo Data
+
+You will need to fetch the sample data for the initial database seeding. Using `s5cmd` is recommended for performance:
+
+```bash
+s5cmd --no-sign-request --endpoint-url https://s3.echo.stfc.ac.uk cp "s3://mast/level2/shots/30421.zarr/*" fds/demo/source_data/30421/
+```
+
+### 2. Start the Environment
 
 ```bash
 cd demo
@@ -29,11 +37,12 @@ podman-compose up --build
 ```
 
 Services started:
+
 - **FDS API**: `http://localhost:8000`
 - **Keycloak**: `http://localhost:8080` (User/Pass: `admin`/`admin`)
 - **MinIO**: `http://localhost:9000` (User/Pass: `admin`/`password`)
 
-### 2. Run the Demonstration Notebook
+### 3. Run the Demonstration Notebook
 
 The `demonstration.py` notebook walks through the FDS workflow (Auth -> Registration -> Token Exchange -> Data Access).
 
@@ -53,18 +62,21 @@ This project uses `uv` for dependency management.
 
 ### Setup
 
-1.  **Clone the repository:**
+1. **Clone the repository:**
+
     ```bash
     git clone <repository-url>
     cd fds
     ```
 
-2.  **Install dependencies:**
+2. **Install dependencies:**
+
     ```bash
     uv sync
     ```
 
-3.  **Install pre-commit hooks:**
+3. **Install pre-commit hooks:**
+
     ```bash
     pre-commit install
     ```
@@ -74,6 +86,7 @@ This project uses `uv` for dependency management.
 The application uses `pydantic-settings` for configuration. Environment variables can be set in a `.env` file or exported in the shell.
 
 Key configuration areas:
+
 - **Database**: Connection string for the metadata store.
 - **Authentication**: IdP details (Issuer, Audience, JWKS URI).
 - **Storage**: Credentials and bucket information for S3, GCS, or Azure.
