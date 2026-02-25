@@ -7,7 +7,6 @@
 
 # Demo environment (large data files)
 demo/
-frontend/
 tests/
 
 # Generated artifacts
