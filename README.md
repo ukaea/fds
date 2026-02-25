@@ -27,9 +27,9 @@ A self-contained demo environment is available in the `demo/` directory. It incl
 ```bash
 cd demo
 # Using Docker
-docker-compose up --build
+docker compose up --build
 # OR using Podman
-podman-compose up --build
+podman compose up --build
 ```
 
 Services started:
