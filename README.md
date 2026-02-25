@@ -14,6 +14,10 @@ The Fusion Data Service (FDS) is a platform designed to provide scalable, FAIR-c
 - **High Performance Access**: Supports "Direct Cloud Access" patterns (presigned URLs) for massive parallel I/O, avoiding API bottlenecks.
 - **FAIR Compliance**: Aligned with DCAT (Data Catalog Vocabulary) standards.
 
+## Documentation
+
+Detailed architectural decisions for the Fusion Data Service are recorded as Architecture Decision Records (ADRs) in the [`docs/adrs/`](docs/adrs/) directory.
+
 ## Quick Start Demo
 
 A self-contained demo environment is available in the `demo/` directory. It includes FDS, Keycloak, MinIO, and a [Marimo](https://marimo.io/) notebook to demonstrate the authentication and data access workflow.
@@ -29,6 +33,7 @@ podman-compose up --build
 ```
 
 Services started:
+
 - **FDS API**: `http://localhost:8000`
 - **Keycloak**: `http://localhost:8080` (User/Pass: `admin`/`admin`)
 - **MinIO**: `http://localhost:9000` (User/Pass: `admin`/`password`)
@@ -53,18 +58,21 @@ This project uses `uv` for dependency management.
 
 ### Setup
 
-1.  **Clone the repository:**
+1. **Clone the repository:**
+
     ```bash
     git clone <repository-url>
     cd fds
     ```
 
-2.  **Install dependencies:**
+2. **Install dependencies:**
+
     ```bash
     uv sync
     ```
 
-3.  **Install pre-commit hooks:**
+3. **Install pre-commit hooks:**
+
     ```bash
     pre-commit install
     ```
@@ -74,6 +82,7 @@ This project uses `uv` for dependency management.
 The application uses `pydantic-settings` for configuration. Environment variables can be set in a `.env` file or exported in the shell.
 
 Key configuration areas:
+
 - **Database**: Connection string for the metadata store.
 - **Authentication**: IdP details (Issuer, Audience, JWKS URI).
 - **Storage**: Credentials and bucket information for S3, GCS, or Azure.
