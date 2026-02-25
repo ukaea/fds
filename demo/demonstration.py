@@ -519,17 +519,7 @@ def _(mo):
 
 
 @app.cell
-def _(
-    Client,
-    FDS_API_URL,
-    LocalCluster,
-    MINIO_URL,
-    headers,
-    requests,
-    time,
-    xr,
-    zarr,
-):
+def _(Client, FDS_API_URL, LocalCluster, MINIO_URL, headers, requests, time):
     # 1. Setup Dask Cluster (Reuse or Create)
     try:
         client = Client.current()
