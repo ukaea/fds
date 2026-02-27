@@ -194,3 +194,57 @@ def test_update_dataset(
     )
     assert response.status_code == 200
     assert response.json()["level"] == 5
+
+
+def test_get_datasets_with_storage_options(
+    test_client: TestClient, session: Session, admin_user_token: dict, mocker
+):
+    # Register device, shot, and dataset
+    from app.auth.security import AuthenticatedUser
+    from app.models.device import DeviceCreate
+    from app.models.file_access import S3Credentials
+    from app.models.shot import ShotCreate
+    from app.services.device_service import DeviceService
+    from app.services.shot_service import ShotService
+
+    admin = AuthenticatedUser(id="admin", scopes=["fds-admin"])
+    DeviceService(session).create(DeviceCreate(name="OPTS", type="Tokamak"), user=admin)
+    ShotService(session).create(ShotCreate(id="1", device_name="OPTS"), user=admin)
+    session.commit()
+
+    test_client.post(
+        "/api/v1/devices/OPTS/shots/1/datasets/",
+        headers=admin_user_token,
+        json={"name": "data1", "level": 1, "data_url": "s3://opts/1"},
+    )
+
+    # Define Mock directly in the router test, ensuring STS assumes work
+    mock_provider = mocker.MagicMock()
+    mock_provider.generate_credentials.return_value = {
+        "opts": S3Credentials(
+            access_key_id="r_key",
+            secret_access_key="r_sec",
+            session_token="r_tok",
+            expiration="2026-01-01T00:00:00Z",
+            provider="s3",
+        )
+    }
+    mocker.patch(
+        "app.services.file_access_service.get_provider_for_protocol",
+        return_value=mock_provider,
+    )
+
+    # Without query param -> no storage_options (protects list latency)
+    resp = test_client.get("/api/v1/devices/OPTS/shots/1/datasets/data1")
+    assert resp.status_code == 200
+    assert resp.json().get("storage_options") is None
+
+    # With query param -> enriched
+    resp2 = test_client.get(
+        "/api/v1/devices/OPTS/shots/1/datasets/data1?include_storage_options=true"
+    )
+    assert resp2.status_code == 200
+    data = resp2.json()
+    assert data.get("storage_options") is not None
+    assert data["storage_options"]["key"] == "r_key"
+    assert data["storage_options"]["secret"] == "r_sec"

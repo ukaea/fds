@@ -47,8 +47,8 @@ def test_generate_credentials_success(mock_google_auth):
     # Verify return structure
     assert "my-bucket" in result
     assert "other-bucket" in result
-    assert result["my-bucket"]["token"] == "mock-downscoped-token"
-    assert result["my-bucket"]["expiry"] == "2026-01-01T12:00:00"
+    assert result["my-bucket"].token == "mock-downscoped-token"
+    assert result["my-bucket"].expiry == "2026-01-01T12:00:00"
 
     # Verify Logic
     # 1. Base credentials fetched

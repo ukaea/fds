@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 try:
     from azure.identity import DefaultAzureCredential
@@ -12,6 +11,7 @@ except ImportError:
     DefaultAzureCredential = None
 
 from app.core.config import config
+from app.models.file_access import AzureCredentials
 from app.services.exceptions import ConfigurationError
 
 
@@ -25,7 +25,7 @@ class AzureCredentialProvider:
 
     def generate_credentials(
         self, allowed_prefixes: list[str], _session_name: str
-    ) -> dict[str, Any]:
+    ) -> dict[str, AzureCredentials]:
         """
         Generates a Map of Container -> SAS Token.
         """
@@ -86,7 +86,7 @@ class AzureCredentialProvider:
                     start=key_start,  # Optional: set start time to avoid immediate failure if clock skew?
                     # Usually omitted for immediate access, but start=key_start aligns with key.
                 )
-                result[container_name] = sas_token
+                result[container_name] = AzureCredentials(sas_token=sas_token)
             except Exception as e:
                 # Log? Warning?
                 # Failing one container shouldn't fail all?

@@ -49,7 +49,7 @@ def test_generate_credentials_success(mock_azure_blobs):
     # Verify results
     assert "container1" in result
     assert "container2" in result
-    assert result["container1"] == "sp=r&st=2026..."
+    assert result["container1"].sas_token == "sp=r&st=2026..."
 
     # Verify Logic
     mocks = mock_azure_blobs

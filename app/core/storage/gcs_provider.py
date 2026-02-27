@@ -1,10 +1,9 @@
-from typing import Any
-
 import google.auth
 import google.auth.downscoped
 from google.auth import exceptions
 from google.auth.transport.requests import Request
 
+from app.models.file_access import GCSCredentials
 from app.services.exceptions import ConfigurationError
 
 # Note: We import Request from google.auth.transport.requests
@@ -18,7 +17,7 @@ class GCSCredentialProvider:
 
     def generate_credentials(
         self, allowed_prefixes: list[str], _session_name: str
-    ) -> dict[str, Any]:
+    ) -> dict[str, GCSCredentials]:
         # 1. Initialize Base Credentials
         try:
             # We explicitly create a Request object.
@@ -68,14 +67,13 @@ class GCSCredentialProvider:
 
         # 5. Structure Response
         result = {}
-        token_info = {
-            "token": downscoped_creds.token,
-            "expiry": downscoped_creds.expiry.isoformat()
-            if downscoped_creds.expiry
-            else None,
-        }
 
         for bucket_name in buckets:
-            result[bucket_name] = token_info
+            result[bucket_name] = GCSCredentials(
+                token=downscoped_creds.token,
+                expiry=downscoped_creds.expiry.isoformat()
+                if downscoped_creds.expiry
+                else None,
+            )
 
         return result

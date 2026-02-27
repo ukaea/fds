@@ -57,6 +57,7 @@ class DatasetRead(DatasetBase):
     id: int
     shot_id: str | None = None
     effective_access_level: AccessLevel | None = None
+    storage_options: dict[str, str | dict] | None = None
 
 
 class DatasetUpdate(SQLModel):

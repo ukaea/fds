@@ -4,6 +4,7 @@ from sqlmodel import Session
 from app.auth.security import AuthenticatedUser
 from app.models.dataset import DatasetCreate, DatasetUpdate
 from app.models.device import DeviceCreate
+from app.models.file_access import S3Credentials
 from app.models.shot import ShotCreate
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
@@ -40,7 +41,6 @@ def test_create_dataset(
     shot = shot_service.create(
         ShotCreate(id="shot-101", device_name="Test Device"), user=admin_user
     )
-    assert shot is not None
     assert shot.id == "shot-101"
 
     dataset_create = DatasetCreate(
@@ -53,7 +53,6 @@ def test_create_dataset(
     )
     dataset = dataset_service.create(dataset_create, user=admin_user)
 
-    assert dataset is not None
     assert dataset.id is not None
     assert dataset.name == "core_profiles"
     assert dataset.level == 2
@@ -95,7 +94,6 @@ def test_get_dataset(
     shot = shot_service.create(
         ShotCreate(id="shot-101", device_name="Test Device"), user=admin_user
     )
-    assert shot is not None
     assert shot.id == "shot-101"
 
     created_dataset = dataset_service.create(
@@ -108,10 +106,8 @@ def test_get_dataset(
         ),
         user=admin_user,
     )
-    assert created_dataset is not None
 
     retrieved_dataset = dataset_service.get(created_dataset.id)
-    assert retrieved_dataset is not None
     assert retrieved_dataset.id == created_dataset.id
     assert retrieved_dataset.name == "mag_diag"
 
@@ -135,7 +131,6 @@ def test_get_datasets(
     shot = shot_service.create(
         ShotCreate(id="shot-101", device_name="Test Device"), user=admin_user
     )
-    assert shot is not None
     assert shot.id == "shot-101"
 
     dataset_service.create(
@@ -176,7 +171,6 @@ def test_get_datasets_for_shot(
     shot1 = shot_service.create(
         ShotCreate(id="shot-1", device_name="Device 1"), user=admin_user
     )
-    assert shot1 is not None
     assert shot1.id == "shot-1"
 
     device2 = device_service.create(
@@ -186,7 +180,6 @@ def test_get_datasets_for_shot(
     shot2 = shot_service.create(
         ShotCreate(id="shot-2", device_name="Device 2"), user=admin_user
     )
-    assert shot2 is not None
     assert shot2.id == "shot-2"
 
     dataset_service.create(
@@ -313,7 +306,6 @@ def test_update_dataset(
     shot = shot_service.create(
         ShotCreate(id="shot-101", device_name="Test Device"), user=admin_user
     )
-    assert shot is not None
     assert shot.id == "shot-101"
 
     created_dataset = dataset_service.create(
@@ -327,19 +319,16 @@ def test_update_dataset(
         ),
         user=admin_user,
     )
-    assert created_dataset is not None
     assert created_dataset.id is not None
     assert created_dataset.quality_flag == "good"
 
     db_dataset_to_update = dataset_service.get(created_dataset.id)
-    assert db_dataset_to_update is not None
 
     dataset_update = DatasetUpdate(name="new_name", level=2, quality_flag="bad")
     updated_dataset = dataset_service.update(
         db_obj=db_dataset_to_update, obj_in=dataset_update, user=admin_user
     )
 
-    assert updated_dataset is not None
     assert updated_dataset.name == "new_name"
     assert updated_dataset.level == 2
     assert updated_dataset.quality_flag == "bad"
@@ -360,7 +349,6 @@ def test_delete_dataset(
     shot = shot_service.create(
         ShotCreate(id="shot-101", device_name="Test Device"), user=admin_user
     )
-    assert shot is not None
     assert shot.id == "shot-101"
 
     dataset_to_delete = dataset_service.create(
@@ -373,7 +361,6 @@ def test_delete_dataset(
         ),
         user=admin_user,
     )
-    assert dataset_to_delete is not None
 
     dataset_service.delete_with_auth(dataset_to_delete.id, user=admin_user)
 
@@ -386,3 +373,103 @@ def test_delete_dataset_not_found(
 ):
     with pytest.raises(ResourceNotFoundError):
         dataset_service.delete_with_auth(999, user=admin_user)
+
+
+def test_enrich_with_storage_options_s3(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+    mocker,
+):
+    """
+    Verifies that datasets with an S3 storage protocol (`s3://`) successfully
+    retrieve temporary STS credentials via `FileAccessService` and map them
+    into the FSSpec `storage_options` dictionary required by Xarray/Zarr.
+    """
+    # Setup Data
+    device = device_service.create(
+        DeviceCreate(name="enrich-dev1", type="Test"), user=admin_user
+    )
+    shot = shot_service.create(
+        ShotCreate(id="enrich-1", device_name="enrich-dev1"), user=admin_user
+    )
+
+    dataset_service.create(
+        DatasetCreate(
+            name="ds_s3",
+            level=1,
+            data_url="s3://b/k1",
+            shot_id=shot.id,
+            device_name="enrich-dev1",
+        ),
+        user=admin_user,
+    )
+
+    mock_provider = mocker.MagicMock()
+    mock_provider.generate_credentials.return_value = {
+        "b": S3Credentials(
+            access_key_id="mock_key",
+            secret_access_key="mock_secret",
+            session_token="mock_token",
+            expiration="2026-01-01T00:00:00Z",
+        )
+    }
+
+    mocker.patch(
+        "app.services.file_access_service.get_provider_for_protocol",
+        return_value=mock_provider,
+    )
+
+    models = dataset_service.get_datasets_for_shot(shot.id, device.id, user=admin_user)
+    read_models = [dataset_service.to_read_model(m) for m in models]
+    enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
+
+    assert len(enriched) == 1
+    assert enriched[0].storage_options["key"] == "mock_key"
+    assert enriched[0].storage_options["secret"] == "mock_secret"
+    assert enriched[0].storage_options["token"] == "mock_token"
+
+
+def test_enrich_with_storage_options_unsupported_protocol(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+    mocker,
+):
+    """
+    Verifies that datasets utilizing alien or unsupported storage protocols (e.g., `local://`)
+    gracefully fall back without crashing the catalog retrieval pipeline.
+    Their `storage_options` should safely remain `None`.
+    """
+    # Setup Data
+    device = device_service.create(
+        DeviceCreate(name="enrich-dev2", type="Test"), user=admin_user
+    )
+    shot = shot_service.create(
+        ShotCreate(id="enrich-2", device_name="enrich-dev2"), user=admin_user
+    )
+
+    dataset_service.create(
+        DatasetCreate(
+            name="ds_none",
+            level=1,
+            data_url="local://not-s3",
+            shot_id=shot.id,
+            device_name="enrich-dev2",
+        ),
+        user=admin_user,
+    )
+
+    mocker.patch(
+        "app.services.file_access_service.get_provider_for_protocol",
+        side_effect=ValueError("No mock provider for local"),
+    )
+
+    models = dataset_service.get_datasets_for_shot(shot.id, device.id, user=admin_user)
+    read_models = [dataset_service.to_read_model(m) for m in models]
+    enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
+
+    assert len(enriched) == 1
+    assert enriched[0].storage_options is None

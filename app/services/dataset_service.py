@@ -7,6 +7,7 @@ from app.auth.access_control import get_effective_access_level
 from app.auth.permissions import check_device_admin, check_is_admin
 from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
 from app.models.device import Device
+from app.models.file_access import CredentialRequest
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.services.base_service import BaseService
@@ -18,6 +19,7 @@ from app.services.exceptions import (
     ForbiddenError,
     ResourceNotFoundError,
 )
+from app.services.file_access_service import FileAccessService
 from app.services.shot_service import ShotService
 
 
@@ -225,15 +227,38 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         datasets = self.session.exec(statement).all()
         return self._filter_accessible_datasets(datasets, user)
 
-    def to_read_model(self, dataset: Dataset) -> DatasetRead:
+    def to_read_model(
+        self,
+        dataset: Dataset,
+        include_storage_options: bool = False,
+        user: AuthenticatedUser | None = None,
+    ) -> DatasetRead:
         """
         Converts a Dataset ORM object to a DatasetRead DTO, including the effective access level.
+        Optionally enriches it with temporary storage credentials if permitted.
         """
         read_model = DatasetRead.model_validate(dataset)
         read_model.effective_access_level = get_effective_access_level(
             dataset, self.session
         )
+        if include_storage_options and user:
+            read_model = self.enrich_with_storage_options([read_model], user)[0]
         return read_model
+
+    def to_read_models(
+        self,
+        datasets: Sequence[Dataset],
+        include_storage_options: bool = False,
+        user: AuthenticatedUser | None = None,
+    ) -> list[DatasetRead]:
+        """
+        Batch converts ORM objects to DatasetRead DTOs, efficiently applying batch enrichment
+        for temporary storage credentials to avoid N+1 IAM calls.
+        """
+        models = [self.to_read_model(d) for d in datasets]
+        if include_storage_options and user:
+            models = self.enrich_with_storage_options(models, user)
+        return models
 
     def _filter_accessible_datasets(
         self, datasets: Sequence[Dataset], user: AuthenticatedUser
@@ -249,3 +274,53 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             except ForbiddenError:
                 continue
         return accessible_datasets
+
+    def enrich_with_storage_options(
+        self, read_models: list[DatasetRead], user: AuthenticatedUser
+    ) -> list[DatasetRead]:
+        """
+        Takes a list of DatasetRead models and batch-injects standard FSSpec `storage_options` dictionaries
+        containing temporary S3/MinIO STS credentials for authorized resources.
+        Filters natively handle access control logic inside FileAccessService.
+        """
+        if not read_models:
+            return read_models
+
+        # Extract all valid protocol URLs
+        urls = [m.data_url for m in read_models if m.data_url]
+        if not urls:
+            return read_models
+
+        # Request tokens for the batch in a single call to prevent N+1 IAM assumptions
+        file_access_service = FileAccessService(self.session)
+        request = CredentialRequest(data_urls=urls)
+
+        # This service internally runs the _check_download_permission policy engine.
+        # Unknown/Unauthorised URLs will simply not appear in the resulting manifest map.
+        manifest = file_access_service.generate_session_credentials(
+            user=user, request=request
+        )
+
+        for model in read_models:
+            if model.data_url not in manifest.resource_map:
+                continue
+
+            token_idx = manifest.resource_map[model.data_url]
+            token_payload = manifest.tokens[token_idx]
+
+            # The payload contains {"provider": str, "credentials": {"resource": CredentialModel}}
+            raw_creds = list(token_payload["credentials"].values())[0]
+
+            # Cloud Agnostic Dispatch: Let the Credential model define its own FSSpec arg mapping
+            if hasattr(raw_creds, "to_storage_options"):
+                storage_options = raw_creds.to_storage_options()
+            elif hasattr(raw_creds, "model_dump"):
+                storage_options = raw_creds.model_dump()
+            elif hasattr(raw_creds, "dict"):
+                storage_options = raw_creds.dict()
+            else:
+                storage_options = dict(raw_creds)
+
+            model.storage_options = storage_options
+
+        return read_models

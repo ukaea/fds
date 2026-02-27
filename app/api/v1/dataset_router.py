@@ -49,12 +49,15 @@ def read_datasets_global(
     user: CurrentUserDep,
     offset: int = 0,
     limit: int = 100,
+    include_storage_options: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve global datasets.
     """
     datasets = dataset_service.get_multi(user=user, offset=offset, limit=limit)
-    return [dataset_service.to_read_model(d) for d in datasets]
+    return dataset_service.to_read_models(
+        datasets, include_storage_options=include_storage_options, user=user
+    )
 
 
 @router.post(
@@ -115,6 +118,7 @@ def read_datasets_shot(
     user: CurrentUserDep,
     offset: int = 0,
     limit: int = 100,
+    include_storage_options: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all datasets for a specific shot.
@@ -126,7 +130,9 @@ def read_datasets_shot(
     datasets = dataset_service.get_datasets_for_shot(
         shot_id, device.id, user=user, offset=offset, limit=limit
     )
-    return [dataset_service.to_read_model(d) for d in datasets]
+    return dataset_service.to_read_models(
+        datasets, include_storage_options=include_storage_options, user=user
+    )
 
 
 @router.get(
@@ -142,6 +148,7 @@ def read_dataset_by_name(
     name: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
+    include_storage_options: bool = False,
 ) -> DatasetRead | JSONResponse:
     """
     Retrieve a specific dataset by its descriptive name within a shot context.
@@ -159,7 +166,9 @@ def read_dataset_by_name(
         dcat_metadata = map_dataset_to_dcat(dataset, str(request.base_url).rstrip("/"))
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
 
-    return dataset_service.to_read_model(dataset)
+    return dataset_service.to_read_model(
+        dataset, include_storage_options=include_storage_options, user=user
+    )
 
 
 @router.get(
@@ -173,6 +182,7 @@ def read_dataset_global_by_name(
     name: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
+    include_storage_options: bool = False,
 ) -> DatasetRead | JSONResponse:
     """
     Retrieve a specific global dataset by its descriptive name.
@@ -188,7 +198,9 @@ def read_dataset_global_by_name(
         dcat_metadata = map_dataset_to_dcat(dataset, str(request.base_url).rstrip("/"))
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
 
-    return dataset_service.to_read_model(dataset)
+    return dataset_service.to_read_model(
+        dataset, include_storage_options=include_storage_options, user=user
+    )
 
 
 @router.get(
@@ -203,6 +215,7 @@ def read_datasets_device(
     user: CurrentUserDep,
     offset: int = 0,
     limit: int = 100,
+    include_storage_options: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve datasets for a specific device (not tied to any shot).
@@ -210,7 +223,9 @@ def read_datasets_device(
     datasets = dataset_service.get_datasets_for_device(
         device_name, user=user, offset=offset, limit=limit
     )
-    return [dataset_service.to_read_model(d) for d in datasets]
+    return dataset_service.to_read_models(
+        datasets, include_storage_options=include_storage_options, user=user
+    )
 
 
 @router.get(
@@ -225,6 +240,7 @@ def read_dataset_device_by_name(
     name: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
+    include_storage_options: bool = False,
 ) -> DatasetRead | JSONResponse:
     """
     Retrieve a specific device-level dataset by its descriptive name.
@@ -244,7 +260,9 @@ def read_dataset_device_by_name(
         dcat_metadata = map_dataset_to_dcat(dataset, str(request.base_url).rstrip("/"))
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
 
-    return dataset_service.to_read_model(dataset)
+    return dataset_service.to_read_model(
+        dataset, include_storage_options=include_storage_options, user=user
+    )
 
 
 @router.patch(

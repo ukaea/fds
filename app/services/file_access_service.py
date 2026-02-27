@@ -76,7 +76,14 @@ class FileAccessService:
     ) -> tuple[list[dict], dict[str, int]]:
         tokens = []
         resource_map = {}
-        provider = get_provider_for_protocol(protocol)
+        try:
+            provider = get_provider_for_protocol(protocol)
+        except ValueError:
+            logger.warning(
+                f"No credential provider implemented for protocol: {protocol}. Skipping."
+            )
+            return [], {}
+
         provider_key = self._get_provider_key(protocol)
 
         # Split urls into chunks

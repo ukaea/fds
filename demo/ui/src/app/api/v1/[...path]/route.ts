@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { auth } from '@/auth';
+
 // This API route acts as a proxy to the backend FastAPI server
 // It handles all /api/v1/* requests and forwards them to the backend
 export async function GET(request: NextRequest) {
@@ -34,11 +36,17 @@ async function proxyRequest(request: NextRequest) {
   console.log(`[API Proxy] ${request.method} ${request.nextUrl.pathname} -> ${targetUrl}`);
 
   try {
+    const session = await auth();
     // Only forward necessary headers (avoid Next.js internal headers)
     const headers = new Headers();
     const contentType = request.headers.get('content-type');
     if (contentType) {
       headers.set('content-type', contentType);
+    }
+
+    // Inject Authorization header if user is authenticated
+    if (session?.accessToken) {
+      headers.set('Authorization', `Bearer ${session.accessToken}`);
     }
 
     // Forward the request to the backend

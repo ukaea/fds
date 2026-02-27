@@ -2,7 +2,7 @@
 # requires-python = ">=3.14"
 # dependencies = [
 #     "marimo>=0.19.4",
-#     "requests==2.32.5",
+#     "httpx==0.27.2",
 #     "s3fs==2026.1.0",
 #     "xarray[parallel]==2025.12.0",
 #     "zarr==3.1.5",
@@ -20,14 +20,12 @@ def _():
     import json
     import time
 
+    import httpx
     import marimo as mo
-    import requests
-    import s3fs
     import xarray as xr
-    import zarr
     from dask.distributed import Client, LocalCluster
 
-    return Client, LocalCluster, json, mo, requests, s3fs, time, xr, zarr
+    return Client, LocalCluster, httpx, json, mo, time, xr
 
 
 @app.cell(hide_code=True)
@@ -41,8 +39,8 @@ def _(mo):
 
     1. Authenticate with Keycloak to get an OIDC identity.
     2. Register a pre-existing Zarr dataset in the FDS catalog.
-    3. Exchange the OIDC token for temporary S3 credentials via FDS.
-    4. Consume the data using xarray, authenticated by the vended credentials.
+    3. Query the catalog for the dataset, requesting `include_storage_options=true`.
+    4. Consume the data using xarray natively, authenticated by the embedded credentials.
     """)
     return
 
@@ -78,7 +76,7 @@ def _(mo):
 
 
 @app.cell
-def _(KEYCLOAK_URL, requests):
+def _(KEYCLOAK_URL, httpx):
     auth_payload = {
         "client_id": "fds-client",
         "client_secret": "fds-client-secret",
@@ -88,7 +86,7 @@ def _(KEYCLOAK_URL, requests):
         "scope": "openid profile fds-admin",
     }
 
-    auth_response = requests.post(KEYCLOAK_URL, data=auth_payload)
+    auth_response = httpx.post(KEYCLOAK_URL, data=auth_payload)
     auth_response.raise_for_status()
     token = auth_response.json()["access_token"]
 
@@ -110,7 +108,7 @@ def _(mo):
 
 
 @app.cell
-def _(FDS_API_URL, headers, requests):
+def _(FDS_API_URL, headers, httpx):
     # 1. Register Device
     device_meta = {
         "name": "mast",
@@ -118,8 +116,8 @@ def _(FDS_API_URL, headers, requests):
         "type": "tokamak",
     }
     print("Registering Device: mast...")
-    resp_device = requests.post(
-        f"{FDS_API_URL}/devices/", json=device_meta, headers=headers
+    resp_device = httpx.post(
+        f"{FDS_API_URL}/devices", json=device_meta, headers=headers
     )
     if resp_device.status_code in (201, 409):
         print("Device registered.")
@@ -131,8 +129,8 @@ def _(FDS_API_URL, headers, requests):
     # 2. Register Shot 30421 (Real MAST Data)
     shot_30421_meta = {"id": "30421", "access_level": "public", "device_name": "mast"}
     print("Registering Shot: 30421...")
-    resp_shot_30421 = requests.post(
-        f"{FDS_API_URL}/devices/mast/shots/", json=shot_30421_meta, headers=headers
+    resp_shot_30421 = httpx.post(
+        f"{FDS_API_URL}/devices/mast/shots", json=shot_30421_meta, headers=headers
     )
     if resp_shot_30421.status_code in (201, 409):
         print("Shot 30421 registered.")
@@ -144,8 +142,8 @@ def _(FDS_API_URL, headers, requests):
     # 3. Register Shot 50000 (Synthetic Data)
     shot_50000_meta = {"id": "50000", "access_level": "public", "device_name": "mast"}
     print("Registering Shot: 50000...")
-    resp_shot_50000 = requests.post(
-        f"{FDS_API_URL}/devices/mast/shots/", json=shot_50000_meta, headers=headers
+    resp_shot_50000 = httpx.post(
+        f"{FDS_API_URL}/devices/mast/shots", json=shot_50000_meta, headers=headers
     )
     if resp_shot_50000.status_code in (201, 409):
         print("Shot 50000 registered.")
@@ -168,7 +166,7 @@ def _(mo):
 
 
 @app.cell
-def _(FDS_API_URL, headers, json, requests):
+def _(FDS_API_URL, headers, httpx, json):
     dataset_metadata = {
         "name": "equilibrium",
         "level": 2,
@@ -178,7 +176,7 @@ def _(FDS_API_URL, headers, json, requests):
         "media_type": "application/x-zarr",
     }
 
-    ds_response = requests.post(
+    ds_response = httpx.post(
         f"{FDS_API_URL}/devices/mast/shots/30421/datasets",
         json=dataset_metadata,
         headers=headers,
@@ -204,7 +202,7 @@ def _(mo):
 
 
 @app.cell
-def _(FDS_API_URL, headers, requests):
+def _(FDS_API_URL, headers, httpx):
     # 1. Create the Source (Code) as a Global Source
     # EFIT is a general-purpose equilibrium reconstruction code used across many
     # tokamaks (MAST, DIII-D, NSTX, KSTAR, etc.), so it belongs as a global source.
@@ -215,7 +213,7 @@ def _(FDS_API_URL, headers, requests):
     }
 
     print("Creating Global Source: efit...")
-    resp_source = requests.post(
+    resp_source = httpx.post(
         f"{FDS_API_URL}/sources/", json=source_meta, headers=headers
     )
 
@@ -224,7 +222,7 @@ def _(FDS_API_URL, headers, requests):
         print(f"Source created with ID: {source_id}")
     elif resp_source.status_code == 409:
         print("Source already exists, fetching...")
-        resp_get_source = requests.get(f"{FDS_API_URL}/sources/efit", headers=headers)
+        resp_get_source = httpx.get(f"{FDS_API_URL}/sources/efit", headers=headers)
         if resp_get_source.status_code == 200:
             source_id = resp_get_source.json()["id"]
             print(f"Found existing source with ID: {source_id}")
@@ -236,7 +234,7 @@ def _(FDS_API_URL, headers, requests):
         source_id = None
 
     # 2. Link Dataset to Source
-    resp_get_dataset = requests.get(
+    resp_get_dataset = httpx.get(
         f"{FDS_API_URL}/devices/mast/shots/30421/datasets/equilibrium",
         headers=headers,
     )
@@ -253,7 +251,7 @@ def _(FDS_API_URL, headers, requests):
             }
 
             print(f"Linking Dataset {dataset_id} to Source {source_id}...")
-            resp_link = requests.post(
+            resp_link = httpx.post(
                 f"{FDS_API_URL}/datasets/{dataset_id}/sources",
                 json=link_meta,
                 headers=headers,
@@ -280,7 +278,7 @@ def _(mo):
 
 
 @app.cell
-def _(FDS_API_URL, headers, json, requests):
+def _(FDS_API_URL, headers, httpx, json):
     # Request JSON-LD for the dataset we just registered
     jsonld_url = f"{FDS_API_URL}/devices/mast/shots/30421/datasets/equilibrium"
 
@@ -288,7 +286,7 @@ def _(FDS_API_URL, headers, json, requests):
     ld_headers = headers.copy()
     ld_headers["Accept"] = "application/ld+json"
 
-    jld_resp = requests.get(jsonld_url, headers=ld_headers)
+    jld_resp = httpx.get(jsonld_url, headers=ld_headers)
 
     if jld_resp.status_code == 200:
         print("Successfully retrieved JSON-LD:")
@@ -310,7 +308,7 @@ def _(mo):
 
 
 @app.cell
-def _(FDS_API_URL, headers, requests):
+def _(FDS_API_URL, headers, httpx):
     # Register 50 Public Signals
     print("Registering 50 Public Signals for Shot 50000...")
     for i in range(50):
@@ -324,7 +322,7 @@ def _(FDS_API_URL, headers, requests):
             "title": f"Public Signal {i}",
             "media_type": "application/x-zarr",
         }
-        requests.post(
+        httpx.post(
             f"{FDS_API_URL}/devices/mast/shots/50000/datasets",
             json=meta,
             headers=headers,
@@ -343,7 +341,7 @@ def _(FDS_API_URL, headers, requests):
             "title": f"Restricted Data {i}",
             "media_type": "application/x-zarr",
         }
-        requests.post(
+        httpx.post(
             f"{FDS_API_URL}/devices/mast/shots/50000/datasets",
             json=meta,
             headers=headers,
@@ -358,168 +356,93 @@ def _(mo):
     mo.md(r"""
     ## 4. Attempting Unauthorized Access
 
-    Before we get our temporary credentials, let's see what happens if we try to access the data directly using `s3fs` without any authentication. This should fail because the bucket is not public.
+    Before we fetch credentials from FDS, let's see what happens if we attempt to access a dataset directly using native `xarray` without providing authentication.
+
+    We will try to read a dataset we categorized as `restricted` in FDS. It is important to note that FDS is purely a metadata catalog—it does not manage or enforce physical bucket policies on the underlying object store!
+
+    Because the data owner has configured access to this dataset in their bucket to be restricted, native access will fail without proper AWS keys. FDS bridges this gap by securely vending temporary STS tokens for authorized users, saving them from managing long-lived AWS credentials manually.
     """)
     return
 
 
 @app.cell
-def _(MINIO_URL, s3fs, xr):
-    # This should fail because we haven't provided credentials to s3fs
-    fs_unauth = s3fs.S3FileSystem(
-        anon=False,
-        client_kwargs={"endpoint_url": MINIO_URL},
-    )
+def _(MINIO_URL, xr):
+    url = "s3://fds-data/shots/50000/restricted/data_00"
+    print(f"Attempting to open restricted dataset at {url} without credentials...")
 
-    s3_path = "fds-data/shots/30421/equilibrium"
-    print(f"Attempting to open dataset at {s3_path} without credentials...")
     try:
-        store_unauth = s3fs.S3Map(root=s3_path, s3=fs_unauth, check=False)
-        xr.open_zarr(store=store_unauth)
-        print(
-            "Success (Unexpected! This might happen if you have AWS_ACCESS_KEY_ID set in your environment)"
+        xr.open_dataset(
+            url,
+            engine="zarr",
+            storage_options={"client_kwargs": {"endpoint_url": MINIO_URL}},
         )
+        print("Success (Unexpected! You might have AWS keys set locally)")
     except Exception as e:
         print(f"Caught expected error: {e}")
-    return (s3_path,)
+    return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 5. Retrieving Temporary Access Credentials
+    ## 5. Secure Consumption with Data-Driven Configuration
 
-    Exchange the OIDC identity for S3-specific temporary credentials.
+    Instead of manually vending and managing tokens, we simply fetch the datasets from FDS with `include_storage_options=true`. The API evaluates our permissions and automatically calculates and embeds the necessary STS endpoint URLs and temporary keys directly into the JSON response!
     """)
     return
 
 
 @app.cell
-def _(FDS_API_URL, headers, requests):
-    # Request credentials for Shot 50000 (multi-token demo)
-    creds_response = requests.post(
-        f"{FDS_API_URL}/file-access/credentials",
-        json={"shot_id": "50000", "device_name": "mast"},
+def _(FDS_API_URL, headers, httpx, xr):
+    ds_meta = httpx.get(
+        f"{FDS_API_URL}/devices/mast/shots/50000/datasets/restricted_00",
         headers=headers,
+        params={"include_storage_options": True},
+    ).json()
+
+    xr.open_dataset(
+        ds_meta["data_url"], engine="zarr", storage_options=ds_meta["storage_options"]
     )
-
-    creds_response.raise_for_status()
-    manifest = creds_response.json()
-
-    print(f"Received Manifest with {len(manifest['tokens'])} tokens.")
-    print(f"Total resources mapped: {len(manifest['resource_map'])}")
-
-    # Also get credentials for Shot 30421 (Real Data Demo)
-    creds_real_resp = requests.post(
-        f"{FDS_API_URL}/file-access/credentials",
-        json={"shot_id": "30421", "device_name": "mast"},
-        headers=headers,
-    )
-    creds_real_resp.raise_for_status()
-    manifest_real = creds_real_resp.json()
-
-    # Extract the first token's credentials for the real data demo
-    token_real = manifest_real["tokens"][0]
-    s3_creds = list(token_real["credentials"].values())[0]
-    return manifest, s3_creds
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 6. Secure Consumption with Multi-Token Vending
-
-    We iterate over the datasets we want to read, automatically selecting the correct token from the manifest.
-    """)
-    return
-
-
-@app.cell
-def _(MINIO_URL, manifest, xr, zarr):
-    # Load a selection of signals and restricted data from Shot 50000
-    datasets_to_load = [
-        "s3://fds-data/shots/50000/signals/signal_00",
-        "s3://fds-data/shots/50000/signals/signal_25",
-        "s3://fds-data/shots/50000/signals/signal_49",
-        "s3://fds-data/shots/50000/restricted/data_00",
-    ]
-
-    loaded_data = {}
-
-    for url in datasets_to_load:
-        if url not in manifest["resource_map"]:
-            print(f"Skipping {url} - No credentials vended (Access Denied?)")
-            continue
-
-        # 1. Lookup Token
-        token_idx = manifest["resource_map"][url]
-        token_payload = manifest["tokens"][token_idx]
-        creds_map = token_payload["credentials"]
-        creds = list(creds_map.values())[0]
-
-        # 2. Open Zarr v3 store with vended credentials
-        try:
-            store = zarr.storage.FsspecStore.from_url(
-                url,
-                storage_options=dict(
-                    key=creds["access_key_id"],
-                    secret=creds["secret_access_key"],
-                    token=creds["session_token"],
-                    client_kwargs={"endpoint_url": MINIO_URL},
-                ),
-            )
-            ds = xr.open_zarr(store=store, zarr_format=3, consolidated=False)
-            loaded_data[url] = ds
-            print(f"Successfully loaded {url} using Token #{token_idx}")
-        except Exception as e:
-            print(f"Failed to load {url}: {e}")
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 7. Single Dataset Access (Detailed View)
+    ## 6. Single Dataset Access (Detailed View)
 
-    Now we use `xarray` + `s3fs` to read the real MAST data — the Level 2 Equilibrium reconstruction from Shot 30421.
+    Now we use `xarray` to read some real MAST data — the Level 2 Equilibrium reconstruction from Shot 30421.
     """)
     return
 
 
 @app.cell
-def _(MINIO_URL, s3_creds, s3_path, xr, zarr):
-    # 1. Build a Zarr v3 FsspecStore with vended credentials
-    store_single = zarr.storage.FsspecStore.from_url(
-        f"s3://{s3_path}",
-        storage_options=dict(
-            key=s3_creds["access_key_id"],
-            secret=s3_creds["secret_access_key"],
-            token=s3_creds["session_token"],
-            client_kwargs={"endpoint_url": MINIO_URL},
-        ),
+def _(FDS_API_URL, httpx, xr):
+    eq_dataset = httpx.get(
+        f"{FDS_API_URL}/devices/mast/shots/30421/datasets/equilibrium",
+        params={"include_storage_options": True},
+    ).json()
+
+    xr.open_dataset(
+        eq_dataset["data_url"],
+        engine="zarr",
+        storage_options=eq_dataset["storage_options"],
     )
-
-    # 2. Open with xarray (Zarr v3)
-    print(f"Opening dataset at {s3_path}...")
-    ds_single = xr.open_zarr(store=store_single, zarr_format=3, consolidated=False)
-
-    ds_single
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 8. High-Throughput Parallel Analysis (Dask)
+    ## 7. High-Throughput Parallel Analysis (Dask)
 
-    FDS facilitates parallel analysis by vending a manifest of tokens that can be distributed to workers.
-    Here, we use `dask.distributed` to read and process signals in parallel.
+    FDS facilitates parallel analysis by resolving tokens server-side. We simply pass the `storage_options` dictionary to our worker functions.
     """)
     return
 
 
 @app.cell
-def _(Client, FDS_API_URL, LocalCluster, MINIO_URL, headers, requests, time):
+def _(Client, FDS_API_URL, LocalCluster, headers, httpx, time):
     # 1. Setup Dask Cluster (Reuse or Create)
     try:
         client = Client.current()
@@ -532,21 +455,10 @@ def _(Client, FDS_API_URL, LocalCluster, MINIO_URL, headers, requests, time):
         print(f"Created Dask Cluster: {client}")
 
     # 2. Worker Function (local imports required — marimo module wrappers can't be pickled)
-    def process_signal_mean(url, token_payload, endpoint):
+    def process_signal_mean(url, storage_options):
         import xarray as xr
-        import zarr
 
-        creds = list(token_payload["credentials"].values())[0]
-        store = zarr.storage.FsspecStore.from_url(
-            url,
-            storage_options=dict(
-                key=creds["access_key_id"],
-                secret=creds["secret_access_key"],
-                token=creds["session_token"],
-                client_kwargs={"endpoint_url": endpoint},
-            ),
-        )
-        ds = xr.open_zarr(store=store, zarr_format=3, consolidated=False)
+        ds = xr.open_dataset(url, engine="zarr", storage_options=storage_options)
         return ds["val"].values.mean()
 
     # 3. The "Grand Finale": Fetch Credentials & Compute in Parallel
@@ -554,35 +466,30 @@ def _(Client, FDS_API_URL, LocalCluster, MINIO_URL, headers, requests, time):
         print("\n--- Starting Full Workflow Benchmark ---")
         start_time = time.time()
 
-        # A. Request Credentials
-        print("1. Requesting Credentials for Shot 50000...")
-        bench_resp = requests.post(
-            f"{FDS_API_URL}/file-access/credentials",
-            json={"shot_id": "50000", "device_name": "mast"},
+        # A. Request Datasets with native storage_options configured
+        print("1. Requesting Datasets for Shot 50000...")
+        datasets_new = httpx.get(
+            f"{FDS_API_URL}/devices/mast/shots/50000/datasets",
             headers=headers,
-        )
-        bench_resp.raise_for_status()
-        manifest_new = bench_resp.json()
-        print(
-            f"   -> Received {len(manifest_new['tokens'])} tokens mapping {len(manifest_new['resource_map'])} resources."
-        )
+            params={"include_storage_options": "true"},
+        ).json()
+
+        print(f"   -> Received {len(datasets_new)} datasets.")
 
         # B. Distribute Work
-        print("2. Distributing 60 tasks to Dask Cluster...")
-        bench_urls = [
-            u
-            for u in manifest_new["resource_map"].keys()
-            if "signal_" in u or "restricted" in u
-        ]
-
+        print("2. Distributing tasks to Dask Cluster...")
         local_futures = []
-        for u in bench_urls:
-            idx = manifest_new["resource_map"][u]
-            local_futures.append(
-                client.submit(
-                    process_signal_mean, u, manifest_new["tokens"][idx], MINIO_URL
+        for ds_meta in datasets_new:
+            if ds_meta.get("storage_options") and (
+                "signal_" in ds_meta["name"] or "restricted" in ds_meta["name"]
+            ):
+                local_futures.append(
+                    client.submit(
+                        process_signal_mean,
+                        ds_meta["data_url"],
+                        ds_meta["storage_options"],
+                    )
                 )
-            )
 
         # C. Compute
         bench_results = client.gather(local_futures)
