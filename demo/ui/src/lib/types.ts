@@ -16,6 +16,13 @@ export interface Dataset {
   shot_id?: number;
   data_url?: string;
   created_at?: string;
+  publisher?: string;
+  level?: number;
+  description?: string;
+  license?: string;
+  media_type?: string;
+  access_level?: string;
+  effective_access_level?: string;
 }
 
 export interface Source {

@@ -37,4 +37,20 @@ mc admin policy create local fds-policy /tmp/fds-policy.json
 mc admin user add local fds-sa fds-sa-secret
 mc admin policy attach local fds-policy --user fds-sa
 
+# Configure CORS for browser access
+cat <<EOF > /tmp/cors.json
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": ["*"],
+      "AllowedMethods": ["GET", "HEAD"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": ["ETag", "Accept-Ranges", "Content-Encoding", "Content-Length", "Content-Range"]
+    }
+  ]
+}
+EOF
+mc anonymous set download local/fds-data
+mc cors set /tmp/cors.json local/fds-data
+
 echo "MinIO setup complete."
