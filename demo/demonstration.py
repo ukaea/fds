@@ -502,6 +502,12 @@ def _(Client, FDS_API_URL, LocalCluster, headers, httpx, time):
         print(f"Average Mean Value: {sum(bench_results) / len(bench_results):.4f}")
 
     run_benchmark()
+
+    # 4. Cleanup Dask Cluster
+    client.close()
+    if "cluster" in locals():
+        cluster.close()
+
     return
 
 

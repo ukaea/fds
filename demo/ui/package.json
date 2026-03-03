@@ -9,13 +9,15 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "aws4fetch": "^1.0.20",
     "clsx": "^2.1.1",
     "lucide-react": "^0.563.0",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.30",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "swr": "^2.4.0"
+    "swr": "^2.4.0",
+    "zarrita": "^0.6.1"
   },
   "devDependencies": {
     "@types/node": "20.19.33",
