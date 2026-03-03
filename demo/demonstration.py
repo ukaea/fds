@@ -117,7 +117,7 @@ def _(FDS_API_URL, headers, httpx):
     }
     print("Registering Device: mast...")
     resp_device = httpx.post(
-        f"{FDS_API_URL}/devices", json=device_meta, headers=headers
+        f"{FDS_API_URL}/devices/", json=device_meta, headers=headers
     )
     if resp_device.status_code in (201, 409):
         print("Device registered.")
