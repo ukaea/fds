@@ -39,6 +39,10 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         if user.is_anonymous:
             raise ForbiddenError("Authentication required for this resource")
 
+        # Fall back to context-based authorization
+        if shot.device:
+            check_shot_operator(user, shot.device.name)
+
     def create(
         self,
         obj_in: ShotCreate,

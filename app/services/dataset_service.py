@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.auth.access_control import get_effective_access_level
-from app.auth.permissions import check_device_admin, check_is_admin
+from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
 from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
 from app.models.device import Device
 from app.models.file_access import CredentialRequest
@@ -58,6 +58,23 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         # For restricted, you must be authenticated
         if user.is_anonymous:
             raise ForbiddenError("Authentication required for this resource")
+
+        # Enforce specific scope if one is defined
+        if dataset.required_scope:
+            if dataset.required_scope not in user.scopes:
+                raise ForbiddenError(
+                    f"Not authorized, requires scope: {dataset.required_scope}"
+                )
+            return
+
+        # Fall back to context-based authorization
+        if dataset.device_name:
+            if dataset.shot_id:
+                check_shot_operator(user, dataset.device_name)
+            else:
+                check_device_admin(user, dataset.device_name)
+        else:
+            check_is_admin(user)
 
     def create(self, obj_in: DatasetCreate, user: AuthenticatedUser) -> Dataset:
         """
