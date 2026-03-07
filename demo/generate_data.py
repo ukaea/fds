@@ -9,6 +9,7 @@
 # ///
 """Generate and upload demo data for FDS.
 
+- Shot 30420 (real MAST data): Uploaded from /source_data/30420/
 - Shot 30421 (real MAST data): Uploaded from /source_data/30421/
 - Shot 50000 (synthetic data): Generated and uploaded programmatically
 """
@@ -32,49 +33,53 @@ fs = s3fs.S3FileSystem(
     key=access_key, secret=secret_key, client_kwargs={"endpoint_url": minio_url}
 )
 
-# ---------------------------------------------------------
-# 1. Upload Real MAST Data (Shot 30421)
-# ---------------------------------------------------------
-source_dir = Path("/source_data/30421")
-real_target = f"{bucket_name}/shots/30421"
 
-if fs.exists(real_target):
-    print("Shot 30421 already exists in MinIO. Skipping upload.")
-else:
+# ---------------------------------------------------------
+# Helper: Upload a real shot from source_data
+# ---------------------------------------------------------
+def upload_real_shot(shot_id: str, source_base: str = "/source_data"):
+    source_dir = Path(f"{source_base}/{shot_id}")
+    target = f"{bucket_name}/shots/{shot_id}"
+
+    if fs.exists(target):
+        print(f"Shot {shot_id} already exists in MinIO. Skipping upload.")
+        return
+
     if not source_dir.exists() or not any(source_dir.iterdir()):
-        print("Source data not found locally. Downloading via s3fs...")
-        source_dir.mkdir(parents=True, exist_ok=True)
-        # Use an anonymous filesystem for the public bucket
-        remote_fs = s3fs.S3FileSystem(
-            anon=True, client_kwargs={"endpoint_url": "https://s3.echo.stfc.ac.uk"}
-        )
-        try:
-            remote_fs.get(
-                "mast/level2/shots/30421.zarr/equilibrium",
-                str(source_dir / "equilibrium"),
-                recursive=True,
-            )
-            print("Download complete.")
-        except Exception as e:
-            print(f"Error downloading data: {e}")
-
-    if source_dir.exists():
-        print(f"Uploading Shot 30421 from {source_dir}...")
-        # Recursively upload all files
-        for local_file in sorted(source_dir.rglob("*")):
-            if local_file.is_file():
-                rel_path = local_file.relative_to(source_dir)
-                s3_key = f"{real_target}/{rel_path}"
-                fs.put(str(local_file), s3_key)
-        print("Shot 30421 uploaded successfully.")
-
-        # Consolidate metadata for the equilibrium subgroup
-        print("Consolidating metadata for equilibrium...")
-        eq_store = s3fs.S3Map(root=f"{real_target}/equilibrium", s3=fs, check=False)
-        zarr.consolidate_metadata(eq_store)
-        print("Metadata consolidated.")
-    else:
         print(f"WARNING: Source data not found at {source_dir}")
+        return
+
+    # Discover all IDS groups (subdirectories)
+    ids_groups = sorted([d.name for d in source_dir.iterdir() if d.is_dir()])
+    print(
+        f"Uploading Shot {shot_id} ({len(ids_groups)} IDS groups: {', '.join(ids_groups)})..."
+    )
+
+    for local_file in sorted(source_dir.rglob("*")):
+        if local_file.is_file():
+            rel_path = local_file.relative_to(source_dir)
+            s3_key = f"{target}/{rel_path}"
+            fs.put(str(local_file), s3_key)
+
+    # Consolidate metadata for each IDS group
+    for ids_name in ids_groups:
+        ids_path = f"{target}/{ids_name}"
+        if fs.exists(ids_path):
+            print(f"  Consolidating metadata for {ids_name}...")
+            store = s3fs.S3Map(root=ids_path, s3=fs, check=False)
+            try:
+                zarr.consolidate_metadata(store)
+            except Exception as e:
+                print(f"  Warning: Could not consolidate {ids_name}: {e}")
+
+    print(f"Shot {shot_id} uploaded successfully.")
+
+
+# ---------------------------------------------------------
+# 1. Upload Real MAST Data
+# ---------------------------------------------------------
+upload_real_shot("30420")
+upload_real_shot("30421")
 
 # ---------------------------------------------------------
 # 2. Generate Synthetic Data (Shot 50000)

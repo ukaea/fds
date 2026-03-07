@@ -11,7 +11,7 @@
 
 import marimo
 
-__generated_with = "0.20.2"
+__generated_with = "0.20.4"
 app = marimo.App(width="medium")
 
 
@@ -99,94 +99,137 @@ def _(KEYCLOAK_URL, httpx):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 2b. Registering Device and Shots
+    ## 2b. Registering Devices and Shots
 
     Before we can register datasets, we must ensure the `Device` and `Shot` contexts exist in the Metadata Catalog.
-    We will register the **MAST** tokamak with shots **30421** (real data) and **50000** (synthetic data).
+    We will register:
+    - **MAST** with shots **30420** and **30421** (real IMAS-structured Zarr data)
+    - **MAST-Upgrade** with shot **50000** (synthetic data demonstrating access restrictions)
     """)
     return
 
 
 @app.cell
 def _(FDS_API_URL, headers, httpx):
-    # 1. Register Device
-    device_meta = {
-        "name": "mast",
-        "description": "Mega Ampere Spherical Tokamak (MAST)",
-        "type": "tokamak",
-    }
-    print("Registering Device: mast...")
-    resp_device = httpx.post(
-        f"{FDS_API_URL}/devices/", json=device_meta, headers=headers
-    )
-    if resp_device.status_code in (201, 409):
-        print("Device registered.")
-    else:
-        print(
-            f"Device registration failed: {resp_device.status_code} {resp_device.text}"
-        )
+    def register(endpoint, payload, label):
+        resp = httpx.post(f"{FDS_API_URL}{endpoint}", json=payload, headers=headers)
+        if resp.status_code in (201, 409):
+            print(f"  {label}: OK")
+        else:
+            print(f"  {label}: FAILED ({resp.status_code}) {resp.text}")
+        return resp
 
-    # 2. Register Shot 30421 (Real MAST Data)
-    shot_30421_meta = {"id": "30421", "access_level": "public", "device_name": "mast"}
-    print("Registering Shot: 30421...")
-    resp_shot_30421 = httpx.post(
-        f"{FDS_API_URL}/devices/mast/shots", json=shot_30421_meta, headers=headers
+    # 1. Register Devices
+    print("Registering Devices...")
+    register(
+        "/devices/",
+        {
+            "name": "mast",
+            "description": "Mega Ampere Spherical Tokamak (MAST)",
+            "type": "tokamak",
+        },
+        "mast",
     )
-    if resp_shot_30421.status_code in (201, 409):
-        print("Shot 30421 registered.")
-    else:
-        print(
-            f"Shot 30421 registration failed: {resp_shot_30421.status_code} {resp_shot_30421.text}"
-        )
+    register(
+        "/devices/",
+        {
+            "name": "mast-upgrade",
+            "description": "Mega Ampere Spherical Tokamak Upgrade (MAST-U)",
+            "type": "tokamak",
+        },
+        "mast-upgrade",
+    )
 
-    # 3. Register Shot 50000 (Synthetic Data)
-    shot_50000_meta = {"id": "50000", "access_level": "public", "device_name": "mast"}
-    print("Registering Shot: 50000...")
-    resp_shot_50000 = httpx.post(
-        f"{FDS_API_URL}/devices/mast/shots", json=shot_50000_meta, headers=headers
+    # 2. Register Shots
+    print("Registering Shots...")
+    register(
+        "/devices/mast/shots",
+        {
+            "id": "30420",
+            "access_level": "public",
+            "device_name": "mast",
+        },
+        "mast/30420",
     )
-    if resp_shot_50000.status_code in (201, 409):
-        print("Shot 50000 registered.")
-    else:
-        print(
-            f"Shot 50000 registration failed: {resp_shot_50000.status_code} {resp_shot_50000.text}"
-        )
+    register(
+        "/devices/mast/shots",
+        {
+            "id": "30421",
+            "access_level": "public",
+            "device_name": "mast",
+        },
+        "mast/30421",
+    )
+    register(
+        "/devices/mast-upgrade/shots",
+        {
+            "id": "50000",
+            "access_level": "public",
+            "device_name": "mast-upgrade",
+        },
+        "mast-upgrade/50000",
+    )
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 3. Registering the Real Dataset
+    ## 3. Registering the Real Datasets
 
-    A Zarr v3 dataset from MAST Shot 30421 is stored at `s3://fds-data/shots/30421/equilibrium`.
-    This was pre-loaded into MinIO. We'll now register it in FDS.
+    Real IMAS-structured Zarr data from two MAST shots has been pre-loaded into MinIO.
+    We'll register every IDS group as an individual Dataset in the FDS catalog.
+
+    - **Shot 30420**: 12 IDS groups (equilibrium, magnetics, thomson_scattering, ...)
+    - **Shot 30421**: 13 IDS groups (same + charge_exchange)
     """)
     return
 
 
 @app.cell
-def _(FDS_API_URL, headers, httpx, json):
-    dataset_metadata = {
-        "name": "equilibrium",
-        "level": 2,
-        "data_url": "s3://fds-data/shots/30421/equilibrium",
-        "access_level": "public",
-        "title": "MAST Shot 30421 EFit Equilibrium",
-        "media_type": "application/x-zarr",
-    }
+def _(FDS_API_URL, headers, httpx):
+    # IDS groups per shot (matching what generate_data.py uploaded)
+    shot_30420_ids = [
+        "equilibrium",
+        "gas_injection",
+        "interferometer",
+        "magnetics",
+        "pf_active",
+        "pf_passive",
+        "pulse_schedule",
+        "soft_x_rays",
+        "spectrometer_visible",
+        "summary",
+        "thomson_scattering",
+        "wall",
+    ]
+    shot_30421_ids = shot_30420_ids + ["charge_exchange"]
 
-    ds_response = httpx.post(
-        f"{FDS_API_URL}/devices/mast/shots/30421/datasets",
-        json=dataset_metadata,
-        headers=headers,
-    )
-    if ds_response.status_code == 201:
-        print("Dataset registered in FDS catalog.")
-    else:
-        print(f"Dataset status: {ds_response.status_code}")
+    def register_ids_datasets(device, shot_id, ids_list):
+        print(f"Registering {len(ids_list)} datasets for {device}/shots/{shot_id}...")
+        for ids_name in ids_list:
+            meta = {
+                "name": ids_name,
+                "level": 2,
+                "data_url": f"s3://fds-data/shots/{shot_id}/{ids_name}",
+                "access_level": "public",
+                "title": f"{ids_name.replace('_', ' ').title()} — Shot {shot_id}",
+                "media_type": "application/x-zarr",
+            }
+            resp = httpx.post(
+                f"{FDS_API_URL}/devices/{device}/shots/{shot_id}/datasets",
+                json=meta,
+                headers=headers,
+            )
+            status = (
+                "OK"
+                if resp.status_code in (201, 409)
+                else f"FAILED ({resp.status_code})"
+            )
+            print(f"  {ids_name}: {status}")
 
-    print(json.dumps(ds_response.json(), indent=2))
+    register_ids_datasets("mast", "30420", shot_30420_ids)
+    register_ids_datasets("mast", "30421", shot_30421_ids)
     return
 
 
@@ -299,9 +342,10 @@ def _(FDS_API_URL, headers, httpx, json):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### 3b. Registering the Synthetic Shot (Extended Demo)
+    ### 3b. Registering the Synthetic Shot (MAST-Upgrade)
 
-    We also register a large number of datasets (simulating Shot 50000) to demonstrate multi-token vending.
+    We register synthetic datasets under **MAST-Upgrade Shot 50000** to demonstrate
+    multi-token vending and access restrictions on a different device.
     These datasets correspond to what `demo/generate_data.py` created.
     """)
     return
@@ -310,44 +354,44 @@ def _(mo):
 @app.cell
 def _(FDS_API_URL, headers, httpx):
     # Register 50 Public Signals
-    print("Registering 50 Public Signals for Shot 50000...")
+    print("Registering 50 Public Signals for MAST-Upgrade Shot 50000...")
     for i in range(50):
         meta = {
             "name": f"signal_{i:02d}",
             "level": 1,
             "shot_id": "50000",
-            "device_name": "mast",
+            "device_name": "mast-upgrade",
             "data_url": f"s3://fds-data/shots/50000/signals/signal_{i:02d}",
             "access_level": "public",
             "title": f"Public Signal {i}",
             "media_type": "application/x-zarr",
         }
         httpx.post(
-            f"{FDS_API_URL}/devices/mast/shots/50000/datasets",
+            f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets",
             json=meta,
             headers=headers,
         )
 
     # Register 10 Restricted Signals
-    print("Registering 10 Restricted Signals for Shot 50000...")
+    print("Registering 10 Restricted Signals for MAST-Upgrade Shot 50000...")
     for i in range(10):
         meta = {
             "name": f"restricted_{i:02d}",
             "level": 1,
             "shot_id": "50000",
-            "device_name": "mast",
+            "device_name": "mast-upgrade",
             "data_url": f"s3://fds-data/shots/50000/restricted/data_{i:02d}",
             "access_level": "restricted",
             "title": f"Restricted Data {i}",
             "media_type": "application/x-zarr",
         }
         httpx.post(
-            f"{FDS_API_URL}/devices/mast/shots/50000/datasets",
+            f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets",
             json=meta,
             headers=headers,
         )
 
-    print("Synthetic Shot registration complete.")
+    print("MAST-Upgrade Shot 50000 registration complete.")
     return
 
 
@@ -395,7 +439,7 @@ def _(mo):
 @app.cell
 def _(FDS_API_URL, headers, httpx, xr):
     ds_meta = httpx.get(
-        f"{FDS_API_URL}/devices/mast/shots/50000/datasets/restricted_00",
+        f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets/restricted_00",
         headers=headers,
         params={"include_storage_options": True},
     ).json()
@@ -469,7 +513,7 @@ def _(Client, FDS_API_URL, LocalCluster, headers, httpx, time):
         # A. Request Datasets with native storage_options configured
         print("1. Requesting Datasets for Shot 50000...")
         datasets_new = httpx.get(
-            f"{FDS_API_URL}/devices/mast/shots/50000/datasets",
+            f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets",
             headers=headers,
             params={"include_storage_options": "true"},
         ).json()
@@ -507,7 +551,6 @@ def _(Client, FDS_API_URL, LocalCluster, headers, httpx, time):
     client.close()
     if "cluster" in locals():
         cluster.close()
-
     return
 
 
