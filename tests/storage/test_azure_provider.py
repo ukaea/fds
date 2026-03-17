@@ -84,7 +84,7 @@ def test_missing_storage_account(mocker):
         provider.generate_credentials(["az://c/p"], "s")
 
 
-def test_sas_generation_error(mock_azure_blobs, mocker):
+def test_sas_generation_error(mock_azure_blobs):
     """Test error handling during SAS generation."""
     mocks = mock_azure_blobs
     # Make generation fail

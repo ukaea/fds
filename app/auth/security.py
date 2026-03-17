@@ -1,5 +1,6 @@
 import fnmatch
 import hashlib
+from typing import NotRequired, TypedDict, cast
 
 import jwt
 from fastapi import Depends
@@ -9,17 +10,34 @@ from pydantic import ValidationError
 from app.auth.exceptions import create_unauthorized_exception
 from app.auth.jwks import JWKSClientDep
 from app.core.config import config
-from app.models.identity import AuthenticatedUser
+from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 
 # This creates the security scheme. It simply looks for an
 # 'Authorization: Bearer <token>' header.
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+class TokenClaims(TypedDict):
+    """Validated JWT claims consumed by the FDS auth layer.
+
+    `iss` is required because issuer validation happens during token decoding and
+    is used later for scope filtering and pseudonymous user ID generation.
+
+    `scp` and `scope` are both supported to accommodate different IdP claim
+    conventions. Either claim may be represented as a space-delimited string or
+    a list of strings.
+    """
+
+    iss: str
+    sub: NotRequired[str]
+    scp: NotRequired[str | list[str]]
+    scope: NotRequired[str | list[str]]
+
+
 async def get_token_claims(
     jwks_client: JWKSClientDep,
     auth: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-) -> dict | None:
+) -> TokenClaims | None:
     """
     Dependency that gets the bearer token, validates its signature, and
     returns the decoded claims. Returns None if no token provided.
@@ -37,7 +55,7 @@ async def get_token_claims(
             audience=config.OIDC_AUDIENCE,
             issuer=valid_issuers,
         )
-        return claims
+        return cast(TokenClaims, claims)
     except (jwt.PyJWTError, ValidationError) as e:
         raise create_unauthorized_exception(
             detail=f"Invalid token: {e}",
@@ -45,26 +63,31 @@ async def get_token_claims(
         )
 
 
-def _extract_scopes(claims: dict) -> list[str]:
-    token_scopes_str = claims.get("scp", claims.get("scope", ""))
-    if isinstance(token_scopes_str, str):
-        return token_scopes_str.split()
-    return list(token_scopes_str)
+def _extract_scopes(claims: TokenClaims) -> list[str]:
+    scope_claim: str | list[str] | None = claims.get("scp")
+    if scope_claim is None:
+        scope_claim = claims.get("scope", "")
+
+    if isinstance(scope_claim, str):
+        return scope_claim.split()
+    if isinstance(scope_claim, list):
+        return [str(item) for item in scope_claim]
+    return []
 
 
-def _filter_scopes(raw_scopes: list[str], issuer: str) -> list[str]:
+def _filter_scopes(raw_scopes: list[str], issuer: str) -> tuple[str, ...]:
     trusted_idp = next((t for t in config.TRUSTED_IDPS if t.issuer == issuer), None)
     if not trusted_idp:
-        return []
+        return ()
 
-    final_scopes = []
+    final_scopes: list[str] = []
     for scope in raw_scopes:
         if any(
             fnmatch.fnmatchcase(scope, pattern)
             for pattern in trusted_idp.allowed_scopes
         ):
             final_scopes.append(scope)
-    return final_scopes
+    return tuple(final_scopes)
 
 
 def _hash_user_id(issuer: str, sub: str) -> str:
@@ -73,20 +96,19 @@ def _hash_user_id(issuer: str, sub: str) -> str:
 
 
 async def get_current_user(
-    claims: dict | None = Depends(get_token_claims),
+    claims: TokenClaims | None = Depends(get_token_claims),
 ) -> AuthenticatedUser:
     """
     Dependency that takes decoded JWT claims and returns an AuthenticatedUser model.
     Applies scope filtering and PII hashing.
     """
     if not claims:
-        from app.models.identity import ANONYMOUS_USER
-
         return ANONYMOUS_USER
 
     raw_scopes = _extract_scopes(claims)
-    issuer = claims.get("iss")
+    issuer = claims["iss"]
+    subject = claims.get("sub", "")
     final_scopes = _filter_scopes(raw_scopes, issuer)
-    hashed_id = _hash_user_id(issuer, claims.get("sub", ""))
+    hashed_id = _hash_user_id(issuer, subject)
 
-    return AuthenticatedUser(id=hashed_id, scopes=final_scopes)
+    return AuthenticatedUser(id=hashed_id, scopes=final_scopes, issuer=issuer)

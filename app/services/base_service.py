@@ -34,9 +34,13 @@ class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         objects = result.all()
         return objects
 
-    def create(self, obj_in: CreateSchemaType) -> ModelType:
+    def create_unchecked(self, obj_in: CreateSchemaType) -> ModelType:
         """
-        Create a new object.
+        Unchecked persistence helper for creating a new object.
+
+        Bypasses service-layer authorization and business-rule enforcement.
+        Call this only from service methods that have already completed the
+        required validation and authorization checks.
         """
         db_obj = self.model.model_validate(obj_in)
         self.session.add(db_obj)
@@ -44,9 +48,15 @@ class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         self.session.refresh(db_obj)
         return db_obj
 
-    def update(self, *, db_obj: ModelType, obj_in: UpdateSchemaType) -> ModelType:
+    def update_unchecked(
+        self, *, db_obj: ModelType, obj_in: UpdateSchemaType
+    ) -> ModelType:
         """
-        Update an existing object.
+        Unchecked persistence helper for updating an existing object.
+
+        Bypasses service-layer authorization and business-rule enforcement.
+        Call this only from service methods that have already completed the
+        required validation and authorization checks.
         """
         update_data = obj_in.model_dump(exclude_unset=True)
         db_obj.sqlmodel_update(update_data)
@@ -55,9 +65,13 @@ class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         self.session.refresh(db_obj)
         return db_obj
 
-    def delete(self, id: Any) -> bool:
+    def delete_unchecked(self, id: Any) -> bool:
         """
-        Delete an existing object.
+        Unchecked persistence helper for deleting an object.
+
+        Bypasses service-layer authorization and business-rule enforcement.
+        Call this only from service methods that have already completed the
+        required validation and authorization checks.
         """
         db_obj = self.session.get(self.model, id)
         if not db_obj:

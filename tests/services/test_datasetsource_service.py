@@ -125,7 +125,7 @@ def test_delete_datasetsource_link(
     link_create = DatasetSourceLink(dataset_id=dataset1.id, source_id=source1.id)
     datasetsource_service.create(link_create, user=admin_user)
 
-    deleted = datasetsource_service.delete_with_auth(
+    deleted = datasetsource_service.delete(
         dataset_id=dataset1.id, source_id=source1.id, user=admin_user
     )
     assert deleted is True
@@ -140,9 +140,7 @@ def test_delete_datasetsource_link_not_found(
     datasetsource_service: DatasetSourceService, admin_user: AuthenticatedUser
 ):
     with pytest.raises(ResourceNotFoundError):
-        datasetsource_service.delete_with_auth(
-            dataset_id=999, source_id=999, user=admin_user
-        )
+        datasetsource_service.delete(dataset_id=999, source_id=999, user=admin_user)
 
 
 def test_get_links_for_dataset(

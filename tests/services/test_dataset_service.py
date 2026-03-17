@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 from sqlmodel import Session
 
@@ -108,6 +110,7 @@ def test_get_dataset(
     )
 
     retrieved_dataset = dataset_service.get(created_dataset.id)
+    assert retrieved_dataset is not None
     assert retrieved_dataset.id == created_dataset.id
     assert retrieved_dataset.name == "mag_diag"
 
@@ -214,16 +217,55 @@ def test_get_datasets_for_shot(
     )
 
     datasets_shot1 = dataset_service.get_datasets_for_shot(
-        shot1.id, device1.id, user=admin_user
+        shot1.id, "Device 1", user=admin_user
     )
     assert len(datasets_shot1) == 2
     assert all(ds.shot_id == shot1.id for ds in datasets_shot1)
 
     datasets_shot2 = dataset_service.get_datasets_for_shot(
-        shot2.id, device2.id, user=admin_user
+        shot2.id, "Device 2", user=admin_user
     )
     assert len(datasets_shot2) == 1
     assert all(ds.shot_id == shot2.id for ds in datasets_shot2)
+
+
+def test_get_datasets_for_device_excludes_shot_scoped(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+):
+    device_service.create(DeviceCreate(name="Device X", type="Type X"), user=admin_user)
+    shot = shot_service.create(
+        ShotCreate(id="shot-1", device_name="Device X"), user=admin_user
+    )
+
+    device_ds = dataset_service.create(
+        DatasetCreate(
+            name="device_data",
+            level=1,
+            data_url="url_device",
+            device_name="Device X",
+        ),
+        user=admin_user,
+    )
+    dataset_service.create(
+        DatasetCreate(
+            name="shot_data",
+            level=1,
+            data_url="url_shot",
+            device_name="Device X",
+            shot_id=shot.id,
+        ),
+        user=admin_user,
+    )
+
+    datasets_device = dataset_service.get_datasets_for_device(
+        "Device X", user=admin_user
+    )
+    assert len(datasets_device) == 1
+    assert datasets_device[0].id == device_ds.id
+    assert datasets_device[0].shot_id is None
 
 
 def test_create_global_dataset(
@@ -253,7 +295,7 @@ def test_create_device_dataset(
 
 
 def test_create_dataset_unauthorized_global(dataset_service: DatasetService):
-    regular_user = AuthenticatedUser(id="user", scopes=[])
+    regular_user = AuthenticatedUser(id="user", scopes=())
     dataset_create = DatasetCreate(name="global", level=1, data_url="url")
     with pytest.raises(ForbiddenError):
         dataset_service.create(dataset_create, user=regular_user)
@@ -265,7 +307,7 @@ def test_create_dataset_unauthorized_device(
     admin_user: AuthenticatedUser,
 ):
     device_service.create(DeviceCreate(name="JET", type="Tokamak"), user=admin_user)
-    regular_user = AuthenticatedUser(id="user", scopes=["mast_admin"])
+    regular_user = AuthenticatedUser(id="user", scopes=("mast_admin",))
     dataset_create = DatasetCreate(
         name="jet_data", level=1, data_url="url", device_name="JET"
     )
@@ -323,6 +365,7 @@ def test_update_dataset(
     assert created_dataset.quality_flag == "good"
 
     db_dataset_to_update = dataset_service.get(created_dataset.id)
+    assert db_dataset_to_update is not None
 
     dataset_update = DatasetUpdate(name="new_name", level=2, quality_flag="bad")
     updated_dataset = dataset_service.update(
@@ -361,8 +404,9 @@ def test_delete_dataset(
         ),
         user=admin_user,
     )
+    assert dataset_to_delete.id is not None
 
-    dataset_service.delete_with_auth(dataset_to_delete.id, user=admin_user)
+    dataset_service.delete(dataset_to_delete.id, user=admin_user)
 
     retrieved_dataset = dataset_service.get(dataset_to_delete.id)
     assert retrieved_dataset is None
@@ -372,7 +416,7 @@ def test_delete_dataset_not_found(
     dataset_service: DatasetService, admin_user: AuthenticatedUser
 ):
     with pytest.raises(ResourceNotFoundError):
-        dataset_service.delete_with_auth(999, user=admin_user)
+        dataset_service.delete(999, user=admin_user)
 
 
 def test_enrich_with_storage_options_s3(
@@ -388,7 +432,7 @@ def test_enrich_with_storage_options_s3(
     into the FSSpec `storage_options` dictionary required by Xarray/Zarr.
     """
     # Setup Data
-    device = device_service.create(
+    device_service.create(
         DeviceCreate(name="enrich-dev1", type="Test"), user=admin_user
     )
     shot = shot_service.create(
@@ -412,7 +456,7 @@ def test_enrich_with_storage_options_s3(
             access_key_id="mock_key",
             secret_access_key="mock_secret",
             session_token="mock_token",
-            expiration="2026-01-01T00:00:00Z",
+            expiration=datetime.fromisoformat("2026-01-01T00:00:00+00:00"),
         )
     }
 
@@ -421,11 +465,14 @@ def test_enrich_with_storage_options_s3(
         return_value=mock_provider,
     )
 
-    models = dataset_service.get_datasets_for_shot(shot.id, device.id, user=admin_user)
+    models = dataset_service.get_datasets_for_shot(
+        shot.id, "enrich-dev1", user=admin_user
+    )
     read_models = [dataset_service.to_read_model(m) for m in models]
     enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
 
     assert len(enriched) == 1
+    assert enriched[0].storage_options is not None
     assert enriched[0].storage_options["key"] == "mock_key"
     assert enriched[0].storage_options["secret"] == "mock_secret"
     assert enriched[0].storage_options["token"] == "mock_token"
@@ -444,7 +491,7 @@ def test_enrich_with_storage_options_unsupported_protocol(
     Their `storage_options` should safely remain `None`.
     """
     # Setup Data
-    device = device_service.create(
+    device_service.create(
         DeviceCreate(name="enrich-dev2", type="Test"), user=admin_user
     )
     shot = shot_service.create(
@@ -467,7 +514,9 @@ def test_enrich_with_storage_options_unsupported_protocol(
         side_effect=ValueError("No mock provider for local"),
     )
 
-    models = dataset_service.get_datasets_for_shot(shot.id, device.id, user=admin_user)
+    models = dataset_service.get_datasets_for_shot(
+        shot.id, "enrich-dev2", user=admin_user
+    )
     read_models = [dataset_service.to_read_model(m) for m in models]
     enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
 

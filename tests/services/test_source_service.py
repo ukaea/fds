@@ -91,7 +91,8 @@ def test_delete_source(session: Session, admin_user: AuthenticatedUser):
     service = SourceService(session)
     source = service.create(SourceCreate(name="ToDelete"), user=admin_user)
 
-    service.delete_with_auth(source.id, user=admin_user)
+    assert source.id is not None
+    service.delete(source.id, user=admin_user)
 
     db_source = session.get(Source, source.id)
     assert db_source is None
@@ -100,7 +101,7 @@ def test_delete_source(session: Session, admin_user: AuthenticatedUser):
 def test_delete_source_not_found(session: Session, admin_user: AuthenticatedUser):
     service = SourceService(session)
     with pytest.raises(ResourceNotFoundError):
-        service.delete_with_auth(999, user=admin_user)
+        service.delete(999, user=admin_user)
 
 
 def test_get_source_by_name(session: Session, admin_user: AuthenticatedUser):

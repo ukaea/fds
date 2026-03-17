@@ -80,7 +80,7 @@ def test_duplicate_dataset_creation(
     session.commit()
     session.refresh(device)
 
-    shot = Shot(id="2000", device_id=device.id)
+    shot = Shot(id="2000", device_name=device.name)
     session.add(shot)
     session.commit()
 

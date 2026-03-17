@@ -3,10 +3,17 @@ from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
 from app.models.device import DeviceCreate
-from app.models.shot import Shot, ShotCreate
+from app.models.policy import AccessLevel
+from app.models.shot import Shot, ShotCreate, ShotUpdate
 from app.services.device_service import DeviceService
-from app.services.exceptions import DeviceNotFoundError, ForbiddenError
+from app.services.exceptions import (
+    DeviceNotFoundError,
+    FDSValidationError,
+    ForbiddenError,
+)
 from app.services.shot_service import ShotService
+
+IDP_A = "https://idp-a.example.com"
 
 
 @pytest.fixture(name="device_service")
@@ -19,7 +26,7 @@ def shot_service_fixture(session: Session) -> ShotService:
     return ShotService(session)
 
 
-def test_create_shot_with_device_id(
+def test_create_shot_for_device(
     device_service: DeviceService,
     shot_service: ShotService,
     admin_user: AuthenticatedUser,
@@ -34,7 +41,7 @@ def test_create_shot_with_device_id(
     shot = shot_service.create(shot_create, admin_user)
     assert shot is not None
     assert shot.id == "shot-101"
-    assert shot.device_id == device.id
+    assert shot.device_name == "Test Device"
 
 
 def test_create_shot_with_device_scope(
@@ -88,7 +95,7 @@ def test_get_shot(
     )
     assert created_shot is not None
 
-    retrieved_shot = shot_service.get(created_shot.id, device.id)
+    retrieved_shot = shot_service.get(("Test Device", created_shot.id))
     assert retrieved_shot is not None
     assert retrieved_shot.id == "shot-201"
 
@@ -98,21 +105,17 @@ def test_get_shots_for_device(
     shot_service: ShotService,
     admin_user: AuthenticatedUser,
 ):
-    device1 = device_service.create(
-        DeviceCreate(name="Device 1", type="A"), user=admin_user
-    )
-    _device2 = device_service.create(
-        DeviceCreate(name="Device 2", type="B"), user=admin_user
-    )
+    device_service.create(DeviceCreate(name="Device 1", type="A"), user=admin_user)
+    device_service.create(DeviceCreate(name="Device 2", type="B"), user=admin_user)
 
     shot_service.create(ShotCreate(id="shot-1001", device_name="Device 1"), admin_user)
     shot_service.create(ShotCreate(id="shot-1002", device_name="Device 1"), admin_user)
     shot_service.create(ShotCreate(id="shot-2001", device_name="Device 2"), admin_user)
 
     # Get shots for device 1
-    device1_shots = shot_service.get_multi_by_device(device1.id)
+    device1_shots = shot_service.get_multi_by_device_name("Device 1", user=admin_user)
     assert len(device1_shots) == 2
-    assert all(shot.device_id == device1.id for shot in device1_shots)
+    assert all(shot.device_name == "Device 1" for shot in device1_shots)
     assert {shot.id for shot in device1_shots} == {"shot-1001", "shot-1002"}
 
 
@@ -122,7 +125,7 @@ def test_delete_shot(
     session: Session,
     admin_user: AuthenticatedUser,
 ):
-    device = device_service.create(
+    device_service.create(
         DeviceCreate(name="Test Device", type="Test"), user=admin_user
     )
 
@@ -131,9 +134,84 @@ def test_delete_shot(
     )
     assert shot_to_delete is not None
 
-    shot_service.delete_with_auth(
-        shot_to_delete.id, admin_user, device_name="Test Device"
-    )
+    shot_service.delete(shot_to_delete.id, admin_user, device_name="Test Device")
 
-    db_shot = session.get(Shot, (device.id, shot_to_delete.id))
+    db_shot = session.get(Shot, ("Test Device", shot_to_delete.id))
     assert db_shot is None
+
+
+@pytest.mark.usefixtures("idp_config")
+def test_create_shot_public_with_required_scopes_rejected(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    admin_user: AuthenticatedUser,
+):
+    device_service.create(DeviceCreate(name="DEV"), user=admin_user)
+    with pytest.raises(FDSValidationError, match="PUBLIC"):
+        shot_service.create(
+            ShotCreate(
+                id="s1",
+                device_name="DEV",
+                access_level=AccessLevel.PUBLIC,
+                required_scopes=["some:scope"],
+            ),
+            user=admin_user,
+        )
+
+
+@pytest.mark.usefixtures("idp_config")
+def test_create_shot_null_access_with_allowed_idps_rejected(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    admin_user: AuthenticatedUser,
+):
+    device_service.create(DeviceCreate(name="DEV2"), user=admin_user)
+    with pytest.raises(FDSValidationError, match="allowed_idps requires"):
+        shot_service.create(
+            ShotCreate(id="s2", device_name="DEV2", allowed_idps=[IDP_A]),
+            user=admin_user,
+        )
+
+
+@pytest.mark.usefixtures("idp_config")
+def test_create_shot_restricted_with_policy_accepted(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    admin_user: AuthenticatedUser,
+):
+    device_service.create(DeviceCreate(name="DEV3"), user=admin_user)
+    shot = shot_service.create(
+        ShotCreate(
+            id="s3",
+            device_name="DEV3",
+            access_level=AccessLevel.RESTRICTED,
+            allowed_idps=[IDP_A],
+        ),
+        user=admin_user,
+    )
+    assert shot.id == "s3"
+    assert shot.allowed_idps == [IDP_A]
+
+
+@pytest.mark.usefixtures("idp_config")
+def test_update_shot_transition_to_public_with_scopes_rejected(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    admin_user: AuthenticatedUser,
+):
+    device_service.create(DeviceCreate(name="DEV4"), user=admin_user)
+    shot = shot_service.create(
+        ShotCreate(
+            id="s4",
+            device_name="DEV4",
+            access_level=AccessLevel.RESTRICTED,
+            required_scopes=["some:scope"],
+        ),
+        user=admin_user,
+    )
+    with pytest.raises(FDSValidationError, match="PUBLIC"):
+        shot_service.update(
+            db_obj=shot,
+            obj_in=ShotUpdate(access_level=AccessLevel.PUBLIC),
+            user=admin_user,
+        )

@@ -25,7 +25,7 @@ def test_access_public_anonymous(access_service):
 
 def test_access_public_authenticated(access_service):
     """Public datasets should be accessible to authenticated users."""
-    user = AuthenticatedUser(id="u1", scopes=[])
+    user = AuthenticatedUser(id="u1", scopes=())
     dataset = Dataset(
         name="pub", level=1, data_url="s3://pub", access_level=AccessLevel.PUBLIC
     )
@@ -33,27 +33,27 @@ def test_access_public_authenticated(access_service):
 
 
 def test_access_required_scope_allowed(access_service):
-    """Dataset with required_scope should be accessible to user having that scope."""
-    user = AuthenticatedUser(id="u1", scopes=["special:access"])
+    """Dataset with required_scopes should be accessible to user having all listed scopes."""
+    user = AuthenticatedUser(id="u1", scopes=("special:access",))
     dataset = Dataset(
         name="scoped",
         level=1,
         data_url="s3://scoped",
         access_level=AccessLevel.RESTRICTED,
-        required_scope="special:access",
+        required_scopes=["special:access"],
     )
     assert access_service._check_download_permission(user, dataset) is True
 
 
 def test_access_required_scope_denied(access_service):
-    """Dataset with required_scope should be DENIED to user lacking that scope."""
-    user = AuthenticatedUser(id="u1", scopes=["wrong:scope"])
+    """Dataset with required_scopes should be DENIED to user lacking any listed scope."""
+    user = AuthenticatedUser(id="u1", scopes=("wrong:scope",))
     dataset = Dataset(
         name="scoped",
         level=1,
         data_url="s3://scoped",
         access_level=AccessLevel.RESTRICTED,
-        required_scope="special:access",
+        required_scopes=["special:access"],
     )
     assert access_service._check_download_permission(user, dataset) is False
 
@@ -61,16 +61,16 @@ def test_access_required_scope_denied(access_service):
 def test_access_required_scope_overrides_fallback(
     access_service, mock_check_shot_operator
 ):
-    """If required_scope is set, fallback context check should NOT act (Specific Overrides General)."""
+    """If required_scopes is set, fallback context check should NOT be called (Specific Overrides General)."""
     # User HAS shot operator (context), but LACKS required_scope.
     # Should FAIL.
-    user = AuthenticatedUser(id="u1", scopes=["shot-operator:mast"])
+    user = AuthenticatedUser(id="u1", scopes=("shot-operator:mast",))
     dataset = Dataset(
         name="override",
         level=1,
         data_url="s3://override",
         access_level=AccessLevel.RESTRICTED,
-        required_scope="special:top-secret",
+        required_scopes=["special:top-secret"],
         device_name="mast",
     )
 
@@ -80,9 +80,28 @@ def test_access_required_scope_overrides_fallback(
     mock_check_shot_operator.assert_not_called()
 
 
+def test_access_empty_required_scopes_auth_only_bypasses_fallback(
+    access_service, mock_check_shot_operator
+):
+    """required_scopes=[] is an explicit auth-only gate and must bypass fallback."""
+    user = AuthenticatedUser(id="u1", scopes=())
+    dataset = Dataset(
+        name="auth-only",
+        level=1,
+        data_url="s3://auth-only",
+        access_level=AccessLevel.RESTRICTED,
+        required_scopes=[],
+        device_name="mast",
+        shot_id="123",
+    )
+
+    assert access_service._check_download_permission(user, dataset) is True
+    mock_check_shot_operator.assert_not_called()
+
+
 def test_access_fallback_shot_context_allowed(access_service, mock_check_shot_operator):
     """If no required_scope, should fallback to Shot Context check."""
-    user = AuthenticatedUser(id="u1", scopes=[])
+    user = AuthenticatedUser(id="u1", scopes=())
     dataset = Dataset(
         name="fallback",
         level=1,
@@ -100,7 +119,7 @@ def test_access_fallback_shot_context_allowed(access_service, mock_check_shot_op
 
 def test_access_fallback_shot_context_denied(access_service, mock_check_shot_operator):
     """If no required_scope, should fallback to Shot Context check (failing)."""
-    user = AuthenticatedUser(id="u1", scopes=[])
+    user = AuthenticatedUser(id="u1", scopes=())
     dataset = Dataset(
         name="fallback",
         level=1,
@@ -127,7 +146,7 @@ def test_fail_fast_malformed_url(access_service, mocker):
 
 
 def test_polyglot_routing_s3(session, access_service, mock_s3_provider):
-    user = AuthenticatedUser(id="user", scopes=[])
+    user = AuthenticatedUser(id="user", scopes=())
 
     # 1. Setup DB with S3 dataset
     ds1 = Dataset(
@@ -163,7 +182,7 @@ def test_polyglot_routing_s3(session, access_service, mock_s3_provider):
 
 
 def test_empty_request_returns_empty(access_service, mock_s3_provider):
-    user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
+    user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
 
     # Act
     result = access_service.generate_session_credentials(user, CredentialRequest())
@@ -205,7 +224,7 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
     # Identify Shot ID
     shot_id = "12345"
     # Create Shot (AccessLevel.PUBLIC for simplicity)
-    shot = Shot(id=shot_id, device_id=device.id, access_level=AccessLevel.PUBLIC)
+    shot = Shot(id=shot_id, device_name=device.name, access_level=AccessLevel.PUBLIC)
     session.add(shot)
     session.commit()
 
@@ -215,7 +234,7 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
             name=f"signal_{i:02d}",
             level=1,
             shot_id=shot_id,
-            device_id=device.id,
+            device_name=device.name,
             data_url=f"s3://fds-data/shots/{shot_id}/signals/signal_{i:02d}",
             access_level=AccessLevel.PUBLIC,
             media_type="application/x-zarr",
@@ -225,14 +244,14 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
     # Create 1 Dataset for a DIFFERENT shot (noise)
     other_shot_id = "999"
     other_shot = Shot(
-        id=other_shot_id, device_id=device.id, access_level=AccessLevel.PUBLIC
+        id=other_shot_id, device_name=device.name, access_level=AccessLevel.PUBLIC
     )
     session.add(other_shot)
     ds_noise = Dataset(
         name="noise",
         level=1,
         shot_id=other_shot_id,
-        device_id=device.id,
+        device_name=device.name,
         data_url="s3://fds-data/shots/999/noise",
         access_level=AccessLevel.PUBLIC,
     )

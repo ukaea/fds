@@ -13,7 +13,7 @@ def test_hybrid_storage_fields(
     session.add(device)
     session.commit()
 
-    shot = Shot(id="1001", device_name=device.name, device_id=device.id)
+    shot = Shot(id="1001", device_name=device.name)
     session.add(shot)
     session.commit()
 

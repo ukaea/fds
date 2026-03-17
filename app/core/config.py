@@ -1,10 +1,18 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class TrustedIdP(BaseModel):
     issuer: str
     allowed_scopes: list[str] = ["*"]
+
+    @field_validator("issuer")
+    @classmethod
+    def normalize_issuer(cls, issuer: str) -> str:
+        normalized = issuer.strip().rstrip("/")
+        if not normalized:
+            raise ValueError("issuer must be non-empty and not whitespace-only")
+        return normalized
 
 
 class Config(BaseSettings):
@@ -27,6 +35,18 @@ class Config(BaseSettings):
     TRUSTED_IDPS: list[TrustedIdP] = Field(
         default=[], validation_alias="FDS_TRUSTED_IDPS"
     )
+
+    @field_validator("TRUSTED_IDPS")
+    @classmethod
+    def validate_trusted_idps(cls, idps: list[TrustedIdP]) -> list[TrustedIdP]:
+        seen: set[str] = set()
+        for idp in idps:
+            if idp.issuer in seen:
+                raise ValueError(
+                    f"TRUSTED_IDPS contains a duplicate issuer: '{idp.issuer}'"
+                )
+            seen.add(idp.issuer)
+        return idps
 
     # Storage Provider Settings
     CREDENTIAL_TOKEN_DURATION: int = Field(

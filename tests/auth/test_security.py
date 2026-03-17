@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.auth.security import (
+    TokenClaims,
     _extract_scopes,
     _filter_scopes,
     _hash_user_id,
@@ -16,7 +17,7 @@ from app.core.config import TrustedIdP, config
 
 
 @pytest.mark.asyncio
-async def test_get_token_claims_success(mock_jwks_client, mock_jwt_decode, mocker):
+async def test_get_token_claims_success(mock_jwks_client, mock_jwt_decode):
     token = "valid_token"
     auth = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
@@ -76,48 +77,47 @@ async def test_get_current_user_parsing(mocker):
     mocker.patch("app.auth.security.config.TRUSTED_IDPS", trusted_idps)
 
     # Case 1: scope is string
-    claims = {"sub": "123", "scope": "A B", "iss": "test-idp"}
+    claims: TokenClaims = {"sub": "123", "scope": "A B", "iss": "test-idp"}
     user = await get_current_user(claims=claims)
 
     expected_id = hashlib.sha256("test-idp|123".encode()).hexdigest()
     assert user.id == expected_id
-    assert user.scopes == ["A", "B"]
+    assert user.scopes == ("A", "B")
 
     # Case 2: use 'scp' instead of 'scope', list format
-    claims_scp = {"sub": "456", "scp": ["C", "D"], "iss": "test-idp"}
+    claims_scp: TokenClaims = {"sub": "456", "scp": ["C", "D"], "iss": "test-idp"}
     user2 = await get_current_user(claims=claims_scp)
 
     expected_id2 = hashlib.sha256("test-idp|456".encode()).hexdigest()
     assert user2.id == expected_id2
-    assert user2.scopes == ["C", "D"]
+    assert user2.scopes == ("C", "D")
 
     # Case 3: No scopes
-    claims_none = {"sub": "789", "iss": "test-idp"}
+    claims_none: TokenClaims = {"sub": "789", "iss": "test-idp"}
     user3 = await get_current_user(claims=claims_none)
 
     expected_id3 = hashlib.sha256("test-idp|789".encode()).hexdigest()
     assert user3.id == expected_id3
-    assert user3.scopes == []
+    assert user3.scopes == ()
 
 
 def test_extract_scopes_string():
-    claims = {"scope": "read write delete"}
+    claims: TokenClaims = {"iss": "https://test-idp.com", "scope": "read write delete"}
     assert _extract_scopes(claims) == ["read", "write", "delete"]
 
 
 def test_extract_scopes_list():
-    claims = {"scope": ["read", "write"]}
+    claims: TokenClaims = {"iss": "https://test-idp.com", "scope": ["read", "write"]}
     assert _extract_scopes(claims) == ["read", "write"]
 
 
 def test_extract_scopes_scp_claim():
-    claims = {"scp": "admin"}
+    claims: TokenClaims = {"iss": "https://test-idp.com", "scp": "admin"}
     assert _extract_scopes(claims) == ["admin"]
 
 
 def test_extract_scopes_empty():
-    assert _extract_scopes({}) == []
-    assert _extract_scopes({"other": "claim"}) == []
+    assert _extract_scopes({"iss": "https://test-idp.com"}) == []
 
 
 def test_hash_user_id():
@@ -139,7 +139,7 @@ def test_filter_scopes_no_trusted_idp(mocker):
 
     scopes = ["read", "write"]
     # Should return empty because issuer is unknown
-    assert _filter_scopes(scopes, "https://unknown.com") == []
+    assert _filter_scopes(scopes, "https://unknown.com") == ()
 
 
 def test_filter_scopes_match(mocker):

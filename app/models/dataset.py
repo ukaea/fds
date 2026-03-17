@@ -1,7 +1,14 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKeyConstraint
-from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
+from sqlmodel import (
+    JSON,
+    Column,
+    Field,
+    ForeignKeyConstraint,
+    Relationship,
+    SQLModel,
+    UniqueConstraint,
+)
 
 from .mixins import DescriptiveMixin, TimestampMixin
 from .policy import AccessLevel
@@ -23,14 +30,30 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
     keywords: str | None = Field(default=None)  # Comma-separated list
     media_type: str | None = Field(default=None)
     format: str | None = Field(default=None)
-    required_scope: str | None = Field(default=None)
+    required_scopes: list[str] | None = Field(
+        default=None,
+        description=(
+            "OAuth scopes required to read this dataset when access is restricted. "
+            "If null, scope requirements inherit from the enclosing shot or device "
+            "policy."
+        ),
+        sa_column=Column(JSON, nullable=True),
+    )
+    allowed_idps: list[str] | None = Field(
+        default=None,
+        description=(
+            "Trusted issuer allowlist for this dataset. If null, allowed issuers "
+            "inherit from the enclosing shot or device policy."
+        ),
+        sa_column=Column(JSON, nullable=True),
+    )
 
 
 class Dataset(DatasetBase, table=True):
     __table_args__ = (
         ForeignKeyConstraint(
-            ["device_id", "shot_id"],
-            ["shot.device_id", "shot.id"],
+            ["device_name", "shot_id"],
+            ["shot.device_name", "shot.id"],
         ),
         UniqueConstraint(
             "device_name", "shot_id", "name", name="idx_dataset_context_name"
@@ -38,12 +61,12 @@ class Dataset(DatasetBase, table=True):
     )
     id: int | None = Field(default=None, primary_key=True)
     shot_id: str | None = Field(default=None, index=True)
-    device_id: int | None = Field(default=None, index=True)
 
     shot: "Shot" = Relationship(
         back_populates="datasets",
         sa_relationship_kwargs={
-            "primaryjoin": "and_(Dataset.shot_id==Shot.id, Dataset.device_id==Shot.device_id)",
+            "primaryjoin": "and_(Dataset.shot_id==Shot.id, Dataset.device_name==Shot.device_name)",
+            "foreign_keys": "[Dataset.shot_id, Dataset.device_name]",
         },
     )
     source_links: list["DatasetSource"] = Relationship(back_populates="dataset")
@@ -76,3 +99,18 @@ class DatasetUpdate(SQLModel):
     keywords: str | None = None
     media_type: str | None = None
     format: str | None = None
+    required_scopes: list[str] | None = Field(
+        default=None,
+        description=(
+            "OAuth scopes required to read this dataset when access is restricted. "
+            "If null, scope requirements inherit from the enclosing shot or device "
+            "policy."
+        ),
+    )
+    allowed_idps: list[str] | None = Field(
+        default=None,
+        description=(
+            "Trusted issuer allowlist for this dataset. If null, allowed issuers "
+            "inherit from the enclosing shot or device policy."
+        ),
+    )

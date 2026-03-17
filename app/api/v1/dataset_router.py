@@ -5,7 +5,6 @@ from app.api.deps import (
     CurrentUserDep,
     DatasetServiceDep,
     DatasetSourceServiceDep,
-    DeviceServiceDep,
 )
 from app.models.dataset import DatasetCreate, DatasetRead, DatasetUpdate
 from app.models.datasetsource import (
@@ -114,7 +113,6 @@ def read_datasets_shot(
     device_name: str,
     shot_id: str,
     dataset_service: DatasetServiceDep,
-    device_service: DeviceServiceDep,
     user: CurrentUserDep,
     offset: int = 0,
     limit: int = 100,
@@ -123,12 +121,8 @@ def read_datasets_shot(
     """
     Retrieve all datasets for a specific shot.
     """
-    device = device_service.get_by_name(device_name)
-    if not device:
-        raise ResourceNotFoundError(f"Device '{device_name}' not found")
-
     datasets = dataset_service.get_datasets_for_shot(
-        shot_id, device.id, user=user, offset=offset, limit=limit
+        shot_id, device_name, user=user, offset=offset, limit=limit
     )
     return dataset_service.to_read_models(
         datasets, include_storage_options=include_storage_options, user=user
@@ -300,7 +294,7 @@ def delete_dataset(
     """
     Delete a dataset by internal ID. Requires appropriate tiered authorization.
     """
-    dataset_service.delete_with_auth(id, user)
+    dataset_service.delete(id, user)
     return None
 
 
@@ -338,8 +332,10 @@ def read_dataset_source_links(
     """
     Retrieve all source links for a specific dataset.
     """
-    return dataset_source_service.get_for_dataset(
-        dataset_id=dataset_id, offset=offset, limit=limit
+    return list(
+        dataset_source_service.get_for_dataset(
+            dataset_id=dataset_id, offset=offset, limit=limit
+        )
     )
 
 
@@ -357,7 +353,5 @@ def delete_dataset_source_link(
     """
     Remove a link between a dataset and a source.
     """
-    dataset_source_service.delete_with_auth(
-        dataset_id=dataset_id, source_id=source_id, user=user
-    )
+    dataset_source_service.delete(dataset_id=dataset_id, source_id=source_id, user=user)
     return None

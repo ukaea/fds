@@ -1,9 +1,13 @@
 from collections.abc import Sequence
 
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
-from app.auth.access_control import get_effective_access_level
+from app.auth.access_control import (
+    get_effective_access_level,
+    get_effective_policy,
+    validate_policy_fields,
+)
 from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
 from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
 from app.models.device import Device
@@ -11,7 +15,6 @@ from app.models.file_access import CredentialRequest
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.services.base_service import BaseService
-from app.services.device_service import DeviceService
 from app.services.exceptions import (
     ConflictError,
     DeviceNotFoundError,
@@ -43,31 +46,40 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
 
     def check_read_access(self, dataset: Dataset, user: AuthenticatedUser) -> None:
         """
-        Calculates effective access level (Inheritance: Dataset > Shot > Device)
-        and enforces read access.
+        Enforces read access for dataset metadata.
+        Uses the full effective policy (inherited access_level, required_scopes,
+        allowed_idps) from the Dataset → Shot → Device hierarchy.
         """
-        effective_level = get_effective_access_level(dataset, self.session)
+        policy = get_effective_policy(dataset, self.session)
 
-        # Public AND Embargoed metadata is accessible to everyone (Discoverable)
+        # PUBLIC and EMBARGOED: metadata is discoverable by everyone
         if (
-            effective_level == AccessLevel.PUBLIC
-            or effective_level == AccessLevel.EMBARGOED
+            policy.access_level == AccessLevel.PUBLIC
+            or policy.access_level == AccessLevel.EMBARGOED
         ):
             return
 
-        # For restricted, you must be authenticated
+        # RESTRICTED: must be authenticated
         if user.is_anonymous:
             raise ForbiddenError("Authentication required for this resource")
 
-        # Enforce specific scope if one is defined
-        if dataset.required_scope:
-            if dataset.required_scope not in user.scopes:
+        # Enforce IdP restriction if specified
+        if policy.allowed_idps is not None:
+            if user.issuer not in policy.allowed_idps:
                 raise ForbiddenError(
-                    f"Not authorized, requires scope: {dataset.required_scope}"
+                    "Access denied: your identity provider is not permitted "
+                    "for this resource"
                 )
+
+        # Enforce required scopes if explicitly set
+        # None → use capability fallback; [] → auth-only gate (already passed above)
+        if policy.required_scopes is not None:
+            for scope in policy.required_scopes:
+                if scope not in user.scopes:
+                    raise ForbiddenError(f"Not authorized, requires scope: {scope}")
             return
 
-        # Fall back to context-based authorization
+        # Capability fallback (no explicit required_scopes at any level)
         if dataset.device_name:
             if dataset.shot_id:
                 check_shot_operator(user, dataset.device_name)
@@ -80,6 +92,13 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         Create a new dataset. Handles global, device, or shot context.
         """
+        # 0. Validate policy invariants before any DB work
+        validate_policy_fields(
+            obj_in.access_level,
+            obj_in.required_scopes,
+            obj_in.allowed_idps,
+        )
+
         # 1. Determine and Validate Context
         if obj_in.shot_id:
             if not obj_in.device_name:
@@ -87,15 +106,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                     "Device name is required when specifying a shot_id"
                 )
 
-            # Resolve device first
-            statement = select(Device).where(Device.name == obj_in.device_name)
-            device = self.session.exec(statement).first()
-            if not device:
-                raise DeviceNotFoundError(f"Device '{obj_in.device_name}' not found")
-
-            # Check Shot Context
+            # Verify the shot exists under this device
             shot_service = ShotService(self.session)
-            shot = shot_service.get(obj_in.shot_id, device.id)
+            shot = shot_service.get((obj_in.device_name, obj_in.shot_id))
             if not shot:
                 raise ResourceNotFoundError(
                     f"Shot {obj_in.shot_id} not found for device {obj_in.device_name}"
@@ -105,9 +118,10 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             check_device_admin(user, obj_in.device_name)
 
         elif obj_in.device_name:
-            device = DeviceService(self.session).get_by_name(obj_in.device_name)
-            if not device:
-                raise ResourceNotFoundError(f"Device {obj_in.device_name} not found")
+            # Verify device exists
+            stmt = select(Device).where(Device.name == obj_in.device_name)
+            if not self.session.exec(stmt).first():
+                raise DeviceNotFoundError(f"Device '{obj_in.device_name}' not found")
 
             # Auth: Device Admin
             check_device_admin(user, obj_in.device_name)
@@ -125,19 +139,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         if existing:
             raise ConflictError(f"Dataset {obj_in.name} already exists in this context")
 
-        # 3. Create DB Object
+        # 3. Create DB Object — device_name flows through from obj_in directly
         db_obj = Dataset.model_validate(obj_in)
-
-        # Populate derived fields
-        if obj_in.shot_id:
-            statement = select(Device).where(Device.name == obj_in.device_name)
-            device = self.session.exec(statement).first()
-            db_obj.device_id = device.id
-
-        elif obj_in.device_name:
-            statement = select(Device).where(Device.name == obj_in.device_name)
-            device = self.session.exec(statement).first()
-            db_obj.device_id = device.id
 
         self.session.add(db_obj)
         try:
@@ -168,9 +171,23 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         if obj_in.shot_id and obj_in.shot_id != db_obj.shot_id:
             raise ForbiddenError("Cannot move a dataset between shots")
 
-        return super().update(db_obj=db_obj, obj_in=obj_in)
+        # Validate updated policy fields against the resulting effective state.
+        # Use incoming value if provided, else fall back to the stored value.
+        update_data = obj_in.model_dump(exclude_unset=True)
+        effective_access_level = update_data.get("access_level", db_obj.access_level)
+        effective_required_scopes = update_data.get(
+            "required_scopes", db_obj.required_scopes
+        )
+        effective_allowed_idps = update_data.get("allowed_idps", db_obj.allowed_idps)
+        validate_policy_fields(
+            effective_access_level,
+            effective_required_scopes,
+            effective_allowed_idps,
+        )
 
-    def delete_with_auth(self, id: int, user: AuthenticatedUser) -> bool:
+        return self.update_unchecked(db_obj=db_obj, obj_in=obj_in)
+
+    def delete(self, id: int, user: AuthenticatedUser) -> bool:
         """
         Delete a dataset with authorization.
         """
@@ -183,7 +200,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         else:
             check_is_admin(user)
 
-        return self.delete(id)
+        return self.delete_unchecked(id)
 
     def get_by_name_in_context(
         self,
@@ -217,7 +234,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         statement = (
             select(Dataset)
-            .where(Dataset.device_name == device_name, Dataset.shot_id.is_(None))
+            .where(Dataset.device_name == device_name, col(Dataset.shot_id).is_(None))
             .offset(offset)
             .limit(limit)
         )
@@ -227,17 +244,17 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     def get_datasets_for_shot(
         self,
         shot_id: str,
-        device_id: int,
+        device_name: str,
         user: AuthenticatedUser = ANONYMOUS_USER,
         offset: int = 0,
         limit: int = 100,
     ) -> Sequence[Dataset]:
         """
-        Get all datasets for a specific shot (scoped by device).
+        Get all datasets for a specific shot (scoped by device name).
         """
         statement = (
             select(Dataset)
-            .where(Dataset.shot_id == shot_id, Dataset.device_id == device_id)
+            .where(Dataset.shot_id == shot_id, Dataset.device_name == device_name)
             .offset(offset)
             .limit(limit)
         )
