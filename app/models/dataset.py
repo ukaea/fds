@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlmodel import (
     JSON,
@@ -80,7 +80,7 @@ class DatasetRead(DatasetBase):
     id: int
     shot_id: str | None = None
     effective_access_level: AccessLevel | None = None
-    storage_options: dict[str, str | dict] | None = None
+    storage_options: dict[str, Any] | None = None
 
 
 class DatasetUpdate(SQLModel):

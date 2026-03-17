@@ -1,5 +1,6 @@
 import logging
 from collections import defaultdict
+from typing import Any
 from urllib.parse import urlparse
 
 from sqlmodel import Session, col, select
@@ -74,9 +75,9 @@ class FileAccessService:
         urls: list[str],
         session_name: str,
         start_index: int,
-    ) -> tuple[list[dict], dict[str, int]]:
-        tokens = []
-        resource_map = {}
+    ) -> tuple[list[dict[str, Any]], dict[str, int]]:
+        tokens: list[dict[str, Any]] = []
+        resource_map: dict[str, int] = {}
         try:
             provider = get_provider_for_protocol(protocol)
         except ValueError:
