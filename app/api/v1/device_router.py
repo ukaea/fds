@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUserDep, DeviceServiceDep, SourceServiceDep
 from app.models.device import DeviceCreate, DeviceRead, DeviceUpdate
-from app.models.source import Source, SourceCreate, SourceRead
+from app.models.source import SourceCreate, SourceRead
 from app.services.jsonld import map_device_to_dcat
 
 router = APIRouter()
@@ -107,13 +107,14 @@ def create_source_for_device(
     source_in: SourceCreate,
     source_service: SourceServiceDep,
     user: CurrentUserDep,
-) -> Source:
+) -> SourceRead:
     """
     Create a new source linked to a specific device. Requires global admin.
     """
     # Force the device_name to match the path
     source_in.device_name = device_name
-    return source_service.create(source_in, user)
+    source = source_service.create(source_in, user)
+    return source_service.to_read_model(source)
 
 
 @router.get(
@@ -133,4 +134,4 @@ def read_sources_for_device(
     sources = source_service.get_for_device(
         device_name=device_name, offset=offset, limit=limit
     )
-    return [SourceRead.model_validate(source) for source in sources]
+    return source_service.to_read_models(sources)

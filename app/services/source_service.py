@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 
 from app.auth.permissions import check_is_admin
 from app.models.identity import AuthenticatedUser
-from app.models.source import Source, SourceCreate, SourceUpdate
+from app.models.source import Source, SourceCreate, SourceRead, SourceUpdate
 from app.services.base_service import BaseService
 from app.services.device_service import DeviceService
 from app.services.exceptions import ConflictError, ResourceNotFoundError
@@ -14,6 +14,14 @@ from app.services.exceptions import ConflictError, ResourceNotFoundError
 class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
     def __init__(self, session: Session):
         super().__init__(model=Source, session=session)
+
+    def to_read_model(self, source: Source) -> SourceRead:
+        """Convert a Source ORM object to a SourceRead DTO."""
+        return SourceRead.model_validate(source)
+
+    def to_read_models(self, sources: Sequence[Source]) -> list[SourceRead]:
+        """Batch convert Source ORM objects to SourceRead DTOs."""
+        return [self.to_read_model(source) for source in sources]
 
     def create(self, obj_in: SourceCreate, user: AuthenticatedUser) -> Source:
         """
