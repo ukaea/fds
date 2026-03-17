@@ -90,6 +90,7 @@ def test_update_shot_nested_device_change(
 
     # Verify it did NOT move
     updated_shot = shot_service.get(("MAST", shot.id))
+    assert updated_shot is not None
     assert updated_shot.device_name == "MAST"
 
 
@@ -100,7 +101,7 @@ def test_update_shot_nested_mismatch_404(
 ):
     device_service = DeviceService(session)
     shot_service = ShotService(session)
-    admin_user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
+    admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
 
     device_service.create(DeviceCreate(name="MAST", type="Tokamak"), user=admin_user)
     jet = device_service.create(
@@ -127,7 +128,7 @@ def test_delete_shot(
 ):
     device_service = DeviceService(session)
     shot_service = ShotService(session)
-    admin_user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
+    admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
 
     mast = device_service.create(
         DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
@@ -144,7 +145,34 @@ def test_delete_shot(
     assert response.status_code == 204
 
     # Verify it's deleted
-    assert shot_service.get((mast.id, shot.id)) is None
+    assert shot_service.get((mast.name, shot.id)) is None
+
+
+def test_delete_shot_unauthorized(
+    test_client: TestClient,
+    session: Session,
+    admin_user_token: dict,
+    jet_admin_user_token: dict,
+):
+    device_service = DeviceService(session)
+    shot_service = ShotService(session)
+    admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+
+    mast = device_service.create(
+        DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
+    )
+    shot = shot_service.create(
+        ShotCreate(id="shot-protected", device_name="MAST"), user=admin_user
+    )
+    session.commit()
+
+    response = test_client.delete(
+        f"/api/v1/devices/{mast.name}/shots/{shot.id}",
+        headers=jet_admin_user_token,
+    )
+    assert response.status_code == 403
+
+    assert shot_service.get((mast.name, shot.id)) is not None
 
 
 def test_read_shots_include_device(

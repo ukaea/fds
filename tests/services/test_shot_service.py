@@ -140,6 +140,23 @@ def test_delete_shot(
     assert db_shot is None
 
 
+def test_delete_shot_unauthorized(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    mast_admin_user: AuthenticatedUser,
+    admin_user: AuthenticatedUser,
+):
+    device_service.create(DeviceCreate(name="JET", type="Test"), user=admin_user)
+
+    shot_to_delete = shot_service.create(
+        ShotCreate(id="shot-302", device_name="JET"), admin_user
+    )
+    assert shot_to_delete is not None
+
+    with pytest.raises(ForbiddenError):
+        shot_service.delete(shot_to_delete.id, mast_admin_user, device_name="JET")
+
+
 @pytest.mark.usefixtures("idp_config")
 def test_create_shot_public_with_required_scopes_rejected(
     device_service: DeviceService,

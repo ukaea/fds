@@ -1,15 +1,20 @@
+from datetime import datetime
+
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.auth.security import AuthenticatedUser
+from app.models.dataset import Dataset, DatasetCreate
 from app.models.device import DeviceCreate
+from app.models.file_access import S3Credentials
 from app.models.shot import ShotCreate
+from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
 
 # Dummy users for setup
-admin_user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
-mast_admin = AuthenticatedUser(id="mast", scopes=["mast_admin"])
+admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+mast_admin = AuthenticatedUser(id="mast", scopes=("mast_admin",))
 
 
 def test_create_global_dataset(test_client: TestClient, admin_user_token: dict):
@@ -175,8 +180,6 @@ def test_read_global_dataset_by_name(test_client: TestClient, admin_user_token: 
 def test_update_dataset(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
-    from app.models.dataset import Dataset
-
     # Create global via API
     test_client.post(
         "/api/v1/datasets/",
@@ -196,18 +199,61 @@ def test_update_dataset(
     assert response.json()["level"] == 5
 
 
+def test_delete_dataset(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    test_client.post(
+        "/api/v1/datasets/",
+        headers=admin_user_token,
+        json={"name": "to_delete", "level": 1, "data_url": "url"},
+    )
+    dataset = session.exec(select(Dataset).where(Dataset.name == "to_delete")).one()
+
+    response = test_client.delete(
+        f"/api/v1/datasets/{dataset.id}",
+        headers=admin_user_token,
+    )
+    assert response.status_code == 204
+
+    response = test_client.get("/api/v1/datasets/to_delete")
+    assert response.status_code == 404
+
+
+def test_delete_dataset_unauthorized(
+    test_client: TestClient,
+    session: Session,
+    jet_admin_user_token: dict,
+):
+    DeviceService(session).create(
+        DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
+    )
+    DatasetService(session).create(
+        DatasetCreate(
+            name="restricted_delete",
+            level=1,
+            data_url="url",
+            device_name="MAST",
+        ),
+        user=admin_user,
+    )
+    dataset = session.exec(
+        select(Dataset).where(Dataset.name == "restricted_delete")
+    ).one()
+
+    response = test_client.delete(
+        f"/api/v1/datasets/{dataset.id}",
+        headers=jet_admin_user_token,
+    )
+    assert response.status_code == 403
+
+    assert session.get(Dataset, dataset.id) is not None
+
+
 def test_get_datasets_with_storage_options(
     test_client: TestClient, session: Session, admin_user_token: dict, mocker
 ):
     # Register device, shot, and dataset
-    from app.auth.security import AuthenticatedUser
-    from app.models.device import DeviceCreate
-    from app.models.file_access import S3Credentials
-    from app.models.shot import ShotCreate
-    from app.services.device_service import DeviceService
-    from app.services.shot_service import ShotService
-
-    admin = AuthenticatedUser(id="admin", scopes=["fds-admin"])
+    admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
     DeviceService(session).create(DeviceCreate(name="OPTS", type="Tokamak"), user=admin)
     ShotService(session).create(ShotCreate(id="1", device_name="OPTS"), user=admin)
     session.commit()
@@ -225,8 +271,7 @@ def test_get_datasets_with_storage_options(
             access_key_id="r_key",
             secret_access_key="r_sec",
             session_token="r_tok",
-            expiration="2026-01-01T00:00:00Z",
-            provider="s3",
+            expiration=datetime.fromisoformat("2026-01-01T00:00:00+00:00"),
         )
     }
     mocker.patch(
