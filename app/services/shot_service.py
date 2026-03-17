@@ -1,17 +1,19 @@
-from typing import TYPE_CHECKING, Sequence
-
-if TYPE_CHECKING:
-    from app.models.shot import ShotRead
+from collections.abc import Sequence
+from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.auth.access_control import get_effective_access_level
+from app.auth.access_control import (
+    get_effective_access_level,
+    get_effective_policy,
+    validate_policy_fields,
+)
 from app.auth.permissions import check_device_admin, check_shot_operator
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
-from app.models.shot import Shot, ShotCreate, ShotUpdate
+from app.models.shot import Shot, ShotCreate, ShotRead, ShotUpdate
 from app.services.base_service import BaseService
 from app.services.exceptions import (
     ConflictError,
@@ -27,21 +29,35 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
 
     def check_read_access(self, shot: Shot, user: AuthenticatedUser) -> None:
         """
-        Enforces read access rules:
-        - PUBLIC: Allow anonymous.
-        - RESTRICTED: Allow authenticated.
-        - EMBARGOED: Allow authenticated (for now, usually requires specific scope).
+        Enforces read access for shot metadata.
+        Uses the full effective policy from the Shot → Device hierarchy.
+
+        - PUBLIC: accessible to everyone.
+        - RESTRICTED / EMBARGOED: must be authenticated; then IdP and scope gates if set.
+          No capability check for metadata reads — that belongs to credential vending.
         """
-        level = get_effective_access_level(shot, self.session)
-        if level == AccessLevel.PUBLIC:
+        policy = get_effective_policy(shot, self.session)
+
+        if policy.access_level == AccessLevel.PUBLIC:
             return
 
         if user.is_anonymous:
             raise ForbiddenError("Authentication required for this resource")
 
-        # Fall back to context-based authorization
-        if shot.device:
-            check_shot_operator(user, shot.device.name)
+        # Enforce IdP restriction if specified
+        if policy.allowed_idps is not None:
+            if user.issuer not in policy.allowed_idps:
+                raise ForbiddenError(
+                    "Access denied: your identity provider is not permitted "
+                    "for this resource"
+                )
+
+        # Enforce required scopes if explicitly set
+        # None → auth gate only (already passed); [] → same; [...] → all must be present
+        if policy.required_scopes is not None:
+            for scope in policy.required_scopes:
+                if scope not in user.scopes:
+                    raise ForbiddenError(f"Not authorized, requires scope: {scope}")
 
     def create(
         self,
@@ -64,17 +80,23 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         if not target_device_name:
             raise FDSValidationError("Device name is required for shot creation.")
 
+        # Validate policy fields before any DB work
+        validate_policy_fields(
+            obj_in.access_level,
+            obj_in.required_scopes,
+            obj_in.allowed_idps,
+        )
+
         # Permission check
         # Allow Shot Operators to create shots
         check_shot_operator(user, target_device_name)
 
-        # Resolve device name to ID
+        # Verify the device exists before creating the shot
         statement = select(Device).where(Device.name == target_device_name)
-        device = self.session.exec(statement).first()
-        if not device:
+        if not self.session.exec(statement).first():
             raise DeviceNotFoundError(f"Device '{target_device_name}' not found")
 
-        db_obj = Shot.model_validate(obj_in, update={"device_id": device.id})
+        db_obj = Shot.model_validate(obj_in, update={"device_name": target_device_name})
 
         self.session.add(db_obj)
         try:
@@ -82,26 +104,25 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         except IntegrityError as e:
             self.session.rollback()
             raise ConflictError(
-                f"Shot '{obj_in.id}' already exists for device '{device.name}'"
+                f"Shot '{obj_in.id}' already exists for device '{target_device_name}'"
             ) from e
         self.session.refresh(db_obj)
         return db_obj
 
-    def get(self, shot_id: str, device_id: int) -> Shot | None:
+    def get(self, id: Any) -> Shot | None:
         """
-        Get a shot by its composite primary key (shot_id, device_id).
+        Get a shot by its composite primary key as (device_name, shot_id).
         """
-        statement = select(Shot).where(Shot.id == shot_id, Shot.device_id == device_id)
-        return self.session.exec(statement).first()
+        if not isinstance(id, tuple) or len(id) != 2:
+            raise FDSValidationError(
+                "ShotService.get requires a composite key tuple (device_name, shot_id)."
+            )
+        device_name, shot_id = id
 
-    def get_multi_by_device(
-        self, device_id: int, offset: int = 0, limit: int = 100
-    ) -> Sequence[Shot]:
-        statement = (
-            select(Shot).where(Shot.device_id == device_id).offset(offset).limit(limit)
+        statement = select(Shot).where(
+            Shot.id == shot_id, Shot.device_name == device_name
         )
-        result = self.session.exec(statement)
-        return result.all()
+        return self.session.exec(statement).first()
 
     def get_multi_by_device_name(
         self,
@@ -111,19 +132,16 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         limit: int = 100,
     ) -> Sequence[Shot]:
         """
-        Retrieve all shots for a given device by its unique name.
+        Retrieve all shots for a given device by its name.
         """
-        # We join with device to filter by name
         statement = (
             select(Shot)
-            .join(Device)
-            .where(Device.name == device_name)
+            .where(Shot.device_name == device_name)
             .offset(offset)
             .limit(limit)
         )
         result = self.session.exec(statement).all()
 
-        # Filter permissions
         accessible_shots = []
         for s in result:
             try:
@@ -145,10 +163,14 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         Update a shot. Enforces ownership and permission checks.
         """
         # Permission check for the CURRENT device
-        if db_obj.device:
-            check_shot_operator(user, db_obj.device.name)
+        check_shot_operator(user, db_obj.device_name)
 
         update_data = obj_in.model_dump(exclude_unset=True)
+        validate_policy_fields(
+            update_data.get("access_level", db_obj.access_level),
+            update_data.get("required_scopes", db_obj.required_scopes),
+            update_data.get("allowed_idps", db_obj.allowed_idps),
+        )
 
         # Handle device change - this is complex with composite PKs, effectively a move/copy
         # For now, we disallow changing device_name/device_id via update as it changes the PK
@@ -163,22 +185,16 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         self.session.refresh(db_obj)
         return db_obj
 
-    def delete_with_auth(
+    def delete(
         self,
         shot_id: str,
         user: AuthenticatedUser,
         device_name: str,
     ) -> bool:
         """
-        Delete a shot with authentication. Device name is now required to identify the shot.
+        Delete a shot with authentication.
         """
-        # Resolve device name to ID
-        statement = select(Device).where(Device.name == device_name)
-        device = self.session.exec(statement).first()
-        if not device:
-            return False  # or raise DeviceNotFoundError
-
-        shot = self.get(shot_id, device.id)
+        shot = self.get((device_name, shot_id))
         if not shot:
             return False
 
@@ -193,8 +209,6 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         Converts a Shot ORM object to a ShotRead DTO, optionally including the full device object.
         Centralizes the presentation logic for shots.
         """
-        from app.models.shot import ShotRead
-
         read_model = ShotRead.model_validate(shot)
         read_model.effective_access_level = get_effective_access_level(
             shot, self.session

@@ -7,6 +7,7 @@ from app.auth.permissions import check_is_admin
 from app.models.identity import AuthenticatedUser
 from app.models.source import Source, SourceCreate, SourceUpdate
 from app.services.base_service import BaseService
+from app.services.device_service import DeviceService
 from app.services.exceptions import ConflictError, ResourceNotFoundError
 
 
@@ -22,8 +23,6 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
 
         device_id = None
         if obj_in.device_name:
-            from app.services.device_service import DeviceService
-
             device = DeviceService(self.session).get_by_name(obj_in.device_name)
             if not device:
                 raise ResourceNotFoundError(f"Device '{obj_in.device_name}' not found")
@@ -50,9 +49,9 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
         Update a source.
         """
         check_is_admin(user)
-        return super().update(db_obj=db_obj, obj_in=obj_in)
+        return self.update_unchecked(db_obj=db_obj, obj_in=obj_in)
 
-    def delete_with_auth(self, id: int, user: AuthenticatedUser) -> bool:
+    def delete(self, id: int, user: AuthenticatedUser) -> bool:
         """
         Delete a source with authorization.
         """
@@ -60,7 +59,7 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
         db_obj = self.get(id)
         if not db_obj:
             raise ResourceNotFoundError(f"Source {id} not found")
-        return self.delete(id)
+        return self.delete_unchecked(id)
 
     def get_by_name(self, name: str) -> Source | None:
         """
@@ -70,14 +69,17 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
         return self.session.exec(statement).first()
 
     def get_for_device(
-        self, device_id: int, offset: int = 0, limit: int = 100
+        self, device_name: str, offset: int = 0, limit: int = 100
     ) -> Sequence[Source]:
         """
-        Retrieve sources associated with a specific device.
+        Retrieve sources associated with a specific device by name.
         """
+        device = DeviceService(self.session).get_by_name(device_name)
+        if not device:
+            raise ResourceNotFoundError(f"Device '{device_name}' not found")
         statement = (
             select(Source)
-            .where(Source.device_id == device_id)
+            .where(Source.device_id == device.id)
             .offset(offset)
             .limit(limit)
         )

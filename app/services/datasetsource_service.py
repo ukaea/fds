@@ -7,6 +7,7 @@ from app.models.datasetsource import DatasetSource, DatasetSourceLink
 from app.models.identity import AuthenticatedUser
 from app.services.dataset_service import DatasetService
 from app.services.exceptions import ResourceNotFoundError
+from app.services.source_service import SourceService
 
 
 class DatasetSourceService:
@@ -42,8 +43,6 @@ class DatasetSourceService:
             check_is_admin(user)
 
         # 2. Validate Source
-        from app.services.source_service import SourceService
-
         if not SourceService(self.session).get(obj_in.source_id):
             raise ResourceNotFoundError(f"Source {obj_in.source_id} not found")
 
@@ -54,7 +53,7 @@ class DatasetSourceService:
         self.session.refresh(db_obj)
         return db_obj
 
-    def delete_with_auth(
+    def delete(
         self, *, dataset_id: int, source_id: int, user: AuthenticatedUser
     ) -> bool:
         """

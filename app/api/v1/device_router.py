@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUserDep, DeviceServiceDep, SourceServiceDep
-from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
+from app.models.device import DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.source import Source, SourceCreate, SourceRead
 from app.services.jsonld import map_device_to_dcat
 
@@ -15,7 +15,7 @@ def create_device(
     device_service: DeviceServiceDep,
     device_in: DeviceCreate,
     user: CurrentUserDep,
-) -> Device:
+) -> DeviceRead:
     """
     Create a new device.
     """
@@ -68,7 +68,7 @@ def update_device(
     device_name: str,
     device_in: DeviceUpdate,
     user: CurrentUserDep,
-) -> Device:
+) -> DeviceRead:
     """
     Update a device by name.
     """
@@ -90,11 +90,9 @@ def delete_device(
     """
     Delete a device by name.
     """
-    current_device = device_service.get_by_name(device_name)
-    if not current_device:
+    deleted = device_service.delete(device_name, user)
+    if not deleted:
         raise HTTPException(status_code=404, detail="Device not found")
-
-    device_service.delete(current_device.id, user)
     return None
 
 
@@ -126,19 +124,13 @@ def read_sources_for_device(
     *,
     device_name: str,
     source_service: SourceServiceDep,
-    device_service: DeviceServiceDep,
     offset: int = 0,
     limit: int = 100,
 ) -> list[SourceRead]:
     """
     Retrieve sources associated with a specific device.
     """
-    device = device_service.get_by_name(device_name)
-    if not device:
-        from app.services.exceptions import ResourceNotFoundError
-
-        raise ResourceNotFoundError(f"Device '{device_name}' not found")
-
-    return source_service.get_for_device(
-        device_id=device.id, offset=offset, limit=limit
+    sources = source_service.get_for_device(
+        device_name=device_name, offset=offset, limit=limit
     )
+    return [SourceRead.model_validate(source) for source in sources]

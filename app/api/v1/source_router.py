@@ -4,6 +4,7 @@ from fastapi import APIRouter, status
 
 from app.api.deps import CurrentUserDep, SourceServiceDep
 from app.models.source import Source, SourceCreate, SourceRead, SourceUpdate
+from app.services.exceptions import ResourceNotFoundError
 
 router = APIRouter()
 
@@ -40,8 +41,6 @@ def read_source_by_name(name: str, source_service: SourceServiceDep) -> Source:
     """
     source = source_service.get_by_name(name)
     if not source:
-        from app.services.exceptions import ResourceNotFoundError
-
         raise ResourceNotFoundError(f"Source {name} not found")
     return source
 
@@ -59,11 +58,6 @@ def update_source(
     """
     db_source = source_service.get(id)
     if not db_source:
-        from app.services.exceptions import ResourceNotFoundError
-
         raise ResourceNotFoundError(f"Source {id} not found")
     source = source_service.update(db_obj=db_source, obj_in=source_in, user=user)
     return source
-
-    source_service.delete_with_auth(id, user)
-    return None

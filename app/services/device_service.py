@@ -1,7 +1,7 @@
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.auth.access_control import get_effective_access_level
+from app.auth.access_control import get_effective_access_level, validate_policy_fields
 from app.auth.permissions import check_is_admin
 from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.identity import AuthenticatedUser
@@ -21,9 +21,14 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         """
         Create a new device. Requires global admin privileges.
         """
+        validate_policy_fields(
+            obj_in.access_level,
+            obj_in.required_scopes,
+            obj_in.allowed_idps,
+        )
         check_is_admin(user)
         try:
-            return super().create(obj_in)
+            return self.create_unchecked(obj_in)
         except IntegrityError as e:
             self.session.rollback()
             raise ConflictError(f"Device '{obj_in.name}' already exists") from e
@@ -35,17 +40,23 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         Update a device. Requires global admin privileges.
         """
         check_is_admin(user)
-        return super().update(db_obj=db_obj, obj_in=obj_in)
+        update_data = obj_in.model_dump(exclude_unset=True)
+        validate_policy_fields(
+            update_data.get("access_level", db_obj.access_level),
+            update_data.get("required_scopes", db_obj.required_scopes),
+            update_data.get("allowed_idps", db_obj.allowed_idps),
+        )
+        return self.update_unchecked(db_obj=db_obj, obj_in=obj_in)
 
-    def delete(self, device_id: int, user: AuthenticatedUser) -> bool:
+    def delete(self, device_name: str, user: AuthenticatedUser) -> bool:
         """
-        Delete a device. Requires global admin privileges.
+        Delete a device by name. Requires global admin privileges.
         """
         check_is_admin(user)
-        db_obj = self.get(device_id)
-        if not db_obj:
+        device = self.get_by_name(device_name)
+        if not device:
             return False
-        self.session.delete(db_obj)
+        self.session.delete(device)
         self.session.commit()
         return True
 

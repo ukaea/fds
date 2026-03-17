@@ -4,6 +4,7 @@ from sqlmodel import Session
 from app.auth.security import AuthenticatedUser
 from app.models.dataset import DatasetCreate
 from app.models.device import Device
+from app.models.policy import AccessLevel
 from app.models.shot import Shot
 from app.models.source import SourceCreate
 from app.services.dataset_service import DatasetService
@@ -21,7 +22,7 @@ def test_jsonld_provenance(
     session.add(device)
     session.commit()
 
-    shot = Shot(id="100", device_id=device.id)
+    shot = Shot(id="100", device_name=device.name)
     session.add(shot)
     session.commit()
 
@@ -41,7 +42,7 @@ def test_jsonld_provenance(
             device_name=device.name,
             shot_id=shot.id,
             data_url="s3://test/prov",
-            access_level="public",
+            access_level=AccessLevel("public"),
         ),
         user=admin_user,
     )

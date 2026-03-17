@@ -36,12 +36,12 @@ def client_fixture(session: Session) -> Generator[TestClient, None, None]:
 
 @pytest.fixture(name="admin_user")
 def admin_user_fixture() -> AuthenticatedUser:
-    return AuthenticatedUser(id="admin", scopes=["fds-admin"])
+    return AuthenticatedUser(id="admin", scopes=("fds-admin",))
 
 
 @pytest.fixture(name="mast_admin_user")
 def mast_admin_user_fixture() -> AuthenticatedUser:
-    return AuthenticatedUser(id="mast-admin", scopes=["mast_admin"])
+    return AuthenticatedUser(id="mast-admin", scopes=("mast_admin",))
 
 
 @pytest.fixture
@@ -114,6 +114,29 @@ def mock_config(monkeypatch):
     # This ensures existing tests (which don't care about IdP) pass by default.
     default_test_idp = TrustedIdP(issuer="https://test-idp.com", allowed_scopes=["*"])
     monkeypatch.setattr(config, "TRUSTED_IDPS", [default_test_idp])
+
+
+@pytest.fixture
+def idp_config(monkeypatch):
+    """Configure TRUSTED_IDPS with a single named issuer for policy tests."""
+    monkeypatch.setattr(
+        config,
+        "TRUSTED_IDPS",
+        [TrustedIdP(issuer="https://idp-a.example.com", allowed_scopes=["*"])],
+    )
+
+
+@pytest.fixture
+def two_idp_config(monkeypatch):
+    """Configure TRUSTED_IDPS with two named issuers for policy tests."""
+    monkeypatch.setattr(
+        config,
+        "TRUSTED_IDPS",
+        [
+            TrustedIdP(issuer="https://idp-a.example.com", allowed_scopes=["*"]),
+            TrustedIdP(issuer="https://idp-b.example.com", allowed_scopes=["*"]),
+        ],
+    )
 
 
 @pytest.fixture

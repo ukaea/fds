@@ -4,7 +4,7 @@ import jwt
 import pytest
 from fastapi import HTTPException
 
-from app.auth.security import get_current_user, get_token_claims
+from app.auth.security import TokenClaims, get_current_user, get_token_claims
 from app.core.config import TrustedIdP
 
 # Mock Data
@@ -28,9 +28,8 @@ def setup_trusted_idps(mocker):
 
 
 @pytest.mark.asyncio
-async def test_get_token_claims_valid_idp(
-    setup_trusted_idps, mock_jwks_client, mock_jwt_decode, mocker
-):
+@pytest.mark.usefixtures("setup_trusted_idps")
+async def test_get_token_claims_valid_idp(mock_jwks_client, mock_jwt_decode, mocker):
     """Verify generic token acceptance from a trusted IdP"""
     token_claims = {"iss": IDP_JET, "sub": "user1", "scope": "openid jet:read"}
     mock_jwt_decode.return_value = token_claims
@@ -44,8 +43,9 @@ async def test_get_token_claims_valid_idp(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("setup_trusted_idps")
 async def test_get_token_claims_untrusted_idp(
-    setup_trusted_idps, mock_jwks_client, mock_jwt_decode, mocker
+    mock_jwks_client, mock_jwt_decode, mocker
 ):
     """Verify rejection of untrusted IdP"""
     token_claims = {"iss": IDP_ROGUE, "sub": "hacker", "scope": "fds-admin"}
@@ -55,7 +55,7 @@ async def test_get_token_claims_untrusted_idp(
     # if we mock jwt.decode to just return claims, it WON'T validation the issuer.
     # We must configure the mock to raise InvalidIssuerError if the issuer in token doesn't match expected.
 
-    def side_effect_decode(token, **kwargs):
+    def side_effect_decode(_token, **kwargs):
         # Simulation of pyjwt issuer validation
         allowed_issuers = kwargs.get("issuer", [])
         if isinstance(allowed_issuers, str):
@@ -80,11 +80,16 @@ async def test_get_token_claims_untrusted_idp(
 
 
 @pytest.mark.asyncio
-async def test_scope_filtering_stripped(setup_trusted_idps):
+@pytest.mark.usefixtures("setup_trusted_idps")
+async def test_scope_filtering_stripped():
     """Verify unauthorized scopes are stripped based on IdP"""
     # IDP_JET is only allowed ["jet:*", "openid"]
     # Token has "mast:admin" which should be removed
-    claims = {"iss": IDP_JET, "sub": "user1", "scope": "openid jet:read mast:admin"}
+    claims: TokenClaims = {
+        "iss": IDP_JET,
+        "sub": "user1",
+        "scope": "openid jet:read mast:admin",
+    }
 
     user = await get_current_user(claims=claims)
 
@@ -95,10 +100,11 @@ async def test_scope_filtering_stripped(setup_trusted_idps):
 
 
 @pytest.mark.asyncio
-async def test_scope_filtering_wildcard(setup_trusted_idps):
+@pytest.mark.usefixtures("setup_trusted_idps")
+async def test_scope_filtering_wildcard():
     """Verify wildcard matching"""
     # IDP_JET allowed "jet:*"
-    claims = {
+    claims: TokenClaims = {
         "iss": IDP_JET,
         "sub": "user1",
         "scope": "jet:write jet:read custom:scope",
@@ -111,9 +117,10 @@ async def test_scope_filtering_wildcard(setup_trusted_idps):
 
 
 @pytest.mark.asyncio
-async def test_pii_hashing(setup_trusted_idps):
+@pytest.mark.usefixtures("setup_trusted_idps")
+async def test_pii_hashing():
     """Verify user ID is hashed and namespaced"""
-    claims = {"iss": IDP_JET, "sub": "user_123", "scope": "openid"}
+    claims: TokenClaims = {"iss": IDP_JET, "sub": "user_123", "scope": "openid"}
 
     user = await get_current_user(claims=claims)
 

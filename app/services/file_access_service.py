@@ -2,8 +2,9 @@ import logging
 from collections import defaultdict
 from urllib.parse import urlparse
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
+from app.auth.access_control import get_effective_policy
 from app.auth.permissions import check_shot_operator
 from app.core.storage.providers import get_provider_for_protocol
 from app.models.dataset import Dataset
@@ -143,7 +144,7 @@ class FileAccessService:
             query = query.where(Dataset.device_name == request.device_name)
 
         if request.data_urls:
-            query = query.where(Dataset.data_url.in_(request.data_urls))
+            query = query.where(col(Dataset.data_url).in_(request.data_urls))
 
         datasets = self.session.exec(query).all()
 
@@ -163,43 +164,56 @@ class FileAccessService:
         self, user: AuthenticatedUser, dataset: Dataset
     ) -> bool:
         """
-        Unified policy check for data access.
-        - Public: Always allowed.
-        - Specific Override: If required_scope is set, user must have it.
-        - General Fallback: If no required_scope, fall back to context (Shot/Device).
+        Unified policy check for data access (credential vending).
+
+        Uses the full effective policy resolved from the
+        Dataset → Shot → Device hierarchy (same semantics as metadata reads).
+
+        - PUBLIC:  always open (including anonymous).
+        - EMBARGOED / RESTRICTED:
+            1. Must be authenticated.
+            2. If effective allowed_idps is set, user issuer must be in list.
+            3. If effective required_scopes is explicitly set (including []):
+               all listed scopes must be present; [] means auth-only gate.
+            4. Otherwise fall back to context-based capability check
+               (shot-operator role).
         """
-        # 1. Public is always open
-        if dataset.access_level == AccessLevel.PUBLIC:
+        policy = get_effective_policy(dataset, self.session)
+
+        # 1. PUBLIC is always open
+        if policy.access_level == AccessLevel.PUBLIC:
             return True
 
-        # 2. Specific Override (Data-Driven)
-        if dataset.required_scope:
-            if dataset.required_scope in user.scopes:
-                return True
-            # If a specific scope IS required but user lacks it, we deny access
-            # We do NOT fallback to general checks if a specific lock is present.
+        # 2. Must be authenticated for non-public data
+        if user.is_anonymous:
             return False
 
-        # 3. General Fallback (Implicit Scopes based on Context)
-        # Used for Restricted/Embargoed datasets without a specific required_scope
+        # 3. Enforce IdP restriction if specified
+        if policy.allowed_idps is not None:
+            if user.issuer not in policy.allowed_idps:
+                return False
+
+        # 4. Enforce required scopes if explicitly set at any hierarchy level
+        #    None  → fall through to capability check
+        #    []    → auth-only gate (already satisfied by step 2)
+        #    [..] → all scopes must be present
+        if policy.required_scopes is not None:
+            if len(policy.required_scopes) == 0:
+                return True
+            for scope in policy.required_scopes:
+                if scope not in user.scopes:
+                    return False
+            return True
+
+        # 5. Capability fallback (no explicit required_scopes anywhere in hierarchy)
         try:
-            # Shot Context -> Shot Operator
-            if dataset.shot_id and dataset.device_name:
-                check_shot_operator(user, dataset.device_name)
-                return True
-
-            # Device Context (No Shot) -> Device Admin?
-            # (Assuming device-admin is implied if not a shot, or maybe we just check shot-operator for simplicity)
-            # For now, let's stick to the Shot Operator role for data access as discussed
             if dataset.device_name:
-                # Re-using check_shot_operator as generic "Data Access" role for device
                 check_shot_operator(user, dataset.device_name)
                 return True
-
         except ForbiddenError:
             return False
 
-        # Default Deny
+        # Default deny
         return False
 
     def _get_provider_key(self, protocol: str) -> str:

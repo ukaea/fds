@@ -34,7 +34,7 @@ MOCK_JWKS = {
 
 
 @pytest.fixture
-def jwks_client_instance(mocker):
+def jwks_client_instance():
     client = JwksClient()
     return client
 
@@ -43,7 +43,7 @@ def jwks_client_instance(mocker):
 def mock_httpx(monkeypatch):
     """Mocks httpx.AsyncClient.get for OIDC/JWKS"""
 
-    async def mock_get(_, url, **kwargs):
+    async def mock_get(_, url, **_kwargs):
         url = str(url)
         if url == f"{MOCK_ISSUER}/.well-known/openid-configuration":
             return Response(200, json=MOCK_OIDC_DISCOVERY, request=Request("GET", url))
@@ -55,7 +55,8 @@ def mock_httpx(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_discover_jwks_uri_success(jwks_client_instance, mock_httpx):
+@pytest.mark.usefixtures("mock_httpx")
+async def test_discover_jwks_uri_success(jwks_client_instance):
     uri = await jwks_client_instance._discover_jwks_uri(MOCK_ISSUER)
     assert uri == MOCK_OIDC_DISCOVERY["jwks_uri"]
 
@@ -68,14 +69,16 @@ async def test_discover_jwks_uri_untrusted(jwks_client_instance):
 
 
 @pytest.mark.asyncio
-async def test_get_jwks_success(jwks_client_instance, mock_httpx):
+@pytest.mark.usefixtures("mock_httpx")
+async def test_get_jwks_success(jwks_client_instance):
     jwks = await jwks_client_instance.get_jwks(MOCK_ISSUER)
     assert jwks == MOCK_JWKS
     assert jwks_client_instance.cache[MOCK_ISSUER] == MOCK_JWKS
 
 
 @pytest.mark.asyncio
-async def test_get_signing_key_success(jwks_client_instance, mock_httpx, monkeypatch):
+@pytest.mark.usefixtures("mock_httpx")
+async def test_get_signing_key_success(jwks_client_instance, monkeypatch):
     token = "header.payload.sig"
 
     # Mock JWT parts to avoid crypto
@@ -124,7 +127,7 @@ async def test_get_signing_key_rotation(jwks_client_instance, mocker):
 
     # We mock the client.get method directly on the instance
     # Use side_effect for conditional responses based on URL (simple fake)
-    async def mock_get_side_effect(url, **kwargs):
+    async def mock_get_side_effect(url, **_kwargs):
         url = str(url)
         request = httpx.Request("GET", url)
         if "openid-configuration" in url:
@@ -148,7 +151,7 @@ async def test_get_signing_key_rotation(jwks_client_instance, mocker):
 async def test_get_jwks_upstream_error(jwks_client_instance, monkeypatch):
     """Test that a 500 from the IdP raises a 502 Bad Gateway"""
 
-    async def mock_get(*args, **kwargs):
+    async def mock_get(*_args, **_kwargs):
         return httpx.Response(500, request=httpx.Request("GET", "url"))
 
     monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)
@@ -164,7 +167,7 @@ async def test_get_jwks_upstream_error(jwks_client_instance, monkeypatch):
 async def test_get_jwks_network_error(jwks_client_instance, monkeypatch):
     """Test that a network error raises a 503 Service Unavailable"""
 
-    async def mock_get(*args, **kwargs):
+    async def mock_get(*_args, **_kwargs):
         raise httpx.RequestError("Network failure", request=httpx.Request("GET", "url"))
 
     monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)

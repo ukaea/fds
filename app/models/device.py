@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
 from .mixins import DescriptiveMixin, TimestampMixin
 from .policy import AccessLevel
@@ -16,11 +16,35 @@ class DeviceBase(DescriptiveMixin, TimestampMixin, SQLModel):
     began_operations: str | None = None
     status: str | None = Field(default=None, index=True)
     access_level: AccessLevel | None = Field(default=None, index=True)
+    required_scopes: list[str] | None = Field(
+        default=None,
+        description=(
+            "OAuth scopes required to read resources under this device when access "
+            "is restricted. If null, scope requirements are inherited by narrower "
+            "contexts only when they do not define their own policy."
+        ),
+        sa_column=Column(JSON, nullable=True),
+    )
+    allowed_idps: list[str] | None = Field(
+        default=None,
+        description=(
+            "Trusted issuer allowlist for resources under this device. If null, any "
+            "globally trusted issuer is permitted unless a narrower context defines "
+            "its own issuer policy."
+        ),
+        sa_column=Column(JSON, nullable=True),
+    )
 
 
 class Device(DeviceBase, table=True):
     id: int | None = Field(default=None, primary_key=True, index=True)
-    shots: list["Shot"] = Relationship(back_populates="device")
+    shots: list["Shot"] = Relationship(
+        back_populates="device",
+        sa_relationship_kwargs={
+            "primaryjoin": "Device.name==Shot.device_name",
+            "foreign_keys": "[Shot.device_name]",
+        },
+    )
     sources: list["Source"] = Relationship(back_populates="device")
 
 
@@ -42,3 +66,19 @@ class DeviceUpdate(SQLModel):
     title: str | None = None
     description: str | None = None
     publisher: str | None = None
+    required_scopes: list[str] | None = Field(
+        default=None,
+        description=(
+            "OAuth scopes required to read resources under this device when access "
+            "is restricted. If null, scope requirements are inherited by narrower "
+            "contexts only when they do not define their own policy."
+        ),
+    )
+    allowed_idps: list[str] | None = Field(
+        default=None,
+        description=(
+            "Trusted issuer allowlist for resources under this device. If null, any "
+            "globally trusted issuer is permitted unless a narrower context defines "
+            "its own issuer policy."
+        ),
+    )

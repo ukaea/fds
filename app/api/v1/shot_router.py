@@ -1,12 +1,12 @@
 from fastapi import APIRouter, status
 
-from app.api.deps import CurrentUserDep, DeviceServiceDep, ShotServiceDep
+from app.api.deps import CurrentUserDep, ShotServiceDep
 from app.models.shot import (
     ShotCreate,
     ShotRead,
     ShotUpdate,
 )
-from app.services.exceptions import DeviceNotFoundError, ResourceNotFoundError
+from app.services.exceptions import ResourceNotFoundError
 
 router = APIRouter()
 
@@ -64,18 +64,13 @@ def read_shot(
     *,
     device_name: str,
     shot_service: ShotServiceDep,
-    device_service: DeviceServiceDep,
     shot_id: str,
     user: CurrentUserDep,
 ) -> ShotRead:
     """
     Retrieve a shot specifically for a device context.
     """
-    device = device_service.get_by_name(device_name)
-    if not device:
-        raise DeviceNotFoundError(f"Device '{device_name}' not found")
-
-    shot = shot_service.get(shot_id, device.id)
+    shot = shot_service.get((device_name, shot_id))
     if not shot:
         raise ResourceNotFoundError(
             f"Shot '{shot_id}' not found for device '{device_name}'"
@@ -96,17 +91,12 @@ def update_shot(
     shot_id: str,
     shot_in: ShotUpdate,
     shot_service: ShotServiceDep,
-    device_service: DeviceServiceDep,
     user: CurrentUserDep,
 ) -> ShotRead:
     """
     Update a shot nested under a device.
     """
-    device = device_service.get_by_name(device_name)
-    if not device:
-        raise DeviceNotFoundError(f"Device '{device_name}' not found")
-
-    db_obj = shot_service.get(shot_id, device.id)
+    db_obj = shot_service.get((device_name, shot_id))
     if not db_obj:
         raise ResourceNotFoundError(
             f"Shot '{shot_id}' not found for device '{device_name}'"
@@ -130,5 +120,5 @@ def delete_shot(
     """
     Delete a shot with authentication and optional context check.
     """
-    shot_service.delete_with_auth(shot_id, user, device_name=device_name)
+    shot_service.delete(shot_id, user, device_name=device_name)
     return None

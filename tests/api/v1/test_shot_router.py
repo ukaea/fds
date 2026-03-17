@@ -7,7 +7,7 @@ from app.models.shot import AccessLevel, ShotCreate
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
 
-admin_user = AuthenticatedUser(id="test-admin", scopes=["fds-admin"])
+admin_user = AuthenticatedUser(id="test-admin", scopes=("fds-admin",))
 
 
 def test_create_shot_nested_endpoint(
@@ -63,7 +63,7 @@ def test_update_shot_nested_device_change(
 ):
     device_service = DeviceService(session)
     shot_service = ShotService(session)
-    admin_user = AuthenticatedUser(id="admin", scopes=["fds-admin"])
+    admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
 
     mast = device_service.create(
         DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
@@ -89,8 +89,8 @@ def test_update_shot_nested_device_change(
     assert response.status_code == 409
 
     # Verify it did NOT move
-    updated_shot = shot_service.get(shot.id, mast.id)
-    assert updated_shot.device_id == mast.id
+    updated_shot = shot_service.get(("MAST", shot.id))
+    assert updated_shot.device_name == "MAST"
 
 
 def test_update_shot_nested_mismatch_404(
@@ -144,7 +144,7 @@ def test_delete_shot(
     assert response.status_code == 204
 
     # Verify it's deleted
-    assert shot_service.get(shot.id, mast.id) is None
+    assert shot_service.get((mast.id, shot.id)) is None
 
 
 def test_read_shots_include_device(
