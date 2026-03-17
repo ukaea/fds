@@ -1,4 +1,6 @@
+import logging
 from collections.abc import Sequence
+from typing import Any, cast
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
@@ -25,10 +27,47 @@ from app.services.exceptions import (
 from app.services.file_access_service import FileAccessService
 from app.services.shot_service import ShotService
 
+logger = logging.getLogger(__name__)
+
 
 class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     def __init__(self, session: Session):
         super().__init__(model=Dataset, session=session)
+
+    def _extract_storage_options(
+        self, token_payload: dict[str, Any], data_url: str
+    ) -> dict[str, Any] | None:
+        """Extract FSSpec storage options from a credential token payload."""
+        raw_credentials = token_payload.get("credentials")
+        if not isinstance(raw_credentials, dict) or not raw_credentials:
+            logger.warning(
+                "Skipping malformed credential payload",
+                extra={"data_url": data_url, "token_payload": token_payload},
+            )
+            return None
+
+        raw_creds = next(iter(raw_credentials.values()))
+
+        to_storage_options = getattr(raw_creds, "to_storage_options", None)
+        if callable(to_storage_options):
+            return cast(dict[str, Any], to_storage_options())
+
+        model_dump = getattr(raw_creds, "model_dump", None)
+        if callable(model_dump):
+            return cast(dict[str, Any], model_dump())
+
+        as_dict = getattr(raw_creds, "dict", None)
+        if callable(as_dict):
+            return cast(dict[str, Any], as_dict())
+
+        logger.error(
+            "Skipping credential payload with unsupported credential object",
+            extra={
+                "data_url": data_url,
+                "credential_type": type(raw_creds).__name__,
+            },
+        )
+        return None
 
     def get_multi(
         self,
@@ -342,18 +381,11 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             token_idx = manifest.resource_map[model.data_url]
             token_payload = manifest.tokens[token_idx]
 
-            # The payload contains {"provider": str, "credentials": {"resource": CredentialModel}}
-            raw_creds = list(token_payload["credentials"].values())[0]
-
-            # Cloud Agnostic Dispatch: Let the Credential model define its own FSSpec arg mapping
-            if hasattr(raw_creds, "to_storage_options"):
-                storage_options = raw_creds.to_storage_options()
-            elif hasattr(raw_creds, "model_dump"):
-                storage_options = raw_creds.model_dump()
-            elif hasattr(raw_creds, "dict"):
-                storage_options = raw_creds.dict()
-            else:
-                storage_options = dict(raw_creds)
+            storage_options = self._extract_storage_options(
+                token_payload, model.data_url
+            )
+            if storage_options is None:
+                continue
 
             model.storage_options = storage_options
 

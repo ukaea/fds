@@ -6,7 +6,7 @@ from sqlmodel import Session
 from app.auth.security import AuthenticatedUser
 from app.models.dataset import DatasetCreate, DatasetUpdate
 from app.models.device import DeviceCreate
-from app.models.file_access import S3Credentials
+from app.models.file_access import CredentialManifest, S3Credentials
 from app.models.shot import ShotCreate
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
@@ -516,6 +516,94 @@ def test_enrich_with_storage_options_unsupported_protocol(
 
     models = dataset_service.get_datasets_for_shot(
         shot.id, "enrich-dev2", user=admin_user
+    )
+    read_models = [dataset_service.to_read_model(m) for m in models]
+    enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
+
+    assert len(enriched) == 1
+    assert enriched[0].storage_options is None
+
+
+def test_enrich_with_storage_options_empty_credentials_payload(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+    mocker,
+):
+    device_service.create(
+        DeviceCreate(name="enrich-dev3", type="Test"), user=admin_user
+    )
+    shot = shot_service.create(
+        ShotCreate(id="enrich-3", device_name="enrich-dev3"), user=admin_user
+    )
+
+    dataset_service.create(
+        DatasetCreate(
+            name="ds_empty_creds",
+            level=1,
+            data_url="s3://bucket/empty",
+            shot_id=shot.id,
+            device_name="enrich-dev3",
+        ),
+        user=admin_user,
+    )
+
+    mock_manifest = CredentialManifest(
+        tokens=[{"provider": "s3", "credentials": {}}],
+        resource_map={"s3://bucket/empty": 0},
+    )
+    mocker.patch(
+        "app.services.dataset_service.FileAccessService.generate_session_credentials",
+        return_value=mock_manifest,
+    )
+
+    models = dataset_service.get_datasets_for_shot(
+        shot.id, "enrich-dev3", user=admin_user
+    )
+    read_models = [dataset_service.to_read_model(m) for m in models]
+    enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
+
+    assert len(enriched) == 1
+    assert enriched[0].storage_options is None
+
+
+def test_enrich_with_storage_options_missing_credentials_payload(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+    mocker,
+):
+    device_service.create(
+        DeviceCreate(name="enrich-dev4", type="Test"), user=admin_user
+    )
+    shot = shot_service.create(
+        ShotCreate(id="enrich-4", device_name="enrich-dev4"), user=admin_user
+    )
+
+    dataset_service.create(
+        DatasetCreate(
+            name="ds_missing_creds",
+            level=1,
+            data_url="s3://bucket/missing",
+            shot_id=shot.id,
+            device_name="enrich-dev4",
+        ),
+        user=admin_user,
+    )
+
+    mock_manifest = CredentialManifest(
+        tokens=[{"provider": "s3"}],
+        resource_map={"s3://bucket/missing": 0},
+    )
+    mocker.patch(
+        "app.services.dataset_service.FileAccessService.generate_session_credentials",
+        return_value=mock_manifest,
+    )
+
+    models = dataset_service.get_datasets_for_shot(
+        shot.id, "enrich-dev4", user=admin_user
     )
     read_models = [dataset_service.to_read_model(m) for m in models]
     enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
