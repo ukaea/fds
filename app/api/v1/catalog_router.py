@@ -1,10 +1,8 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
-from sqlmodel import Session, select
+from fastapi import APIRouter, Request
 
-from app.core.db import get_session
-from app.models.device import Device
+from app.api.deps import CurrentUserDep, DeviceServiceDep
 from app.services.jsonld import generate_context, map_device_to_dcat
 
 router = APIRouter()
@@ -13,7 +11,8 @@ router = APIRouter()
 @router.get("/catalog", response_model=dict[str, Any])
 def get_catalog(
     request: Request,
-    session: Session = Depends(get_session),
+    device_service: DeviceServiceDep,
+    user: CurrentUserDep,
 ) -> dict[str, Any]:
     """
     Returns the root Data Catalog (DCAT) for the Fusion Data Service.
@@ -22,7 +21,7 @@ def get_catalog(
     base_url = str(request.base_url).rstrip("/")
 
     # Root Catalog Metadata
-    catalog = {
+    catalog: dict[str, Any] = {
         "@context": generate_context(),
         "@type": "dcat:Catalog",
         "@id": f"{base_url}/api/v1/catalog",
@@ -32,8 +31,8 @@ def get_catalog(
     }
 
     # List all devices as sub-catalogs
-    devices = session.exec(select(Device)).all()
-    sub_catalogs = []
+    devices = device_service.get_multi(user=user)
+    sub_catalogs: list[dict[str, Any]] = []
 
     for device in devices:
         dcat_device = map_device_to_dcat(device, base_url)

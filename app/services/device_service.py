@@ -1,17 +1,66 @@
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.auth.access_control import get_effective_access_level, validate_policy_fields
+from app.auth.access_control import (
+    get_effective_access_level,
+    get_effective_policy,
+    validate_policy_fields,
+)
 from app.auth.permissions import check_is_admin
 from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.identity import AuthenticatedUser
+from app.models.policy import AccessLevel
 from app.services.base_service import BaseService
-from app.services.exceptions import ConflictError
+from app.services.exceptions import ConflictError, ForbiddenError
 
 
 class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
     def __init__(self, session: Session):
         super().__init__(model=Device, session=session)
+
+    def check_read_access(self, device: Device, user: AuthenticatedUser) -> None:
+        """Enforce read access for device metadata."""
+        policy = get_effective_policy(device, self.session)
+
+        if policy.access_level == AccessLevel.PUBLIC:
+            return
+
+        if user.is_anonymous:
+            raise ForbiddenError("Authentication required for this resource")
+
+        if policy.allowed_idps is not None and user.issuer not in policy.allowed_idps:
+            raise ForbiddenError(
+                "Access denied: your identity provider is not permitted "
+                "for this resource"
+            )
+
+        if policy.required_scopes is not None:
+            for scope in policy.required_scopes:
+                if scope not in user.scopes:
+                    raise ForbiddenError(f"Not authorized, requires scope: {scope}")
+
+    def get_multi(
+        self,
+        *,
+        user: AuthenticatedUser | None = None,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> list[Device]:
+        """Get devices with metadata visibility filtering applied."""
+        devices = list(super().get_multi(offset=offset, limit=limit))
+        if user is None:
+            return devices
+
+        accessible_devices: list[Device] = []
+
+        for device in devices:
+            try:
+                self.check_read_access(device, user)
+                accessible_devices.append(device)
+            except ForbiddenError:
+                continue
+
+        return accessible_devices
 
     def get_by_name(self, name: str) -> Device | None:
         result = self.session.exec(select(Device).where(Device.name == name))

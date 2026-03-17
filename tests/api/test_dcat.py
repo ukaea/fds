@@ -32,15 +32,22 @@ def test_get_catalog(test_client: TestClient, session: Session):
     """
     Test the /api/v1/catalog endpoint returns valid JSON-LD structure.
     """
-    # Setup: Create a device to show up in the catalog
-    device = Device(
+    public_device = Device(
         name="mast",
         title="MAST Upgrade",
         description="Mega Ampere Spherical Tokamak",
         publisher="UKAEA",
         access_level=AccessLevel.PUBLIC,
     )
-    session.add(device)
+    restricted_device = Device(
+        name="private-device",
+        title="Private Device",
+        description="Restricted device metadata",
+        publisher="Private Publisher",
+        access_level=AccessLevel.RESTRICTED,
+    )
+    session.add(public_device)
+    session.add(restricted_device)
     session.commit()
 
     response = test_client.get("/api/v1/catalog")
@@ -63,3 +70,9 @@ def test_get_catalog(test_client: TestClient, session: Session):
     assert mast_entry["@type"] == "dcat:Catalog"
     assert mast_entry["title"] == "MAST Upgrade"
     assert mast_entry["publisher"] == "UKAEA"
+
+    private_entry = next(
+        (item for item in sub_catalogs if item["identifier"] == "private-device"),
+        None,
+    )
+    assert private_entry is None
