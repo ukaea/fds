@@ -99,6 +99,13 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
         statement = select(Source).where(Source.name == name)
         return self.session.exec(statement).first()
 
+    def get_by_name_or_raise(self, name: str) -> Source:
+        """Resolve a source by name or raise a not-found error."""
+        source = self.get_by_name(name)
+        if not source:
+            raise ResourceNotFoundError(f"Source {name} not found")
+        return source
+
     def get_for_device(
         self, device_name: str, offset: int = 0, limit: int = 100
     ) -> Sequence[Source]:

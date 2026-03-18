@@ -12,7 +12,6 @@ from app.models.datasetsource import (
     DatasetSourceLink,
     DatasetSourceRead,
 )
-from app.services.exceptions import ResourceNotFoundError
 from app.services.jsonld import map_dataset_to_dcat
 
 router = APIRouter()
@@ -149,11 +148,9 @@ def read_dataset_by_name(
     Supports Content Negotiation:
     - Accept: application/ld+json -> Returns DCAT Metadata
     """
-    dataset = dataset_service.get_by_name_in_context(
+    dataset = dataset_service.get_by_name_in_context_or_raise(
         name=name, user=user, device_name=device_name, shot_id=shot_id
     )
-    if not dataset:
-        raise ResourceNotFoundError(f"Dataset {name} not found in this context")
 
     # Content Negotiation
     if "application/ld+json" in request.headers.get("accept", ""):
@@ -183,9 +180,7 @@ def read_dataset_global_by_name(
     Supports Content Negotiation:
     - Accept: application/ld+json -> Returns DCAT Metadata
     """
-    dataset = dataset_service.get_by_name_in_context(name=name, user=user)
-    if not dataset:
-        raise ResourceNotFoundError(f"Global dataset {name} not found")
+    dataset = dataset_service.get_by_name_in_context_or_raise(name=name, user=user)
 
     # Content Negotiation
     if "application/ld+json" in request.headers.get("accept", ""):
@@ -241,13 +236,9 @@ def read_dataset_device_by_name(
     Supports Content Negotiation:
     - Accept: application/ld+json -> Returns DCAT Metadata
     """
-    dataset = dataset_service.get_by_name_in_context(
+    dataset = dataset_service.get_by_name_in_context_or_raise(
         name=name, user=user, device_name=device_name
     )
-    if not dataset:
-        raise ResourceNotFoundError(
-            f"Dataset {name} not found for device {device_name}"
-        )
 
     # Content Negotiation
     if "application/ld+json" in request.headers.get("accept", ""):

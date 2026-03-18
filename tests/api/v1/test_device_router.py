@@ -3,10 +3,11 @@ from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
 from app.models.device import DeviceCreate
+from app.models.policy import AccessLevel
 from app.services.device_service import DeviceService
 
 # Dummy admin user for test setup
-admin_user = AuthenticatedUser(id="test-admin", scopes=["fds-admin"])
+admin_user = AuthenticatedUser(id="test-admin", scopes=("fds-admin",))
 
 
 def test_create_device(test_client: TestClient, admin_user_token: dict[str, str]):
@@ -25,7 +26,8 @@ def test_update_device(
     test_client: TestClient, session: Session, admin_user_token: dict[str, str]
 ):
     device = DeviceService(session).create(
-        DeviceCreate(name="Initial", type="Test"), user=admin_user
+        DeviceCreate(name="Initial", type="Test", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
     )
     response = test_client.put(
         f"/api/v1/devices/{device.name}",
@@ -41,7 +43,8 @@ def test_delete_device(
     test_client: TestClient, session: Session, admin_user_token: dict[str, str]
 ):
     device = DeviceService(session).create(
-        DeviceCreate(name="ToDelete", type="Test"), user=admin_user
+        DeviceCreate(name="ToDelete", type="Test", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
     )
     response = test_client.delete(
         f"/api/v1/devices/{device.name}", headers=admin_user_token
@@ -68,10 +71,12 @@ def test_delete_device_not_found(
 def test_read_devices(test_client: TestClient, session: Session):
     # For read tests, we need to create data first, which requires admin privileges
     DeviceService(session).create(
-        DeviceCreate(name="Device 1", type="Type A"), user=admin_user
+        DeviceCreate(name="Device 1", type="Type A", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
     )
     DeviceService(session).create(
-        DeviceCreate(name="Device 2", type="Type B"), user=admin_user
+        DeviceCreate(name="Device 2", type="Type B", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
     )
 
     response = test_client.get("/api/v1/devices/")
@@ -85,7 +90,8 @@ def test_read_devices(test_client: TestClient, session: Session):
 
 def test_read_device(test_client: TestClient, session: Session):
     device = DeviceService(session).create(
-        DeviceCreate(name="JET", type="Tokamak"), user=admin_user
+        DeviceCreate(name="JET", type="Tokamak", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
     )
 
     response = test_client.get(f"/api/v1/devices/{device.name}")
@@ -100,3 +106,43 @@ def test_read_device(test_client: TestClient, session: Session):
 def test_read_device_not_found(test_client: TestClient):
     response = test_client.get("/api/v1/devices/NonExistent")
     assert response.status_code == 404
+
+
+def test_read_restricted_device_requires_auth(
+    test_client: TestClient, session: Session
+):
+    DeviceService(session).create(
+        DeviceCreate(
+            name="Restricted Device",
+            type="Tokamak",
+            access_level=AccessLevel.RESTRICTED,
+        ),
+        user=admin_user,
+    )
+
+    response = test_client.get("/api/v1/devices/Restricted Device")
+    assert response.status_code == 403
+
+
+def test_read_devices_filters_restricted_for_anonymous(
+    test_client: TestClient, session: Session
+):
+    DeviceService(session).create(
+        DeviceCreate(
+            name="Public Device", type="Type A", access_level=AccessLevel.PUBLIC
+        ),
+        user=admin_user,
+    )
+    DeviceService(session).create(
+        DeviceCreate(
+            name="Private Device", type="Type B", access_level=AccessLevel.RESTRICTED
+        ),
+        user=admin_user,
+    )
+
+    response = test_client.get("/api/v1/devices/")
+    assert response.status_code == 200
+
+    names = [device["name"] for device in response.json()]
+    assert "Public Device" in names
+    assert "Private Device" not in names

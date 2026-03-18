@@ -4,7 +4,6 @@ from fastapi.responses import JSONResponse
 from app.api.deps import CurrentUserDep, DeviceServiceDep, SourceServiceDep
 from app.models.device import DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.source import SourceCreate, SourceRead
-from app.services.exceptions import DeviceNotFoundError
 from app.services.jsonld import map_device_to_dcat
 
 router = APIRouter()
@@ -28,13 +27,14 @@ def create_device(
 def read_devices(
     *,
     device_service: DeviceServiceDep,
+    user: CurrentUserDep,
     offset: int = 0,
     limit: int = 100,
 ) -> list[DeviceRead]:
     """
     Retrieve all devices.
     """
-    devices = device_service.get_multi(offset=offset, limit=limit)
+    devices = device_service.get_multi(user=user, offset=offset, limit=limit)
     return [device_service.to_read_model(d) for d in devices]
 
 
@@ -44,15 +44,14 @@ def read_device(
     request: Request,
     device_service: DeviceServiceDep,
     device_name: str,
+    user: CurrentUserDep,
 ) -> DeviceRead | JSONResponse:
     """
     Retrieve a single device by name.
     Supports Content Negotiation:
     - Accept: application/ld+json -> Returns DCAT Metadata
     """
-    device = device_service.get_by_name(device_name)
-    if not device:
-        raise DeviceNotFoundError(f"Device '{device_name}' not found")
+    device = device_service.get_by_name_or_raise(device_name, user=user)
 
     # Content Negotiation
     if "application/ld+json" in request.headers.get("accept", ""):

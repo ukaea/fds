@@ -120,6 +120,51 @@ def test_get_dataset_not_found(dataset_service: DatasetService):
     assert retrieved_dataset is None
 
 
+def test_get_dataset_by_name_in_context_or_raise(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+):
+    device_service.create(
+        DeviceCreate(name="Device Resolve", type="Test"), user=admin_user
+    )
+    shot_service.create(
+        ShotCreate(id="shot-resolve", device_name="Device Resolve"), user=admin_user
+    )
+
+    dataset_service.create(
+        DatasetCreate(
+            name="resolved_dataset",
+            level=1,
+            data_url="s3://resolved",
+            shot_id="shot-resolve",
+            device_name="Device Resolve",
+        ),
+        user=admin_user,
+    )
+
+    dataset = dataset_service.get_by_name_in_context_or_raise(
+        name="resolved_dataset",
+        user=admin_user,
+        device_name="Device Resolve",
+        shot_id="shot-resolve",
+    )
+
+    assert dataset.name == "resolved_dataset"
+
+
+def test_get_dataset_by_name_in_context_or_raise_not_found(
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+):
+    with pytest.raises(ResourceNotFoundError, match="Global dataset missing not found"):
+        dataset_service.get_by_name_in_context_or_raise(
+            name="missing",
+            user=admin_user,
+        )
+
+
 def test_get_datasets(
     device_service: DeviceService,
     shot_service: ShotService,

@@ -4,7 +4,6 @@ from fastapi import APIRouter, status
 
 from app.api.deps import CurrentUserDep, SourceServiceDep
 from app.models.source import SourceCreate, SourceRead, SourceUpdate
-from app.services.exceptions import ResourceNotFoundError
 
 router = APIRouter()
 
@@ -39,9 +38,7 @@ def read_source_by_name(name: str, source_service: SourceServiceDep) -> SourceRe
     """
     Retrieve a single source by its descriptive name.
     """
-    source = source_service.get_by_name(name)
-    if not source:
-        raise ResourceNotFoundError(f"Source {name} not found")
+    source = source_service.get_by_name_or_raise(name)
     return source_service.to_read_model(source)
 
 

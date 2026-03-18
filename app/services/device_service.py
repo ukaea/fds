@@ -8,7 +8,7 @@ from app.auth.access_control import (
 )
 from app.auth.permissions import check_is_admin
 from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
-from app.models.identity import AuthenticatedUser
+from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.services.base_service import BaseService
 from app.services.exceptions import ConflictError, DeviceNotFoundError, ForbiddenError
@@ -62,13 +62,32 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
 
         return accessible_devices
 
-    def get_by_name(self, name: str) -> Device | None:
+    def get_by_name(
+        self,
+        name: str,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+    ) -> Device | None:
         result = self.session.exec(select(Device).where(Device.name == name))
-        return result.first()
+        device = result.first()
+        if device:
+            self.check_read_access(device, user)
+        return device
+
+    def get_by_name_or_raise(
+        self,
+        name: str,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+    ) -> Device:
+        """Resolve a device by name, enforcing read access and 404 semantics."""
+        device = self.get_by_name(name, user=user)
+        if not device:
+            raise DeviceNotFoundError(f"Device '{name}' not found")
+        return device
 
     def _get_by_name_or_raise(self, name: str) -> Device:
         """Internal helper: resolves a device by name or raises DeviceNotFoundError."""
-        device = self.get_by_name(name)
+        result = self.session.exec(select(Device).where(Device.name == name))
+        device = result.first()
         if not device:
             raise DeviceNotFoundError(f"Device '{name}' not found")
         return device

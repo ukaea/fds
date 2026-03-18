@@ -265,6 +265,35 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             self.check_read_access(dataset, user)
         return dataset
 
+    def get_by_name_in_context_or_raise(
+        self,
+        *,
+        name: str,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        device_name: str | None = None,
+        shot_id: str | None = None,
+    ) -> Dataset:
+        """
+        Retrieve a dataset by name within its context, enforcing read access and
+        raising a context-aware not-found error when absent.
+        """
+        dataset = self.get_by_name_in_context(
+            name=name,
+            user=user,
+            device_name=device_name,
+            shot_id=shot_id,
+        )
+        if dataset:
+            return dataset
+
+        if device_name and shot_id:
+            raise ResourceNotFoundError(f"Dataset {name} not found in this context")
+        if device_name:
+            raise ResourceNotFoundError(
+                f"Dataset {name} not found for device {device_name}"
+            )
+        raise ResourceNotFoundError(f"Global dataset {name} not found")
+
     def get_datasets_for_device(
         self,
         device_name: str,
