@@ -1,18 +1,26 @@
 from datetime import datetime, timedelta, timezone
-
-try:
-    from azure.identity import DefaultAzureCredential
-    from azure.storage.blob import (
-        BlobServiceClient,
-        ContainerSasPermissions,
-        generate_container_sas,
-    )
-except ImportError:
-    DefaultAzureCredential = None
+from importlib import import_module
+from typing import Any
 
 from app.core.config import config
 from app.models.file_access import AzureCredentials
 from app.services.exceptions import ConfigurationError
+
+DefaultAzureCredential: Any = None
+BlobServiceClient: Any = None
+ContainerSasPermissions: Any = None
+generate_container_sas: Any = None
+
+try:
+    azure_identity = import_module("azure.identity")
+    azure_blob = import_module("azure.storage.blob")
+
+    DefaultAzureCredential = getattr(azure_identity, "DefaultAzureCredential")
+    BlobServiceClient = getattr(azure_blob, "BlobServiceClient")
+    ContainerSasPermissions = getattr(azure_blob, "ContainerSasPermissions")
+    generate_container_sas = getattr(azure_blob, "generate_container_sas")
+except ImportError:
+    pass
 
 
 class AzureCredentialProvider:
@@ -23,17 +31,32 @@ class AzureCredentialProvider:
     def __init__(self):
         self._service_client = None
 
+    def _require_azure_sdk(self) -> tuple[Any, Any, Any, Any]:
+        if (
+            DefaultAzureCredential is None
+            or BlobServiceClient is None
+            or ContainerSasPermissions is None
+            or generate_container_sas is None
+        ):
+            raise ConfigurationError(
+                "azure-storage-blob is not installed. "
+                "Please install the 'azure' optional dependency: pip install 'fds[azure]'"
+            )
+
+        return (
+            DefaultAzureCredential,
+            BlobServiceClient,
+            ContainerSasPermissions,
+            generate_container_sas,
+        )
+
     def generate_credentials(
         self, allowed_prefixes: list[str], _session_name: str
     ) -> dict[str, AzureCredentials]:
         """
         Generates a Map of Container -> SAS Token.
         """
-        if DefaultAzureCredential is None:
-            raise ConfigurationError(
-                "azure-storage-blob is not installed. "
-                "Please install the 'azure' optional dependency: pip install 'fds[azure]'"
-            )
+        _, _, container_sas_permissions, gen_container_sas = self._require_azure_sdk()
 
         if not config.AZURE_STORAGE_ACCOUNT:
             raise ConfigurationError("AZURE_STORAGE_ACCOUNT is not configured.")
@@ -73,11 +96,11 @@ class AzureCredentialProvider:
         # 3. Generate SAS for each container
         result = {}
         sas_expiry = now + timedelta(seconds=config.CREDENTIAL_TOKEN_DURATION)
-        permissions = ContainerSasPermissions(read=True, list=True)
+        permissions = container_sas_permissions(read=True, list=True)
 
         for container_name in containers:
             try:
-                sas_token = generate_container_sas(
+                sas_token = gen_container_sas(
                     account_name=config.AZURE_STORAGE_ACCOUNT,
                     container_name=container_name,
                     user_delegation_key=ud_key,
@@ -98,10 +121,14 @@ class AzureCredentialProvider:
         return result
 
     def _get_service_client(self):
+        default_credential, blob_service_client, _, _ = self._require_azure_sdk()
+
         if not self._service_client:
             account_url = (
                 f"https://{config.AZURE_STORAGE_ACCOUNT}.blob.core.windows.net"
             )
-            credential = DefaultAzureCredential()
-            self._service_client = BlobServiceClient(account_url, credential=credential)
+            credential = default_credential()
+            self._service_client = blob_service_client(
+                account_url, credential=credential
+            )
         return self._service_client
