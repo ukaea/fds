@@ -22,7 +22,7 @@ class Source(SourceBase, table=True):
 
 class SourceRead(SourceBase):
     id: int
-    device_id: int | None = None
+    device_name: str | None = None
 
 
 class SourceCreate(SourceBase):

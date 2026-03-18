@@ -3,12 +3,16 @@ from collections.abc import Sequence
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.auth.permissions import check_is_admin
+from app.auth.permissions import check_device_admin, check_is_admin
+from app.models.device import Device
 from app.models.identity import AuthenticatedUser
 from app.models.source import Source, SourceCreate, SourceRead, SourceUpdate
 from app.services.base_service import BaseService
-from app.services.device_service import DeviceService
-from app.services.exceptions import ConflictError, ResourceNotFoundError
+from app.services.exceptions import (
+    ConflictError,
+    DeviceNotFoundError,
+    ResourceNotFoundError,
+)
 
 
 class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
@@ -16,25 +20,29 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
         super().__init__(model=Source, session=session)
 
     def to_read_model(self, source: Source) -> SourceRead:
-        """Convert a Source ORM object to a SourceRead DTO."""
-        return SourceRead.model_validate(source)
+        """Convert a Source ORM model to a SourceRead model with device_name."""
+        source_data = source.model_dump()
+        source_data["device_name"] = source.device.name if source.device else None
+        return SourceRead.model_validate(source_data)
 
     def to_read_models(self, sources: Sequence[Source]) -> list[SourceRead]:
-        """Batch convert Source ORM objects to SourceRead DTOs."""
         return [self.to_read_model(source) for source in sources]
 
     def create(self, obj_in: SourceCreate, user: AuthenticatedUser) -> Source:
         """
         Create a new source.
         """
-        check_is_admin(user)
-
         device_id = None
         if obj_in.device_name:
-            device = DeviceService(self.session).get_by_name(obj_in.device_name)
+            device = self.session.exec(
+                select(Device).where(Device.name == obj_in.device_name)
+            ).first()
             if not device:
-                raise ResourceNotFoundError(f"Device '{obj_in.device_name}' not found")
+                raise DeviceNotFoundError(f"Device '{obj_in.device_name}' not found")
             device_id = device.id
+            check_device_admin(user, obj_in.device_name)
+        else:
+            check_is_admin(user)
 
         # Convert to dict and exclude device_name since it's not in the Source table
         source_data = obj_in.model_dump(exclude={"device_name"})
@@ -51,23 +59,38 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
         return db_obj
 
     def update(
-        self, *, db_obj: Source, obj_in: SourceUpdate, user: AuthenticatedUser
+        self, *, id: int, obj_in: SourceUpdate, user: AuthenticatedUser
     ) -> Source:
         """
-        Update a source.
+        Update a source. Resolves the source by ID internally.
         """
-        check_is_admin(user)
-        return self.update_unchecked(db_obj=db_obj, obj_in=obj_in)
-
-    def delete(self, id: int, user: AuthenticatedUser) -> bool:
-        """
-        Delete a source with authorization.
-        """
-        check_is_admin(user)
         db_obj = self.get(id)
         if not db_obj:
             raise ResourceNotFoundError(f"Source {id} not found")
+
+        if db_obj.device:
+            check_device_admin(user, db_obj.device.name)
+        else:
+            check_is_admin(user)
+        return self.update_unchecked(db_obj=db_obj, obj_in=obj_in)
+
+    def delete_with_auth(self, id: int, user: AuthenticatedUser) -> bool:
+        """
+        Delete a source with authorization.
+        """
+        db_obj = self.get(id)
+        if not db_obj:
+            raise ResourceNotFoundError(f"Source {id} not found")
+
+        if db_obj.device:
+            check_device_admin(user, db_obj.device.name)
+        else:
+            check_is_admin(user)
         return self.delete_unchecked(id)
+
+    def delete(self, id: int, user: AuthenticatedUser) -> bool:
+        """Backward-compatible delete entrypoint."""
+        return self.delete_with_auth(id, user)
 
     def get_by_name(self, name: str) -> Source | None:
         """
@@ -82,9 +105,11 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
         """
         Retrieve sources associated with a specific device by name.
         """
-        device = DeviceService(self.session).get_by_name(device_name)
+        device = self.session.exec(
+            select(Device).where(Device.name == device_name)
+        ).first()
         if not device:
-            raise ResourceNotFoundError(f"Device '{device_name}' not found")
+            raise DeviceNotFoundError(f"Device '{device_name}' not found")
         statement = (
             select(Source)
             .where(Source.device_id == device.id)

@@ -46,7 +46,7 @@ def test_create_source_nested_endpoint(
     assert resp.status_code == 201
     data = resp.json()
     assert data["name"] == "source_on_device_a"
-    assert data["device_id"] == dev1.id
+    assert data["device_name"] == dev1.name
 
 
 def test_list_sources_nested_endpoint(

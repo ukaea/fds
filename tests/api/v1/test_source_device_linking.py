@@ -40,7 +40,7 @@ def test_create_source_with_device(
     assert resp.status_code == 201
     data = resp.json()
     assert data["name"] == "device_specific_source"
-    assert data["device_id"] == device.id
+    assert data["device_name"] == device.name
 
 
 def test_create_source_invalid_device(

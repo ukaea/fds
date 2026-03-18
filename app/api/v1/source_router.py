@@ -56,8 +56,19 @@ def update_source(
     """
     Update a source. Requires global admin.
     """
-    db_source = source_service.get(id)
-    if not db_source:
-        raise ResourceNotFoundError(f"Source {id} not found")
-    source = source_service.update(db_obj=db_source, obj_in=source_in, user=user)
+    source = source_service.update(id=id, obj_in=source_in, user=user)
     return source_service.to_read_model(source)
+
+
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_source(
+    *,
+    id: int,
+    source_service: SourceServiceDep,
+    user: CurrentUserDep,
+) -> None:
+    """
+    Delete a source. Requires global admin.
+    """
+    source_service.delete_with_auth(id, user)
+    return None
