@@ -16,13 +16,13 @@ class GCSCredentialProvider:
     """
 
     def generate_credentials(
-        self, allowed_prefixes: list[str], _session_name: str
+        self, allowed_prefixes: list[str], session_name: str
     ) -> dict[str, GCSCredentials]:
         # 1. Initialize Base Credentials
         try:
             # We explicitly create a Request object.
             # google.auth.default() uses environment variables to find credentials.
-            base_creds, project_id = google.auth.default()
+            base_creds, _project_id = google.auth.default()
         except exceptions.DefaultCredentialsError:
             raise ConfigurationError(
                 "Could not determine Google Cloud credentials. "
@@ -56,7 +56,7 @@ class GCSCredentialProvider:
         request = Request()
 
         downscoped_creds = google.auth.downscoped.Credentials(
-            base_creds, access_boundary=cab
+            base_creds, credential_access_boundary=cab
         )
 
         # 4. Refresh to mint the token immediately
@@ -68,9 +68,13 @@ class GCSCredentialProvider:
         # 5. Structure Response
         result = {}
 
+        token = downscoped_creds.token
+        if not isinstance(token, str):
+            raise ConfigurationError("Failed to vend GCS credentials: missing token")
+
         for bucket_name in buckets:
             result[bucket_name] = GCSCredentials(
-                token=downscoped_creds.token,
+                token=token,
                 expiry=downscoped_creds.expiry.isoformat()
                 if downscoped_creds.expiry
                 else None,

@@ -1,7 +1,10 @@
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device, DeviceRead
+
+if TYPE_CHECKING:
+    from app.models.datasetsource import DatasetSource
 
 METADATA_CONTEXT = {
     "dcat": "http://www.w3.org/ns/dcat#",
@@ -99,9 +102,11 @@ def map_dataset_to_dcat(
 
     # PROV-O Mapping (Provenance)
     # Check if the dataset object has source_links loaded
-    if hasattr(dataset, "source_links") and dataset.source_links:
+    source_links = getattr(dataset, "source_links", None)
+    if source_links:
+        typed_source_links = cast(list["DatasetSource"], source_links)
         activities = []
-        for link in dataset.source_links:
+        for link in typed_source_links:
             # Source Entity URI
             source_uri = f"{base_url}/api/v1/sources/{link.source_id}"
 

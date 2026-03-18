@@ -10,18 +10,18 @@ from app.core.config import config
 class CustomJsonFormatter(json.JsonFormatter):
     def add_fields(
         self,
-        log_record: dict[str, Any],
+        log_data: dict[str, Any],
         record: logging.LogRecord,
         message_dict: dict[str, Any],
     ) -> None:
-        super().add_fields(log_record, record, message_dict)
-        if not log_record.get("timestamp"):
+        super().add_fields(log_data, record, message_dict)
+        if not log_data.get("timestamp"):
             # Use ISO8601 format
-            log_record["timestamp"] = self.formatTime(record, self.datefmt)
-        if log_record.get("level"):
-            log_record["level"] = log_record["level"].upper()
+            log_data["timestamp"] = self.formatTime(record, self.datefmt)
+        if log_data.get("level"):
+            log_data["level"] = log_data["level"].upper()
         else:
-            log_record["level"] = record.levelname
+            log_data["level"] = record.levelname
 
 
 def setup_logging() -> None:
@@ -32,7 +32,7 @@ def setup_logging() -> None:
     handler = logging.StreamHandler(sys.stdout)
 
     # Use JSON formatting for production-like environments
-    if getattr(config, "ENVIRONMENT", "dev").lower() in ("production", "prod"):
+    if config.ENVIRONMENT.lower() in ("production", "prod"):
         formatter = CustomJsonFormatter(
             "%(timestamp)s %(level)s %(name)s %(message)s", datefmt="%Y-%m-%dT%H:%M:%S"
         )
@@ -51,9 +51,7 @@ def setup_logging() -> None:
     root_logger.handlers = [handler]
 
     # Set level
-    log_level = (
-        config.LOG_LEVEL.upper() if getattr(config, "LOG_LEVEL", None) else "INFO"
-    )
+    log_level = config.LOG_LEVEL.upper() if config.LOG_LEVEL else "INFO"
     root_logger.setLevel(log_level)
 
     # Silence noisy libraries if needed

@@ -1,5 +1,7 @@
-from typing import Any, Protocol
+from collections.abc import Mapping
+from typing import Protocol
 
+from app.models.file_access import CredentialPayload
 from app.services.exceptions import ConfigurationError
 
 
@@ -11,7 +13,7 @@ class CredentialProvider(Protocol):
 
     def generate_credentials(
         self, allowed_prefixes: list[str], session_name: str
-    ) -> dict[str, Any]: ...
+    ) -> Mapping[str, CredentialPayload]: ...
 
 
 def get_provider_for_protocol(protocol: str) -> CredentialProvider:

@@ -22,6 +22,8 @@ class Config(BaseSettings):
     # Application Settings
     app_name: str = Field(default="fds", validation_alias="FDS_APP_NAME")
     debug: bool = Field(default=False, validation_alias="FDS_DEBUG")
+    ENVIRONMENT: str = Field(default="dev", validation_alias="FDS_ENVIRONMENT")
+    LOG_LEVEL: str = Field(default="INFO", validation_alias="FDS_LOG_LEVEL")
 
     # Database Settings
     db_user: str = Field(default="", validation_alias="FDS_DB_USER")

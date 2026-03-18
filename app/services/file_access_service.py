@@ -1,6 +1,5 @@
 import logging
 from collections import defaultdict
-from typing import Any
 from urllib.parse import urlparse
 
 from sqlmodel import Session, col, select
@@ -9,7 +8,11 @@ from app.auth.access_control import get_effective_policy
 from app.auth.permissions import check_shot_operator
 from app.core.storage.providers import get_provider_for_protocol
 from app.models.dataset import Dataset
-from app.models.file_access import CredentialManifest, CredentialRequest
+from app.models.file_access import (
+    CredentialManifest,
+    CredentialRequest,
+    CredentialTokenPayload,
+)
 from app.models.identity import AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.services.exceptions import ForbiddenError
@@ -75,8 +78,8 @@ class FileAccessService:
         urls: list[str],
         session_name: str,
         start_index: int,
-    ) -> tuple[list[dict[str, Any]], dict[str, int]]:
-        tokens: list[dict[str, Any]] = []
+    ) -> tuple[list[CredentialTokenPayload], dict[str, int]]:
+        tokens: list[CredentialTokenPayload] = []
         resource_map: dict[str, int] = {}
         try:
             provider = get_provider_for_protocol(protocol)
@@ -113,7 +116,10 @@ class FileAccessService:
             )
 
             # We wrap it in a structure that identifies it as part of the list
-            token_payload = {"provider": provider_key, "credentials": creds}
+            token_payload: CredentialTokenPayload = {
+                "provider": provider_key,
+                "credentials": dict(creds),
+            }
             tokens.append(token_payload)
 
             # Map these resources to this token index

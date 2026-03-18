@@ -1,14 +1,16 @@
 import json
+from importlib import import_module
 from typing import Any
-
-try:
-    import boto3
-except ImportError:
-    boto3 = None
 
 from app.core.config import config
 from app.models.file_access import S3Credentials
 from app.services.exceptions import ConfigurationError
+
+boto3: Any = None
+try:
+    boto3 = import_module("boto3")
+except ImportError:
+    pass
 
 
 class S3CredentialProvider:
@@ -37,7 +39,7 @@ class S3CredentialProvider:
 
     def generate_credentials(
         self, allowed_prefixes: list[str], session_name: str
-    ) -> dict[str, Any]:
+    ) -> dict[str, S3Credentials]:
         """
         Assumes the configured STS role and returns temporary credentials.
         The policy is dynamically generated to allow access only to 'allowed_prefixes'.

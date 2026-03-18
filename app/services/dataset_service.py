@@ -13,7 +13,7 @@ from app.auth.access_control import (
 from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
 from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
 from app.models.device import Device
-from app.models.file_access import CredentialRequest
+from app.models.file_access import CredentialRequest, CredentialTokenPayload
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.services.base_service import BaseService
@@ -35,7 +35,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         super().__init__(model=Dataset, session=session)
 
     def _extract_storage_options(
-        self, token_payload: dict[str, Any], data_url: str
+        self, token_payload: CredentialTokenPayload, data_url: str
     ) -> dict[str, Any] | None:
         """Extract FSSpec storage options from a credential token payload."""
         raw_credentials = token_payload.get("credentials")

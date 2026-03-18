@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 from pydantic import BaseModel
 
@@ -61,6 +61,14 @@ class GCSCredentials(BaseModel):
         }
 
 
+CredentialPayload = S3Credentials | AzureCredentials | GCSCredentials
+
+
+class CredentialTokenPayload(TypedDict):
+    provider: NotRequired[str]
+    credentials: NotRequired[dict[str, CredentialPayload]]
+
+
 class CredentialRequest(BaseModel):
     """
     Filter for credential generation.
@@ -76,5 +84,5 @@ class CredentialManifest(BaseModel):
     Response model for multi-token vending.
     """
 
-    tokens: list[dict[str, Any]]
+    tokens: list[CredentialTokenPayload]
     resource_map: dict[str, int]
