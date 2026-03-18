@@ -11,7 +11,7 @@ from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.identity import AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.services.base_service import BaseService
-from app.services.exceptions import ConflictError, ForbiddenError
+from app.services.exceptions import ConflictError, DeviceNotFoundError, ForbiddenError
 
 
 class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
@@ -66,6 +66,13 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         result = self.session.exec(select(Device).where(Device.name == name))
         return result.first()
 
+    def _get_by_name_or_raise(self, name: str) -> Device:
+        """Internal helper: resolves a device by name or raises DeviceNotFoundError."""
+        device = self.get_by_name(name)
+        if not device:
+            raise DeviceNotFoundError(f"Device '{name}' not found")
+        return device
+
     def create(self, obj_in: DeviceCreate, user: AuthenticatedUser) -> Device:
         """
         Create a new device. Requires global admin privileges.
@@ -83,12 +90,18 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
             raise ConflictError(f"Device '{obj_in.name}' already exists") from e
 
     def update(
-        self, *, db_obj: Device, obj_in: DeviceUpdate, user: AuthenticatedUser
+        self,
+        *,
+        device_name: str,
+        obj_in: DeviceUpdate,
+        user: AuthenticatedUser,
     ) -> Device:
         """
-        Update a device. Requires global admin privileges.
+        Update a device by name. Requires global admin privileges.
+        Resolves the device internally.
         """
         check_is_admin(user)
+        db_obj = self._get_by_name_or_raise(device_name)
         update_data = obj_in.model_dump(exclude_unset=True)
         validate_policy_fields(
             update_data.get("access_level", db_obj.access_level),
@@ -102,9 +115,7 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         Delete a device by name. Requires global admin privileges.
         """
         check_is_admin(user)
-        device = self.get_by_name(device_name)
-        if not device:
-            return False
+        device = self._get_by_name_or_raise(device_name)
         self.session.delete(device)
         self.session.commit()
         return True

@@ -6,7 +6,6 @@ from app.models.shot import (
     ShotRead,
     ShotUpdate,
 )
-from app.services.exceptions import ResourceNotFoundError
 
 router = APIRouter()
 
@@ -70,13 +69,7 @@ def read_shot(
     """
     Retrieve a shot specifically for a device context.
     """
-    shot = shot_service.get((device_name, shot_id))
-    if not shot:
-        raise ResourceNotFoundError(
-            f"Shot '{shot_id}' not found for device '{device_name}'"
-        )
-
-    shot_service.check_read_access(shot, user)
+    shot = shot_service.get_by_device_name(shot_id, device_name, user)
     return shot_service.to_read_model(shot, include_device=True)
 
 
@@ -96,13 +89,9 @@ def update_shot(
     """
     Update a shot nested under a device.
     """
-    db_obj = shot_service.get((device_name, shot_id))
-    if not db_obj:
-        raise ResourceNotFoundError(
-            f"Shot '{shot_id}' not found for device '{device_name}'"
-        )
-
-    shot = shot_service.update(db_obj=db_obj, obj_in=shot_in, user=user)
+    shot = shot_service.update(
+        shot_id=shot_id, device_name=device_name, obj_in=shot_in, user=user
+    )
     return shot_service.to_read_model(shot)
 
 

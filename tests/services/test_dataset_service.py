@@ -364,12 +364,9 @@ def test_update_dataset(
     assert created_dataset.id is not None
     assert created_dataset.quality_flag == "good"
 
-    db_dataset_to_update = dataset_service.get(created_dataset.id)
-    assert db_dataset_to_update is not None
-
     dataset_update = DatasetUpdate(name="new_name", level=2, quality_flag="bad")
     updated_dataset = dataset_service.update(
-        db_obj=db_dataset_to_update, obj_in=dataset_update, user=admin_user
+        id=created_dataset.id, obj_in=dataset_update, user=admin_user
     )
 
     assert updated_dataset.name == "new_name"

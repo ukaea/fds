@@ -142,7 +142,7 @@ def test_update_transition_to_public_with_scopes_rejected(dataset_service, admin
     )
     with pytest.raises(FDSValidationError, match="PUBLIC"):
         dataset_service.update(
-            db_obj=ds,
+            id=ds.id,
             obj_in=DatasetUpdate(access_level=AccessLevel.PUBLIC),
             user=admin_user,
         )

@@ -5,7 +5,7 @@ from app.auth.security import AuthenticatedUser
 from app.models.device import Device, DeviceCreate, DeviceUpdate
 from app.models.policy import AccessLevel
 from app.services.device_service import DeviceService
-from app.services.exceptions import FDSValidationError
+from app.services.exceptions import DeviceNotFoundError, FDSValidationError
 
 IDP_A = "https://idp-a.example.com"
 
@@ -85,12 +85,9 @@ def test_update_device(session: Session, admin_user: AuthenticatedUser):
     created_device = service.create(device_create, user=admin_user)
     assert created_device.id is not None
 
-    db_device_to_update = service.get(created_device.id)
-    assert db_device_to_update is not None
-
     device_update = DeviceUpdate(name="Updated Test", status="Updated Status")
     updated_device = service.update(
-        db_obj=db_device_to_update, obj_in=device_update, user=admin_user
+        device_name="Update Test", obj_in=device_update, user=admin_user
     )
     assert updated_device is not None
     assert updated_device.name == "Updated Test"
@@ -117,8 +114,8 @@ def test_delete_device(session: Session, admin_user: AuthenticatedUser):
 
 def test_delete_device_not_found(session: Session, admin_user: AuthenticatedUser):
     service = DeviceService(session)
-    device_deleted = service.delete("NonExistent", user=admin_user)
-    assert device_deleted is False
+    with pytest.raises(DeviceNotFoundError):
+        service.delete("NonExistent", user=admin_user)
 
 
 @pytest.mark.usefixtures("idp_config")
@@ -183,7 +180,7 @@ def test_update_device_transition_to_public_with_scopes_rejected(
     )
     with pytest.raises(FDSValidationError, match="PUBLIC"):
         service.update(
-            db_obj=device,
+            device_name=device.name,
             obj_in=DeviceUpdate(access_level=AccessLevel.PUBLIC),
             user=admin_user,
         )

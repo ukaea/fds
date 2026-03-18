@@ -193,11 +193,15 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         return db_obj
 
     def update(
-        self, *, db_obj: Dataset, obj_in: DatasetUpdate, user: AuthenticatedUser
+        self, *, id: int, obj_in: DatasetUpdate, user: AuthenticatedUser
     ) -> Dataset:
         """
-        Update a dataset.
+        Update a dataset. Resolves by ID internally.
         """
+        db_obj = self.get(id)
+        if not db_obj:
+            raise ResourceNotFoundError(f"Dataset {id} not found")
+
         # Auth check based on existing context
         if db_obj.device_name:
             check_device_admin(user, db_obj.device_name)

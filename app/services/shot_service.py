@@ -20,6 +20,7 @@ from app.services.exceptions import (
     DeviceNotFoundError,
     FDSValidationError,
     ForbiddenError,
+    ResourceNotFoundError,
 )
 
 
@@ -124,6 +125,35 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         )
         return self.session.exec(statement).first()
 
+    def _resolve_shot(self, shot_id: str, device_name: str) -> Shot:
+        """
+        Internal helper: resolves a device name and shot ID to a Shot object.
+        Raises DeviceNotFoundError or ResourceNotFoundError.
+        """
+        device = self.session.exec(
+            select(Device).where(Device.name == device_name)
+        ).first()
+        if not device:
+            raise DeviceNotFoundError(f"Device '{device_name}' not found")
+
+        shot = self.get((device_name, shot_id))
+        if not shot:
+            raise ResourceNotFoundError(
+                f"Shot '{shot_id}' not found for device '{device_name}'"
+            )
+        return shot
+
+    def get_by_device_name(
+        self, shot_id: str, device_name: str, user: AuthenticatedUser
+    ) -> Shot:
+        """
+        Retrieve a single shot by device name and shot ID.
+        Resolves the device, fetches the shot, and enforces read access.
+        """
+        shot = self._resolve_shot(shot_id, device_name)
+        self.check_read_access(shot, user)
+        return shot
+
     def get_multi_by_device_name(
         self,
         device_name: str,
@@ -155,13 +185,16 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
     def update(
         self,
         *,
-        db_obj: Shot,
+        shot_id: str,
+        device_name: str,
         obj_in: ShotUpdate,
         user: AuthenticatedUser,
     ) -> Shot:
         """
-        Update a shot. Enforces ownership and permission checks.
+        Update a shot. Resolves internally and enforces permission checks.
         """
+        db_obj = self._resolve_shot(shot_id, device_name)
+
         # Permission check for the CURRENT device
         check_shot_operator(user, db_obj.device_name)
 
@@ -194,9 +227,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         """
         Delete a shot with authentication.
         """
-        shot = self.get((device_name, shot_id))
-        if not shot:
-            return False
+        shot = self._resolve_shot(shot_id, device_name)
 
         check_device_admin(user, device_name)
 

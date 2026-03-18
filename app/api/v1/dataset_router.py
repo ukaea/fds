@@ -274,10 +274,7 @@ def update_dataset(
     """
     Update a dataset. Requires appropriate tiered authorization.
     """
-    db_obj = dataset_service.get(id)
-    if not db_obj:
-        raise ResourceNotFoundError(f"Dataset {id} not found")
-    dataset = dataset_service.update(db_obj=db_obj, obj_in=dataset_in, user=user)
+    dataset = dataset_service.update(id=id, obj_in=dataset_in, user=user)
     return dataset_service.to_read_model(dataset)
 
 

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUserDep, DeviceServiceDep, SourceServiceDep
 from app.models.device import DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.source import SourceCreate, SourceRead
+from app.services.exceptions import DeviceNotFoundError
 from app.services.jsonld import map_device_to_dcat
 
 router = APIRouter()
@@ -51,7 +52,7 @@ def read_device(
     """
     device = device_service.get_by_name(device_name)
     if not device:
-        raise HTTPException(status_code=404, detail="Device not found")
+        raise DeviceNotFoundError(f"Device '{device_name}' not found")
 
     # Content Negotiation
     if "application/ld+json" in request.headers.get("accept", ""):
@@ -72,11 +73,7 @@ def update_device(
     """
     Update a device by name.
     """
-    current_device = device_service.get_by_name(device_name)
-    if not current_device:
-        raise HTTPException(status_code=404, detail="Device not found")
-
-    device = device_service.update(db_obj=current_device, obj_in=device_in, user=user)
+    device = device_service.update(device_name=device_name, obj_in=device_in, user=user)
     return device_service.to_read_model(device)
 
 
@@ -90,9 +87,7 @@ def delete_device(
     """
     Delete a device by name.
     """
-    deleted = device_service.delete(device_name, user)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Device not found")
+    device_service.delete(device_name, user)
     return None
 
 

@@ -228,7 +228,8 @@ def test_update_shot_transition_to_public_with_scopes_rejected(
     )
     with pytest.raises(FDSValidationError, match="PUBLIC"):
         shot_service.update(
-            db_obj=shot,
+            shot_id=shot.id,
+            device_name="DEV4",
             obj_in=ShotUpdate(access_level=AccessLevel.PUBLIC),
             user=admin_user,
         )
