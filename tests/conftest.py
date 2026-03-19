@@ -157,6 +157,8 @@ def mock_jwt_decode(mocker):
 def mock_s3_provider(mocker):
     # Mock the get_provider_for_protocol to return a mock S3 provider
     mock_prov = mocker.Mock()
+    # Providers return a mapping payload; use an empty mapping by default.
+    mock_prov.generate_credentials.return_value = {}
     # When initialized, S3CredentialProvider will be used, but we want to intercept the factory
     mocker.patch(
         "app.services.file_access_service.get_provider_for_protocol",
