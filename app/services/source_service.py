@@ -74,10 +74,8 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
             check_is_admin(user)
         return self.update_unchecked(db_obj=db_obj, obj_in=obj_in)
 
-    def delete_with_auth(self, id: int, user: AuthenticatedUser) -> bool:
-        """
-        Delete a source with authorization.
-        """
+    def delete(self, id: int, user: AuthenticatedUser) -> bool:
+        """Delete a source with authorization."""
         db_obj = self.get(id)
         if not db_obj:
             raise ResourceNotFoundError(f"Source {id} not found")
@@ -88,22 +86,15 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
             check_is_admin(user)
         return self.delete_unchecked(id)
 
-    def delete(self, id: int, user: AuthenticatedUser) -> bool:
-        """Backward-compatible delete entrypoint."""
-        return self.delete_with_auth(id, user)
+    def get_by_name(self, name: str) -> Source:
+        """Resolve a source by name.
 
-    def get_by_name(self, name: str) -> Source | None:
-        """
-        Retrieve a source by its unique name.
+        Raises ``ResourceNotFoundError`` if the source does not exist.
         """
         statement = select(Source).where(Source.name == name)
-        return self.session.exec(statement).first()
-
-    def get_by_name_or_raise(self, name: str) -> Source:
-        """Resolve a source by name or raise a not-found error."""
-        source = self.get_by_name(name)
+        source = self.session.exec(statement).first()
         if not source:
-            raise ResourceNotFoundError(f"Source {name} not found")
+            raise ResourceNotFoundError(f"Source '{name}' not found")
         return source
 
     def get_for_device(

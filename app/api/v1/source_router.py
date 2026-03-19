@@ -38,7 +38,7 @@ def read_source_by_name(name: str, source_service: SourceServiceDep) -> SourceRe
     """
     Retrieve a single source by its descriptive name.
     """
-    source = source_service.get_by_name_or_raise(name)
+    source = source_service.get_by_name(name)
     return source_service.to_read_model(source)
 
 
@@ -67,5 +67,5 @@ def delete_source(
     """
     Delete a source. Requires global admin.
     """
-    source_service.delete_with_auth(id, user)
+    source_service.delete(id, user)
     return None

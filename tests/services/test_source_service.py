@@ -107,13 +107,13 @@ def test_get_source_by_name(session: Session, admin_user: AuthenticatedUser):
     service.create(SourceCreate(name="UniqueName"), user=admin_user)
 
     retrieved = service.get_by_name("UniqueName")
-    assert retrieved is not None
     assert retrieved.name == "UniqueName"
 
 
 def test_get_source_by_name_not_found(session: Session):
     service = SourceService(session)
-    assert service.get_by_name("NonExistent") is None
+    with pytest.raises(ResourceNotFoundError):
+        service.get_by_name("NonExistent")
 
 
 def test_create_source_device_admin(
@@ -192,5 +192,5 @@ def test_delete_source_device_admin(
     )
     assert source.id is not None
 
-    assert service.delete_with_auth(id=source.id, user=mast_admin_user) is True
+    assert service.delete(id=source.id, user=mast_admin_user) is True
     assert service.get(source.id) is None

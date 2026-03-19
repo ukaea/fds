@@ -27,22 +27,24 @@ def test_create_device(session: Session, admin_user: AuthenticatedUser):
     assert db_device.name == "MAST"
 
 
-def test_get_device(session: Session, admin_user: AuthenticatedUser):
+def test_get_device_by_name(session: Session, admin_user: AuthenticatedUser):
     service = DeviceService(session)
-    device_create = DeviceCreate(name="JET", type="Tokamak")
-    created_device = service.create(device_create, user=admin_user)
-    assert created_device.id is not None
+    service.create(DeviceCreate(name="JET", type="Tokamak"), user=admin_user)
 
-    retrieved_device = service.get(created_device.id)
-    assert retrieved_device is not None
-    assert retrieved_device.id == created_device.id
-    assert retrieved_device.name == "JET"
+    retrieved = service.get_by_name("JET", admin_user)
+    assert retrieved.name == "JET"
 
 
-def test_get_device_not_found(session: Session):
+def test_get_device_by_name_not_found(session: Session, admin_user: AuthenticatedUser):
     service = DeviceService(session)
-    retrieved_device = service.get(999)  # Non-existent ID
-    assert retrieved_device is None
+    with pytest.raises(DeviceNotFoundError):
+        service.get_by_name("NonExistent", admin_user)
+
+
+def test_get_id_disabled(session: Session):
+    service = DeviceService(session)
+    with pytest.raises(NotImplementedError):
+        service.get(1)
 
 
 def test_get_devices(session: Session, admin_user: AuthenticatedUser):

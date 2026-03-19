@@ -15,8 +15,23 @@ from app.services.exceptions import ConflictError, DeviceNotFoundError, Forbidde
 
 
 class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
+    """
+    Service for device CRUD operations.
+
+    Devices are identified externally by *name* (e.g. "MAST", "JET").
+    The surrogate ``id`` column is a persistence detail for ORM relations;
+    it is not a valid retrieval key at the service boundary.
+    Use ``get_by_name`` for all external lookups.
+    """
+
     def __init__(self, session: Session):
         super().__init__(model=Device, session=session)
+
+    def get(self, id: object) -> Device:
+        raise NotImplementedError(
+            "DeviceService does not support lookup by id. "
+            "Use get_by_name(name, user) instead."
+        )
 
     def check_read_access(self, device: Device, user: AuthenticatedUser) -> None:
         """Enforce read access for device metadata."""
@@ -66,26 +81,23 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         self,
         name: str,
         user: AuthenticatedUser = ANONYMOUS_USER,
-    ) -> Device | None:
-        result = self.session.exec(select(Device).where(Device.name == name))
-        device = result.first()
-        if device:
-            self.check_read_access(device, user)
-        return device
-
-    def get_by_name_or_raise(
-        self,
-        name: str,
-        user: AuthenticatedUser = ANONYMOUS_USER,
     ) -> Device:
-        """Resolve a device by name, enforcing read access and 404 semantics."""
-        device = self.get_by_name(name, user=user)
-        if not device:
-            raise DeviceNotFoundError(f"Device '{name}' not found")
+        """Resolve a device by name, enforcing read access.
+
+        Raises ``DeviceNotFoundError`` if the device does not exist.
+        Raises ``ForbiddenError`` if ``user`` lacks read access.
+        """
+        device = self._get_by_name(name)
+        self.check_read_access(device, user)
         return device
 
-    def _get_by_name_or_raise(self, name: str) -> Device:
-        """Internal helper: resolves a device by name or raises DeviceNotFoundError."""
+    def _get_by_name(self, name: str) -> Device:
+        """Internal lookup by name with no access check.
+
+        Used by admin mutation paths (update/delete) where read policy
+        should not gate the operation.  Raises ``DeviceNotFoundError``
+        if the device does not exist.
+        """
         result = self.session.exec(select(Device).where(Device.name == name))
         device = result.first()
         if not device:
@@ -120,7 +132,7 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         Resolves the device internally.
         """
         check_is_admin(user)
-        db_obj = self._get_by_name_or_raise(device_name)
+        db_obj = self._get_by_name(device_name)
         update_data = obj_in.model_dump(exclude_unset=True)
         validate_policy_fields(
             update_data.get("access_level", db_obj.access_level),
@@ -134,7 +146,7 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         Delete a device by name. Requires global admin privileges.
         """
         check_is_admin(user)
-        device = self._get_by_name_or_raise(device_name)
+        device = self._get_by_name(device_name)
         self.session.delete(device)
         self.session.commit()
         return True

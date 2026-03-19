@@ -51,7 +51,7 @@ def read_device(
     Supports Content Negotiation:
     - Accept: application/ld+json -> Returns DCAT Metadata
     """
-    device = device_service.get_by_name_or_raise(device_name, user=user)
+    device = device_service.get_by_name(device_name, user=user)
 
     # Content Negotiation
     if "application/ld+json" in request.headers.get("accept", ""):
