@@ -55,6 +55,7 @@ This project uses `uv` for dependency management.
 
 - Python 3.14+
 - `uv` package manager
+- `prek` for pre-commit checks
 
 ### Setup
 
@@ -74,7 +75,7 @@ This project uses `uv` for dependency management.
 3. **Install pre-commit hooks:**
 
     ```bash
-    pre-commit install
+    prek install
     ```
 
 ## Configuration
@@ -100,7 +101,7 @@ uv run pytest
 This project uses `ruff` for linting and formatting.
 
 ```bash
-uv run pre-commit run --all-files
+prek run
 ```
 
 ### Database Migrations
