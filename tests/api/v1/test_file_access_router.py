@@ -14,9 +14,8 @@ def test_get_credentials(test_client: TestClient, admin_user_token: dict):
     assert response.status_code == 200
     data = response.json()
 
-    assert "tokens" in data
     assert "resource_map" in data
-    # We might expect empty tokens if DB is empty, but status 200 confirms wiring.
+    # We might expect empty resource_map if DB is empty, but status 200 confirms wiring.
 
 
 def test_get_credentials_unauthorized(test_client: TestClient):
@@ -32,4 +31,4 @@ def test_get_credentials_unauthorized(test_client: TestClient):
     response = test_client.post("/api/v1/file-access/credentials", json={})
     assert response.status_code == 200
     data = response.json()
-    assert "tokens" in data
+    assert "resource_map" in data

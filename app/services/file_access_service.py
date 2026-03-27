@@ -10,8 +10,8 @@ from app.core.storage.providers import get_provider_for_protocol
 from app.models.dataset import Dataset
 from app.models.file_access import (
     CredentialManifest,
+    CredentialPayload,
     CredentialRequest,
-    CredentialTokenPayload,
 )
 from app.models.identity import AuthenticatedUser
 from app.models.policy import AccessLevel
@@ -31,7 +31,7 @@ class FileAccessService:
     ) -> CredentialManifest:
         """
         Generates temporary storage credentials.
-        Returns a Manifest containing multiple tokens if necessary.
+        Returns a manifest mapping each dataset URL to its credential.
         """
         allowed_urls = self._resolve_allowed_urls(user, request)
 
@@ -39,27 +39,20 @@ class FileAccessService:
             logger.info(
                 "Access denied or no datasets found", extra={"user_id": user.id}
             )
-            return CredentialManifest(tokens=[], resource_map={})
+            return CredentialManifest(resource_map={})
 
         grouped_urls = self._group_urls_by_protocol(allowed_urls)
-
-        manifest = CredentialManifest(tokens=[], resource_map={})
-        token_index_counter = 0
         session_name = f"fds-sess-{user.id[-8:]}"
+        resource_map: dict[str, CredentialPayload] = {}
 
         for protocol, urls in grouped_urls.items():
             if not urls:
                 continue
-
-            new_tokens, new_map = self._mint_for_protocol(
-                user, protocol, urls, session_name, token_index_counter
+            resource_map.update(
+                self._mint_for_protocol(user, protocol, urls, session_name)
             )
 
-            manifest.tokens.extend(new_tokens)
-            manifest.resource_map.update(new_map)
-            token_index_counter += len(new_tokens)
-
-        return manifest
+        return CredentialManifest(resource_map=resource_map)
 
     def _group_urls_by_protocol(self, urls: list[str]) -> dict[str, list[str]]:
         logger.info(f"Grouping {len(urls)} URLs by protocol")
@@ -77,56 +70,42 @@ class FileAccessService:
         protocol: str,
         urls: list[str],
         session_name: str,
-        start_index: int,
-    ) -> tuple[list[CredentialTokenPayload], dict[str, int]]:
-        tokens: list[CredentialTokenPayload] = []
-        resource_map: dict[str, int] = {}
+    ) -> dict[str, CredentialPayload]:
+        result: dict[str, CredentialPayload] = {}
         try:
             provider = get_provider_for_protocol(protocol)
         except ValueError:
             logger.warning(
                 f"No credential provider implemented for protocol: {protocol}. Skipping."
             )
-            return [], {}
+            return {}
 
-        provider_key = self._get_provider_key(protocol)
-
-        # Split urls into chunks
         chunks = [
             urls[i : i + self.MAX_DATASETS_PER_TOKEN]
             for i in range(0, len(urls), self.MAX_DATASETS_PER_TOKEN)
         ]
 
-        for chunk in chunks:
-            current_index = start_index + len(tokens)
-
+        for chunk_index, chunk in enumerate(chunks):
             logger.info(
                 "Vending chunked credentials",
                 extra={
                     "user_id": user.id,
                     "protocol": protocol,
                     "chunk_size": len(chunk),
-                    "token_index": current_index,
+                    "chunk_index": chunk_index,
                 },
             )
 
-            # Generic provider returns dict (e.g. S3Credentials or similar)
             creds = provider.generate_credentials(
-                chunk, f"{session_name}-{current_index}"
+                chunk, f"{session_name}-{chunk_index}"
             )
 
-            # We wrap it in a structure that identifies it as part of the list
-            token_payload: CredentialTokenPayload = {
-                "provider": provider_key,
-                "credentials": dict(creds),
-            }
-            tokens.append(token_payload)
-
-            # Map these resources to this token index
             for url in chunk:
-                resource_map[url] = current_index
+                bucket = urlparse(url).netloc
+                if bucket in creds:
+                    result[url] = creds[bucket]
 
-        return tokens, resource_map
+        return result
 
     def _resolve_allowed_urls(
         self, user: AuthenticatedUser, request: CredentialRequest
@@ -222,12 +201,3 @@ class FileAccessService:
 
         # Default deny
         return False
-
-    def _get_provider_key(self, protocol: str) -> str:
-        if protocol == "s3":
-            return "s3"
-        if protocol in ("az", "abfs"):
-            return "azure"
-        if protocol == "gs":
-            return "gcp"
-        return protocol

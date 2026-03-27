@@ -1,6 +1,5 @@
 import logging
 from collections.abc import Sequence
-from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
@@ -13,11 +12,7 @@ from app.auth.access_control import (
 from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
 from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
 from app.models.device import Device
-from app.models.file_access import (
-    CredentialRequest,
-    CredentialTokenPayload,
-    anonymous_storage_options,
-)
+from app.models.file_access import CredentialRequest, anonymous_storage_options
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.services.base_service import BaseService
@@ -37,19 +32,6 @@ logger = logging.getLogger(__name__)
 class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     def __init__(self, session: Session):
         super().__init__(model=Dataset, session=session)
-
-    def _credential_to_storage_options(
-        self, token_payload: CredentialTokenPayload, data_url: str
-    ) -> dict[str, Any] | None:
-        """Extract FSSpec storage options from a credential token payload."""
-        credentials = token_payload.get("credentials")
-        if not credentials:
-            logger.warning(
-                "Skipping malformed credential payload",
-                extra={"data_url": data_url, "token_payload": token_payload},
-            )
-            return None
-        return next(iter(credentials.values())).to_storage_options()
 
     def get_multi(
         self,
@@ -399,11 +381,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 request=CredentialRequest(data_urls=credentialed_urls),
             )
             for model in non_public:
-                if (idx := manifest.resource_map.get(model.data_url)) is not None:
-                    opts = self._credential_to_storage_options(
-                        manifest.tokens[idx], model.data_url
-                    )
-                    if opts is not None:
-                        model.storage_options = opts
+                if model.data_url and (
+                    cred := manifest.resource_map.get(model.data_url)
+                ):
+                    model.storage_options = cred.to_storage_options()
 
         return read_models

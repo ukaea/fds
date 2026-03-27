@@ -1,8 +1,10 @@
+from datetime import datetime
+
 import pytest
 from sqlmodel import Session, select
 
 from app.models.dataset import Dataset
-from app.models.file_access import CredentialRequest
+from app.models.file_access import CredentialRequest, S3Credentials
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.models.shot import Shot
@@ -155,30 +157,25 @@ def test_polyglot_routing_s3(session, access_service, mock_s3_provider):
     session.add(ds1)
     session.commit()
 
+    fake_cred = S3Credentials(
+        access_key_id="k",
+        secret_access_key="s",
+        session_token="t",
+        expiration=datetime.fromisoformat("2099-01-01T00:00:00+00:00"),
+    )
+    mock_s3_provider.generate_credentials.return_value = {"bucket": fake_cred}
+
     # 2. Call Service
-    # Must specify explicit request now (no implicit "select all")
     req = CredentialRequest(data_urls=["s3://bucket/ds1"])
     result = access_service.generate_session_credentials(user, req)
 
     # 3. Verify Routing
-    # Should have called get_provider_for_protocol("s3") -> mock_s3_provider
-    # Then mock_s3_provider.generate_credentials(...)
     mock_s3_provider.generate_credentials.assert_called_once()
-
-    # Verify allowed_urls passed to provider
     args = mock_s3_provider.generate_credentials.call_args
     assert "s3://bucket/ds1" in args[0][0]
 
-    # Verify Result Structure
-    # result is CredentialManifest. tokens is list[dict].
-    # Check if we have a token for s3
-    s3_tokens = [t for t in result.tokens if t["provider"] == "s3"]
-    assert len(s3_tokens) > 0
-    # Check that the token credentials match the mock return
-    assert (
-        s3_tokens[0]["credentials"]
-        == mock_s3_provider.generate_credentials.return_value
-    )
+    # Verify the URL is mapped to a credential in the manifest
+    assert "s3://bucket/ds1" in result.resource_map
 
 
 def test_empty_request_returns_empty(access_service, mock_s3_provider):
@@ -189,7 +186,6 @@ def test_empty_request_returns_empty(access_service, mock_s3_provider):
 
     # Assert
     # Empty request should return empty manifest, not wildcard
-    assert len(result.tokens) == 0
     assert len(result.resource_map) == 0
     assert mock_s3_provider.generate_credentials.call_count == 0
 
@@ -269,11 +265,15 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
 
     # 3. Mock Provider to avoid calling AWS STS
     # We patch at the module level where FileAccessService imports it
+    fake_cred = S3Credentials(
+        access_key_id="fake",
+        secret_access_key="fake",
+        session_token="fake",
+        expiration=datetime.fromisoformat("2099-01-01T00:00:00+00:00"),
+    )
     mock_provider = mocker.MagicMock()
     mock_provider.generate_credentials.side_effect = lambda urls, name: {
-        "access_key_id": "fake",
-        "secret_access_key": "fake",
-        "session_token": "fake",
+        "fds-data": fake_cred
     }
 
     # Replace the provider interaction
@@ -293,9 +293,6 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
 
     # Should NOT include the noise dataset
     assert "s3://fds-data/shots/999/noise" not in manifest.resource_map
-
-    # Should have generated at least one token
-    assert len(manifest.tokens) >= 1
 
     # Check provider was called with correct URLs - we can use any call_args
     assert mock_provider.generate_credentials.call_count >= 1

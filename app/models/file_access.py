@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, NotRequired, TypedDict
+from typing import Any
 from urllib.parse import urlparse
 
 from pydantic import BaseModel
@@ -63,11 +63,6 @@ class GCSCredentials(BaseModel):
 CredentialPayload = S3Credentials | AzureCredentials | GCSCredentials
 
 
-class CredentialTokenPayload(TypedDict):
-    provider: NotRequired[str]
-    credentials: NotRequired[dict[str, CredentialPayload]]
-
-
 class CredentialRequest(BaseModel):
     """
     Filter for credential generation.
@@ -80,11 +75,10 @@ class CredentialRequest(BaseModel):
 
 class CredentialManifest(BaseModel):
     """
-    Response model for multi-token vending.
+    Maps each dataset URL to its temporary storage credential.
     """
 
-    tokens: list[CredentialTokenPayload]
-    resource_map: dict[str, int]
+    resource_map: dict[str, CredentialPayload]
 
 
 def anonymous_storage_options(data_url: str) -> dict[str, Any] | None:
