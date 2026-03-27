@@ -1,7 +1,10 @@
 from datetime import datetime
 from typing import Any, NotRequired, TypedDict
+from urllib.parse import urlparse
 
 from pydantic import BaseModel
+
+from app.core.config import config
 
 
 class S3Credentials(BaseModel):
@@ -16,9 +19,7 @@ class S3Credentials(BaseModel):
 
     def to_storage_options(self) -> dict[str, Any]:
         """Convert STS token attributes into FSSpec kwargs seamlessly."""
-        from app.core.config import config
-
-        opts = {
+        opts: dict[str, Any] = {
             "key": self.access_key_id,
             "secret": self.secret_access_key,
             "token": self.session_token,
@@ -38,8 +39,6 @@ class AzureCredentials(BaseModel):
 
     def to_storage_options(self) -> dict[str, Any]:
         """Convert SAS token into FSSpec kwargs for adlfs."""
-        from app.core.config import config
-
         return {
             "account_name": config.AZURE_STORAGE_ACCOUNT,
             "sas_token": self.sas_token,
@@ -86,3 +85,24 @@ class CredentialManifest(BaseModel):
 
     tokens: list[CredentialTokenPayload]
     resource_map: dict[str, int]
+
+
+def anonymous_storage_options(data_url: str) -> dict[str, Any] | None:
+    """
+    Return FSSpec storage options for anonymous/public access based on URL scheme.
+    Returns None for unsupported schemes.
+
+    Note: Azure public blobs are accessible without credentials when no SAS token
+    is provided; adlfs infers anonymous access from the empty options dict.
+    """
+    scheme = urlparse(data_url).scheme
+    if scheme == "s3":
+        opts: dict[str, Any] = {"anon": True}
+        if config.STS_ENDPOINT_URL:
+            opts["client_kwargs"] = {"endpoint_url": config.STS_ENDPOINT_URL}
+        return opts
+    if scheme in ("az", "abfs"):
+        return {}
+    if scheme == "gs":
+        return {"token": "anon"}
+    return None

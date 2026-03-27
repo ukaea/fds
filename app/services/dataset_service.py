@@ -1,6 +1,6 @@
 import logging
 from collections.abc import Sequence
-from typing import Any, cast
+from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
@@ -13,7 +13,11 @@ from app.auth.access_control import (
 from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
 from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
 from app.models.device import Device
-from app.models.file_access import CredentialRequest, CredentialTokenPayload
+from app.models.file_access import (
+    CredentialRequest,
+    CredentialTokenPayload,
+    anonymous_storage_options,
+)
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.services.base_service import BaseService
@@ -34,40 +38,18 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     def __init__(self, session: Session):
         super().__init__(model=Dataset, session=session)
 
-    def _extract_storage_options(
+    def _credential_to_storage_options(
         self, token_payload: CredentialTokenPayload, data_url: str
     ) -> dict[str, Any] | None:
         """Extract FSSpec storage options from a credential token payload."""
-        raw_credentials = token_payload.get("credentials")
-        if not isinstance(raw_credentials, dict) or not raw_credentials:
+        credentials = token_payload.get("credentials")
+        if not credentials:
             logger.warning(
                 "Skipping malformed credential payload",
                 extra={"data_url": data_url, "token_payload": token_payload},
             )
             return None
-
-        raw_creds = next(iter(raw_credentials.values()))
-
-        to_storage_options = getattr(raw_creds, "to_storage_options", None)
-        if callable(to_storage_options):
-            return cast(dict[str, Any], to_storage_options())
-
-        model_dump = getattr(raw_creds, "model_dump", None)
-        if callable(model_dump):
-            return cast(dict[str, Any], model_dump())
-
-        as_dict = getattr(raw_creds, "dict", None)
-        if callable(as_dict):
-            return cast(dict[str, Any], as_dict())
-
-        logger.error(
-            "Skipping credential payload with unsupported credential object",
-            extra={
-                "data_url": data_url,
-                "credential_type": type(raw_creds).__name__,
-            },
-        )
-        return None
+        return next(iter(credentials.values())).to_storage_options()
 
     def get_multi(
         self,
@@ -385,41 +367,43 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         self, read_models: list[DatasetRead], user: AuthenticatedUser
     ) -> list[DatasetRead]:
         """
-        Takes a list of DatasetRead models and batch-injects standard FSSpec `storage_options` dictionaries
-        containing temporary S3/MinIO STS credentials for authorized resources.
-        Filters natively handle access control logic inside FileAccessService.
+        Batch-injects FSSpec `storage_options` into DatasetRead models.
+        Public datasets receive anonymous options directly; non-public datasets
+        go through credential vending via FileAccessService.
         """
         if not read_models:
             return read_models
 
-        # Extract all valid protocol URLs
-        urls = [m.data_url for m in read_models if m.data_url]
-        if not urls:
-            return read_models
+        public = [
+            m for m in read_models if m.effective_access_level == AccessLevel.PUBLIC
+        ]
+        non_public = [
+            m for m in read_models if m.effective_access_level != AccessLevel.PUBLIC
+        ]
 
-        # Request tokens for the batch in a single call to prevent N+1 IAM assumptions
-        file_access_service = FileAccessService(self.session)
-        request = CredentialRequest(data_urls=urls)
+        for model in public:
+            if model.data_url:
+                opts = anonymous_storage_options(model.data_url)
+                if opts is None:
+                    logger.warning(
+                        "No anonymous storage options for scheme",
+                        extra={"data_url": model.data_url},
+                    )
+                else:
+                    model.storage_options = opts
 
-        # This service internally runs the _check_download_permission policy engine.
-        # Unknown/Unauthorised URLs will simply not appear in the resulting manifest map.
-        manifest = file_access_service.generate_session_credentials(
-            user=user, request=request
-        )
-
-        for model in read_models:
-            if model.data_url not in manifest.resource_map:
-                continue
-
-            token_idx = manifest.resource_map[model.data_url]
-            token_payload = manifest.tokens[token_idx]
-
-            storage_options = self._extract_storage_options(
-                token_payload, model.data_url
+        credentialed_urls = [m.data_url for m in non_public if m.data_url]
+        if credentialed_urls:
+            manifest = FileAccessService(self.session).generate_session_credentials(
+                user=user,
+                request=CredentialRequest(data_urls=credentialed_urls),
             )
-            if storage_options is None:
-                continue
-
-            model.storage_options = storage_options
+            for model in non_public:
+                if (idx := manifest.resource_map.get(model.data_url)) is not None:
+                    opts = self._credential_to_storage_options(
+                        manifest.tokens[idx], model.data_url
+                    )
+                    if opts is not None:
+                        model.storage_options = opts
 
         return read_models

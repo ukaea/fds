@@ -7,6 +7,7 @@ from app.auth.security import AuthenticatedUser
 from app.models.dataset import DatasetCreate, DatasetUpdate
 from app.models.device import DeviceCreate
 from app.models.file_access import CredentialManifest, S3Credentials
+from app.models.policy import AccessLevel
 from app.models.shot import ShotCreate
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
@@ -652,3 +653,49 @@ def test_enrich_with_storage_options_missing_credentials_payload(
 
     assert len(enriched) == 1
     assert enriched[0].storage_options is None
+
+
+def test_enrich_with_storage_options_public_dataset_no_credentials(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+    mocker,
+):
+    """
+    Verifies that public datasets receive anonymous storage options without
+    minting STS credentials. The credential provider must never be called.
+    """
+    device_service.create(
+        DeviceCreate(name="enrich-dev5", type="Test"), user=admin_user
+    )
+    shot = shot_service.create(
+        ShotCreate(id="enrich-5", device_name="enrich-dev5"), user=admin_user
+    )
+
+    dataset_service.create(
+        DatasetCreate(
+            name="ds_public_s3",
+            level=1,
+            data_url="s3://public-bucket/data",
+            shot_id=shot.id,
+            device_name="enrich-dev5",
+            access_level=AccessLevel.PUBLIC,
+        ),
+        user=admin_user,
+    )
+
+    mock_provider = mocker.patch(
+        "app.services.file_access_service.get_provider_for_protocol"
+    )
+
+    models = dataset_service.get_datasets_for_shot(
+        shot.id, "enrich-dev5", user=admin_user
+    )
+    read_models = [dataset_service.to_read_model(m) for m in models]
+    enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
+
+    assert len(enriched) == 1
+    assert enriched[0].storage_options is not None
+    assert enriched[0].storage_options.get("anon") is True
+    mock_provider.assert_not_called()
