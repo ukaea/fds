@@ -111,10 +111,21 @@ def _(mo):
 
 @app.cell
 def _(FDS_API_URL, headers, httpx):
-    def register(endpoint, payload, label):
+    def register(endpoint, payload, label, update_endpoint=None):
         resp = httpx.post(f"{FDS_API_URL}{endpoint}", json=payload, headers=headers)
-        if resp.status_code in (201, 409):
-            print(f"  {label}: OK")
+        if resp.status_code == 201:
+            print(f"  {label}: Created")
+        elif resp.status_code == 409 and update_endpoint:
+            # Resource exists — patch it to ensure fields like access_level are current
+            upd = httpx.put(
+                f"{FDS_API_URL}{update_endpoint}", json=payload, headers=headers
+            )
+            if upd.status_code == 200:
+                print(f"  {label}: Updated")
+            else:
+                print(f"  {label}: Already exists (update failed {upd.status_code})")
+        elif resp.status_code == 409:
+            print(f"  {label}: Already exists")
         else:
             print(f"  {label}: FAILED ({resp.status_code}) {resp.text}")
         return resp
@@ -127,8 +138,10 @@ def _(FDS_API_URL, headers, httpx):
             "name": "mast",
             "description": "Mega Ampere Spherical Tokamak (MAST)",
             "type": "tokamak",
+            "access_level": "public",
         },
         "mast",
+        update_endpoint="/devices/mast",
     )
     register(
         "/devices/",
@@ -136,8 +149,10 @@ def _(FDS_API_URL, headers, httpx):
             "name": "mast-upgrade",
             "description": "Mega Ampere Spherical Tokamak Upgrade (MAST-U)",
             "type": "tokamak",
+            "access_level": "public",
         },
         "mast-upgrade",
+        update_endpoint="/devices/mast-upgrade",
     )
 
     # 2. Register Shots

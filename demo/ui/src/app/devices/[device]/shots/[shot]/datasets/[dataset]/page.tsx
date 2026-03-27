@@ -112,16 +112,8 @@ export default function DatasetPage() {
           const manifest = await res.json();
           const s3Path = datasetData?.data_url;
 
-          // Find the token assigned to this specific s3Path from the resource_map
-          const tokenIndex = manifest.resource_map[s3Path || ""];
-          let validCreds = null;
-
-          if (tokenIndex !== undefined) {
-             const tokenPayload = manifest.tokens[tokenIndex];
-             if (tokenPayload?.provider === 's3' && tokenPayload?.credentials) {
-                 validCreds = tokenPayload.credentials;
-             }
-          }
+          // resource_map maps URL → credential directly
+          const validCreds = manifest.resource_map[s3Path || ""] ?? null;
 
           if (validCreds && s3Path) {
              setAccessValues({ granted: true, token: validCreds, s3Path });
