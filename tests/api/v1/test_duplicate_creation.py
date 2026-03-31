@@ -86,7 +86,7 @@ def test_duplicate_dataset_creation(
 
     dataset_data = {
         "name": "dup-dataset",
-        "data_url": "s3://test/dup",
+        "url": "s3://test/dup",
         "access_level": "public",
         "level": 1,
     }

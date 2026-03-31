@@ -110,7 +110,7 @@ export default function DatasetPage() {
           if (!res.ok) throw new Error("Failed to get credentials");
 
           const manifest = await res.json();
-          const s3Path = datasetData?.data_url;
+          const s3Path = datasetData?.url;
 
           // resource_map maps URL → credential directly
           const validCreds = manifest.resource_map[s3Path || ""] ?? null;

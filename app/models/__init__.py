@@ -1,6 +1,12 @@
 from .dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
 from .datasetsource import DatasetSource, DatasetSourceLink
 from .device import Device, DeviceCreate, DeviceRead, DeviceUpdate
+from .distribution import (
+    Distribution,
+    DistributionCreate,
+    DistributionRead,
+    DistributionUpdate,
+)
 from .policy import AccessLevel
 from .shot import Shot, ShotCreate, ShotRead, ShotUpdate
 from .source import Source, SourceCreate, SourceRead, SourceUpdate
@@ -26,6 +32,10 @@ __all__ = [
     "DatasetRead",
     "DatasetCreate",
     "DatasetUpdate",
+    "Distribution",
+    "DistributionCreate",
+    "DistributionRead",
+    "DistributionUpdate",
     "Source",
     "SourceRead",
     "SourceCreate",

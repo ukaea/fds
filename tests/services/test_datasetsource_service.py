@@ -58,7 +58,7 @@ def setup_data_fixture(
         DatasetCreate(
             name="Data 1",
             level=1,
-            data_url="url1",
+            url="url1",
             shot_id=shot.id,
             device_name="Test Device",
         ),
@@ -68,7 +68,7 @@ def setup_data_fixture(
         DatasetCreate(
             name="Data 2",
             level=1,
-            data_url="url2",
+            url="url2",
             shot_id=shot.id,
             device_name="Test Device",
         ),

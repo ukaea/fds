@@ -1,11 +1,12 @@
 # /// script
 # requires-python = ">=3.14"
 # dependencies = [
-#     "marimo>=0.19.4",
+#     "marimo>=0.20.2",
 #     "httpx==0.27.2",
 #     "s3fs==2026.1.0",
 #     "xarray[parallel]==2025.12.0",
 #     "zarr==3.1.5",
+#     "pyzmq>=27.1.0",
 # ]
 # ///
 
@@ -226,7 +227,7 @@ def _(FDS_API_URL, headers, httpx):
             meta = {
                 "name": ids_name,
                 "level": 2,
-                "data_url": f"s3://fds-data/shots/{shot_id}/{ids_name}",
+                "url": f"s3://fds-data/shots/{shot_id}/{ids_name}",
                 "access_level": "public",
                 "title": f"{ids_name.replace('_', ' ').title()} — Shot {shot_id}",
                 "media_type": "application/x-zarr",
@@ -330,7 +331,22 @@ def _(mo):
     mo.md(r"""
     ### 3.3. Semantic Metadata (JSON-LD)
 
-    FDS supports Content Negotiation to satisfy FAIR principles. By requesting `application/ld+json`, we can retrieve the **JSON-LD** representation of the dataset, which maps our internal model to standard ontologies like **DCAT** and **PROV**.
+    FDS supports Content Negotiation to satisfy FAIR principles. By requesting `application/ld+json`
+    we get a representation that maps our internal model to standard ontologies like **DCAT** and **PROV-O**.
+
+    There is an important distinction worth noting here. The standard JSON API returns a **denormalised convenience view**:
+    the access URL and format fields (`url`, `media_type`, `format`) are inlined directly into the Dataset
+    response. This makes the common case — "give me the data for this dataset" — a single simple object.
+
+    Under the hood, however, the FDS model follows the [W3C DCAT](https://www.w3.org/TR/vocab-dcat/) ontology:
+    a **`dcat:Dataset`** is a conceptual entity (what the data *is*), and a **`dcat:Distribution`** is a
+    physical access path (how to *get* it). When you request `application/ld+json`, FDS re-separates these
+    back into their proper DCAT structure — the inlined fields re-emerge as a `dcat:Distribution` node nested
+    inside the `dcat:Dataset`.
+
+    This means that an FDS "Dataset" endpoint is, semantically, a `dcat:Dataset` paired with its default
+    `dcat:Distribution`. Alternative distributions (different formats or access tiers) appear in the
+    `dcat:distribution` array alongside it.
     """)
     return
 
@@ -351,6 +367,33 @@ def _(FDS_API_URL, headers, httpx, json):
         print(json.dumps(jld_resp.json(), indent=2))
     else:
         print(f"Failed to retrieve JSON-LD: {jld_resp.status_code} {jld_resp.text}")
+    return (jld_resp,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    #### Distribution nodes in the JSON-LD response
+
+    Notice that the `dcat:distribution` array below contains the physical access details —
+    the same `url`, `media_type`, and `format` values that were inlined in the plain JSON response.
+    The `dcat:downloadURL` at the top level is a convenience shorthand pointing to the default distribution.
+    """)
+    return
+
+
+@app.cell
+def _(jld_resp, json):
+    if jld_resp.status_code == 200:
+        body = jld_resp.json()
+        distributions = body.get("dcat:distribution", [])
+        if distributions:
+            print(f"Dataset URI:  {body.get('@id')}")
+            print(f"Default downloadURL: {body.get('dcat:downloadURL')}")
+            print(f"\n{len(distributions)} distribution(s):")
+            print(json.dumps(distributions, indent=2))
+        else:
+            print("No dcat:distribution nodes found in response.")
     return
 
 
@@ -376,7 +419,7 @@ def _(FDS_API_URL, headers, httpx):
             "level": 1,
             "shot_id": "50000",
             "device_name": "mast-upgrade",
-            "data_url": f"s3://fds-data/shots/50000/signals/signal_{i:02d}",
+            "url": f"s3://fds-data/shots/50000/signals/signal_{i:02d}",
             "access_level": "public",
             "title": f"Public Signal {i}",
             "media_type": "application/x-zarr",
@@ -395,7 +438,7 @@ def _(FDS_API_URL, headers, httpx):
             "level": 1,
             "shot_id": "50000",
             "device_name": "mast-upgrade",
-            "data_url": f"s3://fds-data/shots/50000/restricted/data_{i:02d}",
+            "url": f"s3://fds-data/shots/50000/restricted/data_{i:02d}",
             "access_level": "restricted",
             "title": f"Restricted Data {i}",
             "media_type": "application/x-zarr",
@@ -460,7 +503,7 @@ def _(FDS_API_URL, headers, httpx, xr):
     ).json()
 
     xr.open_dataset(
-        ds_meta["data_url"], engine="zarr", storage_options=ds_meta["storage_options"]
+        ds_meta["url"], engine="zarr", storage_options=ds_meta["storage_options"]
     )
     return
 
@@ -483,7 +526,7 @@ def _(FDS_API_URL, httpx, xr):
     ).json()
 
     xr.open_dataset(
-        eq_dataset["data_url"],
+        eq_dataset["url"],
         engine="zarr",
         storage_options=eq_dataset["storage_options"],
     )
@@ -545,7 +588,7 @@ def _(Client, FDS_API_URL, LocalCluster, headers, httpx, time):
                 local_futures.append(
                     client.submit(
                         process_signal_mean,
-                        ds_meta["data_url"],
+                        ds_meta["url"],
                         ds_meta["storage_options"],
                     )
                 )

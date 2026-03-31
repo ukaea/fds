@@ -93,7 +93,7 @@ def test_create_public_with_required_scopes_rejected(dataset_service, admin_user
             DatasetCreate(
                 name="bad",
                 level=1,
-                data_url="s3://x",
+                url="s3://x",
                 access_level=AccessLevel.PUBLIC,
                 required_scopes=["some:scope"],
             ),
@@ -107,7 +107,7 @@ def test_create_null_access_with_allowed_idps_rejected(dataset_service, admin_us
             DatasetCreate(
                 name="bad",
                 level=1,
-                data_url="s3://x",
+                url="s3://x",
                 allowed_idps=[IDP_A],
             ),
             user=admin_user,
@@ -119,7 +119,7 @@ def test_create_restricted_empty_scopes_allowed(dataset_service, admin_user):
         DatasetCreate(
             name="auth-only",
             level=1,
-            data_url="s3://x",
+            url="s3://x",
             access_level=AccessLevel.RESTRICTED,
             required_scopes=[],
         ),
@@ -134,7 +134,7 @@ def test_update_transition_to_public_with_scopes_rejected(dataset_service, admin
         DatasetCreate(
             name="upgrading",
             level=1,
-            data_url="s3://x",
+            url="s3://x",
             access_level=AccessLevel.RESTRICTED,
             required_scopes=["some:scope"],
         ),
@@ -160,7 +160,7 @@ def test_effective_policy_inherits_required_scopes_from_device(
         user=admin_user,
     )
     ds = dataset_service.create(
-        DatasetCreate(name="ds", level=1, data_url="s3://x", device_name="LAB-A"),
+        DatasetCreate(name="ds", level=1, url="s3://x", device_name="LAB-A"),
         user=admin_user,
     )
     policy = get_effective_policy(ds, session)
@@ -183,7 +183,7 @@ def test_effective_policy_dataset_overrides_device_required_scopes(
         DatasetCreate(
             name="ds",
             level=1,
-            data_url="s3://x",
+            url="s3://x",
             device_name="LAB-B",
             access_level=AccessLevel.RESTRICTED,
             required_scopes=["special:top-secret"],
@@ -209,7 +209,7 @@ def test_effective_policy_inherits_allowed_idps_from_shot(
     )
     ds = dataset_service.create(
         DatasetCreate(
-            name="ds", level=1, data_url="s3://x", device_name="DEV-C", shot_id="S1"
+            name="ds", level=1, url="s3://x", device_name="DEV-C", shot_id="S1"
         ),
         user=admin_user,
     )
@@ -225,7 +225,7 @@ def test_effective_policy_no_idp_restriction_when_unset(
         user=admin_user,
     )
     ds = dataset_service.create(
-        DatasetCreate(name="ds", level=1, data_url="s3://x", device_name="OPEN-DEV"),
+        DatasetCreate(name="ds", level=1, url="s3://x", device_name="OPEN-DEV"),
         user=admin_user,
     )
     policy = get_effective_policy(ds, session)
@@ -241,7 +241,7 @@ def test_read_access_allowed_idp_permitted(dataset_service, device_service, admi
         DatasetCreate(
             name="ds",
             level=1,
-            data_url="s3://x",
+            url="s3://x",
             device_name="DEV-D",
             access_level=AccessLevel.RESTRICTED,
             allowed_idps=[IDP_A],
@@ -263,7 +263,7 @@ def test_read_access_wrong_idp_denied(dataset_service, device_service, admin_use
         DatasetCreate(
             name="ds",
             level=1,
-            data_url="s3://x",
+            url="s3://x",
             device_name="DEV-E",
             access_level=AccessLevel.RESTRICTED,
             allowed_idps=[IDP_A],
@@ -290,7 +290,7 @@ def test_read_access_restricted_empty_scopes_auth_only_gate(
         DatasetCreate(
             name="auth-gate",
             level=1,
-            data_url="s3://x",
+            url="s3://x",
             access_level=AccessLevel.RESTRICTED,
             required_scopes=[],
         ),
@@ -309,7 +309,7 @@ def test_read_access_restricted_empty_scopes_anonymous_denied(
         DatasetCreate(
             name="auth-gate-anon",
             level=1,
-            data_url="s3://x",
+            url="s3://x",
             access_level=AccessLevel.RESTRICTED,
             required_scopes=[],
         ),
@@ -330,7 +330,6 @@ def test_download_allowed_idp_correct_scope(session, device_service, admin_user)
     ds = Dataset(
         name="ds",
         level=1,
-        data_url="s3://x",
         access_level=AccessLevel.RESTRICTED,
         device_name="DEV-F",
         required_scopes=["read:data"],
@@ -347,7 +346,6 @@ def test_download_correct_scope_wrong_idp_denied(session):
     ds = Dataset(
         name="ds",
         level=1,
-        data_url="s3://x",
         access_level=AccessLevel.RESTRICTED,
         required_scopes=["read:data"],
         allowed_idps=[IDP_A],
@@ -363,7 +361,6 @@ def test_download_restricted_empty_scopes_anonymous_denied(session):
     ds = Dataset(
         name="ds",
         level=1,
-        data_url="s3://x",
         access_level=AccessLevel.RESTRICTED,
         required_scopes=[],
     )
@@ -378,7 +375,6 @@ def test_download_embargoed_no_scopes_anonymous_denied(session):
     ds = Dataset(
         name="ds",
         level=1,
-        data_url="s3://x",
         access_level=AccessLevel.EMBARGOED,
     )
     assert svc._check_download_permission(ANONYMOUS_USER, ds) is False

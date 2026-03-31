@@ -21,7 +21,7 @@ def test_create_global_dataset(test_client: TestClient, admin_user_token: dict):
     response = test_client.post(
         "/api/v1/datasets/",
         headers=admin_user_token,
-        json={"name": "global_const", "level": 1, "data_url": "s3://global"},
+        json={"name": "global_const", "level": 1, "url": "s3://global"},
     )
     assert response.status_code == 201
     data = response.json()
@@ -41,7 +41,7 @@ def test_create_device_dataset(
     response = test_client.post(
         "/api/v1/devices/NSTX/datasets/",
         headers=admin_user_token,
-        json={"name": "machine_params", "level": 1, "data_url": "s3://nstx"},
+        json={"name": "machine_params", "level": 1, "url": "s3://nstx"},
     )
     assert response.status_code == 201
     data = response.json()
@@ -63,7 +63,7 @@ def test_create_shot_dataset(
     response = test_client.post(
         "/api/v1/devices/MAST/shots/123/datasets/",
         headers=admin_user_token,
-        json={"name": "efit", "level": 2, "data_url": "s3://mast/123/efit"},
+        json={"name": "efit", "level": 2, "url": "s3://mast/123/efit"},
     )
     assert response.status_code == 201
     data = response.json()
@@ -87,7 +87,7 @@ def test_read_dataset_by_name(
     test_client.post(
         "/api/v1/devices/MAST/shots/456/datasets/",
         headers=admin_user_token,
-        json={"name": "plasma_current", "level": 1, "data_url": "s3://url"},
+        json={"name": "plasma_current", "level": 1, "url": "s3://url"},
     )
 
     response = test_client.get("/api/v1/devices/MAST/shots/456/datasets/plasma_current")
@@ -107,7 +107,7 @@ def test_dataset_name_collision_in_context(
     )
     session.commit()
 
-    payload = {"name": "重复", "level": 1, "data_url": "s3://url"}
+    payload = {"name": "重复", "level": 1, "url": "s3://url"}
     test_client.post(
         "/api/v1/devices/MAST/shots/789/datasets/",
         headers=admin_user_token,
@@ -135,7 +135,7 @@ def test_unauthorized_device_dataset(
     response = test_client.post(
         "/api/v1/devices/MAST/datasets/",
         headers=jet_admin_user_token,
-        json={"name": "illegal", "level": 1, "data_url": "url"},
+        json={"name": "illegal", "level": 1, "url": "url"},
     )
     assert response.status_code == 403
 
@@ -151,12 +151,12 @@ def test_list_device_datasets(
     test_client.post(
         "/api/v1/devices/DIII-D/datasets/",
         headers=admin_user_token,
-        json={"name": "data_a", "level": 1, "data_url": "url_a"},
+        json={"name": "data_a", "level": 1, "url": "url_a"},
     )
     test_client.post(
         "/api/v1/devices/DIII-D/datasets/",
         headers=admin_user_token,
-        json={"name": "data_b", "level": 1, "data_url": "url_b"},
+        json={"name": "data_b", "level": 1, "url": "url_b"},
     )
 
     response = test_client.get("/api/v1/devices/DIII-D/datasets/")
@@ -169,7 +169,7 @@ def test_read_global_dataset_by_name(test_client: TestClient, admin_user_token: 
     test_client.post(
         "/api/v1/datasets/",
         headers=admin_user_token,
-        json={"name": "global_ref", "level": 1, "data_url": "url"},
+        json={"name": "global_ref", "level": 1, "url": "url"},
     )
 
     response = test_client.get("/api/v1/datasets/global_ref")
@@ -184,7 +184,7 @@ def test_update_dataset(
     test_client.post(
         "/api/v1/datasets/",
         headers=admin_user_token,
-        json={"name": "to_update", "level": 1, "data_url": "url"},
+        json={"name": "to_update", "level": 1, "url": "url"},
     )
     # Find ID from DB (since it's not in the Read model)
     dataset = session.exec(select(Dataset).where(Dataset.name == "to_update")).one()
@@ -205,7 +205,7 @@ def test_delete_dataset(
     test_client.post(
         "/api/v1/datasets/",
         headers=admin_user_token,
-        json={"name": "to_delete", "level": 1, "data_url": "url"},
+        json={"name": "to_delete", "level": 1, "url": "url"},
     )
     dataset = session.exec(select(Dataset).where(Dataset.name == "to_delete")).one()
 
@@ -231,7 +231,7 @@ def test_delete_dataset_unauthorized(
         DatasetCreate(
             name="restricted_delete",
             level=1,
-            data_url="url",
+            url="url",
             device_name="MAST",
         ),
         user=admin_user,
@@ -261,7 +261,7 @@ def test_get_datasets_with_storage_options(
     test_client.post(
         "/api/v1/devices/OPTS/shots/1/datasets/",
         headers=admin_user_token,
-        json={"name": "data1", "level": 1, "data_url": "s3://opts/1"},
+        json={"name": "data1", "level": 1, "url": "s3://opts/1"},
     )
 
     # Define Mock directly in the router test, ensuring STS assumes work

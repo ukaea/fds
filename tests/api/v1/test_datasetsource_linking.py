@@ -37,7 +37,7 @@ def setup_linking_data_fixture(
         DatasetCreate(
             name="linked_data",
             level=1,
-            data_url="s3://linked",
+            url="s3://linked",
             shot_id=shot.id,
             device_name="LinkingDevice",
         ),

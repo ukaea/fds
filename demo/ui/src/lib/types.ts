@@ -14,7 +14,7 @@ export interface Dataset {
   name: string;
   device_name?: string;
   shot_id?: number;
-  data_url?: string;
+  url?: string;
   created_at?: string;
   publisher?: string;
   level?: number;

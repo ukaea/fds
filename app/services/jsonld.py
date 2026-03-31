@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device, DeviceRead
+from app.models.distribution import Distribution
 
 if TYPE_CHECKING:
     from app.models.datasetsource import DatasetSource
@@ -92,13 +93,33 @@ def map_dataset_to_dcat(
         "keywords": dataset.keywords.split(",") if dataset.keywords else [],
         "license": dataset.license,
         "version": dataset.version,
-        "mediaType": dataset.media_type,
-        "format": dataset.format,
     }
 
     # Access Rights mapping
     if dataset.access_level:
         data["accessRights"] = dataset.access_level.value
+
+    # DCAT Distribution mapping
+    distributions: list[Distribution] = getattr(dataset, "distributions", []) or []
+    if distributions:
+        dist_nodes = []
+        for dist in distributions:
+            node: dict[str, Any] = {
+                "@type": "dcat:Distribution",
+                "dcat:downloadURL": dist.url,
+            }
+            if dist.media_type:
+                node["dcat:mediaType"] = dist.media_type
+            if dist.format:
+                node["dct:format"] = dist.format
+            if dist.access_level:
+                node["dct:accessRights"] = dist.access_level.value
+            dist_nodes.append(node)
+        data["dcat:distribution"] = dist_nodes
+        # Convenience shorthand: downloadURL of the default distribution
+        default = next((d for d in distributions if d.default_distribution), None)
+        if default:
+            data["dcat:downloadURL"] = default.url
 
     # PROV-O Mapping (Provenance)
     # Check if the dataset object has source_links loaded

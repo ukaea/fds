@@ -40,7 +40,7 @@ def test_access_inheritance_dataset_from_shot(
     )
     dataset = dataset_service.create(
         DatasetCreate(
-            name="data", level=1, data_url="url", shot_id=shot.id, device_name="TOKAMAK"
+            name="data", level=1, url="url", shot_id=shot.id, device_name="TOKAMAK"
         ),
         user=admin_user,
     )
@@ -61,9 +61,7 @@ def test_access_inheritance_dataset_from_device(
         user=admin_user,
     )
     dataset = dataset_service.create(
-        DatasetCreate(
-            name="top-secret", level=1, data_url="url", device_name="SECRET-LAB"
-        ),
+        DatasetCreate(name="top-secret", level=1, url="url", device_name="SECRET-LAB"),
         user=admin_user,
     )
 
@@ -76,7 +74,7 @@ def test_access_inheritance_global_default(
 ):
     # Setup: Global Dataset -> Inherit (RESTRICTED default)
     dataset = dataset_service.create(
-        DatasetCreate(name="global-data", level=1, data_url="url"), user=admin_user
+        DatasetCreate(name="global-data", level=1, url="url"), user=admin_user
     )
 
     read_model = dataset_service.to_read_model(dataset)
@@ -96,7 +94,7 @@ def test_access_override_at_dataset_level(
         DatasetCreate(
             name="override",
             level=1,
-            data_url="url",
+            url="url",
             shot_id=shot.id,
             device_name="DEV",
             access_level=AccessLevel.EMBARGOED,

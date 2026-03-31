@@ -1,9 +1,11 @@
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models.dataset import Dataset
+from app.models.dataset import DatasetCreate
 from app.models.device import Device
+from app.models.identity import AuthenticatedUser
 from app.models.policy import AccessLevel
+from app.services.dataset_service import DatasetService
 
 
 def test_content_negotiation_device(test_client: TestClient, session: Session):
@@ -46,20 +48,24 @@ def test_content_negotiation_dataset(test_client: TestClient, session: Session):
     Test that the dataset endpoint (global) respects the Accept header.
     """
     # Setup
-    dataset = Dataset(
-        name="test-dataset-negotiation",
-        title="Negotiation Test Dataset",
-        description="A dataset for testing content negotiation",
-        publisher="Test Publisher",
-        access_level=AccessLevel.PUBLIC,
-        level=0,
-        data_url="s3://test-bucket/data",
+    admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    DatasetService(session).create(
+        DatasetCreate(
+            name="test-dataset-negotiation",
+            title="Negotiation Test Dataset",
+            description="A dataset for testing content negotiation",
+            publisher="Test Publisher",
+            access_level=AccessLevel.PUBLIC,
+            level=0,
+            url="s3://test-bucket/data",
+        ),
+        user=admin,
     )
-    session.add(dataset)
-    session.commit()
+
+    dataset_name = "test-dataset-negotiation"
 
     # 1. Default (JSON)
-    response = test_client.get(f"/api/v1/datasets/{dataset.name}")
+    response = test_client.get(f"/api/v1/datasets/{dataset_name}")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
     data = response.json()
@@ -68,7 +74,7 @@ def test_content_negotiation_dataset(test_client: TestClient, session: Session):
 
     # 2. JSON-LD
     response = test_client.get(
-        f"/api/v1/datasets/{dataset.name}", headers={"Accept": "application/ld+json"}
+        f"/api/v1/datasets/{dataset_name}", headers={"Accept": "application/ld+json"}
     )
     assert response.status_code == 200
     assert "application/ld+json" in response.headers["content-type"]

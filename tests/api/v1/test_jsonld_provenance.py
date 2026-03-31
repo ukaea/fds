@@ -41,7 +41,7 @@ def test_jsonld_provenance(
             level=1,
             device_name=device.name,
             shot_id=shot.id,
-            data_url="s3://test/prov",
+            url="s3://test/prov",
             access_level=AccessLevel("public"),
         ),
         user=admin_user,

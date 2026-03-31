@@ -49,7 +49,7 @@ def test_create_dataset(
     dataset_create = DatasetCreate(
         name="core_profiles",
         level=2,
-        data_url="s3://test-bucket/shot-101/core_profiles.zarr",
+        url="s3://test-bucket/shot-101/core_profiles.zarr",
         quality_flag="good",
         shot_id=shot.id,
         device_name="Test Device",
@@ -59,7 +59,9 @@ def test_create_dataset(
     assert dataset.id is not None
     assert dataset.name == "core_profiles"
     assert dataset.level == 2
-    assert dataset.data_url == "s3://test-bucket/shot-101/core_profiles.zarr"
+    assert (
+        dataset.distributions[0].url == "s3://test-bucket/shot-101/core_profiles.zarr"
+    )
     assert dataset.quality_flag == "good"
     assert dataset.shot_id == shot.id
 
@@ -75,7 +77,7 @@ def test_create_dataset_for_nonexistent_shot(
     dataset_create = DatasetCreate(
         name="nonexistent_data",
         level=1,
-        data_url="s3://nonexistent",
+        url="s3://nonexistent",
         shot_id="nonexistent-shot",
         device_name="Test Device",
     )
@@ -103,7 +105,7 @@ def test_get_dataset(
         DatasetCreate(
             name="mag_diag",
             level=1,
-            data_url="s3://url",
+            url="s3://url",
             shot_id=shot.id,
             device_name="Test Device",
         ),
@@ -138,7 +140,7 @@ def test_get_dataset_by_name_in_context_or_raise(
         DatasetCreate(
             name="resolved_dataset",
             level=1,
-            data_url="s3://resolved",
+            url="s3://resolved",
             shot_id="shot-resolve",
             device_name="Device Resolve",
         ),
@@ -186,7 +188,7 @@ def test_get_datasets(
         DatasetCreate(
             name="data1",
             level=1,
-            data_url="url1",
+            url="url1",
             shot_id=shot.id,
             device_name="Test Device",
         ),
@@ -196,7 +198,7 @@ def test_get_datasets(
         DatasetCreate(
             name="data2",
             level=2,
-            data_url="url2",
+            url="url2",
             shot_id=shot.id,
             device_name="Test Device",
         ),
@@ -235,7 +237,7 @@ def test_get_datasets_for_shot(
         DatasetCreate(
             name="shot1_data1",
             level=1,
-            data_url="url_s1_d1",
+            url="url_s1_d1",
             shot_id=shot1.id,
             device_name="Device 1",
         ),
@@ -245,7 +247,7 @@ def test_get_datasets_for_shot(
         DatasetCreate(
             name="shot1_data2",
             level=2,
-            data_url="url_s1_d2",
+            url="url_s1_d2",
             shot_id=shot1.id,
             device_name="Device 1",
         ),
@@ -255,7 +257,7 @@ def test_get_datasets_for_shot(
         DatasetCreate(
             name="shot2_data1",
             level=1,
-            data_url="url_s2_d1",
+            url="url_s2_d1",
             shot_id=shot2.id,
             device_name="Device 2",
         ),
@@ -290,7 +292,7 @@ def test_get_datasets_for_device_excludes_shot_scoped(
         DatasetCreate(
             name="device_data",
             level=1,
-            data_url="url_device",
+            url="url_device",
             device_name="Device X",
         ),
         user=admin_user,
@@ -299,7 +301,7 @@ def test_get_datasets_for_device_excludes_shot_scoped(
         DatasetCreate(
             name="shot_data",
             level=1,
-            data_url="url_shot",
+            url="url_shot",
             device_name="Device X",
             shot_id=shot.id,
         ),
@@ -318,7 +320,7 @@ def test_create_global_dataset(
     dataset_service: DatasetService, admin_user: AuthenticatedUser
 ):
     dataset_create = DatasetCreate(
-        name="reference_cross_sections", level=1, data_url="s3://global/xsec"
+        name="reference_cross_sections", level=1, url="s3://global/xsec"
     )
     dataset = dataset_service.create(dataset_create, user=admin_user)
     assert dataset.device_name is None
@@ -333,7 +335,7 @@ def test_create_device_dataset(
 ):
     device_service.create(DeviceCreate(name="NSTX", type="Spherical"), user=admin_user)
     dataset_create = DatasetCreate(
-        name="machine_config", level=1, data_url="s3://nstx/config", device_name="NSTX"
+        name="machine_config", level=1, url="s3://nstx/config", device_name="NSTX"
     )
     dataset = dataset_service.create(dataset_create, user=admin_user)
     assert dataset.device_name == "NSTX"
@@ -342,7 +344,7 @@ def test_create_device_dataset(
 
 def test_create_dataset_unauthorized_global(dataset_service: DatasetService):
     regular_user = AuthenticatedUser(id="user", scopes=())
-    dataset_create = DatasetCreate(name="global", level=1, data_url="url")
+    dataset_create = DatasetCreate(name="global", level=1, url="url")
     with pytest.raises(ForbiddenError):
         dataset_service.create(dataset_create, user=regular_user)
 
@@ -355,7 +357,7 @@ def test_create_dataset_unauthorized_device(
     device_service.create(DeviceCreate(name="JET", type="Tokamak"), user=admin_user)
     regular_user = AuthenticatedUser(id="user", scopes=("mast_admin",))
     dataset_create = DatasetCreate(
-        name="jet_data", level=1, data_url="url", device_name="JET"
+        name="jet_data", level=1, url="url", device_name="JET"
     )
     with pytest.raises(ForbiddenError):
         dataset_service.create(dataset_create, user=regular_user)
@@ -374,7 +376,7 @@ def test_create_dataset_context_mismatch(
     )
 
     dataset_create = DatasetCreate(
-        name="bad_context", level=1, data_url="url", shot_id=shot.id, device_name="JET"
+        name="bad_context", level=1, url="url", shot_id=shot.id, device_name="JET"
     )
     with pytest.raises(ResourceNotFoundError):
         dataset_service.create(dataset_create, user=admin_user)
@@ -400,7 +402,7 @@ def test_update_dataset(
         DatasetCreate(
             name="old_name",
             level=1,
-            data_url="old_url",
+            url="old_url",
             shot_id=shot.id,
             quality_flag="good",
             device_name="Test Device",
@@ -418,7 +420,7 @@ def test_update_dataset(
     assert updated_dataset.name == "new_name"
     assert updated_dataset.level == 2
     assert updated_dataset.quality_flag == "bad"
-    assert updated_dataset.data_url == "old_url"  # Should remain unchanged
+    assert updated_dataset.distributions[0].url == "old_url"  # Should remain unchanged
 
 
 def test_delete_dataset(
@@ -441,7 +443,7 @@ def test_delete_dataset(
         DatasetCreate(
             name="to_delete",
             level=1,
-            data_url="url_del",
+            url="url_del",
             shot_id=shot.id,
             device_name="Test Device",
         ),
@@ -486,7 +488,7 @@ def test_enrich_with_storage_options_s3(
         DatasetCreate(
             name="ds_s3",
             level=1,
-            data_url="s3://b/k1",
+            url="s3://b/k1",
             shot_id=shot.id,
             device_name="enrich-dev1",
         ),
@@ -545,7 +547,7 @@ def test_enrich_with_storage_options_unsupported_protocol(
         DatasetCreate(
             name="ds_none",
             level=1,
-            data_url="local://not-s3",
+            url="local://not-s3",
             shot_id=shot.id,
             device_name="enrich-dev2",
         ),
@@ -589,7 +591,7 @@ def test_enrich_with_storage_options_url_absent_from_manifest(
         DatasetCreate(
             name="ds_no_creds",
             level=1,
-            data_url="s3://bucket/data",
+            url="s3://bucket/data",
             shot_id=shot.id,
             device_name="enrich-dev3",
         ),
@@ -633,7 +635,7 @@ def test_enrich_with_storage_options_public_dataset_no_credentials(
         DatasetCreate(
             name="ds_public_s3",
             level=1,
-            data_url="s3://public-bucket/data",
+            url="s3://public-bucket/data",
             shot_id=shot.id,
             device_name="enrich-dev5",
             access_level=AccessLevel.PUBLIC,

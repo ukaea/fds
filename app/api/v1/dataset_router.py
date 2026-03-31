@@ -5,12 +5,18 @@ from app.api.deps import (
     CurrentUserDep,
     DatasetServiceDep,
     DatasetSourceServiceDep,
+    DistributionServiceDep,
 )
 from app.models.dataset import DatasetCreate, DatasetRead, DatasetUpdate
 from app.models.datasetsource import (
     DatasetSource,
     DatasetSourceLink,
     DatasetSourceRead,
+)
+from app.models.distribution import (
+    DistributionCreate,
+    DistributionRead,
+    DistributionUpdate,
 )
 from app.services.jsonld import map_dataset_to_dcat
 
@@ -283,6 +289,84 @@ def delete_dataset(
     Delete a dataset by internal ID. Requires appropriate tiered authorization.
     """
     dataset_service.delete(id, user)
+    return None
+
+
+@router.post(
+    "/datasets/{dataset_id}/distributions",
+    response_model=DistributionRead,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_distribution(
+    *,
+    dataset_id: int,
+    distribution_in: DistributionCreate,
+    distribution_service: DistributionServiceDep,
+    user: CurrentUserDep,
+) -> DistributionRead:
+    """
+    Add a distribution to a dataset.
+    """
+    return DistributionRead.model_validate(
+        distribution_service.create(dataset_id, distribution_in, user)
+    )
+
+
+@router.get(
+    "/datasets/{dataset_id}/distributions",
+    response_model=list[DistributionRead],
+    response_model_exclude_none=True,
+)
+def read_distributions(
+    *,
+    dataset_id: int,
+    distribution_service: DistributionServiceDep,
+) -> list[DistributionRead]:
+    """
+    List all distributions for a dataset.
+    """
+    return [
+        DistributionRead.model_validate(d)
+        for d in distribution_service.get_for_dataset(dataset_id)
+    ]
+
+
+@router.patch(
+    "/distributions/{distribution_id}",
+    response_model=DistributionRead,
+    response_model_exclude_none=True,
+)
+def update_distribution(
+    *,
+    distribution_id: int,
+    distribution_in: DistributionUpdate,
+    distribution_service: DistributionServiceDep,
+    user: CurrentUserDep,
+) -> DistributionRead:
+    """
+    Update a distribution. Setting default_distribution=true promotes this
+    distribution to default and demotes the previous default.
+    """
+    return DistributionRead.model_validate(
+        distribution_service.update(distribution_id, distribution_in, user)
+    )
+
+
+@router.delete(
+    "/distributions/{distribution_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_distribution(
+    *,
+    distribution_id: int,
+    distribution_service: DistributionServiceDep,
+    user: CurrentUserDep,
+) -> None:
+    """
+    Delete a distribution. The default distribution cannot be deleted.
+    """
+    distribution_service.delete(distribution_id, user)
     return None
 
 

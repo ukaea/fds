@@ -26,7 +26,7 @@ def test_public_dataset_anonymous_access(
         DatasetCreate(
             name="mag_field",
             level=0,
-            data_url="s3://bucket/mag_field.nc",
+            url="s3://bucket/mag_field.nc",
             device_name="MAST",
             shot_id="100",
             access_level=AccessLevel.PUBLIC,
@@ -59,7 +59,7 @@ def test_restricted_dataset_anonymous_access_forbidden(
         DatasetCreate(
             name="core_temp",
             level=1,
-            data_url="s3://bucket/core_temp.nc",
+            url="s3://bucket/core_temp.nc",
             device_name="JET",
             shot_id="200",
             access_level=AccessLevel.RESTRICTED,
@@ -95,7 +95,7 @@ def test_dataset_inheritance_override(
         DatasetCreate(
             name="summary_data",
             level=2,
-            data_url="s3://iter/summary.json",
+            url="s3://iter/summary.json",
             device_name="ITER",
             shot_id="300",
             access_level=AccessLevel.PUBLIC,
@@ -133,7 +133,7 @@ def test_dataset_inheritance_fallback(
         DatasetCreate(
             name="raw_data",
             level=0,
-            data_url="s3://d3d/raw",
+            url="s3://d3d/raw",
             device_name="D3D",
             shot_id="400",
         ),
@@ -167,7 +167,7 @@ def test_list_filtering(
         DatasetCreate(
             name="visible",
             level=0,
-            data_url="s3://w7x/vis",
+            url="s3://w7x/vis",
             device_name="W7X",
             shot_id="500",
             access_level=AccessLevel.PUBLIC,
@@ -179,7 +179,7 @@ def test_list_filtering(
         DatasetCreate(
             name="hidden",
             level=0,
-            data_url="s3://w7x/hidden",
+            url="s3://w7x/hidden",
             device_name="W7X",
             shot_id="500",
             access_level=AccessLevel.RESTRICTED,

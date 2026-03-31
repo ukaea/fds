@@ -12,6 +12,7 @@ from app.auth.access_control import (
 from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
 from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
 from app.models.device import Device
+from app.models.distribution import Distribution, DistributionRead
 from app.models.file_access import CredentialRequest, anonymous_storage_options
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
@@ -143,7 +144,15 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             raise ConflictError(f"Dataset {obj_in.name} already exists in this context")
 
         # 3. Create DB Object — device_name flows through from obj_in directly
-        db_obj = Dataset.model_validate(obj_in)
+        db_obj = Dataset.model_validate(obj_in, update={"distributions": []})
+
+        distribution = Distribution(
+            url=obj_in.url,
+            media_type=obj_in.media_type,
+            format=obj_in.format,
+            default_distribution=True,
+        )
+        db_obj.distributions.append(distribution)
 
         self.session.add(db_obj)
         try:
@@ -305,9 +314,24 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     ) -> DatasetRead:
         """
         Converts a Dataset ORM object to a DatasetRead DTO, including the effective access level.
+        The default distribution's fields are inlined; other distributions appear in `formats`.
         Optionally enriches it with temporary storage credentials if permitted.
         """
-        read_model = DatasetRead.model_validate(dataset)
+        default_dist = next(
+            (d for d in dataset.distributions if d.default_distribution), None
+        )
+        non_default = [d for d in dataset.distributions if not d.default_distribution]
+
+        read_model = DatasetRead.model_validate(
+            dataset,
+            update={
+                "url": default_dist.url if default_dist else "",
+                "media_type": default_dist.media_type if default_dist else None,
+                "format": default_dist.format if default_dist else None,
+                "formats": [DistributionRead.model_validate(d) for d in non_default]
+                or None,
+            },
+        )
         read_model.effective_access_level = get_effective_access_level(
             dataset, self.session
         )
@@ -364,26 +388,24 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         ]
 
         for model in public:
-            if model.data_url:
-                opts = anonymous_storage_options(model.data_url)
+            if model.url:
+                opts = anonymous_storage_options(model.url)
                 if opts is None:
                     logger.warning(
                         "No anonymous storage options for scheme",
-                        extra={"data_url": model.data_url},
+                        extra={"url": model.url},
                     )
                 else:
                     model.storage_options = opts
 
-        credentialed_urls = [m.data_url for m in non_public if m.data_url]
+        credentialed_urls = [m.url for m in non_public if m.url]
         if credentialed_urls:
             manifest = FileAccessService(self.session).generate_session_credentials(
                 user=user,
                 request=CredentialRequest(data_urls=credentialed_urls),
             )
             for model in non_public:
-                if model.data_url and (
-                    cred := manifest.resource_map.get(model.data_url)
-                ):
+                if model.url and (cred := manifest.resource_map.get(model.url)):
                     model.storage_options = cred.to_storage_options()
 
         return read_models

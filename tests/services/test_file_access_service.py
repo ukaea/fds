@@ -4,6 +4,7 @@ import pytest
 from sqlmodel import Session, select
 
 from app.models.dataset import Dataset
+from app.models.distribution import Distribution
 from app.models.file_access import CredentialRequest, S3Credentials
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
@@ -19,18 +20,14 @@ def access_service(session: Session):
 
 def test_access_public_anonymous(access_service):
     """Public datasets should be accessible to anonymous users."""
-    dataset = Dataset(
-        name="pub", level=1, data_url="s3://pub", access_level=AccessLevel.PUBLIC
-    )
+    dataset = Dataset(name="pub", level=1, access_level=AccessLevel.PUBLIC)
     assert access_service._check_download_permission(ANONYMOUS_USER, dataset) is True
 
 
 def test_access_public_authenticated(access_service):
     """Public datasets should be accessible to authenticated users."""
     user = AuthenticatedUser(id="u1", scopes=())
-    dataset = Dataset(
-        name="pub", level=1, data_url="s3://pub", access_level=AccessLevel.PUBLIC
-    )
+    dataset = Dataset(name="pub", level=1, access_level=AccessLevel.PUBLIC)
     assert access_service._check_download_permission(user, dataset) is True
 
 
@@ -40,7 +37,6 @@ def test_access_required_scope_allowed(access_service):
     dataset = Dataset(
         name="scoped",
         level=1,
-        data_url="s3://scoped",
         access_level=AccessLevel.RESTRICTED,
         required_scopes=["special:access"],
     )
@@ -53,7 +49,6 @@ def test_access_required_scope_denied(access_service):
     dataset = Dataset(
         name="scoped",
         level=1,
-        data_url="s3://scoped",
         access_level=AccessLevel.RESTRICTED,
         required_scopes=["special:access"],
     )
@@ -70,7 +65,6 @@ def test_access_required_scope_overrides_fallback(
     dataset = Dataset(
         name="override",
         level=1,
-        data_url="s3://override",
         access_level=AccessLevel.RESTRICTED,
         required_scopes=["special:top-secret"],
         device_name="mast",
@@ -90,7 +84,6 @@ def test_access_empty_required_scopes_auth_only_bypasses_fallback(
     dataset = Dataset(
         name="auth-only",
         level=1,
-        data_url="s3://auth-only",
         access_level=AccessLevel.RESTRICTED,
         required_scopes=[],
         device_name="mast",
@@ -107,7 +100,6 @@ def test_access_fallback_shot_context_allowed(access_service, mock_check_shot_op
     dataset = Dataset(
         name="fallback",
         level=1,
-        data_url="s3://fallback",
         access_level=AccessLevel.RESTRICTED,  # or Embargoed
         device_name="mast",
         shot_id="123",
@@ -125,7 +117,6 @@ def test_access_fallback_shot_context_denied(access_service, mock_check_shot_ope
     dataset = Dataset(
         name="fallback",
         level=1,
-        data_url="s3://fallback",
         access_level=AccessLevel.RESTRICTED,
         device_name="mast",
         shot_id="123",
@@ -151,10 +142,15 @@ def test_polyglot_routing_s3(session, access_service, mock_s3_provider):
     user = AuthenticatedUser(id="user", scopes=())
 
     # 1. Setup DB with S3 dataset
-    ds1 = Dataset(
-        name="ds1", level=1, data_url="s3://bucket/ds1", access_level=AccessLevel.PUBLIC
-    )
+    ds1 = Dataset(name="ds1", level=1, access_level=AccessLevel.PUBLIC)
     session.add(ds1)
+    session.flush()
+    assert ds1.id is not None
+    session.add(
+        Distribution(
+            dataset_id=ds1.id, url="s3://bucket/ds1", default_distribution=True
+        )
+    )
     session.commit()
 
     fake_cred = S3Credentials(
@@ -231,11 +227,19 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
             level=1,
             shot_id=shot_id,
             device_name=device.name,
-            data_url=f"s3://fds-data/shots/{shot_id}/signals/signal_{i:02d}",
             access_level=AccessLevel.PUBLIC,
-            media_type="application/x-zarr",
         )
         session.add(ds)
+        session.flush()
+        assert ds.id is not None
+        session.add(
+            Distribution(
+                dataset_id=ds.id,
+                url=f"s3://fds-data/shots/{shot_id}/signals/signal_{i:02d}",
+                media_type="application/x-zarr",
+                default_distribution=True,
+            )
+        )
 
     # Create 1 Dataset for a DIFFERENT shot (noise)
     other_shot_id = "999"
@@ -248,10 +252,18 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
         level=1,
         shot_id=other_shot_id,
         device_name=device.name,
-        data_url="s3://fds-data/shots/999/noise",
         access_level=AccessLevel.PUBLIC,
     )
     session.add(ds_noise)
+    session.flush()
+    assert ds_noise.id is not None
+    session.add(
+        Distribution(
+            dataset_id=ds_noise.id,
+            url="s3://fds-data/shots/999/noise",
+            default_distribution=True,
+        )
+    )
 
     session.commit()
 

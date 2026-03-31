@@ -8,6 +8,7 @@ from app.auth.access_control import get_effective_policy
 from app.auth.permissions import check_shot_operator
 from app.core.storage.providers import get_provider_for_protocol
 from app.models.dataset import Dataset
+from app.models.distribution import Distribution
 from app.models.file_access import (
     CredentialManifest,
     CredentialPayload,
@@ -117,10 +118,10 @@ class FileAccessService:
         if not request.shot_id and not request.device_name and not request.data_urls:
             return []
 
-        # Base query: Active Datasets
+        # Join Dataset → Distribution to resolve URLs.
         # Note: We do NOT filter by AccessLevel here yet, we filter by 'Scope' first,
         # then apply Access restrictions.
-        query = select(Dataset)
+        query = select(Dataset, Distribution).join(Distribution)
 
         # Apply Filters
         if request.shot_id:
@@ -130,19 +131,18 @@ class FileAccessService:
             query = query.where(Dataset.device_name == request.device_name)
 
         if request.data_urls:
-            query = query.where(col(Dataset.data_url).in_(request.data_urls))
+            query = query.where(col(Distribution.url).in_(request.data_urls))
 
-        datasets = self.session.exec(query).all()
+        rows = self.session.exec(query).all()
 
         logger.info(
-            f"Query returned {len(datasets)} datasets for request: {request.model_dump_json(exclude_none=True)}"
+            f"Query returned {len(rows)} dataset/distribution rows for request: {request.model_dump_json(exclude_none=True)}"
         )
 
         final_urls = []
-        for ds in datasets:
+        for ds, dist in rows:
             if self._check_download_permission(user, ds):
-                if ds.data_url:
-                    final_urls.append(ds.data_url)
+                final_urls.append(dist.url)
 
         return list(set(final_urls))  # Dedup
 

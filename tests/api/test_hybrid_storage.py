@@ -21,7 +21,7 @@ def test_hybrid_storage_fields(
     dataset_data = {
         "name": "hybrid_dataset",
         "level": 1,
-        "data_url": "s3://bucket/hybrid",
+        "url": "s3://bucket/hybrid",
         "device_name": device.name,
         "shot_id": shot.id,
         "media_type": "application/vnd.icechunk+zarr",
@@ -51,6 +51,10 @@ def test_hybrid_storage_fields(
     assert response.status_code == 200
     ld_data = response.json()
 
-    # 4. Verify JSON-LD mapping
-    assert ld_data["mediaType"] == "application/vnd.icechunk+zarr"
-    assert ld_data["format"] == "icechunk"
+    # 4. Verify JSON-LD mapping — media_type and format now live in dcat:distribution
+    assert "dcat:distribution" in ld_data
+    assert len(ld_data["dcat:distribution"]) == 1
+    dist = ld_data["dcat:distribution"][0]
+    assert dist["dcat:mediaType"] == "application/vnd.icechunk+zarr"
+    assert dist["dct:format"] == "icechunk"
+    assert ld_data["dcat:downloadURL"] == "s3://bucket/hybrid"
