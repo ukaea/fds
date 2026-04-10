@@ -2,22 +2,20 @@ from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import (
+    ActivityServiceDep,
     CurrentUserDep,
     DatasetServiceDep,
-    DatasetSourceServiceDep,
     DistributionServiceDep,
+    SourceServiceDep,
 )
+from app.models.activity import ActivityRead
 from app.models.dataset import DatasetCreate, DatasetRead, DatasetUpdate
-from app.models.datasetsource import (
-    DatasetSource,
-    DatasetSourceLink,
-    DatasetSourceRead,
-)
 from app.models.distribution import (
     DistributionCreate,
     DistributionRead,
     DistributionUpdate,
 )
+from app.models.source import SourceRead
 from app.services.jsonld import map_dataset_to_dcat
 
 router = APIRouter()
@@ -370,60 +368,36 @@ def delete_distribution(
     return None
 
 
-@router.post(
-    "/datasets/{dataset_id}/sources",
-    response_model=DatasetSource,
-    status_code=status.HTTP_201_CREATED,
+@router.get(
+    "/datasets/{dataset_id}/activity",
+    response_model=ActivityRead,
 )
-def create_dataset_source_link(
+def read_dataset_activity(
     *,
     dataset_id: int,
-    link_in: DatasetSourceLink,
-    dataset_source_service: DatasetSourceServiceDep,
-    user: CurrentUserDep,
-) -> DatasetSource:
+    activity_service: ActivityServiceDep,
+) -> ActivityRead:
     """
-    Link a dataset to a source (provenance).
+    Retrieve the Activity (provenance run) that produced this dataset,
+    including timestamps, parameters, and source version.
+    Returns 404 if the dataset has no associated activity.
     """
-    # Force the dataset_id to match the path
-    link_in.dataset_id = dataset_id
-    return dataset_source_service.create(link_in, user)
+    return ActivityRead.model_validate(activity_service.get_for_dataset(dataset_id))
 
 
 @router.get(
-    "/datasets/{dataset_id}/sources",
-    response_model=list[DatasetSourceRead],
+    "/datasets/{dataset_id}/source",
+    response_model=SourceRead,
 )
-def read_dataset_source_links(
+def read_dataset_source(
     *,
     dataset_id: int,
-    dataset_source_service: DatasetSourceServiceDep,
-    offset: int = 0,
-    limit: int = 100,
-) -> list[DatasetSource]:
+    activity_service: ActivityServiceDep,
+    source_service: SourceServiceDep,
+) -> SourceRead:
     """
-    Retrieve all source links for a specific dataset.
+    Retrieve the Source (diagnostic system or code) that produced this dataset.
+    Shortcut for dataset → activity → source. Returns 404 if the dataset has no activity.
     """
-    return list(
-        dataset_source_service.get_for_dataset(
-            dataset_id=dataset_id, offset=offset, limit=limit
-        )
-    )
-
-
-@router.delete(
-    "/datasets/{dataset_id}/sources/{source_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-def delete_dataset_source_link(
-    *,
-    dataset_id: int,
-    source_id: int,
-    dataset_source_service: DatasetSourceServiceDep,
-    user: CurrentUserDep,
-) -> None:
-    """
-    Remove a link between a dataset and a source.
-    """
-    dataset_source_service.delete(dataset_id=dataset_id, source_id=source_id, user=user)
-    return None
+    activity = activity_service.get_for_dataset(dataset_id)
+    return source_service.to_read_model(activity.source)

@@ -1,5 +1,11 @@
+from .activity import (
+    Activity,
+    ActivityCreate,
+    ActivityInput,
+    ActivityRead,
+    ActivityUpdate,
+)
 from .dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
-from .datasetsource import DatasetSource, DatasetSourceLink
 from .device import Device, DeviceCreate, DeviceRead, DeviceUpdate
 from .distribution import (
     Distribution,
@@ -18,6 +24,8 @@ Dataset.model_rebuild()
 DatasetRead.model_rebuild()
 Source.model_rebuild()
 SourceRead.model_rebuild()
+Activity.model_rebuild()
+ActivityRead.model_rebuild()
 
 __all__ = [
     "Device",
@@ -40,7 +48,10 @@ __all__ = [
     "SourceRead",
     "SourceCreate",
     "SourceUpdate",
-    "DatasetSource",
-    "DatasetSourceLink",
+    "Activity",
+    "ActivityCreate",
+    "ActivityRead",
+    "ActivityUpdate",
+    "ActivityInput",
     "AccessLevel",
 ]
