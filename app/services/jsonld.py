@@ -1,11 +1,11 @@
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device, DeviceRead
 from app.models.distribution import Distribution
 
 if TYPE_CHECKING:
-    from app.models.datasetsource import DatasetSource
+    from app.models.activity import Activity
 
 METADATA_CONTEXT = {
     "dcat": "http://www.w3.org/ns/dcat#",
@@ -122,41 +122,38 @@ def map_dataset_to_dcat(
             data["dcat:downloadURL"] = default.url
 
     # PROV-O Mapping (Provenance)
-    # Check if the dataset object has source_links loaded
-    source_links = getattr(dataset, "source_links", None)
-    if source_links:
-        typed_source_links = cast(list["DatasetSource"], source_links)
-        activities = []
-        for link in typed_source_links:
-            # Source Entity URI
-            source_uri = f"{base_url}/api/v1/sources/{link.source_id}"
-
-            # Create an Activity for the generation
-            activity = {
-                "@type": "prov:Activity",
-                "prov:type": link.activity_type,
-                "prov:used": {
-                    "@id": source_uri,
+    # Embed the Activity as prov:wasGeneratedBy if the relationship is loaded
+    activity: "Activity | None" = getattr(dataset, "activity", None)
+    if activity:
+        source_uri = f"{base_url}/api/v1/sources/{activity.source_id}"
+        prov_node: dict[str, Any] = {
+            "@type": "prov:Activity",
+            "prov:type": activity.activity_type,
+            "prov:wasAssociatedWith": {
+                "@id": source_uri,
+                "@type": "prov:SoftwareAgent",
+                "dct:title": activity.source.name if activity.source else None,
+                "dct:description": activity.source.description
+                if activity.source
+                else None,
+                "dcat:version": activity.source_version,
+            },
+        }
+        if activity.started_at:
+            prov_node["prov:startedAtTime"] = activity.started_at.isoformat()
+        if activity.ended_at:
+            prov_node["prov:endedAtTime"] = activity.ended_at.isoformat()
+        if activity.parameters:
+            prov_node["prov:value"] = activity.parameters
+        input_datasets = getattr(activity, "input_datasets", None) or []
+        if input_datasets:
+            prov_node["prov:used"] = [
+                {
+                    "@id": f"{base_url}/api/v1/datasets/{ds.id}",
                     "@type": "prov:Entity",
-                    "dct:title": link.source.name
-                    if link.source
-                    else f"Source {link.source_id}",
-                    "dct:description": link.source.description if link.source else None,
-                    "dcat:version": link.source_version,
-                },
-            }
-
-            # Add parameters if they exist
-            if link.parameters:
-                # We can map parameters to a generic value or specific property
-                # For now, let's just dump them as a value
-                activity["prov:value"] = link.parameters
-
-            activities.append(activity)
-
-        if len(activities) == 1:
-            data["prov:wasGeneratedBy"] = activities[0]
-        elif len(activities) > 1:
-            data["prov:wasGeneratedBy"] = activities
+                }
+                for ds in input_datasets
+            ]
+        data["prov:wasGeneratedBy"] = prov_node
 
     return {k: v for k, v in data.items() if v is not None}

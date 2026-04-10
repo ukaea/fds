@@ -130,7 +130,7 @@ export default function DevicesPage() {
         {devices?.map((device) => (
           <Link
             key={device.name}
-            href={`/devices/${device.name}/shots`}
+            href={`/devices/${device.name}`}
             className="card group overflow-hidden block"
           >
             <div className="p-6 relative">
@@ -150,7 +150,7 @@ export default function DevicesPage() {
               </p>
 
               <div className="flex items-center text-sm font-medium text-primary group-hover:text-blue-300 transition-colors">
-                Browse Shots <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                Browse Data <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
               </div>
             </div>
             <div className="h-1 w-full bg-gradient-to-r from-blue-500 to-purple-500 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left" />

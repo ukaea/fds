@@ -7,7 +7,7 @@ import { Database, Lock, Unlock, Download, Activity, ArrowLeft, ChevronRight } f
 import { useSession, signIn } from "next-auth/react";
 import useSWR from 'swr';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Dataset } from '@/lib/types';
+import { Activity as ActivityType, Dataset } from '@/lib/types';
 
 // Heatmap Color Scale Approximation (Viridis)
 const VIRIDIS_STOPS = [[68, 1, 84], [59, 82, 139], [33, 145, 140], [93, 201, 99], [253, 231, 37]];
@@ -91,6 +91,11 @@ export default function DatasetPage() {
 
   const { data: datasetData } = useSWR<Dataset>(
     device && shot && dataset ? `${API_BASE}/devices/${device}/shots/${shot}/datasets/${dataset}` : null,
+    fetcher
+  );
+
+  const { data: activityData } = useSWR<ActivityType>(
+    datasetData?.activity_id ? `${API_BASE}/datasets/${datasetData.id}/activity` : null,
     fetcher
   );
 
@@ -393,7 +398,7 @@ export default function DatasetPage() {
          <div className="flex items-center text-sm text-slate-400 mb-6 font-medium">
             <Link href="/devices" className="hover:text-primary transition-colors flex items-center">Devices</Link>
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
-            <Link href={`/devices/${device}/shots`} className="hover:text-primary transition-colors flex items-center">{device}</Link>
+            <Link href={`/devices/${device}`} className="hover:text-primary transition-colors flex items-center">{device}</Link>
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
             <Link href={`/devices/${device}/shots/${shot}`} className="hover:text-primary transition-colors flex items-center">Shot #{shot}</Link>
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
@@ -682,6 +687,61 @@ export default function DatasetPage() {
                         <span className="text-slate-200 capitalize">{datasetData?.effective_access_level || datasetData?.access_level || 'Unknown'}</span>
                     </div>
                 </div>
+            </div>
+
+            {/* Provenance Card */}
+            <div className="card p-6 bg-slate-900/60 shadow-xl border-slate-700/50">
+                <h3 className="text-lg font-bold mb-4 border-b border-slate-700 pb-2 text-white flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-slate-400" /> Provenance
+                </h3>
+                {activityData ? (
+                    <div className="space-y-3 text-sm">
+                        {activityData.activity_type && (
+                            <div className="flex flex-col justify-start py-1 border-b border-slate-800 pb-2">
+                                <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Activity Type</span>
+                                <span className="text-slate-200">{activityData.activity_type}</span>
+                            </div>
+                        )}
+                        {activityData.source_version && (
+                            <div className="flex flex-col justify-start py-1 border-b border-slate-800 pb-2">
+                                <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Source Version</span>
+                                <span className="font-mono text-slate-200">{activityData.source_version}</span>
+                            </div>
+                        )}
+                        {activityData.started_at && (
+                            <div className="flex flex-col justify-start py-1 border-b border-slate-800 pb-2">
+                                <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Started</span>
+                                <span className="text-slate-200">{new Date(activityData.started_at).toLocaleString()}</span>
+                            </div>
+                        )}
+                        {activityData.ended_at && (
+                            <div className="flex flex-col justify-start py-1 border-b border-slate-800 pb-2">
+                                <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Ended</span>
+                                <span className="text-slate-200">{new Date(activityData.ended_at).toLocaleString()}</span>
+                            </div>
+                        )}
+                        {activityData.parameters && Object.keys(activityData.parameters).length > 0 && (
+                            <div className="flex flex-col justify-start py-1">
+                                <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Parameters</span>
+                                <pre className="text-xs text-slate-300 font-mono bg-slate-950 border border-slate-800 p-2 rounded overflow-x-auto">
+                                    {JSON.stringify(activityData.parameters, null, 2)}
+                                </pre>
+                            </div>
+                        )}
+                        <Link
+                            href="/sources"
+                            className="text-xs text-primary hover:text-blue-300 inline-flex items-center gap-1 mt-2 transition-colors"
+                        >
+                            View Sources <ChevronRight className="w-3 h-3" />
+                        </Link>
+                    </div>
+                ) : datasetData?.activity_id ? (
+                    <p className="text-slate-500 text-sm">Loading provenance...</p>
+                ) : (
+                    <div className="text-center py-4 bg-slate-900/30 rounded-lg border border-dashed border-slate-700">
+                        <p className="text-xs text-slate-500">No provenance recorded for this dataset.</p>
+                    </div>
+                )}
             </div>
 
         </div>

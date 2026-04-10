@@ -14,7 +14,7 @@ from .mixins import DescriptiveMixin, TimestampMixin
 from .policy import AccessLevel
 
 if TYPE_CHECKING:
-    from .datasetsource import DatasetSource
+    from .activity import Activity
     from .distribution import Distribution, DistributionRead
     from .shot import Shot
 
@@ -85,6 +85,7 @@ class Dataset(DatasetBase, table=True):
     )
     id: int | None = Field(default=None, primary_key=True)
     shot_id: str | None = Field(default=None, index=True)
+    activity_id: int | None = Field(default=None, foreign_key="activity.id", index=True)
 
     shot: "Shot" = Relationship(
         back_populates="datasets",
@@ -93,7 +94,7 @@ class Dataset(DatasetBase, table=True):
             "foreign_keys": "[Dataset.shot_id, Dataset.device_name]",
         },
     )
-    source_links: list["DatasetSource"] = Relationship(back_populates="dataset")
+    activity: "Activity" = Relationship(back_populates="datasets")
     distributions: list["Distribution"] = Relationship(
         back_populates="dataset",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
@@ -110,6 +111,7 @@ class DatasetCreate(DatasetBase):
     """
 
     shot_id: str | None = None
+    activity_id: int | None = None
     # Default distribution fields — inlined for convenience, become a Distribution
     # with default_distribution=True on create.
     url: str
@@ -129,6 +131,7 @@ class DatasetRead(DatasetBase):
 
     id: int
     shot_id: str | None = None
+    activity_id: int | None = None
     effective_access_level: AccessLevel | None = None
     # Default distribution fields inlined
     url: str
@@ -145,6 +148,7 @@ class DatasetUpdate(SQLModel):
     quality_flag: str | None = None
     device_name: str | None = None
     shot_id: str | None = None
+    activity_id: int | None = None
     access_level: AccessLevel | None = None
     title: str | None = None
     description: str | None = None

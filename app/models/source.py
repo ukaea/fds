@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from .datasetsource import DatasetSource
+    from .activity import Activity
     from .device import Device
 
 
@@ -17,7 +17,7 @@ class Source(SourceBase, table=True):
     device_id: int | None = Field(default=None, foreign_key="device.id", nullable=True)
 
     device: "Device" = Relationship(back_populates="sources")
-    dataset_links: list["DatasetSource"] = Relationship(back_populates="source")
+    activities: list["Activity"] = Relationship(back_populates="source")
 
 
 class SourceRead(SourceBase):
