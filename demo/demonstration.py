@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.14"
 # dependencies = [
-#     "marimo>=0.20.2",
+#     "marimo>=0.22.4",
 #     "httpx==0.27.2",
 #     "s3fs==2026.1.0",
 #     "xarray[parallel]==2025.12.0",
@@ -12,7 +12,7 @@
 
 import marimo
 
-__generated_with = "0.20.4"
+__generated_with = "0.23.0"
 app = marimo.App(width="medium")
 
 
@@ -252,20 +252,26 @@ def _(FDS_API_URL, headers, httpx):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### 3.2. Linking Data to a Source (Provenance)
+    ### 3.2. Recording Provenance (Activity)
 
-    FDS tracks **Provenance** by linking Datasets to the Sources (instruments or codes) that produced them.
-    Here we register the **EFIT** equilibrium reconstruction code and link our equilibrium dataset to it.
+    FDS tracks **Provenance** using the PROV-O ontology. The two key concepts are:
+
+    - **Source** (`prov:Agent`) — the instrument or code that *can* produce data (e.g. EFIT)
+    - **Activity** (`prov:Activity`) — a *specific execution* of that source with particular parameters
+      and timestamps (e.g. the EFIT run on shot 30421)
+
+    A Dataset links to the Activity that produced it (`prov:wasGeneratedBy`). The Activity in turn
+    links to the Source (`prov:wasAssociatedWith`).
+
+    Here we register the **EFIT** equilibrium reconstruction code as a Source, create an Activity
+    recording the specific run, and attach that Activity to the equilibrium dataset.
     """)
     return
 
 
 @app.cell
 def _(FDS_API_URL, headers, httpx):
-    # 1. Create the Source (Code) as a Global Source
-    # EFIT is a general-purpose equilibrium reconstruction code used across many
-    # tokamaks (MAST, DIII-D, NSTX, KSTAR, etc.), so it belongs as a global source.
-    # Device-scoped sources are for physical hardware tied to a specific machine.
+    # 1. Create the Source (Agent) — EFIT is used across many tokamaks, so it's a global source.
     source_meta = {
         "name": "efit",
         "description": "EFIT equilibrium reconstruction code",
@@ -292,37 +298,87 @@ def _(FDS_API_URL, headers, httpx):
         print(f"Failed to create source: {resp_source.status_code} {resp_source.text}")
         source_id = None
 
-    # 2. Link Dataset to Source
-    resp_get_dataset = httpx.get(
-        f"{FDS_API_URL}/devices/mast/shots/30421/datasets/equilibrium",
-        headers=headers,
-    )
+    # 2. Create an Activity recording this specific EFIT run.
+    activity_id = None
+    if source_id:
+        activity_meta = {
+            "source_id": source_id,
+            "activity_type": "ANALYSIS",
+            "source_version": "efit-v2.8",
+            "parameters": {"run_id": "30421-efit-standard"},
+            "started_at": "2024-01-15T10:00:00",
+            "ended_at": "2024-01-15T10:12:34",
+        }
+        print("Creating Activity for EFIT run on shot 30421...")
+        resp_activity = httpx.post(
+            f"{FDS_API_URL}/activities/", json=activity_meta, headers=headers
+        )
+        if resp_activity.status_code == 201:
+            activity_id = resp_activity.json()["id"]
+            print(f"Activity created with ID: {activity_id}")
+        else:
+            print(
+                f"Failed to create activity: {resp_activity.status_code} {resp_activity.text}"
+            )
 
-    if resp_get_dataset.status_code == 200:
-        dataset_id = resp_get_dataset.json()["id"]
+    def attach_activity(activity_meta, dataset_path):
+        """Create an Activity and attach it to a dataset, skipping if already recorded."""
+        resp_ds = httpx.get(f"{FDS_API_URL}/{dataset_path}", headers=headers)
+        if resp_ds.status_code != 200:
+            print(f"  Dataset not found: {resp_ds.status_code}")
+            return
+        ds = resp_ds.json()
+        if ds.get("activity_id"):
+            print(f"  Already has Activity {ds['activity_id']}, skipping.")
+            return
 
-        if source_id and dataset_id:
-            link_meta = {
+        resp = httpx.post(
+            f"{FDS_API_URL}/activities/", json=activity_meta, headers=headers
+        )
+        if resp.status_code != 201:
+            print(f"  Failed to create activity: {resp.status_code} {resp.text}")
+            return
+        act_id = resp.json()["id"]
+        print(f"  Activity created with ID: {act_id}")
+
+        resp_patch = httpx.patch(
+            f"{FDS_API_URL}/datasets/{ds['id']}",
+            json={"activity_id": act_id},
+            headers=headers,
+        )
+        if resp_patch.status_code == 200:
+            print(f"  Attached Activity {act_id} to Dataset {ds['id']}.")
+        else:
+            print(
+                f"  Failed to update dataset: {resp_patch.status_code} {resp_patch.text}"
+            )
+
+    if source_id:
+        print("Recording provenance for shot 30421 equilibrium...")
+        attach_activity(
+            {
                 "source_id": source_id,
                 "activity_type": "ANALYSIS",
                 "source_version": "efit-v2.8",
                 "parameters": {"run_id": "30421-efit-standard"},
-            }
+                "started_at": "2024-01-15T10:00:00",
+                "ended_at": "2024-01-15T10:12:34",
+            },
+            "devices/mast/shots/30421/datasets/equilibrium",
+        )
 
-            print(f"Linking Dataset {dataset_id} to Source {source_id}...")
-            resp_link = httpx.post(
-                f"{FDS_API_URL}/datasets/{dataset_id}/sources",
-                json=link_meta,
-                headers=headers,
-            )
-
-            if resp_link.status_code == 201:
-                print("Provenance link created successfully.")
-                print(resp_link.json())
-            else:
-                print(f"Failed to link: {resp_link.status_code} {resp_link.text}")
-    else:
-        print(f"Dataset not found: {resp_get_dataset.status_code}")
+        print("Recording provenance for shot 30420 equilibrium...")
+        attach_activity(
+            {
+                "source_id": source_id,
+                "activity_type": "ANALYSIS",
+                "source_version": "efit-v2.8",
+                "parameters": {"run_id": "30420-efit-standard"},
+                "started_at": "2024-01-14T09:22:00",
+                "ended_at": "2024-01-14T09:34:51",
+            },
+            "devices/mast/shots/30420/datasets/equilibrium",
+        )
     return
 
 

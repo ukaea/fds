@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Dataset } from '@/lib/types';
-import { Database, FileCode, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Database, FileCode, ChevronRight } from 'lucide-react';
 
 export default function ShotDetailPage() {
   const params = useParams();
@@ -20,11 +20,8 @@ export default function ShotDetailPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-         <Link href={`/devices/${deviceName}/shots`} className="inline-flex items-center text-sm text-slate-400 hover:text-white mb-4 transition-colors">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back to Shot List
-         </Link>
         <div className="flex items-center text-sm text-slate-400 mb-2">
-            <span className="text-slate-500">{deviceName}</span>
+            <Link href={`/devices/${deviceName}`} className="hover:text-primary transition-colors">{deviceName}</Link>
             <ChevronRight className="w-4 h-4 mx-2" />
             <span className="text-white font-medium">Shot #{shotId}</span>
         </div>

@@ -11,6 +11,7 @@ export interface Shot {
 }
 
 export interface Dataset {
+  id?: number;
   name: string;
   device_name?: string;
   shot_id?: number;
@@ -23,6 +24,17 @@ export interface Dataset {
   media_type?: string;
   access_level?: string;
   effective_access_level?: string;
+  activity_id?: number;
+}
+
+export interface Activity {
+  id: number;
+  source_id: number;
+  activity_type?: string;
+  source_version?: string;
+  parameters?: Record<string, unknown>;
+  started_at?: string;
+  ended_at?: string;
 }
 
 export interface Source {

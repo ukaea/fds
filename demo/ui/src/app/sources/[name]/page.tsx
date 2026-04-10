@@ -150,9 +150,17 @@ export default function SourceDetailPage() {
             <Activity className="w-5 h-5 text-slate-400" />
             Provenance
           </h2>
-          <div className="text-center py-8 bg-slate-900/30 rounded-lg border border-dashed border-slate-700">
-            <p className="text-sm text-slate-500">
-              Linked datasets and provenance details will be available in a future release.
+          <div className="space-y-3 text-sm text-slate-400">
+            <p className="leading-relaxed">
+              This source acts as a <span className="text-white font-medium">prov:Agent</span> — an instrument
+              or code that can produce data. Each specific execution is recorded as an{' '}
+              <span className="text-white font-medium">Activity</span> (prov:Activity) and linked to the
+              datasets it produced.
+            </p>
+            <p className="leading-relaxed">
+              To see which datasets were produced by this source, navigate to a dataset and check its
+              Provenance panel, or query the API at{' '}
+              <span className="font-mono text-blue-400 text-xs">GET /api/v1/datasets/&#123;id&#125;/source</span>.
             </p>
           </div>
         </div>
