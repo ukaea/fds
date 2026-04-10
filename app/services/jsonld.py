@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, Any
 
+from app.models.collection import Collection, CollectionRead
 from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device, DeviceRead
 from app.models.distribution import Distribution
@@ -154,6 +155,95 @@ def map_dataset_to_dcat(
                 }
                 for ds in input_datasets
             ]
+        data["prov:wasGeneratedBy"] = prov_node
+
+    return {k: v for k, v in data.items() if v is not None}
+
+
+def map_collection_to_dcat(
+    collection: Collection | CollectionRead, base_url: str
+) -> dict[str, Any]:
+    """Maps a Collection to a ``dcat:Catalog`` JSON-LD document.
+
+    Member Datasets are serialised as ``dcat:dataset`` references (``@id``
+    only — full Dataset documents are available at their own URIs). Nested
+    child Collections are serialised as ``dcat:catalog`` references. The
+    producing Activity, if present, is embedded as a ``prov:wasGeneratedBy``
+    node, consistent with the Dataset serialisation in ``map_dataset_to_dcat``.
+    """
+    collection_id = getattr(collection, "id", None)
+    collection_uri = (
+        f"{base_url}/api/v1/collections/{collection_id}" if collection_id else None
+    )
+
+    data: dict[str, Any] = {
+        "@context": METADATA_CONTEXT,
+        "@type": "dcat:Catalog",
+        "@id": collection_uri,
+        "title": collection.title or collection.name,
+        "description": collection.description,
+        "identifier": str(collection_id) if collection_id else collection.name,
+        "publisher": collection.publisher,
+        "created": collection.created_at.isoformat()
+        if hasattr(collection, "created_at")
+        else None,
+        "modified": collection.updated_at.isoformat()
+        if hasattr(collection, "updated_at")
+        else None,
+    }
+
+    if collection.access_level:
+        data["accessRights"] = collection.access_level.value
+
+    # Member Datasets → dcat:dataset references
+    member_datasets: list[Any] = getattr(collection, "datasets", []) or []
+    if member_datasets:
+        data["dcat:dataset"] = [
+            {
+                "@id": f"{base_url}/api/v1/datasets/{ds.id}",
+                "@type": "dcat:Dataset",
+                "dct:title": ds.title or ds.name,
+            }
+            for ds in member_datasets
+            if getattr(ds, "id", None)
+        ] or None
+
+    # Child Collections → dcat:catalog references
+    child_collections: list[Any] = getattr(collection, "child_collections", []) or []
+    if child_collections:
+        data["dcat:catalog"] = [
+            {
+                "@id": f"{base_url}/api/v1/collections/{c.id}",
+                "@type": "dcat:Catalog",
+                "dct:title": c.title or c.name,
+            }
+            for c in child_collections
+            if getattr(c, "id", None)
+        ] or None
+
+    # PROV-O provenance — embed the producing Activity if present
+    activity: "Activity | None" = getattr(collection, "activity", None)
+    if activity:
+        source_uri = f"{base_url}/api/v1/sources/{activity.source_id}"
+        prov_node: dict[str, Any] = {
+            "@type": "prov:Activity",
+            "prov:type": activity.activity_type,
+            "prov:wasAssociatedWith": {
+                "@id": source_uri,
+                "@type": "prov:SoftwareAgent",
+                "dct:title": activity.source.name if activity.source else None,
+                "dct:description": activity.source.description
+                if activity.source
+                else None,
+                "dcat:version": activity.source_version,
+            },
+        }
+        if activity.started_at:
+            prov_node["prov:startedAtTime"] = activity.started_at.isoformat()
+        if activity.ended_at:
+            prov_node["prov:endedAtTime"] = activity.ended_at.isoformat()
+        if activity.parameters:
+            prov_node["prov:value"] = activity.parameters
         data["prov:wasGeneratedBy"] = prov_node
 
     return {k: v for k, v in data.items() if v is not None}

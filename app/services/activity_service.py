@@ -125,7 +125,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
             .offset(offset)
             .limit(limit)
         )
-        return self.session.exec(statement).all()  # type: ignore[return-value]
+        return self.session.exec(statement).all()
 
     def get_for_source(
         self, source_id: int, offset: int = 0, limit: int = 100

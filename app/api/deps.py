@@ -6,6 +6,7 @@ from app.auth.security import get_current_user
 from app.core.db import SessionDep
 from app.models.identity import AuthenticatedUser
 from app.services.activity_service import ActivityService
+from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.distribution_service import DistributionService
@@ -30,6 +31,11 @@ def get_source_service(session: SessionDep) -> SourceService:
     return SourceService(session)
 
 
+def get_collection_service(session: SessionDep) -> CollectionService:
+    """Provide a ``CollectionService`` bound to the current request's session."""
+    return CollectionService(session)
+
+
 def get_dataset_service(session: SessionDep) -> DatasetService:
     return DatasetService(session)
 
@@ -46,6 +52,7 @@ FileAccessServiceDep = Annotated[FileAccessService, Depends(get_file_access_serv
 DeviceServiceDep = Annotated[DeviceService, Depends(get_device_service)]
 ShotServiceDep = Annotated[ShotService, Depends(get_shot_service)]
 SourceServiceDep = Annotated[SourceService, Depends(get_source_service)]
+CollectionServiceDep = Annotated[CollectionService, Depends(get_collection_service)]
 DatasetServiceDep = Annotated[DatasetService, Depends(get_dataset_service)]
 ActivityServiceDep = Annotated[ActivityService, Depends(get_activity_service)]
 DistributionServiceDep = Annotated[

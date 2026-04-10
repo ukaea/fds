@@ -5,6 +5,14 @@ from .activity import (
     ActivityRead,
     ActivityUpdate,
 )
+from .collection import (
+    Collection,
+    CollectionCreate,
+    CollectionDataset,
+    CollectionMember,
+    CollectionRead,
+    CollectionUpdate,
+)
 from .dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
 from .device import Device, DeviceCreate, DeviceRead, DeviceUpdate
 from .distribution import (
@@ -26,6 +34,8 @@ Source.model_rebuild()
 SourceRead.model_rebuild()
 Activity.model_rebuild()
 ActivityRead.model_rebuild()
+Collection.model_rebuild()
+CollectionRead.model_rebuild()
 
 __all__ = [
     "Device",
@@ -53,5 +63,11 @@ __all__ = [
     "ActivityRead",
     "ActivityUpdate",
     "ActivityInput",
+    "Collection",
+    "CollectionCreate",
+    "CollectionRead",
+    "CollectionUpdate",
+    "CollectionDataset",
+    "CollectionMember",
     "AccessLevel",
 ]

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from sqlmodel import Session, select
 
 from app.core.config import config
+from app.models.collection import Collection
 from app.models.dataset import Dataset
 from app.models.device import Device
 from app.models.policy import AccessLevel
@@ -34,26 +35,31 @@ class EffectivePolicy:
 
 
 def get_effective_access_level(
-    obj: Dataset | Shot | Device, session: Session
+    obj: Collection | Dataset | Shot | Device, session: Session
 ) -> AccessLevel:
     """
-    Calculates the effective access level for an object based on inheritance:
-    Specific Overrides General.
-    Hierarchy: Dataset -> Shot -> Device -> Global Default
+    Calculates the effective access level for an object based on inheritance.
+
+    Specific overrides general. The resolution order is:
+    Collection/Dataset → Shot → Device → Global Default
+
+    Collections follow the same inheritance chain as Datasets: if no
+    ``access_level`` is set directly, the enclosing Shot's policy is checked,
+    then the Device's, and finally the global default is applied.
     """
     # 1. Direct override
     if obj.access_level:
         return obj.access_level
 
     # 2. Inherit from Shot (if applicable)
-    if isinstance(obj, Dataset) and obj.shot_id and obj.device_name:
+    if isinstance(obj, (Dataset, Collection)) and obj.shot_id and obj.device_name:
         shot = session.get(Shot, (obj.device_name, obj.shot_id))
         if shot:
             return get_effective_access_level(shot, session)
 
     # 3. Inherit from Device
     device = None
-    if isinstance(obj, (Dataset, Shot)) and obj.device_name:
+    if isinstance(obj, (Dataset, Collection, Shot)) and obj.device_name:
         statement = select(Device).where(Device.name == obj.device_name)
         device = session.exec(statement).first()
 
@@ -65,19 +71,22 @@ def get_effective_access_level(
 
 
 def _get_inherited_list_field(
-    obj: Dataset | Shot | Device,
+    obj: Collection | Dataset | Shot | Device,
     field_name: str,
     session: Session,
 ) -> list[str] | None:
     """
-    Walk Dataset → Shot → Device returning the first explicitly-set list field.
-    Returns None if the field is unset at every level.
+    Walk Collection/Dataset → Shot → Device returning the first explicitly-set
+    list field (``required_scopes`` or ``allowed_idps``).
+
+    Returns ``None`` if the field is unset at every level of the hierarchy.
+    Collections follow the same resolution chain as Datasets.
     """
     val: list[str] | None = getattr(obj, field_name, None)
     if val is not None:
         return val
 
-    if isinstance(obj, Dataset):
+    if isinstance(obj, (Dataset, Collection)):
         # Try shot first (composite key: device_name + shot_id)
         if obj.shot_id and obj.device_name:
             shot = session.get(Shot, (obj.device_name, obj.shot_id))
@@ -102,7 +111,7 @@ def _get_inherited_list_field(
 
 
 def get_effective_policy(
-    obj: Dataset | Shot | Device, session: Session
+    obj: Collection | Dataset | Shot | Device, session: Session
 ) -> EffectivePolicy:
     """
     Returns the fully-resolved EffectivePolicy for a dataset (or shot/device),
