@@ -88,7 +88,7 @@ function formatMediaType(mediaType?: string | null): string {
 
 export default function DatasetPage() {
   const params = useParams();
-  const { device, shot, dataset } = params;
+  const { device, shot, id } = params;
 
   const { data: session, status } = useSession();
   const [accessValues, setAccessValues] = useState<{granted: boolean, token?: any, s3Path?: string, error?: string}>({ granted: false });
@@ -102,7 +102,7 @@ export default function DatasetPage() {
   const [sliderIndices, setSliderIndices] = useState<number[]>([]);
 
   const { data: datasetData } = useSWR<Dataset>(
-    device && shot && dataset ? `${API_BASE}/devices/${device}/shots/${shot}/datasets/${dataset}` : null,
+    id ? `${API_BASE}/datasets/id/${id}` : null,
     fetcher
   );
 
@@ -414,11 +414,11 @@ export default function DatasetPage() {
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
             <Link href={`/devices/${device}/shots/${shot}`} className="hover:text-primary transition-colors flex items-center">Shot #{shot}</Link>
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
-            <span className="text-white">{datasetData?.name || dataset}</span>
+            <span className="text-white">{datasetData?.name || id}</span>
          </div>
          <h1 className="text-4xl font-bold flex items-center gap-3 mb-4">
             <Database className="text-primary w-8 h-8" />
-            {datasetData?.name || dataset}
+            {datasetData?.name || id}
          </h1>
          <p className="text-lg text-slate-300 max-w-4xl leading-relaxed mb-6">
             {datasetData?.description || "Scientific data array containing experimental measurements from the plasma discharge."}

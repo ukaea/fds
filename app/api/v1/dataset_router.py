@@ -16,6 +16,7 @@ from app.models.distribution import (
     DistributionUpdate,
 )
 from app.models.source import SourceRead
+from app.services.exceptions import ResourceNotFoundError
 from app.services.jsonld import map_dataset_to_dcat
 
 router = APIRouter()
@@ -134,29 +135,53 @@ def read_datasets_shot(
 
 @router.get(
     "/devices/{device_name}/shots/{shot_id}/datasets/{name}",
-    response_model=DatasetRead,
+    response_model=list[DatasetRead],
     response_model_exclude_none=True,
 )
 def read_dataset_by_name(
     *,
-    request: Request,
     device_name: str,
     shot_id: str,
     name: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
+) -> list[DatasetRead]:
+    """
+    Retrieve all datasets with the given name within a shot context.
+    Multiple datasets may share a name when produced by different Activities.
+    """
+    datasets = dataset_service.get_by_name_in_context(
+        name=name, user=user, device_name=device_name, shot_id=shot_id
+    )
+    return dataset_service.to_read_models(
+        datasets, include_storage_options=include_storage_options, user=user
+    )
+
+
+@router.get(
+    "/datasets/id/{id}",
+    response_model=DatasetRead,
+    response_model_exclude_none=True,
+)
+def read_dataset_by_id(
+    *,
+    request: Request,
+    id: int,
+    dataset_service: DatasetServiceDep,
+    user: CurrentUserDep,
+    include_storage_options: bool = False,
 ) -> DatasetRead | JSONResponse:
     """
-    Retrieve a specific dataset by its descriptive name within a shot context.
+    Retrieve a single dataset by its internal integer ID.
     Supports Content Negotiation:
     - Accept: application/ld+json -> Returns DCAT Metadata
     """
-    dataset = dataset_service.get_by_name_in_context_or_raise(
-        name=name, user=user, device_name=device_name, shot_id=shot_id
-    )
+    dataset = dataset_service.get(id)
+    if not dataset:
+        raise ResourceNotFoundError(f"Dataset {id} not found")
+    dataset_service.check_read_access(dataset, user)
 
-    # Content Negotiation
     if "application/ld+json" in request.headers.get("accept", ""):
         dcat_metadata = map_dataset_to_dcat(dataset, str(request.base_url).rstrip("/"))
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
@@ -168,31 +193,22 @@ def read_dataset_by_name(
 
 @router.get(
     "/datasets/{name}",
-    response_model=DatasetRead,
+    response_model=list[DatasetRead],
     response_model_exclude_none=True,
 )
 def read_dataset_global_by_name(
     *,
-    request: Request,
     name: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
-) -> DatasetRead | JSONResponse:
+) -> list[DatasetRead]:
     """
-    Retrieve a specific global dataset by its descriptive name.
-    Supports Content Negotiation:
-    - Accept: application/ld+json -> Returns DCAT Metadata
+    Retrieve all global datasets with the given name.
     """
-    dataset = dataset_service.get_by_name_in_context_or_raise(name=name, user=user)
-
-    # Content Negotiation
-    if "application/ld+json" in request.headers.get("accept", ""):
-        dcat_metadata = map_dataset_to_dcat(dataset, str(request.base_url).rstrip("/"))
-        return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
-
-    return dataset_service.to_read_model(
-        dataset, include_storage_options=include_storage_options, user=user
+    datasets = dataset_service.get_by_name_in_context(name=name, user=user)
+    return dataset_service.to_read_models(
+        datasets, include_storage_options=include_storage_options, user=user
     )
 
 
@@ -213,7 +229,7 @@ def read_datasets_device(
     """
     Retrieve datasets for a specific device (not tied to any shot).
     """
-    datasets = dataset_service.get_datasets_for_device(
+    datasets = dataset_service.get_device_level_datasets(
         device_name, user=user, offset=offset, limit=limit
     )
     return dataset_service.to_read_models(
@@ -223,34 +239,25 @@ def read_datasets_device(
 
 @router.get(
     "/devices/{device_name}/datasets/{name}",
-    response_model=DatasetRead,
+    response_model=list[DatasetRead],
     response_model_exclude_none=True,
 )
 def read_dataset_device_by_name(
     *,
-    request: Request,
     device_name: str,
     name: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
-) -> DatasetRead | JSONResponse:
+) -> list[DatasetRead]:
     """
-    Retrieve a specific device-level dataset by its descriptive name.
-    Supports Content Negotiation:
-    - Accept: application/ld+json -> Returns DCAT Metadata
+    Retrieve all device-level datasets with the given name.
     """
-    dataset = dataset_service.get_by_name_in_context_or_raise(
+    datasets = dataset_service.get_by_name_in_context(
         name=name, user=user, device_name=device_name
     )
-
-    # Content Negotiation
-    if "application/ld+json" in request.headers.get("accept", ""):
-        dcat_metadata = map_dataset_to_dcat(dataset, str(request.base_url).rstrip("/"))
-        return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
-
-    return dataset_service.to_read_model(
-        dataset, include_storage_options=include_storage_options, user=user
+    return dataset_service.to_read_models(
+        datasets, include_storage_options=include_storage_options, user=user
     )
 
 

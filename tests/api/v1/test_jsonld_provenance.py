@@ -66,7 +66,7 @@ def test_jsonld_provenance(
     headers = admin_user_token.copy()
     headers["Accept"] = "application/ld+json"
 
-    url = f"/api/v1/devices/{device.name}/shots/{shot.id}/datasets/{dataset.name}"
+    url = f"/api/v1/datasets/id/{dataset.id}"
     resp = test_client.get(url, headers=headers)
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/ld+json"
@@ -120,7 +120,7 @@ def test_jsonld_no_provenance(
 
     headers = admin_user_token.copy()
     headers["Accept"] = "application/ld+json"
-    url = f"/api/v1/devices/{device.name}/shots/{shot.id}/datasets/{dataset.name}"
+    url = f"/api/v1/datasets/id/{dataset.id}"
     resp = test_client.get(url, headers=headers)
     assert resp.status_code == 200
     assert "prov:wasGeneratedBy" not in resp.json()
@@ -168,7 +168,7 @@ def test_jsonld_provenance_with_timestamps(
 
     headers = admin_user_token.copy()
     headers["Accept"] = "application/ld+json"
-    url = f"/api/v1/devices/{device.name}/shots/{shot.id}/datasets/{dataset.name}"
+    url = f"/api/v1/datasets/id/{dataset.id}"
     resp = test_client.get(url, headers=headers)
     assert resp.status_code == 200
     prov = resp.json()["prov:wasGeneratedBy"]
@@ -234,7 +234,7 @@ def test_jsonld_provenance_with_inputs(
 
     headers = admin_user_token.copy()
     headers["Accept"] = "application/ld+json"
-    url = f"/api/v1/devices/{device.name}/shots/{shot.id}/datasets/{derived.name}"
+    url = f"/api/v1/datasets/id/{derived.id}"
     resp = test_client.get(url, headers=headers)
     assert resp.status_code == 200
 

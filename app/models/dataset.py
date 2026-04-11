@@ -5,9 +5,10 @@ from sqlmodel import (
     Column,
     Field,
     ForeignKeyConstraint,
+    Index,
     Relationship,
     SQLModel,
-    UniqueConstraint,
+    text,
 )
 
 from .mixins import DescriptiveMixin, TimestampMixin
@@ -79,13 +80,35 @@ class Dataset(DatasetBase, table=True):
             ["device_name", "shot_id"],
             ["shot.device_name", "shot.id"],
         ),
-        UniqueConstraint(
-            "device_name", "shot_id", "name", name="idx_dataset_context_name"
+        # Unattributed datasets: one per (name, context, origin).
+        # Allows federated catalogs to each contribute a same-named dataset.
+        Index(
+            "idx_dataset_unique_no_activity",
+            "name",
+            "device_name",
+            "shot_id",
+            "origin",
+            unique=True,
+            sqlite_where=text("activity_id IS NULL"),
+            postgresql_where=text("activity_id IS NULL"),
+        ),
+        # Attributed datasets: one per (name, context, activity).
+        # Allows multiple runs (different activity_ids) to each produce same-named datasets.
+        Index(
+            "idx_dataset_unique_with_activity",
+            "name",
+            "device_name",
+            "shot_id",
+            "activity_id",
+            unique=True,
+            sqlite_where=text("activity_id IS NOT NULL"),
+            postgresql_where=text("activity_id IS NOT NULL"),
         ),
     )
     id: int | None = Field(default=None, primary_key=True)
     shot_id: str | None = Field(default=None, index=True)
     activity_id: int | None = Field(default=None, foreign_key="activity.id", index=True)
+    origin: str | None = Field(default=None, index=True)
 
     shot: "Shot" = Relationship(
         back_populates="datasets",
@@ -112,6 +135,7 @@ class DatasetCreate(DatasetBase):
 
     shot_id: str | None = None
     activity_id: int | None = None
+    origin: str | None = None
     # Default distribution fields — inlined for convenience, become a Distribution
     # with default_distribution=True on create.
     url: str
@@ -132,6 +156,7 @@ class DatasetRead(DatasetBase):
     id: int
     shot_id: str | None = None
     activity_id: int | None = None
+    origin: str | None = None
     effective_access_level: AccessLevel | None = None
     # Default distribution fields inlined
     url: str

@@ -123,7 +123,7 @@ def test_get_dataset_not_found(dataset_service: DatasetService):
     assert retrieved_dataset is None
 
 
-def test_get_dataset_by_name_in_context_or_raise(
+def test_get_dataset_by_name_in_context(
     device_service: DeviceService,
     shot_service: ShotService,
     dataset_service: DatasetService,
@@ -147,25 +147,26 @@ def test_get_dataset_by_name_in_context_or_raise(
         user=admin_user,
     )
 
-    dataset = dataset_service.get_by_name_in_context_or_raise(
+    results = dataset_service.get_by_name_in_context(
         name="resolved_dataset",
         user=admin_user,
         device_name="Device Resolve",
         shot_id="shot-resolve",
     )
 
-    assert dataset.name == "resolved_dataset"
+    assert len(results) == 1
+    assert results[0].name == "resolved_dataset"
 
 
-def test_get_dataset_by_name_in_context_or_raise_not_found(
+def test_get_dataset_by_name_in_context_returns_empty_when_missing(
     dataset_service: DatasetService,
     admin_user: AuthenticatedUser,
 ):
-    with pytest.raises(ResourceNotFoundError, match="Global dataset missing not found"):
-        dataset_service.get_by_name_in_context_or_raise(
-            name="missing",
-            user=admin_user,
-        )
+    results = dataset_service.get_by_name_in_context(
+        name="missing",
+        user=admin_user,
+    )
+    assert results == []
 
 
 def test_get_datasets(
@@ -308,7 +309,7 @@ def test_get_datasets_for_device_excludes_shot_scoped(
         user=admin_user,
     )
 
-    datasets_device = dataset_service.get_datasets_for_device(
+    datasets_device = dataset_service.get_device_level_datasets(
         "Device X", user=admin_user
     )
     assert len(datasets_device) == 1

@@ -98,7 +98,7 @@ export default function ShotDetailPage() {
         {datasets?.map((dataset) => (
           <Link
             key={dataset.name}
-            href={`/devices/${deviceName}/shots/${shotId}/datasets/${dataset.name}`}
+            href={`/devices/${deviceName}/shots/${shotId}/datasets/${dataset.id}`}
             className="card p-6 hover:border-primary/50 transition-all group"
           >
             <div className="flex items-start justify-between">

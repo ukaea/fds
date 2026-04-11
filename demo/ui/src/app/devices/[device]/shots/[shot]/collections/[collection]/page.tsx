@@ -106,7 +106,7 @@ export default function CollectionDetailPage() {
               {collection.datasets.map((ds) => (
                 <Link
                   key={ds.name}
-                  href={`/devices/${deviceName}/shots/${shotId}/datasets/${ds.name}`}
+                  href={`/devices/${deviceName}/shots/${shotId}/datasets/${ds.id}`}
                   className="card p-4 hover:border-primary/50 transition-all group flex items-start justify-between"
                 >
                   <div className="flex items-center gap-3">

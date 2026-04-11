@@ -113,6 +113,7 @@ class Collection(CollectionBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
     shot_id: str | None = Field(default=None, index=True)
     activity_id: int | None = Field(default=None, foreign_key="activity.id", index=True)
+    origin: str | None = Field(default=None, index=True)
 
     shot: "Shot" = Relationship(
         back_populates="collections",
@@ -141,6 +142,7 @@ class CollectionCreate(CollectionBase):
 
     shot_id: str | None = None
     activity_id: int | None = None
+    origin: str | None = None
 
 
 class CollectionRead(CollectionBase):
@@ -155,6 +157,7 @@ class CollectionRead(CollectionBase):
     id: int
     shot_id: str | None = None
     activity_id: int | None = None
+    origin: str | None = None
     effective_access_level: AccessLevel | None = None
     datasets: list["DatasetRead"] | None = None
     child_collections: list["CollectionRead"] | None = None

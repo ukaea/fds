@@ -10,6 +10,7 @@ from app.auth.access_control import (
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
+from app.core.config import config
 from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
 from app.models.device import Device
 from app.models.distribution import Distribution, DistributionRead
@@ -133,18 +134,11 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             # Global dataset
             check_is_admin(user)
 
-        # 2. Check for Name Collisions
-        existing = self.get_by_name_in_context(
-            name=obj_in.name,
-            device_name=obj_in.device_name,
-            shot_id=obj_in.shot_id,
-            user=user,
+        # 2. Create DB Object — device_name flows through from obj_in directly
+        origin = obj_in.origin or config.catalog_uri
+        db_obj = Dataset.model_validate(
+            obj_in, update={"distributions": [], "origin": origin}
         )
-        if existing:
-            raise ConflictError(f"Dataset {obj_in.name} already exists in this context")
-
-        # 3. Create DB Object — device_name flows through from obj_in directly
-        db_obj = Dataset.model_validate(obj_in, update={"distributions": []})
 
         distribution = Distribution(
             url=obj_in.url,
@@ -224,50 +218,20 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         user: AuthenticatedUser = ANONYMOUS_USER,
         device_name: str | None = None,
         shot_id: str | None = None,
-    ) -> Dataset | None:
+    ) -> list[Dataset]:
         """
-        Retrieve a dataset by name within its context, enforcing read access.
+        Return all datasets with the given name in the given context.
+        Multiple datasets may share a name when produced by different Activities.
         """
         statement = select(Dataset).where(
             Dataset.name == name,
             Dataset.device_name == device_name,
             Dataset.shot_id == shot_id,
         )
-        dataset = self.session.exec(statement).first()
-        if dataset:
-            self.check_read_access(dataset, user)
-        return dataset
+        datasets = self.session.exec(statement).all()
+        return self._filter_accessible_datasets(datasets, user)
 
-    def get_by_name_in_context_or_raise(
-        self,
-        *,
-        name: str,
-        user: AuthenticatedUser = ANONYMOUS_USER,
-        device_name: str | None = None,
-        shot_id: str | None = None,
-    ) -> Dataset:
-        """
-        Retrieve a dataset by name within its context, enforcing read access and
-        raising a context-aware not-found error when absent.
-        """
-        dataset = self.get_by_name_in_context(
-            name=name,
-            user=user,
-            device_name=device_name,
-            shot_id=shot_id,
-        )
-        if dataset:
-            return dataset
-
-        if device_name and shot_id:
-            raise ResourceNotFoundError(f"Dataset {name} not found in this context")
-        if device_name:
-            raise ResourceNotFoundError(
-                f"Dataset {name} not found for device {device_name}"
-            )
-        raise ResourceNotFoundError(f"Global dataset {name} not found")
-
-    def get_datasets_for_device(
+    def get_device_level_datasets(
         self,
         device_name: str,
         user: AuthenticatedUser = ANONYMOUS_USER,

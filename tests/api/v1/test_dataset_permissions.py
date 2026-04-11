@@ -40,8 +40,9 @@ def test_public_dataset_anonymous_access(
 
     # Assert: Success
     assert response.status_code == 200
-    assert response.json()["name"] == "mag_field"
-    assert response.json()["effective_access_level"] == "public"
+    data = response.json()
+    assert data[0]["name"] == "mag_field"
+    assert data[0]["effective_access_level"] == "public"
 
 
 def test_restricted_dataset_anonymous_access_forbidden(
@@ -71,8 +72,9 @@ def test_restricted_dataset_anonymous_access_forbidden(
     # Act
     response = test_client.get("/api/v1/devices/JET/shots/200/datasets/core_temp")
 
-    # Assert: 403 Forbidden
-    assert response.status_code == 403
+    # Assert: 200 with empty list (restricted resources are hidden, not rejected)
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_dataset_inheritance_override(
@@ -109,7 +111,7 @@ def test_dataset_inheritance_override(
 
     # Assert: Success (200) because Dataset Level (Public) wins
     assert response.status_code == 200
-    assert response.json()["effective_access_level"] == "public"
+    assert response.json()[0]["effective_access_level"] == "public"
 
 
 def test_dataset_inheritance_fallback(
@@ -144,8 +146,9 @@ def test_dataset_inheritance_fallback(
     # Act: Read anonymously
     response = test_client.get("/api/v1/devices/D3D/shots/400/datasets/raw_data")
 
-    # Assert: 403 Forbidden (Inherited Restricted)
-    assert response.status_code == 403
+    # Assert: 200 with empty list (restricted resources are hidden, not rejected)
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_list_filtering(

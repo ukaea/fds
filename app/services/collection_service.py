@@ -10,6 +10,7 @@ from app.auth.access_control import (
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_is_admin
+from app.core.config import config
 from app.models.activity import Activity
 from app.models.collection import (
     Collection,
@@ -146,7 +147,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             )
 
         # 3. Persist
-        db_obj = Collection.model_validate(obj_in)
+        origin = obj_in.origin or config.catalog_uri
+        db_obj = Collection.model_validate(obj_in, update={"origin": origin})
         self.session.add(db_obj)
         try:
             self.session.commit()

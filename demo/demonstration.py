@@ -12,7 +12,7 @@
 
 import marimo
 
-__generated_with = "0.23.0"
+__generated_with = "0.23.1"
 app = marimo.App(width="medium")
 
 
@@ -327,7 +327,11 @@ def _(FDS_API_URL, headers, httpx):
         if resp_ds.status_code != 200:
             print(f"  Dataset not found: {resp_ds.status_code}")
             return
-        ds = resp_ds.json()
+        ds_list = resp_ds.json()
+        if not ds_list:
+            print("  Dataset not found (empty list).")
+            return
+        ds = ds_list[0]
         if ds.get("activity_id"):
             print(f"  Already has Activity {ds['activity_id']}, skipping.")
             return
@@ -409,8 +413,12 @@ def _(mo):
 
 @app.cell
 def _(FDS_API_URL, headers, httpx, json):
-    # Request JSON-LD for the dataset we just registered
-    jsonld_url = f"{FDS_API_URL}/devices/mast/shots/30421/datasets/equilibrium"
+    # Resolve dataset ID first — name-based endpoints return a list
+    _ds_list = httpx.get(
+        f"{FDS_API_URL}/devices/mast/shots/30421/datasets/equilibrium", headers=headers
+    ).json()
+    eq_id = _ds_list[0]["id"]
+    jsonld_url = f"{FDS_API_URL}/datasets/id/{eq_id}"
 
     print(f"Requesting JSON-LD from: {jsonld_url}")
     ld_headers = headers.copy()
@@ -562,7 +570,7 @@ def _(FDS_API_URL, headers, httpx):
     for _ids in ["equilibrium", "magnetics", "thomson_scattering"]:
         _ds_id = httpx.get(
             f"{FDS_API_URL}/devices/mast/shots/30420/datasets/{_ids}", headers=headers
-        ).json()["id"]
+        ).json()[0]["id"]
         httpx.post(
             f"{FDS_API_URL}/activities/{jintrac_activity_id}/inputs/{_ds_id}",
             headers=headers,
@@ -591,7 +599,7 @@ def _(FDS_API_URL, headers, httpx):
             else httpx.get(
                 f"{FDS_API_URL}/devices/mast/shots/30420/datasets/{_stem}",
                 headers=headers,
-            ).json()["id"]
+            ).json()[0]["id"]
         )
         jintrac_dataset_ids.append(_id)
 
@@ -722,7 +730,7 @@ def _(FDS_API_URL, headers, httpx, xr):
         f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets/restricted_00",
         headers=headers,
         params={"include_storage_options": True},
-    ).json()
+    ).json()[0]
 
     xr.open_dataset(
         ds_meta["url"], engine="zarr", storage_options=ds_meta["storage_options"]
@@ -745,7 +753,7 @@ def _(FDS_API_URL, httpx, xr):
     eq_dataset = httpx.get(
         f"{FDS_API_URL}/devices/mast/shots/30421/datasets/equilibrium",
         params={"include_storage_options": True},
-    ).json()
+    ).json()[0]
 
     xr.open_dataset(
         eq_dataset["url"],
