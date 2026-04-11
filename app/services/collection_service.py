@@ -10,6 +10,7 @@ from app.auth.access_control import (
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_is_admin
+from app.models.activity import Activity
 from app.models.collection import (
     Collection,
     CollectionCreate,
@@ -23,6 +24,7 @@ from app.models.device import Device
 from app.models.distribution import DistributionRead
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
+from app.models.source import Source
 from app.services.base_service import BaseService
 from app.services.exceptions import (
     ConflictError,
@@ -322,6 +324,25 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 Collection.shot_id == shot_id,
                 Collection.device_name == device_name,
             )
+            .offset(offset)
+            .limit(limit)
+        )
+        collections = self.session.exec(statement).all()
+        return self._filter_accessible(collections, user)
+
+    def get_for_source(
+        self,
+        source_name: str,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> Sequence[Collection]:
+        """Return all Collections whose linked Activity was produced by the given Source."""
+        statement = (
+            select(Collection)
+            .join(Activity, Activity.id == Collection.activity_id)  # type: ignore[arg-type]
+            .join(Source, Source.id == Activity.source_id)  # type: ignore[arg-type]
+            .where(Source.name == source_name)
             .offset(offset)
             .limit(limit)
         )

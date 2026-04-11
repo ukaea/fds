@@ -48,6 +48,9 @@ export default function RootLayout({
                     <Link href="/datasets" className="hover:text-primary transition-colors">
                       Datasets
                     </Link>
+                    <Link href="/collections" className="hover:text-primary transition-colors">
+                      Collections
+                    </Link>
                     <Link href="/sources" className="hover:text-primary transition-colors">
                       Data Sources
                     </Link>

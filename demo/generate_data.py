@@ -5,6 +5,7 @@
 #     "numpy",
 #     "s3fs",
 #     "zarr",
+#     "netCDF4",
 # ]
 # ///
 """Generate and upload demo data for FDS.
@@ -120,5 +121,116 @@ else:
             f"Restricted Data {i}",
         )
     print("Synthetic data generation complete.")
+
+
+# ---------------------------------------------------------
+# 3. Generate JINTRAC Integrated Modelling Outputs (Shot 30420)
+# ---------------------------------------------------------
+# These represent three IMAS IDSs produced by a JINTRAC simulation that used
+# the measured equilibrium, magnetics, and Thomson scattering from shot 30420
+# as boundary conditions.  The data is synthetic but shaped like real IDS output.
+
+jintrac_base = f"{bucket_name}/shots/30420/jintrac"
+
+if fs.exists(jintrac_base):
+    print("JINTRAC outputs for shot 30420 already exist. Skipping generation.")
+else:
+    print("Generating JINTRAC integrated modelling outputs for shot 30420...")
+
+    rho = np.linspace(0, 1, 50)  # normalised toroidal flux coordinate
+    time = np.linspace(0.1, 0.35, 20)  # seconds
+
+    # ---- equilibrium IDS ------------------------------------------------
+    # Poloidal flux on (R, Z) grid at each time slice
+    R = np.linspace(0.2, 0.8, 64)
+    Z = np.linspace(-0.5, 0.5, 64)
+    psi = np.exp(-((R[None, :, None] - 0.5) ** 2 + Z[None, None, :] ** 2) / 0.08) * (
+        1 + 0.05 * np.random.randn(len(time), len(R), len(Z))
+    )
+    eq_ds = xr.Dataset(
+        {
+            "psi": (["time", "R", "Z"], psi.astype("float32")),
+        },
+        coords={"time": time, "R": R, "Z": Z},
+        attrs={
+            "title": "JINTRAC Equilibrium — Shot 30420",
+            "description": (
+                "Time-dependent poloidal flux map from JINTRAC integrated modelling "
+                "run on MAST shot 30420."
+            ),
+            "IDS": "equilibrium",
+            "source": "JINTRAC v220922",
+        },
+    )
+
+    # ---- core_profiles IDS ----------------------------------------------
+    # Electron temperature and density, ion temperature on (time, rho) grid
+    Te = 2000 * (1 - rho**2) ** 1.5 * (1 + 0.02 * np.random.randn(len(time), len(rho)))
+    ne = 5e19 * (1 - 0.8 * rho**2) * (1 + 0.02 * np.random.randn(len(time), len(rho)))
+    Ti = Te * (1.05 + 0.1 * rho)
+    cp_ds = xr.Dataset(
+        {
+            "electron_temperature": (["time", "rho"], Te.astype("float32")),
+            "electron_density": (["time", "rho"], ne.astype("float32")),
+            "ion_temperature": (["time", "rho"], Ti.astype("float32")),
+        },
+        coords={"time": time, "rho": rho},
+        attrs={
+            "title": "JINTRAC Core Profiles — Shot 30420",
+            "description": (
+                "Electron temperature, electron density, and ion temperature profiles "
+                "from JINTRAC integrated modelling run on MAST shot 30420."
+            ),
+            "IDS": "core_profiles",
+            "source": "JINTRAC v220922",
+            "units_electron_temperature": "eV",
+            "units_electron_density": "m^-3",
+            "units_ion_temperature": "eV",
+        },
+    )
+
+    # ---- core_sources IDS -----------------------------------------------
+    # Electron and ion heat sources (W/m³) on (time, rho) grid
+    Qe = (
+        2e6
+        * np.exp(-((rho - 0.3) ** 2) / 0.05)
+        * (1 + 0.03 * np.random.randn(len(time), len(rho)))
+    )
+    Qi = (
+        1.5e6
+        * np.exp(-((rho - 0.35) ** 2) / 0.06)
+        * (1 + 0.03 * np.random.randn(len(time), len(rho)))
+    )
+    cs_ds = xr.Dataset(
+        {
+            "electron_heat_source": (["time", "rho"], Qe.astype("float32")),
+            "ion_heat_source": (["time", "rho"], Qi.astype("float32")),
+        },
+        coords={"time": time, "rho": rho},
+        attrs={
+            "title": "JINTRAC Core Sources — Shot 30420",
+            "description": (
+                "Electron and ion volumetric heat sources from JINTRAC integrated "
+                "modelling run on MAST shot 30420."
+            ),
+            "IDS": "core_sources",
+            "source": "JINTRAC v220922",
+            "units_electron_heat_source": "W m^-3",
+            "units_ion_heat_source": "W m^-3",
+        },
+    )
+
+    # Upload each IDS as a NetCDF4 file via a local temporary file
+    for name, ids_ds in [
+        ("equilibrium", eq_ds),
+        ("core_profiles", cp_ds),
+        ("core_sources", cs_ds),
+    ]:
+        s3_path = f"{jintrac_base}/{name}.nc"
+        print(f"  Writing {name}.nc to {s3_path}...")
+        with fs.open(s3_path, "wb") as f:
+            ids_ds.to_netcdf(f, engine="netcdf4")
+
+    print("JINTRAC outputs generated and uploaded.")
 
 print("All data tasks finished.")
