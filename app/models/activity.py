@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
+    from .collection import Collection
     from .dataset import Dataset
     from .source import Source
 
@@ -29,6 +30,7 @@ class Activity(ActivityBase, table=True):
 
     source: "Source" = Relationship(back_populates="activities")
     datasets: list["Dataset"] = Relationship(back_populates="activity")
+    collections: list["Collection"] = Relationship(back_populates="activity")
     input_datasets: list["Dataset"] = Relationship(link_model=ActivityInput)
 
 

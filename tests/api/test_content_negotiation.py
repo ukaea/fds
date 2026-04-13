@@ -45,11 +45,11 @@ def test_content_negotiation_device(test_client: TestClient, session: Session):
 
 def test_content_negotiation_dataset(test_client: TestClient, session: Session):
     """
-    Test that the dataset endpoint (global) respects the Accept header.
+    Test that the dataset endpoint (by ID) respects the Accept header.
     """
     # Setup
     admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
-    DatasetService(session).create(
+    dataset = DatasetService(session).create(
         DatasetCreate(
             name="test-dataset-negotiation",
             title="Negotiation Test Dataset",
@@ -62,19 +62,17 @@ def test_content_negotiation_dataset(test_client: TestClient, session: Session):
         user=admin,
     )
 
-    dataset_name = "test-dataset-negotiation"
-
-    # 1. Default (JSON)
-    response = test_client.get(f"/api/v1/datasets/{dataset_name}")
+    # 1. Default (JSON) — by ID
+    response = test_client.get(f"/api/v1/datasets/id/{dataset.id}")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
     data = response.json()
     assert "name" in data
     assert "@type" not in data
 
-    # 2. JSON-LD
+    # 2. JSON-LD — by ID
     response = test_client.get(
-        f"/api/v1/datasets/{dataset_name}", headers={"Accept": "application/ld+json"}
+        f"/api/v1/datasets/id/{dataset.id}", headers={"Accept": "application/ld+json"}
     )
     assert response.status_code == 200
     assert "application/ld+json" in response.headers["content-type"]

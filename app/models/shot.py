@@ -6,6 +6,7 @@ from .mixins import DescriptiveMixin, TimestampMixin
 from .policy import AccessLevel
 
 if TYPE_CHECKING:
+    from .collection import Collection
     from .dataset import Dataset
     from .device import Device, DeviceRead
 
@@ -48,6 +49,16 @@ class Shot(ShotBase, table=True):
         sa_relationship_kwargs={
             "primaryjoin": "and_(Shot.id==Dataset.shot_id, Shot.device_name==Dataset.device_name)",
             "foreign_keys": "[Dataset.shot_id, Dataset.device_name]",
+        },
+    )
+    collections: list["Collection"] = Relationship(
+        back_populates="shot",
+        sa_relationship_kwargs={
+            "primaryjoin": (
+                "and_(Shot.id==Collection.shot_id, "
+                "Shot.device_name==Collection.device_name)"
+            ),
+            "foreign_keys": "[Collection.shot_id, Collection.device_name]",
         },
     )
 

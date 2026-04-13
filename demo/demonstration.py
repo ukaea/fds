@@ -12,7 +12,7 @@
 
 import marimo
 
-__generated_with = "0.23.0"
+__generated_with = "0.23.1"
 app = marimo.App(width="medium")
 
 
@@ -112,19 +112,10 @@ def _(mo):
 
 @app.cell
 def _(FDS_API_URL, headers, httpx):
-    def register(endpoint, payload, label, update_endpoint=None):
+    def register(endpoint, payload, label):
         resp = httpx.post(f"{FDS_API_URL}{endpoint}", json=payload, headers=headers)
         if resp.status_code == 201:
             print(f"  {label}: Created")
-        elif resp.status_code == 409 and update_endpoint:
-            # Resource exists — patch it to ensure fields like access_level are current
-            upd = httpx.put(
-                f"{FDS_API_URL}{update_endpoint}", json=payload, headers=headers
-            )
-            if upd.status_code == 200:
-                print(f"  {label}: Updated")
-            else:
-                print(f"  {label}: Already exists (update failed {upd.status_code})")
         elif resp.status_code == 409:
             print(f"  {label}: Already exists")
         else:
@@ -142,7 +133,6 @@ def _(FDS_API_URL, headers, httpx):
             "access_level": "public",
         },
         "mast",
-        update_endpoint="/devices/mast",
     )
     register(
         "/devices/",
@@ -153,7 +143,6 @@ def _(FDS_API_URL, headers, httpx):
             "access_level": "public",
         },
         "mast-upgrade",
-        update_endpoint="/devices/mast-upgrade",
     )
 
     # 2. Register Shots
@@ -327,7 +316,11 @@ def _(FDS_API_URL, headers, httpx):
         if resp_ds.status_code != 200:
             print(f"  Dataset not found: {resp_ds.status_code}")
             return
-        ds = resp_ds.json()
+        ds_list = resp_ds.json()
+        if not ds_list:
+            print("  Dataset not found (empty list).")
+            return
+        ds = ds_list[0]
         if ds.get("activity_id"):
             print(f"  Already has Activity {ds['activity_id']}, skipping.")
             return
@@ -409,8 +402,12 @@ def _(mo):
 
 @app.cell
 def _(FDS_API_URL, headers, httpx, json):
-    # Request JSON-LD for the dataset we just registered
-    jsonld_url = f"{FDS_API_URL}/devices/mast/shots/30421/datasets/equilibrium"
+    # Resolve dataset ID first — name-based endpoints return a list
+    _ds_list = httpx.get(
+        f"{FDS_API_URL}/devices/mast/shots/30421/datasets/equilibrium", headers=headers
+    ).json()
+    eq_id = _ds_list[0]["id"]
+    jsonld_url = f"{FDS_API_URL}/datasets/id/{eq_id}"
 
     print(f"Requesting JSON-LD from: {jsonld_url}")
     ld_headers = headers.copy()
@@ -512,7 +509,169 @@ def _(FDS_API_URL, headers, httpx):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 4. Attempting Unauthorized Access
+    ## 4. Collections — Grouping Related Datasets
+
+    JINTRAC is an integrated modelling code: given the measured boundary conditions
+    from a shot it produces a self-consistent set of transport solutions across
+    several IMAS IDSs. Here we register a synthetic JINTRAC run on MAST shot 30420
+    and group the outputs into a **Collection** (`dcat:Catalog`) — a single citable
+    unit that records what was produced, by what code, from which inputs.
+    """)
+    return
+
+
+@app.cell
+def _(FDS_API_URL, headers, httpx):
+    # If the collection already exists this run has already been registered — skip.
+    _existing = httpx.get(
+        f"{FDS_API_URL}/devices/mast/shots/30420/collections/jintrac-v220922",
+        headers=headers,
+    )
+    if _existing.status_code == 200:
+        jintrac_collection_id = _existing.json()["id"]
+        print(
+            f"JINTRAC run already registered (collection id={jintrac_collection_id}), skipping."
+        )
+    else:
+        # Source (the code)
+        _r = httpx.post(
+            f"{FDS_API_URL}/sources/",
+            headers=headers,
+            json={"name": "jintrac", "description": "Integrated modelling code"},
+        )
+        jintrac_source_id = (
+            _r.json()["id"]
+            if _r.status_code == 201
+            else httpx.get(f"{FDS_API_URL}/sources/jintrac", headers=headers).json()[
+                "id"
+            ]
+        )
+
+        # Activity (this specific run, with timestamps and parameters)
+        _r = httpx.post(
+            f"{FDS_API_URL}/activities/",
+            headers=headers,
+            json={
+                "source_id": jintrac_source_id,
+                "source_version": "v220922",
+                "activity_type": "SIMULATION",
+                "parameters": {
+                    "run_id": "30420-jintrac-v220922",
+                    "transport_model": "NCLASS",
+                },
+                "started_at": "2024-03-10T14:00:00",
+                "ended_at": "2024-03-10T16:47:22",
+            },
+        )
+        jintrac_activity_id = _r.json()["id"]
+
+        # prov:used — record which measured datasets were consumed as inputs
+        for _ids in ["equilibrium", "magnetics", "thomson_scattering"]:
+            _ds_id = httpx.get(
+                f"{FDS_API_URL}/devices/mast/shots/30420/datasets/{_ids}",
+                headers=headers,
+            ).json()[0]["id"]
+            httpx.post(
+                f"{FDS_API_URL}/activities/{jintrac_activity_id}/inputs/{_ds_id}",
+                headers=headers,
+            )
+
+        # Output datasets — one per IDS, each linked to the Activity via prov:wasGeneratedBy
+        jintrac_dataset_ids = []
+        for _stem in ["equilibrium", "core_profiles", "core_sources"]:
+            _r = httpx.post(
+                f"{FDS_API_URL}/devices/mast/shots/30420/datasets",
+                headers=headers,
+                json={
+                    "name": _stem,
+                    "title": f"JINTRAC {_stem.replace('_', ' ').title()} — Shot 30420",
+                    "level": 3,
+                    "url": f"s3://fds-data/shots/30420/jintrac/{_stem}.nc",
+                    "media_type": "application/netcdf",
+                    "format": "NetCDF4",
+                    "access_level": "public",
+                    "activity_id": jintrac_activity_id,
+                },
+            )
+            jintrac_dataset_ids.append(_r.json()["id"])
+
+        # Collection — groups all outputs into a single citable unit
+        _r = httpx.post(
+            f"{FDS_API_URL}/devices/mast/shots/30420/collections",
+            headers=headers,
+            json={
+                "name": "jintrac-v220922",
+                "title": "JINTRAC Integrated Modelling — Shot 30420",
+                "description": "JINTRAC transport simulation outputs: equilibrium, core profiles, and heat sources.",
+                "access_level": "public",
+                "activity_id": jintrac_activity_id,
+            },
+        )
+        jintrac_collection_id = _r.json()["id"]
+        for _id in jintrac_dataset_ids:
+            httpx.post(
+                f"{FDS_API_URL}/collections/{jintrac_collection_id}/datasets/{_id}",
+                headers=headers,
+            )
+        print(f"Source:     jintrac  (id={jintrac_source_id})")
+        print(
+            f"Activity:   id={jintrac_activity_id}  inputs: equilibrium, magnetics, thomson_scattering"
+        )
+        print(f"Datasets:   {jintrac_dataset_ids}")
+        print(f"Collection: jintrac-v220922  (id={jintrac_collection_id})")
+
+    return (jintrac_collection_id,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### 4a. Inspecting the Collection
+
+    A single GET returns the Collection with all member Datasets inlined.
+    """)
+    return
+
+
+@app.cell
+def _(FDS_API_URL, headers, httpx, jintrac_collection_id):
+    _col = httpx.get(
+        f"{FDS_API_URL}/devices/mast/shots/30420/collections/jintrac-v220922",
+        headers=headers,
+    ).json()
+    print(f"{_col['title']}  (id={jintrac_collection_id})")
+    print(f"access_level: {_col['effective_access_level']}")
+    for _ds in _col.get("datasets") or []:
+        print(f"  {_ds['name']}  [{_ds['format']}]  {_ds['url']}")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### 4b. Collection as `dcat:Catalog` (JSON-LD)
+
+    Requesting with `Accept: application/ld+json` returns a `dcat:Catalog` document.
+    Member datasets appear as `dcat:dataset` references; the provenance Activity
+    is embedded as `prov:wasGeneratedBy`.
+    """)
+    return
+
+
+@app.cell
+def _(FDS_API_URL, headers, httpx, json):
+    _ld = httpx.get(
+        f"{FDS_API_URL}/devices/mast/shots/30420/collections/jintrac-v220922",
+        headers={**headers, "accept": "application/ld+json"},
+    ).json()
+    print(json.dumps(_ld, indent=2))
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 5. Attempting Unauthorized Access
 
     Before we fetch credentials from FDS, let's see what happens if we attempt to access a dataset directly using native `xarray` without providing authentication.
 
@@ -543,7 +702,7 @@ def _(MINIO_URL, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 5. Secure Consumption with Data-Driven Configuration
+    ## 6. Secure Consumption with Data-Driven Configuration
 
     Instead of manually vending and managing tokens, we simply fetch the datasets from FDS with `include_storage_options=true`. The API evaluates our permissions and automatically calculates and embeds the necessary STS endpoint URLs and temporary keys directly into the JSON response!
     """)
@@ -556,7 +715,7 @@ def _(FDS_API_URL, headers, httpx, xr):
         f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets/restricted_00",
         headers=headers,
         params={"include_storage_options": True},
-    ).json()
+    ).json()[0]
 
     xr.open_dataset(
         ds_meta["url"], engine="zarr", storage_options=ds_meta["storage_options"]
@@ -567,7 +726,7 @@ def _(FDS_API_URL, headers, httpx, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 6. Single Dataset Access (Detailed View)
+    ## 7. Single Dataset Access (Detailed View)
 
     Now we use `xarray` to read some real MAST data — the Level 2 Equilibrium reconstruction from Shot 30421.
     """)
@@ -579,7 +738,7 @@ def _(FDS_API_URL, httpx, xr):
     eq_dataset = httpx.get(
         f"{FDS_API_URL}/devices/mast/shots/30421/datasets/equilibrium",
         params={"include_storage_options": True},
-    ).json()
+    ).json()[0]
 
     xr.open_dataset(
         eq_dataset["url"],
@@ -592,7 +751,7 @@ def _(FDS_API_URL, httpx, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 7. High-Throughput Parallel Analysis (Dask)
+    ## 8. High-Throughput Parallel Analysis (Dask)
 
     FDS facilitates parallel analysis by resolving tokens server-side. We simply pass the `storage_options` dictionary to our worker functions.
     """)

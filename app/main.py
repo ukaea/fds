@@ -4,6 +4,7 @@ from app.api.exception_handlers import add_exception_handlers
 from app.api.v1 import (
     activity_router,
     catalog_router,
+    collection_router,
     dataset_router,
     device_router,
     file_access_router,
@@ -26,6 +27,7 @@ app.include_router(
     activity_router.router, prefix="/api/v1/activities", tags=["activities"]
 )
 app.include_router(dataset_router.router, prefix="/api/v1", tags=["datasets"])
+app.include_router(collection_router.router, prefix="/api/v1", tags=["collections"])
 app.include_router(catalog_router.router, prefix="/api/v1", tags=["catalog"])
 app.include_router(
     file_access_router.router, prefix="/api/v1/file-access", tags=["file-access"]

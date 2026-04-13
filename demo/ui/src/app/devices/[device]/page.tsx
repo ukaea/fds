@@ -131,7 +131,7 @@ export default function DeviceDetailPage() {
           {!datasetsLoading && !datasetsError && datasets?.map((dataset) => (
             <Link
               key={dataset.name}
-              href={`/devices/${deviceName}/datasets/${dataset.name}`}
+              href={`/devices/${deviceName}/datasets/${dataset.id}`}
               className="card p-6 hover:border-primary/50 transition-all group"
             >
               <div className="flex items-start justify-between">

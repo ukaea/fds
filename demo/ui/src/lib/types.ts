@@ -27,6 +27,20 @@ export interface Dataset {
   activity_id?: number;
 }
 
+export interface Collection {
+  id: number;
+  name: string;
+  title?: string;
+  description?: string;
+  device_name?: string | null;
+  shot_id?: string | null;
+  access_level?: string;
+  effective_access_level?: string;
+  activity_id?: number | null;
+  datasets?: Dataset[];
+  child_collections?: Collection[];
+}
+
 export interface Activity {
   id: number;
   source_id: number;

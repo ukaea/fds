@@ -40,12 +40,11 @@ def test_hybrid_storage_fields(
     data = response.json()
     assert data["media_type"] == "application/vnd.icechunk+zarr"
     assert data["format"] == "icechunk"
+    dataset_id = data["id"]
 
-    # 3. Retrieve content negotiation (JSON-LD)
-    # Note: Retrieval is by NAME, not ID
-    dataset_name = dataset_data["name"]
+    # 3. Retrieve content negotiation (JSON-LD) — by ID
     response = test_client.get(
-        f"/api/v1/devices/{device.name}/shots/{shot.id}/datasets/{dataset_name}",
+        f"/api/v1/datasets/id/{dataset_id}",
         headers={"Accept": "application/ld+json"},
     )
     assert response.status_code == 200

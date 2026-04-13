@@ -74,9 +74,21 @@ function HeatmapCanvas({ data, width, height, title }: any) {
     );
 }
 
+function isZarr(mediaType?: string | null): boolean {
+  return Boolean(mediaType?.toLowerCase().includes('zarr'));
+}
+
+function formatMediaType(mediaType?: string | null): string {
+  if (!mediaType) return 'Unknown';
+  if (mediaType.includes('zarr')) return 'Zarr';
+  if (mediaType.includes('netcdf') || mediaType.includes('netCDF')) return 'NetCDF';
+  if (mediaType.includes('hdf')) return 'HDF5';
+  return mediaType.split('/').pop() || mediaType;
+}
+
 export default function DatasetPage() {
   const params = useParams();
-  const { device, shot, dataset } = params;
+  const { device, shot, id } = params;
 
   const { data: session, status } = useSession();
   const [accessValues, setAccessValues] = useState<{granted: boolean, token?: any, s3Path?: string, error?: string}>({ granted: false });
@@ -90,7 +102,7 @@ export default function DatasetPage() {
   const [sliderIndices, setSliderIndices] = useState<number[]>([]);
 
   const { data: datasetData } = useSWR<Dataset>(
-    device && shot && dataset ? `${API_BASE}/devices/${device}/shots/${shot}/datasets/${dataset}` : null,
+    id ? `${API_BASE}/datasets/id/${id}` : null,
     fetcher
   );
 
@@ -137,7 +149,7 @@ export default function DatasetPage() {
 
   useEffect(() => {
      if (datasetData && status !== "loading" && !autoLoadAttempted && !accessValues.granted && !accessValues.error) {
-         if (datasetData.effective_access_level === 'public' || status === "authenticated") {
+         if (isZarr(datasetData.media_type) && (datasetData.effective_access_level === 'public' || status === "authenticated")) {
              setAutoLoadAttempted(true);
              handleRequestAccess();
          }
@@ -402,11 +414,11 @@ export default function DatasetPage() {
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
             <Link href={`/devices/${device}/shots/${shot}`} className="hover:text-primary transition-colors flex items-center">Shot #{shot}</Link>
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
-            <span className="text-white">{datasetData?.name || dataset}</span>
+            <span className="text-white">{datasetData?.name || id}</span>
          </div>
          <h1 className="text-4xl font-bold flex items-center gap-3 mb-4">
             <Database className="text-primary w-8 h-8" />
-            {datasetData?.name || dataset}
+            {datasetData?.name || id}
          </h1>
          <p className="text-lg text-slate-300 max-w-4xl leading-relaxed mb-6">
             {datasetData?.description || "Scientific data array containing experimental measurements from the plasma discharge."}
@@ -419,10 +431,11 @@ export default function DatasetPage() {
          </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className={datasetData && !isZarr(datasetData.media_type) ? 'max-w-3xl' : 'grid grid-cols-1 lg:grid-cols-3 gap-8'}>
 
-        {/* Left Column: Visualization */}
-        <div className="lg:col-span-2">
+        {/* Left Column: Zarr Visualizer (only rendered for Zarr datasets) */}
+        {(!datasetData || isZarr(datasetData.media_type)) && (
+          <div className="lg:col-span-2">
             <div className="card h-[650px] flex flex-col relative overflow-hidden shadow-2xl shadow-black/50 border border-slate-700/50">
                 <div className="absolute inset-0 bg-slate-950/80 z-0">
                     {/* Grid Background Pattern */}
@@ -622,7 +635,8 @@ export default function DatasetPage() {
                     )}
                 </div>
             </div>
-        </div>
+          </div>
+        )}
 
         {/* Right Column: Metadata & Controls Sidebar */}
         <div className="space-y-6">
@@ -635,14 +649,20 @@ export default function DatasetPage() {
 
                 {!accessValues.granted ? (
                     <div className="text-left">
-                        <p className="text-slate-400 text-sm mb-6 leading-relaxed">Dataset files are secured in MinIO S3. Authenticate with an FDS account to acquire an Icechunk JWT token.</p>
+                        <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                          {datasetData?.effective_access_level === 'public'
+                            ? 'This dataset is publicly accessible. Click below to load credentials.'
+                            : 'Dataset files are secured in MinIO S3. Authenticate with an FDS account to acquire an S3 token.'}
+                        </p>
                         {accessValues.error && <p className="text-red-400 mb-4 text-sm bg-red-900/20 p-2 rounded border border-red-900/50">{accessValues.error}</p>}
                         <button
                             onClick={handleRequestAccess}
                             className="bg-primary hover:bg-blue-600 text-white font-bold py-3 px-4 rounded w-full transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/25"
                         >
                             <Unlock className="w-4 h-4" />
-                            {status === "authenticated" ? "Request S3 Token" : "Sign In to Access"}
+                            {datasetData?.effective_access_level === 'public'
+                              ? 'Load Data'
+                              : status === "authenticated" ? "Request S3 Token" : "Sign In to Access"}
                         </button>
                     </div>
                 ) : (

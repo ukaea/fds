@@ -4,13 +4,17 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.auth.security import AuthenticatedUser
+from app.models.activity import ActivityCreate
 from app.models.dataset import Dataset, DatasetCreate
 from app.models.device import DeviceCreate
 from app.models.file_access import S3Credentials
 from app.models.shot import ShotCreate
+from app.models.source import SourceCreate
+from app.services.activity_service import ActivityService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
+from app.services.source_service import SourceService
 
 # Dummy users for setup
 admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
@@ -93,34 +97,63 @@ def test_read_dataset_by_name(
     response = test_client.get("/api/v1/devices/MAST/shots/456/datasets/plasma_current")
     assert response.status_code == 200
     data = response.json()
-    assert data["name"] == "plasma_current"
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["name"] == "plasma_current"
 
 
-def test_dataset_name_collision_in_context(
+def test_dataset_same_name_returns_list(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
+    """Same name from different activities is allowed; GET by name returns all matches."""
     DeviceService(session).create(
         DeviceCreate(name="MAST", type="Spherical"), user=admin_user
     )
     ShotService(session).create(
         ShotCreate(id="789", device_name="MAST"), user=admin_user
     )
+    source = SourceService(session).create(
+        SourceCreate(name="list-src"), user=admin_user
+    )
+    assert source.id is not None
+    act1 = ActivityService(session).create(
+        ActivityCreate(source_id=source.id), user=admin_user
+    )
+    act2 = ActivityService(session).create(
+        ActivityCreate(source_id=source.id), user=admin_user
+    )
     session.commit()
 
-    payload = {"name": "重复", "level": 1, "url": "s3://url"}
-    test_client.post(
+    r1 = test_client.post(
         "/api/v1/devices/MAST/shots/789/datasets/",
         headers=admin_user_token,
-        json=payload,
+        json={
+            "name": "duplicate",
+            "level": 1,
+            "url": "s3://url/1",
+            "activity_id": act1.id,
+        },
     )
+    r2 = test_client.post(
+        "/api/v1/devices/MAST/shots/789/datasets/",
+        headers=admin_user_token,
+        json={
+            "name": "duplicate",
+            "level": 1,
+            "url": "s3://url/2",
+            "activity_id": act2.id,
+        },
+    )
+    assert r1.status_code == 201
+    assert r2.status_code == 201
+    assert r1.json()["id"] != r2.json()["id"]
 
-    # Second time should fail
-    response = test_client.post(
-        "/api/v1/devices/MAST/shots/789/datasets/",
+    response = test_client.get(
+        "/api/v1/devices/MAST/shots/789/datasets/duplicate",
         headers=admin_user_token,
-        json=payload,
     )
-    assert response.status_code == 409
+    assert response.status_code == 200
+    assert len(response.json()) == 2
 
 
 def test_unauthorized_device_dataset(
@@ -174,7 +207,10 @@ def test_read_global_dataset_by_name(test_client: TestClient, admin_user_token: 
 
     response = test_client.get("/api/v1/datasets/global_ref")
     assert response.status_code == 200
-    assert response.json()["name"] == "global_ref"
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["name"] == "global_ref"
 
 
 def test_update_dataset(
@@ -216,7 +252,8 @@ def test_delete_dataset(
     assert response.status_code == 204
 
     response = test_client.get("/api/v1/datasets/to_delete")
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_delete_dataset_unauthorized(
@@ -282,14 +319,14 @@ def test_get_datasets_with_storage_options(
     # Without query param -> no storage_options (protects list latency)
     resp = test_client.get("/api/v1/devices/OPTS/shots/1/datasets/data1")
     assert resp.status_code == 200
-    assert resp.json().get("storage_options") is None
+    assert resp.json()[0].get("storage_options") is None
 
     # With query param -> enriched
     resp2 = test_client.get(
         "/api/v1/devices/OPTS/shots/1/datasets/data1?include_storage_options=true"
     )
     assert resp2.status_code == 200
-    data = resp2.json()
+    data = resp2.json()[0]
     assert data.get("storage_options") is not None
     assert data["storage_options"]["key"] == "r_key"
     assert data["storage_options"]["secret"] == "r_sec"
