@@ -241,6 +241,104 @@ def _(FDS_API_URL, headers, httpx):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    ### 3.1. Grouping into Experiment Data Collections
+
+    Each MAST shot's datasets are grouped into an **Experiment Data** Collection.
+    The Collection is linked to an `ACQUISITION` Activity produced by the **Intershot Scheduler**
+    — the automated system that collects and ingests diagnostic data between shots.
+    """)
+    return
+
+
+@app.cell
+def _(FDS_API_URL, headers, httpx):
+    # Create / retrieve the Intershot Scheduler source
+    _r = httpx.post(
+        f"{FDS_API_URL}/sources/",
+        headers=headers,
+        json={
+            "name": "intershot-scheduler",
+            "description": "Automated inter-shot data acquisition scheduler",
+        },
+    )
+    scheduler_source_id = (
+        _r.json()["id"]
+        if _r.status_code == 201
+        else httpx.get(
+            f"{FDS_API_URL}/sources/intershot-scheduler", headers=headers
+        ).json()["id"]
+    )
+
+    # Realistic acquisition timestamps for these MAST shots
+    _shot_timestamps = {
+        "30420": "2008-04-17T14:23:45",
+        "30421": "2008-04-17T15:41:22",
+    }
+
+    for _shot_id, _started_at in _shot_timestamps.items():
+        _existing = httpx.get(
+            f"{FDS_API_URL}/devices/mast/shots/{_shot_id}/collections/experiment-data",
+            headers=headers,
+        )
+        if _existing.status_code == 200:
+            print(
+                f"Shot {_shot_id}: Experiment Data collection already registered, skipping."
+            )
+            continue
+
+        # Activity — records the acquisition run for this shot
+        _act = httpx.post(
+            f"{FDS_API_URL}/activities/",
+            headers=headers,
+            json={
+                "source_id": scheduler_source_id,
+                "activity_type": "ACQUISITION",
+                "source_version": "intershot-scheduler-v1",
+                "parameters": {"shot_id": _shot_id},
+                "started_at": _started_at,
+                "ended_at": _started_at,
+            },
+        )
+        _act_id = _act.json()["id"]
+
+        # Collection — groups all raw IDS datasets for this shot
+        _col = httpx.post(
+            f"{FDS_API_URL}/devices/mast/shots/{_shot_id}/collections",
+            headers=headers,
+            json={
+                "name": "experiment-data",
+                "title": "Experiment Data",
+                "description": f"Raw IDS datasets acquired during MAST shot {_shot_id}.",
+                "access_level": "public",
+                "activity_id": _act_id,
+            },
+        )
+        _col_id = _col.json()["id"]
+
+        # Add all datasets for this shot to the collection.
+        # Section 3.1 runs before the JINTRAC section, so at this point only
+        # the raw IDS datasets exist.
+        _datasets = httpx.get(
+            f"{FDS_API_URL}/devices/mast/shots/{_shot_id}/datasets",
+            headers=headers,
+        ).json()
+        for _ds in _datasets:
+            httpx.post(
+                f"{FDS_API_URL}/collections/{_col_id}/datasets/{_ds['id']}",
+                headers=headers,
+            )
+
+        print(
+            f"Shot {_shot_id}: Experiment Data collection created (id={_col_id}), "
+            f"{len(_datasets)} datasets added, activity id={_act_id}."
+        )
+
+    return (scheduler_source_id,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ### 3.2. Recording Provenance (Activity)
 
     FDS tracks **Provenance** using the PROV-O ontology. The two key concepts are:
