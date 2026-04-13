@@ -112,19 +112,10 @@ def _(mo):
 
 @app.cell
 def _(FDS_API_URL, headers, httpx):
-    def register(endpoint, payload, label, update_endpoint=None):
+    def register(endpoint, payload, label):
         resp = httpx.post(f"{FDS_API_URL}{endpoint}", json=payload, headers=headers)
         if resp.status_code == 201:
             print(f"  {label}: Created")
-        elif resp.status_code == 409 and update_endpoint:
-            # Resource exists — patch it to ensure fields like access_level are current
-            upd = httpx.put(
-                f"{FDS_API_URL}{update_endpoint}", json=payload, headers=headers
-            )
-            if upd.status_code == 200:
-                print(f"  {label}: Updated")
-            else:
-                print(f"  {label}: Already exists (update failed {upd.status_code})")
         elif resp.status_code == 409:
             print(f"  {label}: Already exists")
         else:
@@ -142,7 +133,6 @@ def _(FDS_API_URL, headers, httpx):
             "access_level": "public",
         },
         "mast",
-        update_endpoint="/devices/mast",
     )
     register(
         "/devices/",
@@ -153,7 +143,6 @@ def _(FDS_API_URL, headers, httpx):
             "access_level": "public",
         },
         "mast-upgrade",
-        update_endpoint="/devices/mast-upgrade",
     )
 
     # 2. Register Shots
@@ -533,108 +522,104 @@ def _(mo):
 
 @app.cell
 def _(FDS_API_URL, headers, httpx):
-    # Source (the code)
-    _r = httpx.post(
-        f"{FDS_API_URL}/sources/",
+    # If the collection already exists this run has already been registered — skip.
+    _existing = httpx.get(
+        f"{FDS_API_URL}/devices/mast/shots/30420/collections/jintrac-v220922",
         headers=headers,
-        json={
-            "name": "jintrac",
-            "description": "Integrated modelling code",
-        },
     )
-    jintrac_source_id = (
-        _r.json()["id"]
-        if _r.status_code == 201
-        else httpx.get(f"{FDS_API_URL}/sources/jintrac", headers=headers).json()["id"]
-    )
-
-    # Activity (this specific run, with timestamps and parameters)
-    _r = httpx.post(
-        f"{FDS_API_URL}/activities/",
-        headers=headers,
-        json={
-            "source_id": jintrac_source_id,
-            "source_version": "v220922",
-            "activity_type": "SIMULATION",
-            "parameters": {
-                "run_id": "30420-jintrac-v220922",
-                "transport_model": "NCLASS",
-            },
-            "started_at": "2024-03-10T14:00:00",
-            "ended_at": "2024-03-10T16:47:22",
-        },
-    )
-    jintrac_activity_id = _r.json()["id"]
-
-    # prov:used — record which measured datasets were consumed as inputs
-    for _ids in ["equilibrium", "magnetics", "thomson_scattering"]:
-        _ds_id = httpx.get(
-            f"{FDS_API_URL}/devices/mast/shots/30420/datasets/{_ids}", headers=headers
-        ).json()[0]["id"]
-        httpx.post(
-            f"{FDS_API_URL}/activities/{jintrac_activity_id}/inputs/{_ds_id}",
+    if _existing.status_code == 200:
+        jintrac_collection_id = _existing.json()["id"]
+        print(
+            f"JINTRAC run already registered (collection id={jintrac_collection_id}), skipping."
+        )
+    else:
+        # Source (the code)
+        _r = httpx.post(
+            f"{FDS_API_URL}/sources/",
             headers=headers,
+            json={"name": "jintrac", "description": "Integrated modelling code"},
+        )
+        jintrac_source_id = (
+            _r.json()["id"]
+            if _r.status_code == 201
+            else httpx.get(f"{FDS_API_URL}/sources/jintrac", headers=headers).json()[
+                "id"
+            ]
         )
 
-    # Output datasets — one per IDS, each linked to the Activity via prov:wasGeneratedBy
-    jintrac_dataset_ids = []
-    for _stem in ["equilibrium", "core_profiles", "core_sources"]:
+        # Activity (this specific run, with timestamps and parameters)
         _r = httpx.post(
-            f"{FDS_API_URL}/devices/mast/shots/30420/datasets",
+            f"{FDS_API_URL}/activities/",
             headers=headers,
             json={
-                "name": f"{_stem}",
-                "title": f"JINTRAC {_stem.replace('_', ' ').title()} — Shot 30420",
-                "level": 3,
-                "url": f"s3://fds-data/shots/30420/jintrac/{_stem}.nc",
-                "media_type": "application/netcdf",
-                "format": "NetCDF4",
+                "source_id": jintrac_source_id,
+                "source_version": "v220922",
+                "activity_type": "SIMULATION",
+                "parameters": {
+                    "run_id": "30420-jintrac-v220922",
+                    "transport_model": "NCLASS",
+                },
+                "started_at": "2024-03-10T14:00:00",
+                "ended_at": "2024-03-10T16:47:22",
+            },
+        )
+        jintrac_activity_id = _r.json()["id"]
+
+        # prov:used — record which measured datasets were consumed as inputs
+        for _ids in ["equilibrium", "magnetics", "thomson_scattering"]:
+            _ds_id = httpx.get(
+                f"{FDS_API_URL}/devices/mast/shots/30420/datasets/{_ids}",
+                headers=headers,
+            ).json()[0]["id"]
+            httpx.post(
+                f"{FDS_API_URL}/activities/{jintrac_activity_id}/inputs/{_ds_id}",
+                headers=headers,
+            )
+
+        # Output datasets — one per IDS, each linked to the Activity via prov:wasGeneratedBy
+        jintrac_dataset_ids = []
+        for _stem in ["equilibrium", "core_profiles", "core_sources"]:
+            _r = httpx.post(
+                f"{FDS_API_URL}/devices/mast/shots/30420/datasets",
+                headers=headers,
+                json={
+                    "name": _stem,
+                    "title": f"JINTRAC {_stem.replace('_', ' ').title()} — Shot 30420",
+                    "level": 3,
+                    "url": f"s3://fds-data/shots/30420/jintrac/{_stem}.nc",
+                    "media_type": "application/netcdf",
+                    "format": "NetCDF4",
+                    "access_level": "public",
+                    "activity_id": jintrac_activity_id,
+                },
+            )
+            jintrac_dataset_ids.append(_r.json()["id"])
+
+        # Collection — groups all outputs into a single citable unit
+        _r = httpx.post(
+            f"{FDS_API_URL}/devices/mast/shots/30420/collections",
+            headers=headers,
+            json={
+                "name": "jintrac-v220922",
+                "title": "JINTRAC Integrated Modelling — Shot 30420",
+                "description": "JINTRAC transport simulation outputs: equilibrium, core profiles, and heat sources.",
                 "access_level": "public",
                 "activity_id": jintrac_activity_id,
             },
         )
-        _id = (
-            _r.json()["id"]
-            if _r.status_code == 201
-            else httpx.get(
-                f"{FDS_API_URL}/devices/mast/shots/30420/datasets/{_stem}",
+        jintrac_collection_id = _r.json()["id"]
+        for _id in jintrac_dataset_ids:
+            httpx.post(
+                f"{FDS_API_URL}/collections/{jintrac_collection_id}/datasets/{_id}",
                 headers=headers,
-            ).json()[0]["id"]
+            )
+        print(f"Source:     jintrac  (id={jintrac_source_id})")
+        print(
+            f"Activity:   id={jintrac_activity_id}  inputs: equilibrium, magnetics, thomson_scattering"
         )
-        jintrac_dataset_ids.append(_id)
+        print(f"Datasets:   {jintrac_dataset_ids}")
+        print(f"Collection: jintrac-v220922  (id={jintrac_collection_id})")
 
-    # Collection — groups all outputs into a single citable unit
-    _r = httpx.post(
-        f"{FDS_API_URL}/devices/mast/shots/30420/collections",
-        headers=headers,
-        json={
-            "name": "jintrac-v220922",
-            "title": "JINTRAC Integrated Modelling — Shot 30420",
-            "description": "JINTRAC transport simulation outputs: equilibrium, core profiles, and heat sources.",
-            "access_level": "public",
-            "activity_id": jintrac_activity_id,
-        },
-    )
-    jintrac_collection_id = (
-        _r.json()["id"]
-        if _r.status_code == 201
-        else httpx.get(
-            f"{FDS_API_URL}/devices/mast/shots/30420/collections/jintrac-v220922",
-            headers=headers,
-        ).json()["id"]
-    )
-    for _id in jintrac_dataset_ids:
-        httpx.post(
-            f"{FDS_API_URL}/collections/{jintrac_collection_id}/datasets/{_id}",
-            headers=headers,
-        )
-
-    print(f"Source:     jintrac  (id={jintrac_source_id})")
-    print(
-        f"Activity:   id={jintrac_activity_id}  inputs: equilibrium, magnetics, thomson_scattering"
-    )
-    print(f"Datasets:   {jintrac_dataset_ids}")
-    print(f"Collection: jintrac-v220922  (id={jintrac_collection_id})")
     return (jintrac_collection_id,)
 
 
