@@ -15,6 +15,10 @@ wheels/
 # IDE
 .vscode
 
+# Docs build output
+site/
+.zensical/
+
 # Demo artifacts
 __marimo__/
 minio-data/

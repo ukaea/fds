@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import useSWR from 'swr';
-import { Database, Server, Activity, Plus } from 'lucide-react';
+import { Database, Server, Activity, BookOpen } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Device } from '@/lib/types';
 
@@ -94,7 +94,7 @@ export default function Home() {
       </div>
 
       {/* Other Sections */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <Link href="/sources" className="card group p-8 flex flex-col items-center text-center hover:bg-slate-800/50 transition-colors">
           <div className="bg-ukaea-secondary-yellow/10 p-4 rounded-full mb-6 group-hover:scale-110 transition-transform">
             <Activity className="w-8 h-8 text-ukaea-secondary-yellow" />
@@ -103,12 +103,19 @@ export default function Home() {
           <p className="text-slate-400">Discover diagnostic instruments, simulation codes, and data producers.</p>
         </Link>
         <Link href="/datasets" className="card group p-8 flex flex-col items-center text-center hover:bg-slate-800/50 transition-colors">
-            <div className="bg-ukaea-secondary-green/10 p-4 rounded-full mb-6 group-hover:scale-110 transition-transform">
+          <div className="bg-ukaea-secondary-green/10 p-4 rounded-full mb-6 group-hover:scale-110 transition-transform">
             <Database className="w-8 h-8 text-ukaea-secondary-green" />
-            </div>
+          </div>
           <h2 className="text-2xl font-bold mb-3">Datasets</h2>
           <p className="text-slate-400">Search and access scientific data directly via the global catalog.</p>
         </Link>
+        <a href="http://localhost:4001" target="_blank" rel="noopener noreferrer" className="card group p-8 flex flex-col items-center text-center hover:bg-slate-800/50 transition-colors">
+          <div className="bg-indigo-500/10 p-4 rounded-full mb-6 group-hover:scale-110 transition-transform">
+            <BookOpen className="w-8 h-8 text-indigo-400" />
+          </div>
+          <h2 className="text-2xl font-bold mb-3">Documentation</h2>
+          <p className="text-slate-400">Concepts, data model, provenance, and demo walkthrough.</p>
+        </a>
       </div>
     </div>
   );

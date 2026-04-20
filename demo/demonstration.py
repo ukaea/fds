@@ -32,27 +32,16 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # FDS Demonstration: Zarr & Xarray with Marimo
+    # FDS Demonstration
 
-    This notebook demonstrates how FDS acts as a metadata and access service for scientific data.
-
-    **Workflow:**
-
-    1. Authenticate with Keycloak to get an OIDC identity.
-    2. Register a pre-existing Zarr dataset in the FDS catalog.
-    3. Query the catalog for the dataset, requesting `include_storage_options=true`.
-    4. Consume the data using xarray natively, authenticated by the embedded credentials.
+    Full annotated walkthrough: **[http://localhost:4001/demo/walkthrough/](http://localhost:4001/demo/walkthrough/)**
     """)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## 1. Setup and Environment
-
-    We'll define the URLs for our services. In the local demo environment, these point to the containers running in Podman/Docker.
-    """)
+    mo.md(r"""## 1. Setup and Environment""")
     return
 
 
@@ -68,11 +57,9 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## 2. Authentication
-
-    We'll login to Keycloak to get a JWT. We're using the `admin` user configured in our realm export.
-    """)
+    mo.md(
+        r"""## 2. Authentication — [docs](http://localhost:4001/demo/walkthrough/#2-authentication)"""
+    )
     return
 
 
@@ -99,14 +86,9 @@ def _(KEYCLOAK_URL, httpx):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## 2b. Registering Devices and Shots
-
-    Before we can register datasets, we must ensure the `Device` and `Shot` contexts exist in the Metadata Catalog.
-    We will register:
-    - **MAST** with shots **30420** and **30421** (real IMAS-structured Zarr data)
-    - **MAST-Upgrade** with shot **50000** (synthetic data demonstrating access restrictions)
-    """)
+    mo.md(
+        r"""## 2b. Registering Devices and Shots — [docs](http://localhost:4001/demo/walkthrough/#2b-registering-devices-and-shots)"""
+    )
     return
 
 
@@ -179,15 +161,9 @@ def _(FDS_API_URL, headers, httpx):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## 3. Registering the Real Datasets
-
-    Real IMAS-structured Zarr data from two MAST shots has been pre-loaded into MinIO.
-    We'll register every IDS group as an individual Dataset in the FDS catalog.
-
-    - **Shot 30420**: 12 IDS groups (equilibrium, magnetics, thomson_scattering, ...)
-    - **Shot 30421**: 13 IDS groups (same + charge_exchange)
-    """)
+    mo.md(
+        r"""## 3. Registering Real Datasets — [docs](http://localhost:4001/demo/walkthrough/#3-registering-real-mast-datasets)"""
+    )
     return
 
 
@@ -240,13 +216,9 @@ def _(FDS_API_URL, headers, httpx):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### 3.1. Grouping into Experiment Data Collections
-
-    Each MAST shot's datasets are grouped into an **Experiment Data** Collection.
-    The Collection is linked to an `ACQUISITION` Activity produced by the **Intershot Scheduler**
-    — the automated system that collects and ingests diagnostic data between shots.
-    """)
+    mo.md(
+        r"""### 3.1. Grouping into Experiment Data Collections — [docs](http://localhost:4001/demo/walkthrough/#31-grouping-into-experiment-data-collections)"""
+    )
     return
 
 
@@ -338,21 +310,9 @@ def _(FDS_API_URL, headers, httpx):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### 3.2. Recording Provenance (Activity)
-
-    FDS tracks **Provenance** using the PROV-O ontology. The two key concepts are:
-
-    - **Source** (`prov:Agent`) — the instrument or code that *can* produce data (e.g. EFIT)
-    - **Activity** (`prov:Activity`) — a *specific execution* of that source with particular parameters
-      and timestamps (e.g. the EFIT run on shot 30421)
-
-    A Dataset links to the Activity that produced it (`prov:wasGeneratedBy`). The Activity in turn
-    links to the Source (`prov:wasAssociatedWith`).
-
-    Here we register the **EFIT** equilibrium reconstruction code as a Source, create an Activity
-    recording the specific run, and attach that Activity to the equilibrium dataset.
-    """)
+    mo.md(
+        r"""### 3.2. Recording Provenance — [docs](http://localhost:4001/concepts/provenance/)"""
+    )
     return
 
 
@@ -475,26 +435,9 @@ def _(FDS_API_URL, headers, httpx):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### 3.3. Semantic Metadata (JSON-LD)
-
-    FDS supports Content Negotiation to satisfy FAIR principles. By requesting `application/ld+json`
-    we get a representation that maps our internal model to standard ontologies like **DCAT** and **PROV-O**.
-
-    There is an important distinction worth noting here. The standard JSON API returns a **denormalised convenience view**:
-    the access URL and format fields (`url`, `media_type`, `format`) are inlined directly into the Dataset
-    response. This makes the common case — "give me the data for this dataset" — a single simple object.
-
-    Under the hood, however, the FDS model follows the [W3C DCAT](https://www.w3.org/TR/vocab-dcat/) ontology:
-    a **`dcat:Dataset`** is a conceptual entity (what the data *is*), and a **`dcat:Distribution`** is a
-    physical access path (how to *get* it). When you request `application/ld+json`, FDS re-separates these
-    back into their proper DCAT structure — the inlined fields re-emerge as a `dcat:Distribution` node nested
-    inside the `dcat:Dataset`.
-
-    This means that an FDS "Dataset" endpoint is, semantically, a `dcat:Dataset` paired with its default
-    `dcat:Distribution`. Alternative distributions (different formats or access tiers) appear in the
-    `dcat:distribution` array alongside it.
-    """)
+    mo.md(
+        r"""### 3.3. Semantic Metadata (JSON-LD) — [docs](http://localhost:4001/concepts/dcat-jsonld/)"""
+    )
     return
 
 
@@ -523,13 +466,7 @@ def _(FDS_API_URL, headers, httpx, json):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    #### Distribution nodes in the JSON-LD response
-
-    Notice that the `dcat:distribution` array below contains the physical access details —
-    the same `url`, `media_type`, and `format` values that were inlined in the plain JSON response.
-    The `dcat:downloadURL` at the top level is a convenience shorthand pointing to the default distribution.
-    """)
+    mo.md(r"""#### Distribution nodes in the JSON-LD response""")
     return
 
 
@@ -550,13 +487,9 @@ def _(jld_resp, json):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### 3b. Registering the Synthetic Shot (MAST-Upgrade)
-
-    We register synthetic datasets under **MAST-Upgrade Shot 50000** to demonstrate
-    multi-token vending and access restrictions on a different device.
-    These datasets correspond to what `demo/generate_data.py` created.
-    """)
+    mo.md(
+        r"""### 3b. Registering Synthetic Shot (MAST-Upgrade) — [docs](http://localhost:4001/demo/walkthrough/#3b-mast-upgrade-synthetic-datasets)"""
+    )
     return
 
 
@@ -606,15 +539,9 @@ def _(FDS_API_URL, headers, httpx):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## 4. Collections — Grouping Related Datasets
-
-    JINTRAC is an integrated modelling code: given the measured boundary conditions
-    from a shot it produces a self-consistent set of transport solutions across
-    several IMAS IDSs. Here we register a synthetic JINTRAC run on MAST shot 30420
-    and group the outputs into a **Collection** (`dcat:Catalog`) — a single citable
-    unit that records what was produced, by what code, from which inputs.
-    """)
+    mo.md(
+        r"""## 4. Collections — JINTRAC Integrated Modelling — [docs](http://localhost:4001/demo/walkthrough/#4-collections-jintrac-integrated-modelling)"""
+    )
     return
 
 
@@ -723,11 +650,7 @@ def _(FDS_API_URL, headers, httpx):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### 4a. Inspecting the Collection
-
-    A single GET returns the Collection with all member Datasets inlined.
-    """)
+    mo.md(r"""### 4a. Inspecting the Collection""")
     return
 
 
@@ -746,13 +669,9 @@ def _(FDS_API_URL, headers, httpx, jintrac_collection_id):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### 4b. Collection as `dcat:Catalog` (JSON-LD)
-
-    Requesting with `Accept: application/ld+json` returns a `dcat:Catalog` document.
-    Member datasets appear as `dcat:dataset` references; the provenance Activity
-    is embedded as `prov:wasGeneratedBy`.
-    """)
+    mo.md(
+        r"""### 4b. Collection as `dcat:Catalog` (JSON-LD) — [docs](http://localhost:4001/concepts/dcat-jsonld/#collection-as-dcatcatalog)"""
+    )
     return
 
 
@@ -768,15 +687,9 @@ def _(FDS_API_URL, headers, httpx, json):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## 5. Attempting Unauthorized Access
-
-    Before we fetch credentials from FDS, let's see what happens if we attempt to access a dataset directly using native `xarray` without providing authentication.
-
-    We will try to read a dataset we categorized as `restricted` in FDS. It is important to note that FDS is purely a metadata catalog—it does not manage or enforce physical bucket policies on the underlying object store!
-
-    Because the data owner has configured access to this dataset in their bucket to be restricted, native access will fail without proper AWS keys. FDS bridges this gap by securely vending temporary STS tokens for authorized users, saving them from managing long-lived AWS credentials manually.
-    """)
+    mo.md(
+        r"""## 5. Attempting Unauthorised Access — [docs](http://localhost:4001/concepts/access-control/#what-fds-does-not-do)"""
+    )
     return
 
 
@@ -799,11 +712,9 @@ def _(MINIO_URL, xr):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## 6. Secure Consumption with Data-Driven Configuration
-
-    Instead of manually vending and managing tokens, we simply fetch the datasets from FDS with `include_storage_options=true`. The API evaluates our permissions and automatically calculates and embeds the necessary STS endpoint URLs and temporary keys directly into the JSON response!
-    """)
+    mo.md(
+        r"""## 6. Secure Consumption with `include_storage_options` — [docs](http://localhost:4001/concepts/access-control/#credential-vending-sts-token-pattern)"""
+    )
     return
 
 
@@ -823,11 +734,7 @@ def _(FDS_API_URL, headers, httpx, xr):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## 7. Single Dataset Access (Detailed View)
-
-    Now we use `xarray` to read some real MAST data — the Level 2 Equilibrium reconstruction from Shot 30421.
-    """)
+    mo.md(r"""## 7. Single Dataset Access — real MAST equilibrium, shot 30421""")
     return
 
 
@@ -848,11 +755,9 @@ def _(FDS_API_URL, httpx, xr):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## 8. High-Throughput Parallel Analysis (Dask)
-
-    FDS facilitates parallel analysis by resolving tokens server-side. We simply pass the `storage_options` dictionary to our worker functions.
-    """)
+    mo.md(
+        r"""## 8. High-Throughput Parallel Analysis (Dask) — [docs](http://localhost:4001/concepts/access-control/#bulk-access-the-credential-manifest)"""
+    )
     return
 
 

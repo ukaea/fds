@@ -71,6 +71,14 @@ services:
     network_mode: host
     command: uv run /app/generate_data.py
 
+  docs:
+    image: zensical/zensical
+    volumes:
+      - ../:/docs
+    ports:
+      - "4001:4001"
+    command: serve --dev-addr 0.0.0.0:4001
+
   frontend:
     build:
       context: ./ui
