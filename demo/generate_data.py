@@ -17,6 +17,7 @@
 """
 
 import os
+import tempfile
 
 import numpy as np
 import s3fs
@@ -233,7 +234,7 @@ else:
         },
     )
 
-    # Upload each IDS as a NetCDF4 file via a local temporary file
+    # netCDF4 backend requires a real path, not a file-like object
     for name, ids_ds in [
         ("equilibrium", eq_ds),
         ("core_profiles", cp_ds),
@@ -241,8 +242,9 @@ else:
     ]:
         s3_path = f"{jintrac_base}/{name}.nc"
         print(f"  Writing {name}.nc to {s3_path}...")
-        with fs.open(s3_path, "wb") as f:
-            ids_ds.to_netcdf(f, engine="netcdf4")
+        with tempfile.NamedTemporaryFile(suffix=".nc") as tmp:
+            ids_ds.to_netcdf(tmp.name, engine="netcdf4")
+            fs.put(tmp.name, s3_path)
 
     print("JINTRAC outputs generated and uploaded.")
 
