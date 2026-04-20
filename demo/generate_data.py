@@ -6,6 +6,7 @@
 #     "s3fs",
 #     "zarr",
 #     "netCDF4",
+#     "tqdm",
 # ]
 # ///
 """Generate and upload demo data for FDS.
@@ -21,6 +22,7 @@ import numpy as np
 import s3fs
 import xarray as xr
 import zarr
+from tqdm import tqdm
 
 # Configuration
 minio_url = os.environ.get("MINIO_URL", "http://localhost:9000")
@@ -64,12 +66,16 @@ def ensure_shot_data(shot_id: str) -> None:
         print(f"Shot {shot_id} already in MinIO. Skipping.")
         return
 
-    print(f"Fetching shot {shot_id} ({len(missing)} IDS groups) from STFC S3...")
+    print(
+        f"Fetching shot {shot_id} ({len(missing)} IDS groups) from STFC S3..."
+        " (follow progress with: podman compose logs -f data-generator)"
+    )
 
-    for ids_name in missing:
+    for ids_name in tqdm(missing, desc=f"Shot {shot_id}", unit="IDS"):
         src_ids = f"{public_base}/{ids_name}"
         dst_ids = f"{target}/{ids_name}"
-        for src_file in public_fs.find(src_ids):
+        files = public_fs.find(src_ids)
+        for src_file in tqdm(files, desc=ids_name, unit="file", leave=False):
             rel = src_file[len(src_ids) + 1 :]
             with public_fs.open(src_file, "rb") as src:
                 with fs.open(f"{dst_ids}/{rel}", "wb") as dst:
