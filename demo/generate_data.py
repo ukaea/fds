@@ -18,12 +18,15 @@
 
 import os
 import tempfile
+import warnings
 
 import numpy as np
 import s3fs
 import xarray as xr
 import zarr
 from tqdm import tqdm
+
+warnings.filterwarnings("ignore", message=".*does not have a Zarr V3 specification.*")
 
 # Configuration
 minio_url = os.environ.get("MINIO_URL", "http://localhost:9000")
