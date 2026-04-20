@@ -38,6 +38,8 @@ Services started:
 - **Keycloak**: `http://localhost:8080` (User/Pass: `admin`/`admin`)
 - **MinIO**: `http://localhost:9000` (User/Pass: `admin`/`password`)
 
+> **First run note:** On first launch, the demo automatically pulls real MAST shot data from the STFC public S3 store, which can take several minutes. Run without `-d` to see a progress bar in the terminal. Once downloaded, the data persists in `demo/minio-data/` across restarts, so subsequent launches are fast — unless you delete that directory.
+
 ### 2. Run the Demonstration Notebook
 
 The `demonstration.py` notebook walks through the FDS workflow (Auth -> Registration -> Token Exchange -> Data Access).
