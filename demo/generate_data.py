@@ -10,13 +10,12 @@
 # ///
 """Generate and upload demo data for FDS.
 
-- Shot 30420 (real MAST data): Uploaded from /source_data/30420/
-- Shot 30421 (real MAST data): Uploaded from /source_data/30421/
+- Shot 30420 (real MAST data): Fetched from STFC public S3 if not already in MinIO
+- Shot 30421 (real MAST data): Fetched from STFC public S3 if not already in MinIO
 - Shot 50000 (synthetic data): Generated and uploaded programmatically
 """
 
 import os
-from pathlib import Path
 
 import numpy as np
 import s3fs
@@ -39,9 +38,9 @@ fs = s3fs.S3FileSystem(
 
 
 # ---------------------------------------------------------
-# Helper: Fetch a shot from STFC public S3 into MinIO
+# Helper: Ensure a real MAST shot is present in MinIO
 # ---------------------------------------------------------
-def fetch_shot_from_stfc(shot_id: str) -> bool:
+def ensure_shot_data(shot_id: str) -> None:
     public_fs = s3fs.S3FileSystem(
         anon=True,
         client_kwargs={"endpoint_url": stfc_endpoint},
@@ -49,18 +48,25 @@ def fetch_shot_from_stfc(shot_id: str) -> bool:
     public_base = f"{stfc_bucket}/level2/shots/{shot_id}.zarr"
 
     if not public_fs.exists(public_base):
-        print(f"  Shot {shot_id} not found on STFC public S3 at {public_base}")
-        return False
+        print(f"WARNING: Shot {shot_id} not found on STFC public S3 at {public_base}")
+        return
 
     ids_groups = sorted(
         entry.split("/")[-1]
         for entry in public_fs.ls(public_base, detail=False)
         if public_fs.isdir(entry)
     )
-    print(f"  Fetching {len(ids_groups)} IDS groups for shot {shot_id} from STFC S3...")
 
     target = f"{bucket_name}/shots/{shot_id}"
-    for ids_name in ids_groups:
+    missing = [g for g in ids_groups if not fs.exists(f"{target}/{g}")]
+
+    if not missing:
+        print(f"Shot {shot_id} already in MinIO. Skipping.")
+        return
+
+    print(f"Fetching shot {shot_id} ({len(missing)} IDS groups) from STFC S3...")
+
+    for ids_name in missing:
         src_ids = f"{public_base}/{ids_name}"
         dst_ids = f"{target}/{ids_name}"
         for src_file in public_fs.find(src_ids):
@@ -74,59 +80,14 @@ def fetch_shot_from_stfc(shot_id: str) -> bool:
         except Exception as e:
             print(f"  Warning: Could not consolidate {ids_name}: {e}")
 
-    print(f"  Shot {shot_id} fetched from STFC S3 successfully.")
-    return True
+    print(f"Shot {shot_id} fetched successfully.")
 
 
 # ---------------------------------------------------------
-# Helper: Upload a real shot from source_data
+# 1. Real MAST Data
 # ---------------------------------------------------------
-def upload_real_shot(shot_id: str, source_base: str = "/source_data"):
-    source_dir = Path(f"{source_base}/{shot_id}")
-    target = f"{bucket_name}/shots/{shot_id}"
-
-    if fs.exists(target):
-        print(f"Shot {shot_id} already exists in MinIO. Skipping upload.")
-        return
-
-    if not source_dir.exists() or not any(source_dir.iterdir()):
-        print(
-            f"  Local source data not found at {source_dir}. Fetching from STFC public S3..."
-        )
-        fetch_shot_from_stfc(shot_id)
-        return
-
-    # Discover all IDS groups (subdirectories)
-    ids_groups = sorted([d.name for d in source_dir.iterdir() if d.is_dir()])
-    print(
-        f"Uploading Shot {shot_id} ({len(ids_groups)} IDS groups: {', '.join(ids_groups)})..."
-    )
-
-    for local_file in sorted(source_dir.rglob("*")):
-        if local_file.is_file():
-            rel_path = local_file.relative_to(source_dir)
-            s3_key = f"{target}/{rel_path}"
-            fs.put(str(local_file), s3_key)
-
-    # Consolidate metadata for each IDS group
-    for ids_name in ids_groups:
-        ids_path = f"{target}/{ids_name}"
-        if fs.exists(ids_path):
-            print(f"  Consolidating metadata for {ids_name}...")
-            store = s3fs.S3Map(root=ids_path, s3=fs, check=False)
-            try:
-                zarr.consolidate_metadata(store)
-            except Exception as e:
-                print(f"  Warning: Could not consolidate {ids_name}: {e}")
-
-    print(f"Shot {shot_id} uploaded successfully.")
-
-
-# ---------------------------------------------------------
-# 1. Upload Real MAST Data
-# ---------------------------------------------------------
-upload_real_shot("30420")
-upload_real_shot("30421")
+ensure_shot_data("30420")
+ensure_shot_data("30421")
 
 # ---------------------------------------------------------
 # 2. Generate Synthetic Data (Shot 50000)
