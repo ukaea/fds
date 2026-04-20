@@ -29,10 +29,53 @@ access_key = os.environ.get("AWS_ACCESS_KEY_ID", "admin")
 secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "password")
 bucket_name = "fds-data"
 
+stfc_endpoint = "https://s3.echo.stfc.ac.uk"
+stfc_bucket = "mast"
+
 print(f"Connecting to MinIO at {minio_url}...")
 fs = s3fs.S3FileSystem(
     key=access_key, secret=secret_key, client_kwargs={"endpoint_url": minio_url}
 )
+
+
+# ---------------------------------------------------------
+# Helper: Fetch a shot from STFC public S3 into MinIO
+# ---------------------------------------------------------
+def fetch_shot_from_stfc(shot_id: str) -> bool:
+    public_fs = s3fs.S3FileSystem(
+        anon=True,
+        client_kwargs={"endpoint_url": stfc_endpoint},
+    )
+    public_base = f"{stfc_bucket}/level2/shots/{shot_id}.zarr"
+
+    if not public_fs.exists(public_base):
+        print(f"  Shot {shot_id} not found on STFC public S3 at {public_base}")
+        return False
+
+    ids_groups = sorted(
+        entry.split("/")[-1]
+        for entry in public_fs.ls(public_base, detail=False)
+        if public_fs.isdir(entry)
+    )
+    print(f"  Fetching {len(ids_groups)} IDS groups for shot {shot_id} from STFC S3...")
+
+    target = f"{bucket_name}/shots/{shot_id}"
+    for ids_name in ids_groups:
+        src_ids = f"{public_base}/{ids_name}"
+        dst_ids = f"{target}/{ids_name}"
+        for src_file in public_fs.find(src_ids):
+            rel = src_file[len(src_ids) + 1 :]
+            with public_fs.open(src_file, "rb") as src:
+                with fs.open(f"{dst_ids}/{rel}", "wb") as dst:
+                    dst.write(src.read())
+        store = s3fs.S3Map(root=dst_ids, s3=fs, check=False)
+        try:
+            zarr.consolidate_metadata(store)
+        except Exception as e:
+            print(f"  Warning: Could not consolidate {ids_name}: {e}")
+
+    print(f"  Shot {shot_id} fetched from STFC S3 successfully.")
+    return True
 
 
 # ---------------------------------------------------------
@@ -47,7 +90,10 @@ def upload_real_shot(shot_id: str, source_base: str = "/source_data"):
         return
 
     if not source_dir.exists() or not any(source_dir.iterdir()):
-        print(f"WARNING: Source data not found at {source_dir}")
+        print(
+            f"  Local source data not found at {source_dir}. Fetching from STFC public S3..."
+        )
+        fetch_shot_from_stfc(shot_id)
         return
 
     # Discover all IDS groups (subdirectories)
