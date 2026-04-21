@@ -20,13 +20,13 @@ from app.models.collection import (
     CollectionRead,
     CollectionUpdate,
 )
-from app.models.dataset import Dataset, DatasetRead
+from app.models.dataset import Dataset
 from app.models.device import Device
-from app.models.distribution import DistributionRead
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.models.source import Source
 from app.services.base_service import BaseService
+from app.services.dataset_service import DatasetService
 from app.services.exceptions import (
     ConflictError,
     DeviceNotFoundError,
@@ -460,17 +460,29 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         self.session.delete(membership)
         self.session.commit()
 
-    def to_read_model(self, collection: Collection) -> CollectionRead:
+    def to_read_model(
+        self,
+        collection: Collection,
+        include_storage_options: bool = False,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+    ) -> CollectionRead:
         """Convert a Collection ORM object to a ``CollectionRead`` DTO.
 
-        Member Datasets are inlined as ``DatasetRead`` objects (including the
-        effective access level and default distribution fields). Child
-        Collections are inlined one level deep — their own ``datasets`` and
-        ``child_collections`` fields are omitted to prevent unbounded recursive
-        serialisation.
+        Member Datasets are inlined as ``DatasetRead`` objects. Pass
+        ``include_storage_options=True`` to include short-lived credentials on
+        each dataset. Child Collections are inlined one level deep — their own
+        ``datasets`` and ``child_collections`` are omitted to prevent unbounded
+        recursive serialisation.
         """
-        member_datasets = self._get_member_datasets(collection.id)
-        dataset_reads = [self._dataset_to_read(d) for d in member_datasets] or None
+        member_datasets = self.get_member_datasets(collection.id)
+        dataset_reads = (
+            DatasetService(self.session).to_read_models(
+                member_datasets,
+                include_storage_options=include_storage_options,
+                user=user,
+            )
+            or None
+        )
 
         child_orm = self._get_child_collections(collection.id)
         child_reads = [
@@ -498,9 +510,19 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             },
         )
 
-    def to_read_models(self, collections: Sequence[Collection]) -> list[CollectionRead]:
+    def to_read_models(
+        self,
+        collections: Sequence[Collection],
+        include_storage_options: bool = False,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+    ) -> list[CollectionRead]:
         """Batch convert Collection ORM objects to ``CollectionRead`` DTOs."""
-        return [self.to_read_model(c) for c in collections]
+        return [
+            self.to_read_model(
+                c, include_storage_options=include_storage_options, user=user
+            )
+            for c in collections
+        ]
 
     def _check_write_auth(
         self, collection: Collection, user: AuthenticatedUser
@@ -528,7 +550,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 continue
         return result
 
-    def _get_member_datasets(self, collection_id: int | None) -> list[Dataset]:
+    def get_member_datasets(self, collection_id: int | None) -> list[Dataset]:
         """Return the Datasets that are members of a given Collection.
 
         Returns an empty list if ``collection_id`` is ``None`` (unpersisted Collection).
@@ -559,28 +581,3 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             )
         )
         return list(self.session.exec(stmt).all())
-
-    def _dataset_to_read(self, dataset: Dataset) -> DatasetRead:
-        """Project a Dataset ORM object to a ``DatasetRead`` DTO.
-
-        Inlines the default distribution's ``url``, ``media_type``, and
-        ``format`` fields and resolves the effective access level, mirroring
-        the behaviour of ``DatasetService.to_read_model``.
-        """
-        default_dist = next(
-            (d for d in dataset.distributions if d.default_distribution), None
-        )
-        non_default = [d for d in dataset.distributions if not d.default_distribution]
-
-        read = DatasetRead.model_validate(
-            dataset,
-            update={
-                "url": default_dist.url if default_dist else "",
-                "media_type": default_dist.media_type if default_dist else None,
-                "format": default_dist.format if default_dist else None,
-                "formats": [DistributionRead.model_validate(d) for d in non_default]
-                or None,
-            },
-        )
-        read.effective_access_level = get_effective_access_level(dataset, self.session)
-        return read

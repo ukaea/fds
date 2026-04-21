@@ -25,10 +25,11 @@ def create_collection_global(
     collection_service: CollectionServiceDep,
     collection_in: CollectionCreate,
     user: CurrentUserDep,
+    include_storage_options: bool = False,
 ) -> CollectionRead:
     """Create a global Collection (not scoped to any device or shot)."""
     collection = collection_service.create(collection_in, user)
-    return collection_service.to_read_model(collection)
+    return collection_service.to_read_model(collection, include_storage_options, user)
 
 
 @router.get(
@@ -42,10 +43,11 @@ def read_collections_global(
     user: CurrentUserDep,
     offset: int = 0,
     limit: int = 100,
+    include_storage_options: bool = False,
 ) -> list[CollectionRead]:
     """Retrieve all global Collections accessible to the current user."""
     collections = collection_service.get_multi(user=user, offset=offset, limit=limit)
-    return collection_service.to_read_models(collections)
+    return collection_service.to_read_models(collections, include_storage_options, user)
 
 
 @router.get(
@@ -59,6 +61,7 @@ def read_collection_global_by_name(
     name: str,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
+    include_storage_options: bool = False,
 ) -> CollectionRead | JSONResponse:
     """Retrieve a specific global Collection by name.
 
@@ -73,7 +76,7 @@ def read_collection_global_by_name(
             collection, str(request.base_url).rstrip("/")
         )
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
-    return collection_service.to_read_model(collection)
+    return collection_service.to_read_model(collection, include_storage_options, user)
 
 
 @router.post(
@@ -88,11 +91,12 @@ def create_collection_device(
     collection_service: CollectionServiceDep,
     collection_in: CollectionCreate,
     user: CurrentUserDep,
+    include_storage_options: bool = False,
 ) -> CollectionRead:
     """Create a device-level Collection (not tied to any shot)."""
     collection_in.device_name = device_name
     collection = collection_service.create(collection_in, user)
-    return collection_service.to_read_model(collection)
+    return collection_service.to_read_model(collection, include_storage_options, user)
 
 
 @router.get(
@@ -107,12 +111,13 @@ def read_collections_device(
     user: CurrentUserDep,
     offset: int = 0,
     limit: int = 100,
+    include_storage_options: bool = False,
 ) -> list[CollectionRead]:
     """Retrieve all device-level Collections accessible to the current user."""
     collections = collection_service.get_collections_for_device(
         device_name, user=user, offset=offset, limit=limit
     )
-    return collection_service.to_read_models(collections)
+    return collection_service.to_read_models(collections, include_storage_options, user)
 
 
 @router.get(
@@ -127,6 +132,7 @@ def read_collection_device_by_name(
     name: str,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
+    include_storage_options: bool = False,
 ) -> CollectionRead | JSONResponse:
     """Retrieve a specific device-level Collection by name.
 
@@ -141,7 +147,7 @@ def read_collection_device_by_name(
             collection, str(request.base_url).rstrip("/")
         )
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
-    return collection_service.to_read_model(collection)
+    return collection_service.to_read_model(collection, include_storage_options, user)
 
 
 @router.post(
@@ -157,12 +163,13 @@ def create_collection_shot(
     collection_service: CollectionServiceDep,
     collection_in: CollectionCreate,
     user: CurrentUserDep,
+    include_storage_options: bool = False,
 ) -> CollectionRead:
     """Create a Collection scoped to a specific shot."""
     collection_in.device_name = device_name
     collection_in.shot_id = shot_id
     collection = collection_service.create(collection_in, user)
-    return collection_service.to_read_model(collection)
+    return collection_service.to_read_model(collection, include_storage_options, user)
 
 
 @router.get(
@@ -178,12 +185,13 @@ def read_collections_shot(
     user: CurrentUserDep,
     offset: int = 0,
     limit: int = 100,
+    include_storage_options: bool = False,
 ) -> list[CollectionRead]:
     """Retrieve all Collections scoped to a specific shot."""
     collections = collection_service.get_collections_for_shot(
         shot_id, device_name, user=user, offset=offset, limit=limit
     )
-    return collection_service.to_read_models(collections)
+    return collection_service.to_read_models(collections, include_storage_options, user)
 
 
 @router.get(
@@ -199,6 +207,7 @@ def read_collection_shot_by_name(
     name: str,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
+    include_storage_options: bool = False,
 ) -> CollectionRead | JSONResponse:
     """Retrieve a specific shot-scoped Collection by name.
 
@@ -213,7 +222,7 @@ def read_collection_shot_by_name(
             collection, str(request.base_url).rstrip("/")
         )
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
-    return collection_service.to_read_model(collection)
+    return collection_service.to_read_model(collection, include_storage_options, user)
 
 
 @router.patch(

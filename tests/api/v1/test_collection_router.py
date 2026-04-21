@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
@@ -5,6 +7,7 @@ from app.auth.security import AuthenticatedUser
 from app.models.collection import CollectionCreate
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
+from app.models.file_access import S3Credentials
 from app.models.shot import ShotCreate
 from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
@@ -369,3 +372,46 @@ def test_collection_activity_not_found_when_no_activity(
         f"/api/v1/collections/{col_id}/activity", headers=admin_user_token
     )
     assert response.status_code == 404
+
+
+def test_collection_include_storage_options(
+    test_client: TestClient, session: Session, admin_user_token: dict, mocker
+):
+    """include_storage_options=true enriches inline datasets on any Collection endpoint."""
+    _make_device(session, "CRED")
+    _make_shot(session, "s99", "CRED")
+    ds_id = _make_dataset(session, "cred-ds", "CRED", "s99")
+    col_id = _make_collection(session, "cred-col", "CRED", "s99")
+    CollectionService(session).add_dataset(col_id, ds_id, user=admin_user)
+
+    mock_provider = mocker.MagicMock()
+    mock_provider.generate_credentials.return_value = {
+        "bucket": S3Credentials(
+            access_key_id="c_key",
+            secret_access_key="c_sec",
+            session_token="c_tok",
+            expiration=datetime.fromisoformat("2026-01-01T00:00:00+00:00"),
+        )
+    }
+    mocker.patch(
+        "app.services.file_access_service.get_provider_for_protocol",
+        return_value=mock_provider,
+    )
+
+    # Without flag — datasets inlined but no credentials
+    resp = test_client.get(
+        "/api/v1/devices/CRED/shots/s99/collections/cred-col",
+        headers=admin_user_token,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["datasets"][0].get("storage_options") is None
+
+    # With flag — credentials present on every inlined dataset
+    resp2 = test_client.get(
+        "/api/v1/devices/CRED/shots/s99/collections/cred-col?include_storage_options=true",
+        headers=admin_user_token,
+    )
+    assert resp2.status_code == 200
+    ds = resp2.json()["datasets"][0]
+    assert ds["storage_options"]["key"] == "c_key"
+    assert ds["storage_options"]["secret"] == "c_sec"
