@@ -312,7 +312,7 @@ def test_get_datasets_with_storage_options(
         )
     }
     mocker.patch(
-        "app.services.file_access_service.get_provider_for_protocol",
+        "app.services.file_access_service.get_provider_for_endpoint",
         return_value=mock_provider,
     )
 

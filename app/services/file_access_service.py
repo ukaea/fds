@@ -6,7 +6,7 @@ from sqlmodel import Session, col, select
 
 from app.auth.access_control import get_effective_policy
 from app.auth.permissions import check_shot_operator
-from app.core.storage.providers import get_provider_for_protocol
+from app.core.storage.providers import get_provider_for_endpoint
 from app.models.dataset import Dataset
 from app.models.distribution import Distribution
 from app.models.file_access import (
@@ -34,50 +34,54 @@ class FileAccessService:
         Generates temporary storage credentials.
         Returns a manifest mapping each dataset URL to its credential.
         """
-        allowed_urls = self._resolve_allowed_urls(user, request)
+        allowed_pairs = self._resolve_allowed_urls(user, request)
 
-        if not allowed_urls:
+        if not allowed_pairs:
             logger.info(
                 "Access denied or no datasets found", extra={"user_id": user.id}
             )
             return CredentialManifest(resource_map={})
 
-        grouped_urls = self._group_urls_by_protocol(allowed_urls)
+        grouped = self._group_by_endpoint(allowed_pairs)
         session_name = f"fds-sess-{user.id[-8:]}"
         resource_map: dict[str, CredentialPayload] = {}
 
-        for protocol, urls in grouped_urls.items():
+        for (protocol, endpoint_url), urls in grouped.items():
             if not urls:
                 continue
             resource_map.update(
-                self._mint_for_protocol(user, protocol, urls, session_name)
+                self._mint_for_protocol(
+                    user, protocol, endpoint_url, urls, session_name
+                )
             )
 
         return CredentialManifest(resource_map=resource_map)
 
-    def _group_urls_by_protocol(self, urls: list[str]) -> dict[str, list[str]]:
-        logger.info(f"Grouping {len(urls)} URLs by protocol")
-        grouped = defaultdict(list)
-        for url in urls:
+    def _group_by_endpoint(
+        self, url_pairs: list[tuple[str, str | None]]
+    ) -> dict[tuple[str, str | None], list[str]]:
+        logger.info(f"Grouping {len(url_pairs)} URLs by (protocol, endpoint)")
+        grouped: dict[tuple[str, str | None], list[str]] = defaultdict(list)
+        for url, endpoint_url in url_pairs:
             parsed = urlparse(url)
             protocol = parsed.scheme
             if protocol:
-                grouped[protocol].append(url)
+                grouped[(protocol, endpoint_url)].append(url)
         return grouped
 
     def _mint_for_protocol(
         self,
         user: AuthenticatedUser,
         protocol: str,
+        endpoint_url: str | None,
         urls: list[str],
         session_name: str,
     ) -> dict[str, CredentialPayload]:
         result: dict[str, CredentialPayload] = {}
-        try:
-            provider = get_provider_for_protocol(protocol)
-        except ValueError:
+        provider = get_provider_for_endpoint(endpoint_url)
+        if provider is None:
             logger.warning(
-                f"No credential provider implemented for protocol: {protocol}. Skipping."
+                f"No credential provider configured for endpoint: {endpoint_url!r}. Skipping."
             )
             return {}
 
@@ -110,9 +114,10 @@ class FileAccessService:
 
     def _resolve_allowed_urls(
         self, user: AuthenticatedUser, request: CredentialRequest
-    ) -> list[str]:
+    ) -> list[tuple[str, str | None]]:
         """
-        Queries the database to find specific allowed S3 prefixes based on request filter.
+        Queries the database to find allowed distribution URLs based on request filter.
+        Returns (url, endpoint_url) pairs for each permitted distribution.
         """
         # Guard: If no filters are provided, return empty list to avoid selecting *all* datasets.
         if not request.shot_id and not request.device_name and not request.data_urls:
@@ -139,12 +144,12 @@ class FileAccessService:
             f"Query returned {len(rows)} dataset/distribution rows for request: {request.model_dump_json(exclude_none=True)}"
         )
 
-        final_urls = []
+        seen: dict[str, str | None] = {}
         for ds, dist in rows:
             if self._check_download_permission(user, ds):
-                final_urls.append(dist.url)
+                seen[dist.url] = dist.endpoint_url
 
-        return list(set(final_urls))  # Dedup
+        return list(seen.items())
 
     def _check_download_permission(
         self, user: AuthenticatedUser, dataset: Dataset

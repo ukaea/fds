@@ -15,6 +15,9 @@ class GCSCredentialProvider:
     Vendor Google Cloud Storage credentials using Downscoped Credentials (CAB).
     """
 
+    def __init__(self, provider_config):
+        self._provider_config = provider_config
+
     def generate_credentials(
         self, allowed_prefixes: list[str], session_name: str
     ) -> dict[str, GCSCredentials]:

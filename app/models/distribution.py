@@ -38,6 +38,7 @@ class DistributionBase(SQLModel):
     """
 
     url: str
+    endpoint_url: str | None = Field(default=None)
     media_type: str | None = Field(default=None)
     format: str | None = Field(default=None)
     access_level: AccessLevel | None = Field(default=None)

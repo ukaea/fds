@@ -38,7 +38,7 @@ def test_generate_credentials_success(mock_google_auth):
     """
     mock_auth, mock_downscoped = mock_google_auth
 
-    provider = GCSCredentialProvider()
+    provider = GCSCredentialProvider(None)
     prefixes = ["gs://my-bucket/data/file1", "gs://other-bucket/foo"]
     session_name = "test-session"
 
@@ -74,7 +74,7 @@ def test_missing_credentials_configuration(mocker):
     mock_default = mocker.patch("app.core.storage.gcs_provider.google.auth.default")
     mock_default.side_effect = DefaultCredentialsError("Missing creds")
 
-    provider = GCSCredentialProvider()
+    provider = GCSCredentialProvider(None)
 
     with pytest.raises(ConfigurationError):
         provider.generate_credentials(["gs://bucket/key"], "session")
@@ -84,7 +84,7 @@ def test_requests_transport_used(mock_google_auth):
     """Verify that we initialize the credential with standard Requests transport."""
     _, mock_downscoped = mock_google_auth
 
-    provider = GCSCredentialProvider()
+    provider = GCSCredentialProvider(None)
     provider.generate_credentials(["gs://bucket"], "session")
 
     # Check that .refresh() was called with a google.auth.transport.requests.Request

@@ -1,8 +1,8 @@
 from collections.abc import Mapping
 from typing import Protocol
 
+from app.core.config import config
 from app.models.file_access import CredentialPayload
-from app.services.exceptions import ConfigurationError
 
 
 class CredentialProvider(Protocol):
@@ -16,18 +16,26 @@ class CredentialProvider(Protocol):
     ) -> Mapping[str, CredentialPayload]: ...
 
 
-def get_provider_for_protocol(protocol: str) -> CredentialProvider:
-    if protocol == "s3":
-        from app.core.storage.s3_provider import S3CredentialProvider
+def get_provider_for_endpoint(endpoint_url: str | None) -> CredentialProvider | None:
+    """Return an initialised credential provider for the given storage endpoint URL.
 
-        return S3CredentialProvider()
-    elif protocol in ("gs", "gcs"):
-        from app.core.storage.gcs_provider import GCSCredentialProvider
+    Searches ``config.STORAGE_PROVIDERS`` for a matching entry keyed by
+    ``endpoint_url``.  Returns ``None`` when no provider is configured for that
+    endpoint so callers can skip vending rather than raising.
+    """
+    for provider_config in config.STORAGE_PROVIDERS:
+        if provider_config.endpoint_url != endpoint_url:
+            continue
+        if provider_config.type == "s3":
+            from app.core.storage.s3_provider import S3CredentialProvider
 
-        return GCSCredentialProvider()
-    elif protocol in ("az", "abfs"):
-        from app.core.storage.azure_provider import AzureCredentialProvider
+            return S3CredentialProvider(provider_config)
+        if provider_config.type == "azure":
+            from app.core.storage.azure_provider import AzureCredentialProvider
 
-        return AzureCredentialProvider()
+            return AzureCredentialProvider(provider_config)
+        if provider_config.type == "gcs":
+            from app.core.storage.gcs_provider import GCSCredentialProvider
 
-    raise ConfigurationError(f"No provider configured for protocol: {protocol}")
+            return GCSCredentialProvider(provider_config)
+    return None

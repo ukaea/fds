@@ -3,7 +3,10 @@ from datetime import datetime
 import pytest
 from sqlmodel import Session, select
 
+from app.core.config import S3StorageProvider
+from app.core.storage.s3_provider import S3CredentialProvider
 from app.models.dataset import Dataset
+from app.models.device import Device
 from app.models.distribution import Distribution
 from app.models.file_access import CredentialRequest, S3Credentials
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
@@ -135,7 +138,7 @@ def test_fail_fast_malformed_url(access_service, mocker):
     mock_urlparse.side_effect = ValueError("Invalid URL")
 
     with pytest.raises(ValueError, match="Invalid URL"):
-        access_service._group_urls_by_protocol(["http://bad-url"])
+        access_service._group_by_endpoint([("http://bad-url", None)])
 
 
 def test_polyglot_routing_s3(session, access_service, mock_s3_provider):
@@ -188,9 +191,9 @@ def test_empty_request_returns_empty(access_service, mock_s3_provider):
 
 def test_s3_provider_policy():
     pytest.importorskip("boto3")
-    from app.core.storage.s3_provider import S3CredentialProvider
-
-    provider = S3CredentialProvider()
+    provider = S3CredentialProvider(
+        S3StorageProvider(endpoint_url=None, sts_role_arn="arn:test")
+    )
 
     # Simple check
     pol = provider._construct_policy(["s3://b/k"])
@@ -205,9 +208,6 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
     """
     # 1. Setup Data
     # 1. Setup Data
-    # Create Device first
-    from app.models.device import Device
-
     device = Device(name="test-device", type="tokamak")
     session.add(device)
     session.commit()
@@ -290,7 +290,7 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
 
     # Replace the provider interaction
     mocker.patch(
-        "app.services.file_access_service.get_provider_for_protocol",
+        "app.services.file_access_service.get_provider_for_endpoint",
         return_value=mock_provider,
     )
 

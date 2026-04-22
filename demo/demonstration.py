@@ -12,7 +12,7 @@
 
 import marimo
 
-__generated_with = "0.23.1"
+__generated_with = "0.23.2"
 app = marimo.App(width="medium")
 
 
@@ -41,7 +41,9 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## 1. Setup and Environment""")
+    mo.md(r"""
+    ## 1. Setup and Environment
+    """)
     return
 
 
@@ -57,9 +59,9 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""## 2. Authentication — [docs](http://localhost:4001/demo/walkthrough/#2-authentication)"""
-    )
+    mo.md(r"""
+    ## 2. Authentication — [docs](http://localhost:4001/demo/walkthrough/#2-authentication)
+    """)
     return
 
 
@@ -86,9 +88,9 @@ def _(KEYCLOAK_URL, httpx):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""## 2b. Registering Devices and Shots — [docs](http://localhost:4001/demo/walkthrough/#2b-registering-devices-and-shots)"""
-    )
+    mo.md(r"""
+    ## 2b. Registering Devices and Shots — [docs](http://localhost:4001/demo/walkthrough/#2b-registering-devices-and-shots)
+    """)
     return
 
 
@@ -161,9 +163,9 @@ def _(FDS_API_URL, headers, httpx):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""## 3. Registering Real Datasets — [docs](http://localhost:4001/demo/walkthrough/#3-registering-real-mast-datasets)"""
-    )
+    mo.md(r"""
+    ## 3. Registering Real Datasets — [docs](http://localhost:4001/demo/walkthrough/#3-registering-real-mast-datasets)
+    """)
     return
 
 
@@ -193,6 +195,7 @@ def _(FDS_API_URL, headers, httpx):
                 "name": ids_name,
                 "level": 2,
                 "url": f"s3://fds-data/shots/{shot_id}/{ids_name}",
+                "endpoint_url": "http://localhost:9000",
                 "access_level": "public",
                 "title": f"{ids_name.replace('_', ' ').title()} — Shot {shot_id}",
                 "media_type": "application/x-zarr",
@@ -216,9 +219,9 @@ def _(FDS_API_URL, headers, httpx):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""### 3.1. Grouping into Experiment Data Collections — [docs](http://localhost:4001/demo/walkthrough/#31-grouping-into-experiment-data-collections)"""
-    )
+    mo.md(r"""
+    ### 3.1. Grouping into Experiment Data Collections — [docs](http://localhost:4001/demo/walkthrough/#31-grouping-into-experiment-data-collections)
+    """)
     return
 
 
@@ -304,15 +307,14 @@ def _(FDS_API_URL, headers, httpx):
             f"Shot {_shot_id}: Experiment Data collection created (id={_col_id}), "
             f"{len(_datasets)} datasets added, activity id={_act_id}."
         )
-
-    return (scheduler_source_id,)
+    return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""### 3.2. Recording Provenance — [docs](http://localhost:4001/concepts/provenance/)"""
-    )
+    mo.md(r"""
+    ### 3.2. Recording Provenance — [docs](http://localhost:4001/concepts/provenance/)
+    """)
     return
 
 
@@ -435,9 +437,9 @@ def _(FDS_API_URL, headers, httpx):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""### 3.3. Semantic Metadata (JSON-LD) — [docs](http://localhost:4001/concepts/dcat-jsonld/)"""
-    )
+    mo.md(r"""
+    ### 3.3. Semantic Metadata (JSON-LD) — [docs](http://localhost:4001/concepts/dcat-jsonld/)
+    """)
     return
 
 
@@ -466,7 +468,9 @@ def _(FDS_API_URL, headers, httpx, json):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""#### Distribution nodes in the JSON-LD response""")
+    mo.md(r"""
+    #### Distribution nodes in the JSON-LD response
+    """)
     return
 
 
@@ -487,9 +491,9 @@ def _(jld_resp, json):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""### 3b. Registering Synthetic Shot (MAST-Upgrade) — [docs](http://localhost:4001/demo/walkthrough/#3b-mast-upgrade-synthetic-datasets)"""
-    )
+    mo.md(r"""
+    ### 3b. Registering Synthetic Shot (MAST-Upgrade) — [docs](http://localhost:4001/demo/walkthrough/#3b-mast-upgrade-synthetic-datasets)
+    """)
     return
 
 
@@ -504,6 +508,7 @@ def _(FDS_API_URL, headers, httpx):
             "shot_id": "50000",
             "device_name": "mast-upgrade",
             "url": f"s3://fds-data/shots/50000/signals/signal_{i:02d}",
+            "endpoint_url": "http://localhost:9000",
             "access_level": "public",
             "title": f"Public Signal {i}",
             "media_type": "application/x-zarr",
@@ -523,6 +528,7 @@ def _(FDS_API_URL, headers, httpx):
             "shot_id": "50000",
             "device_name": "mast-upgrade",
             "url": f"s3://fds-data/shots/50000/restricted/data_{i:02d}",
+            "endpoint_url": "http://localhost:9000",
             "access_level": "restricted",
             "title": f"Restricted Data {i}",
             "media_type": "application/x-zarr",
@@ -539,9 +545,9 @@ def _(FDS_API_URL, headers, httpx):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""## 4. Collections — JINTRAC Integrated Modelling — [docs](http://localhost:4001/demo/walkthrough/#4-collections-jintrac-integrated-modelling)"""
-    )
+    mo.md(r"""
+    ## 4. Collections — JINTRAC Integrated Modelling — [docs](http://localhost:4001/demo/walkthrough/#4-collections-jintrac-integrated-modelling)
+    """)
     return
 
 
@@ -612,6 +618,7 @@ def _(FDS_API_URL, headers, httpx):
                     "title": f"JINTRAC {_stem.replace('_', ' ').title()} — Shot 30420",
                     "level": 3,
                     "url": f"s3://fds-data/shots/30420/jintrac/{_stem}.nc",
+                    "endpoint_url": "http://localhost:9000",
                     "media_type": "application/netcdf",
                     "format": "NetCDF4",
                     "access_level": "public",
@@ -644,13 +651,14 @@ def _(FDS_API_URL, headers, httpx):
         )
         print(f"Datasets:   {jintrac_dataset_ids}")
         print(f"Collection: jintrac-v220922  (id={jintrac_collection_id})")
-
     return (jintrac_collection_id,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### 4a. Inspecting the Collection""")
+    mo.md(r"""
+    ### 4a. Inspecting the Collection
+    """)
     return
 
 
@@ -669,9 +677,9 @@ def _(FDS_API_URL, headers, httpx, jintrac_collection_id):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""### 4b. Collection as `dcat:Catalog` (JSON-LD) — [docs](http://localhost:4001/concepts/dcat-jsonld/#collection-as-dcatcatalog)"""
-    )
+    mo.md(r"""
+    ### 4b. Collection as `dcat:Catalog` (JSON-LD) — [docs](http://localhost:4001/concepts/dcat-jsonld/#collection-as-dcatcatalog)
+    """)
     return
 
 
@@ -687,9 +695,9 @@ def _(FDS_API_URL, headers, httpx, json):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""## 5. Attempting Unauthorised Access — [docs](http://localhost:4001/concepts/access-control/#what-fds-does-not-do)"""
-    )
+    mo.md(r"""
+    ## 5. Attempting Unauthorised Access — [docs](http://localhost:4001/concepts/access-control/#what-fds-does-not-do)
+    """)
     return
 
 
@@ -712,9 +720,9 @@ def _(MINIO_URL, xr):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""## 6. Secure Consumption with `include_storage_options` — [docs](http://localhost:4001/concepts/access-control/#credential-vending-sts-token-pattern)"""
-    )
+    mo.md(r"""
+    ## 6. Secure Consumption with `include_storage_options` — [docs](http://localhost:4001/concepts/access-control/#credential-vending-sts-token-pattern)
+    """)
     return
 
 
@@ -734,7 +742,9 @@ def _(FDS_API_URL, headers, httpx, xr):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## 7. Single Dataset Access — real MAST equilibrium, shot 30421""")
+    mo.md(r"""
+    ## 7. Single Dataset Access — real MAST equilibrium, shot 30421
+    """)
     return
 
 
@@ -755,9 +765,9 @@ def _(FDS_API_URL, httpx, xr):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""## 8. High-Throughput Parallel Analysis (Dask) — [docs](http://localhost:4001/concepts/access-control/#bulk-access-the-credential-manifest)"""
-    )
+    mo.md(r"""
+    ## 8. High-Throughput Parallel Analysis (Dask) — [docs](http://localhost:4001/concepts/access-control/#bulk-access-the-credential-manifest)
+    """)
     return
 
 

@@ -18,7 +18,8 @@ class S3CredentialProvider:
     S3/STS Implementation.
     """
 
-    def __init__(self):
+    def __init__(self, provider_config):
+        self._provider_config = provider_config
         self._sts_client = None
 
     @property
@@ -30,11 +31,16 @@ class S3CredentialProvider:
                     "Please install the 's3' optional dependency: pip install 'fds[s3]'"
                 )
 
-            self._sts_client = boto3.client(
-                "sts",
-                region_name=config.STS_REGION,
-                endpoint_url=config.STS_ENDPOINT_URL,
-            )
+            pc = self._provider_config
+            sts_url = pc.sts_endpoint_url or pc.endpoint_url
+            kwargs: dict[str, Any] = {
+                "region_name": pc.sts_region,
+                "endpoint_url": sts_url,
+            }
+            if pc.sts_access_key_id:
+                kwargs["aws_access_key_id"] = pc.sts_access_key_id
+                kwargs["aws_secret_access_key"] = pc.sts_secret_access_key
+            self._sts_client = boto3.client("sts", **kwargs)
         return self._sts_client
 
     def generate_credentials(
@@ -44,10 +50,9 @@ class S3CredentialProvider:
         Assumes the configured STS role and returns temporary credentials.
         The policy is dynamically generated to allow access only to 'allowed_prefixes'.
 
-        New Response Format: Map of bucket -> credentials
+        Response format: Map of bucket -> credentials
         """
-        if not config.STS_ROLE_ARN:
-            raise ConfigurationError("STS_ROLE_ARN is not configured.")
+        role_arn = self._provider_config.sts_role_arn
 
         # 1. Construct Policy
         policy_json = self._construct_policy(allowed_prefixes)
@@ -55,15 +60,14 @@ class S3CredentialProvider:
         # 2. Assume Role
         try:
             response = self.sts_client.assume_role(
-                RoleArn=config.STS_ROLE_ARN,
+                RoleArn=role_arn,
                 RoleSessionName=session_name,
                 Policy=policy_json,
                 DurationSeconds=config.CREDENTIAL_TOKEN_DURATION,
             )
         except Exception as e:
-            # Re-raise with context but preserve original exception for debugging
             raise ConfigurationError(
-                f"Failed to assume STS role '{config.STS_ROLE_ARN}': {e}"
+                f"Failed to assume STS role '{role_arn}': {e}"
             ) from e
 
         # 3. Map to Model
@@ -73,18 +77,12 @@ class S3CredentialProvider:
             secret_access_key=creds["SecretAccessKey"],
             session_token=creds["SessionToken"],
             expiration=creds["Expiration"],
+            endpoint_url=self._provider_config.endpoint_url,
         )
 
         # 4. Return Bucket-Keyed Credential Map
         # STS credentials are bucket-agnostic (one token works for all allowed buckets).
-        # However, we return a dict[bucket_name -> credentials] to maintain a consistent
-        # interface with other providers (GCS, Azure) that may require per-bucket tokens.
-        # Clients extract credentials via: list(result.values())[0]
-        #
-        # TODO: Multi-Endpoint Support
-        # Current limitation: assumes single STS endpoint (config.STS_ENDPOINT_URL).
-        # Future work: support multiple S3-compatible endpoints (AWS, MinIO, Ceph)
-        # by mapping buckets to their respective STS endpoints and role ARNs.
+        # We return dict[bucket_name -> credentials] to match the interface used by GCS/Azure.
 
         if "*" in allowed_prefixes:
             raise ConfigurationError(

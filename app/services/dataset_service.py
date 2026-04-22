@@ -142,6 +142,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
 
         distribution = Distribution(
             url=obj_in.url,
+            endpoint_url=obj_in.endpoint_url,
             media_type=obj_in.media_type,
             format=obj_in.format,
             default_distribution=True,
@@ -284,7 +285,6 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         default_dist = next(
             (d for d in dataset.distributions if d.default_distribution), None
         )
-        non_default = [d for d in dataset.distributions if not d.default_distribution]
 
         read_model = DatasetRead.model_validate(
             dataset,
@@ -292,7 +292,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 "url": default_dist.url if default_dist else "",
                 "media_type": default_dist.media_type if default_dist else None,
                 "format": default_dist.format if default_dist else None,
-                "formats": [DistributionRead.model_validate(d) for d in non_default]
+                "distributions": [
+                    DistributionRead.model_validate(d) for d in dataset.distributions
+                ]
                 or None,
             },
         )
@@ -353,7 +355,12 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
 
         for model in public:
             if model.url:
-                opts = anonymous_storage_options(model.url)
+                default_dist = next(
+                    (d for d in (model.distributions or []) if d.default_distribution),
+                    None,
+                )
+                endpoint_url = default_dist.endpoint_url if default_dist else None
+                opts = anonymous_storage_options(model.url, endpoint_url)
                 if opts is None:
                     logger.warning(
                         "No anonymous storage options for scheme",

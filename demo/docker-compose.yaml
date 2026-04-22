@@ -8,8 +8,7 @@ services:
     environment:
       - FDS_TRUSTED_IDPS=[{"issuer":"http://localhost:8080/realms/fds","allowed_scopes":["*"]}]
       - FDS_OIDC_AUDIENCE=fds-client
-      - FDS_STS_ENDPOINT_URL=http://localhost:9000
-      - FDS_STS_ROLE_ARN=arn:aws:iam::123456789012:role/fds-role # Placeholder, will be configured in minio
+      - FDS_STORAGE_PROVIDERS=[{"type":"s3","endpoint_url":"http://localhost:9000","sts_endpoint_url":"http://minio:9000","sts_role_arn":"arn:aws:iam::123456789012:role/fds-role"}]
       - AWS_ACCESS_KEY_ID=fds-sa
       - AWS_SECRET_ACCESS_KEY=fds-sa-secret
       - AWS_DEFAULT_REGION=us-east-1

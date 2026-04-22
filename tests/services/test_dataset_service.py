@@ -507,7 +507,7 @@ def test_enrich_with_storage_options_s3(
     }
 
     mocker.patch(
-        "app.services.file_access_service.get_provider_for_protocol",
+        "app.services.file_access_service.get_provider_for_endpoint",
         return_value=mock_provider,
     )
 
@@ -556,8 +556,8 @@ def test_enrich_with_storage_options_unsupported_protocol(
     )
 
     mocker.patch(
-        "app.services.file_access_service.get_provider_for_protocol",
-        side_effect=ValueError("No mock provider for local"),
+        "app.services.file_access_service.get_provider_for_endpoint",
+        return_value=None,
     )
 
     models = dataset_service.get_datasets_for_shot(
@@ -645,7 +645,7 @@ def test_enrich_with_storage_options_public_dataset_no_credentials(
     )
 
     mock_provider = mocker.patch(
-        "app.services.file_access_service.get_provider_for_protocol"
+        "app.services.file_access_service.get_provider_for_endpoint"
     )
 
     models = dataset_service.get_datasets_for_shot(

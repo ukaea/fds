@@ -28,7 +28,8 @@ class AzureCredentialProvider:
     Vendor Azure User Delegation SAS tokens for containers.
     """
 
-    def __init__(self):
+    def __init__(self, provider_config):
+        self._provider_config = provider_config
         self._service_client = None
 
     def _require_azure_sdk(self) -> tuple[Any, Any, Any, Any]:
@@ -58,8 +59,7 @@ class AzureCredentialProvider:
         """
         _, _, container_sas_permissions, gen_container_sas = self._require_azure_sdk()
 
-        if not config.AZURE_STORAGE_ACCOUNT:
-            raise ConfigurationError("AZURE_STORAGE_ACCOUNT is not configured.")
+        storage_account = self._provider_config.storage_account
 
         # 1. Get User Delegation Key
         # We need this to sign the SAS tokens on behalf of the AD identity (App Registration)
@@ -101,15 +101,17 @@ class AzureCredentialProvider:
         for container_name in containers:
             try:
                 sas_token = gen_container_sas(
-                    account_name=config.AZURE_STORAGE_ACCOUNT,
+                    account_name=storage_account,
                     container_name=container_name,
                     user_delegation_key=ud_key,
                     permission=permissions,
                     expiry=sas_expiry,
-                    start=key_start,  # Optional: set start time to avoid immediate failure if clock skew?
-                    # Usually omitted for immediate access, but start=key_start aligns with key.
+                    start=key_start,
                 )
-                result[container_name] = AzureCredentials(sas_token=sas_token)
+                result[container_name] = AzureCredentials(
+                    account_name=storage_account,
+                    sas_token=sas_token,
+                )
             except Exception as e:
                 # Log? Warning?
                 # Failing one container shouldn't fail all?
@@ -125,7 +127,7 @@ class AzureCredentialProvider:
 
         if not self._service_client:
             account_url = (
-                f"https://{config.AZURE_STORAGE_ACCOUNT}.blob.core.windows.net"
+                f"https://{self._provider_config.storage_account}.blob.core.windows.net"
             )
             credential = default_credential()
             self._service_client = blob_service_client(

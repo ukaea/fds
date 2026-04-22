@@ -127,18 +127,20 @@ class Dataset(DatasetBase, table=True):
 class DatasetCreate(DatasetBase):
     """Schema for creating a Dataset.
 
-    ``url``, ``media_type``, and ``format`` describe the initial (default)
-    distribution and are stored as a ``Distribution`` row with
-    ``default_distribution=True``.  Additional distributions can be added
-    afterwards via the distributions sub-resource.
+    The fields below the dataset metadata are convenience pass-throughs that
+    describe the initial default ``Distribution`` created alongside the dataset.
+    They are only relevant when creating the first distribution at the same time;
+    additional distributions can be added afterwards via the distributions
+    sub-resource.
     """
 
     shot_id: str | None = None
     activity_id: int | None = None
     origin: str | None = None
-    # Default distribution fields — inlined for convenience, become a Distribution
-    # with default_distribution=True on create.
+    # Default distribution fields — passed through to a Distribution row with
+    # default_distribution=True on create.
     url: str
+    endpoint_url: str | None = None
     media_type: str | None = None
     format: str | None = None
 
@@ -146,11 +148,12 @@ class DatasetCreate(DatasetBase):
 class DatasetRead(DatasetBase):
     """Dataset response schema.
 
-    ``url``, ``media_type``, and ``format`` are denormalised from the default
-    distribution for convenience.  ``formats`` lists all non-default
-    distributions when more than one exists.  In JSON-LD responses these fields
-    are re-separated into proper ``dcat:Dataset`` and ``dcat:distribution``
-    nodes.
+    ``url``, ``media_type``, ``format``, and ``storage_options`` are
+    denormalised from the default distribution for convenience.
+    ``distributions`` lists all distributions associated with the dataset,
+    including the default one (identified by ``default_distribution=True``).
+    In JSON-LD responses these fields are re-separated into proper
+    ``dcat:Dataset`` and ``dcat:distribution`` nodes.
     """
 
     id: int
@@ -158,13 +161,13 @@ class DatasetRead(DatasetBase):
     activity_id: int | None = None
     origin: str | None = None
     effective_access_level: AccessLevel | None = None
-    # Default distribution fields inlined
+    # Default distribution fields inlined for convenience
     url: str
     media_type: str | None = None
     format: str | None = None
     storage_options: dict[str, Any] | None = None
-    # Non-default distributions
-    formats: list["DistributionRead"] | None = None
+    # All distributions (default flagged via default_distribution=True)
+    distributions: list["DistributionRead"] | None = None
 
 
 class DatasetUpdate(SQLModel):

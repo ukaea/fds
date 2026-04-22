@@ -1,3 +1,5 @@
+from typing import Annotated, Literal
+
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -13,6 +15,53 @@ class TrustedIdP(BaseModel):
         if not normalized:
             raise ValueError("issuer must be non-empty and not whitespace-only")
         return normalized
+
+
+class S3StorageProvider(BaseModel):
+    """Configuration for one S3-compatible storage endpoint.
+
+    ``endpoint_url`` is the client-accessible URL and acts as the lookup key
+    that matches ``Distribution.endpoint_url``.  ``None`` means standard AWS S3
+    (no custom endpoint).
+
+    ``sts_endpoint_url`` is the URL the FDS *server* uses for ``AssumeRole``
+    calls.  It may differ from ``endpoint_url`` when internal and external URLs
+    for the same system differ (e.g. a containerised demo where the server can
+    reach MinIO directly by service name).  Defaults to ``endpoint_url``.
+
+    ``sts_access_key_id`` / ``sts_secret_access_key`` are optional; when
+    absent boto3 falls back to its standard credential chain (environment
+    variables, IAM instance role, etc.).
+    """
+
+    type: Literal["s3"] = "s3"
+    endpoint_url: str | None
+    sts_endpoint_url: str | None = None
+    sts_role_arn: str
+    sts_region: str = "us-east-1"
+    sts_access_key_id: str | None = None
+    sts_secret_access_key: str | None = None
+
+
+class GCSStorageProvider(BaseModel):
+    """Configuration for a Google Cloud Storage endpoint (placeholder)."""
+
+    type: Literal["gcs"] = "gcs"
+    endpoint_url: str | None = None
+
+
+class AzureStorageProvider(BaseModel):
+    """Configuration for an Azure Blob Storage endpoint."""
+
+    type: Literal["azure"] = "azure"
+    endpoint_url: str | None = None
+    storage_account: str
+
+
+StorageProvider = Annotated[
+    S3StorageProvider | GCSStorageProvider | AzureStorageProvider,
+    Field(discriminator="type"),
+]
 
 
 class Config(BaseSettings):
@@ -53,30 +102,12 @@ class Config(BaseSettings):
             seen.add(idp.issuer)
         return idps
 
-    # Storage Provider Settings
+    # Storage Providers
     CREDENTIAL_TOKEN_DURATION: int = Field(
         default=3600, validation_alias="FDS_CREDENTIAL_TOKEN_DURATION"
     )
-
-    # --- S3 (STS) ---
-    STS_ROLE_ARN: str = Field(default="", validation_alias="FDS_STS_ROLE_ARN")
-    STS_ENDPOINT_URL: str | None = Field(
-        default=None, validation_alias="FDS_STS_ENDPOINT_URL"
-    )
-    STS_REGION: str = Field(default="us-east-1", validation_alias="FDS_STS_REGION")
-
-    # --- Azure ---
-    AZURE_STORAGE_ACCOUNT: str | None = Field(
-        default=None, validation_alias="FDS_AZURE_STORAGE_ACCOUNT"
-    )
-    AZURE_TENANT_ID: str | None = Field(
-        default=None, validation_alias="FDS_AZURE_TENANT_ID"
-    )
-    AZURE_CLIENT_ID: str | None = Field(
-        default=None, validation_alias="FDS_AZURE_CLIENT_ID"
-    )
-    AZURE_CLIENT_SECRET: str | None = Field(
-        default=None, validation_alias="FDS_AZURE_CLIENT_SECRET"
+    STORAGE_PROVIDERS: list[StorageProvider] = Field(
+        default=[], validation_alias="FDS_STORAGE_PROVIDERS"
     )
 
     @property

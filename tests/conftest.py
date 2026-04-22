@@ -161,7 +161,7 @@ def mock_s3_provider(mocker):
     mock_prov.generate_credentials.return_value = {}
     # When initialized, S3CredentialProvider will be used, but we want to intercept the factory
     mocker.patch(
-        "app.services.file_access_service.get_provider_for_protocol",
+        "app.services.file_access_service.get_provider_for_endpoint",
         return_value=mock_prov,
     )
     return mock_prov
