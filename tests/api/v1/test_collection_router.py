@@ -360,6 +360,33 @@ def test_collection_jsonld_response(
     assert response.headers["content-type"].startswith("application/ld+json")
     data = response.json()
     assert data["@type"] == "dcat:Catalog"
+    # No root_url set → no dcat:distribution node
+    assert "dcat:distribution" not in data
+
+
+def test_collection_jsonld_includes_root_url_distribution(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    """When a Collection has ``root_url``, JSON-LD includes a dcat:distribution
+    node with dcat:accessURL pointing at the store root (per ADR-0029)."""
+    CollectionService(session).create(
+        CollectionCreate(
+            name="ld-col-root",
+            root_url="s3://fds-data/shots/50000/analysed",
+        ),
+        user=admin_user,
+    )
+
+    response = test_client.get(
+        "/api/v1/collections/ld-col-root",
+        headers={**admin_user_token, "accept": "application/ld+json"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["dcat:distribution"] == {
+        "@type": "dcat:Distribution",
+        "dcat:accessURL": "s3://fds-data/shots/50000/analysed",
+    }
 
 
 def test_collection_activity_not_found_when_no_activity(

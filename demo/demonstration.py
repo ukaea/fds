@@ -1,18 +1,19 @@
 # /// script
 # requires-python = ">=3.14"
 # dependencies = [
-#     "marimo>=0.22.4",
+#     "marimo>=0.23.2",
 #     "httpx==0.27.2",
 #     "s3fs==2026.1.0",
-#     "xarray[parallel]==2025.12.0",
-#     "zarr==3.1.5",
+#     "xarray[io, parallel]==2025.12.0",
+#     "icechunk",
 #     "pyzmq>=27.1.0",
+#     "h5py",
 # ]
 # ///
 
 import marimo
 
-__generated_with = "0.23.2"
+__generated_with = "0.23.4"
 app = marimo.App(width="medium")
 
 
@@ -492,54 +493,127 @@ def _(jld_resp, json):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### 3b. Registering Synthetic Shot (MAST-Upgrade) — [docs](http://localhost:4001/demo/walkthrough/#3b-mast-upgrade-synthetic-datasets)
+    ### 3b. Registering Synthetic MAST-U Shot 50000 — Raw and Analysed Collections
+
+    Shot 50000 demonstrates the IceChunk collection model (ADR-0029):
+    - **raw-diagnostics**: 3 restricted NetCDF files (unprocessed diagnostic outputs)
+    - **analysed**: 9 public IDS datasets as groups in a single IceChunk store
     """)
     return
 
 
 @app.cell
 def _(FDS_API_URL, headers, httpx):
-    # Register 50 Public Signals
-    print("Registering 50 Public Signals for MAST-Upgrade Shot 50000...")
-    for i in range(50):
-        meta = {
-            "name": f"signal_{i:02d}",
-            "level": 1,
-            "shot_id": "50000",
-            "device_name": "mast-upgrade",
-            "url": f"s3://fds-data/shots/50000/signals/signal_{i:02d}",
-            "endpoint_url": "http://localhost:9000",
-            "access_level": "public",
-            "title": f"Public Signal {i}",
-            "media_type": "application/x-zarr",
-        }
-        httpx.post(
-            f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets",
-            json=meta,
-            headers=headers,
+    # --- Raw Diagnostics Collection (RESTRICTED) ---
+    _existing = httpx.get(
+        f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/collections/raw-diagnostics",
+        headers=headers,
+    )
+    if _existing.status_code == 200:
+        raw_collection_id = _existing.json()["id"]
+        print(
+            f"Raw diagnostics collection already registered (id={raw_collection_id}), skipping."
         )
-
-    # Register 10 Restricted Signals
-    print("Registering 10 Restricted Signals for MAST-Upgrade Shot 50000...")
-    for i in range(10):
-        meta = {
-            "name": f"restricted_{i:02d}",
-            "level": 1,
-            "shot_id": "50000",
-            "device_name": "mast-upgrade",
-            "url": f"s3://fds-data/shots/50000/restricted/data_{i:02d}",
-            "endpoint_url": "http://localhost:9000",
-            "access_level": "restricted",
-            "title": f"Restricted Data {i}",
-            "media_type": "application/x-zarr",
-        }
-        httpx.post(
-            f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets",
-            json=meta,
+    else:
+        _r = httpx.post(
+            f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/collections",
             headers=headers,
+            json={
+                "name": "raw-diagnostics",
+                "title": "MAST-U Shot 50000 — Raw Diagnostic Data",
+                "description": "Unprocessed raw outputs from MAST-U diagnostic systems.",
+                "access_level": "restricted",
+            },
         )
+        raw_collection_id = _r.json()["id"]
 
-    print("MAST-Upgrade Shot 50000 registration complete.")
+        for _name, _stem in [
+            ("thomson-raw", "thomson_scattering"),
+            ("charge-exchange-raw", "charge_exchange"),
+            ("magnetics-raw", "magnetics"),
+        ]:
+            _ds = httpx.post(
+                f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets",
+                headers=headers,
+                json={
+                    "name": _name,
+                    "title": f"MAST-U {_stem.replace('_', ' ').title()} Raw — Shot 50000",
+                    "level": 1,
+                    "shot_id": "50000",
+                    "device_name": "mast-upgrade",
+                    "url": f"s3://fds-data/shots/50000/raw/{_stem}.nc",
+                    "endpoint_url": "http://localhost:9000",
+                    "media_type": "application/netcdf",
+                    "format": "NetCDF4",
+                    "access_level": "restricted",
+                },
+            )
+            httpx.post(
+                f"{FDS_API_URL}/collections/{raw_collection_id}/datasets/{_ds.json()['id']}",
+                headers=headers,
+            )
+        print(f"Raw diagnostics collection registered (id={raw_collection_id})")
+
+    # --- Analysed Experimental Collection (PUBLIC, IceChunk) ---
+    _existing = httpx.get(
+        f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/collections/analysed",
+        headers=headers,
+    )
+    if _existing.status_code == 200:
+        analysed_collection_id = _existing.json()["id"]
+        print(
+            f"Analysed collection already registered (id={analysed_collection_id}), skipping."
+        )
+    else:
+        _r = httpx.post(
+            f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/collections",
+            headers=headers,
+            json={
+                "name": "analysed",
+                "title": "MAST-U Shot 50000 — Analysed Experimental Data",
+                "description": (
+                    "Post-processed MAST-U diagnostic data in IMAS IDS format, "
+                    "stored as a single IceChunk repository. Each IDS is a group "
+                    "within the shared store."
+                ),
+                "access_level": "public",
+                "root_url": "s3://fds-data/shots/50000/analysed/",
+            },
+        )
+        analysed_collection_id = _r.json()["id"]
+
+        for _ids_name in [
+            "equilibrium",
+            "gas_injection",
+            "interferometer",
+            "magnetics",
+            "pf_active",
+            "pf_passive",
+            "soft_x_rays",
+            "spectrometer_visible",
+            "thomson_scattering",
+        ]:
+            _ds = httpx.post(
+                f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets",
+                headers=headers,
+                json={
+                    "name": _ids_name,
+                    "title": f"MAST-U {_ids_name.replace('_', ' ').title()} — Shot 50000",
+                    "level": 2,
+                    "shot_id": "50000",
+                    "device_name": "mast-upgrade",
+                    "url": f"s3://fds-data/shots/50000/analysed/{_ids_name}",
+                    "endpoint_url": "http://localhost:9000",
+                    "media_type": "application/vnd.icechunk+zarr",
+                    "format": "icechunk",
+                    "access_level": "public",
+                },
+            )
+            httpx.post(
+                f"{FDS_API_URL}/collections/{analysed_collection_id}/datasets/{_ds.json()['id']}",
+                headers=headers,
+            )
+        print(f"Analysed collection registered (id={analysed_collection_id})")
     return
 
 
@@ -703,17 +777,19 @@ def _(mo):
 
 @app.cell
 def _(MINIO_URL, xr):
-    url = "s3://fds-data/shots/50000/restricted/data_00"
+    url = "s3://fds-data/shots/50000/raw/thomson_scattering.nc"
     print(f"Attempting to open restricted dataset at {url} without credentials...")
-
     try:
         xr.open_dataset(
             url,
-            engine="zarr",
-            storage_options={"client_kwargs": {"endpoint_url": MINIO_URL}},
+            engine="h5netcdf",
+            storage_options={
+                "anon": True,
+                "client_kwargs": {"endpoint_url": MINIO_URL},
+            },
         )
-        print("Success (Unexpected! You might have AWS keys set locally)")
-    except Exception as e:
+        print("Success (Unexpected! Bucket policy may allow anonymous reads)")
+    except PermissionError as e:
         print(f"Caught expected error: {e}")
     return
 
@@ -729,13 +805,13 @@ def _(mo):
 @app.cell
 def _(FDS_API_URL, headers, httpx, xr):
     ds_meta = httpx.get(
-        f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets/restricted_00",
+        f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets/thomson-raw",
         headers=headers,
         params={"include_storage_options": True},
     ).json()[0]
 
     xr.open_dataset(
-        ds_meta["url"], engine="zarr", storage_options=ds_meta["storage_options"]
+        ds_meta["url"], engine="h5netcdf", storage_options=ds_meta["storage_options"]
     )
     return
 
@@ -766,77 +842,88 @@ def _(FDS_API_URL, httpx, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 8. High-Throughput Parallel Analysis (Dask) — [docs](http://localhost:4001/concepts/access-control/#bulk-access-the-credential-manifest)
+    ## 8. Parallel Reads from the IceChunk Collection (Dask)
+
+    Each IDS group in the shared IceChunk store is read by a separate Dask worker.
+    This demonstrates that multiple readers can open the same IceChunk repository
+    concurrently without coordination.
     """)
     return
 
 
 @app.cell
-def _(Client, FDS_API_URL, LocalCluster, headers, httpx, time):
-    # 1. Setup Dask Cluster (Reuse or Create)
-    try:
-        client = Client.current()
-        print(f"Using existing Dask Cluster: {client}")
-    except ValueError:
-        cluster = LocalCluster(
-            n_workers=4, threads_per_worker=1, dashboard_address=None
+def _(Client, FDS_API_URL, LocalCluster, httpx, time):
+    # 1. Fetch the collection to get the IceChunk root_url
+    _collection = httpx.get(
+        f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/collections/analysed"
+    ).json()
+    _root_url = _collection["root_url"]
+
+    # 2. Fetch all analysed datasets (public — no auth header needed)
+    _all_datasets = httpx.get(
+        f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets",
+        params={"include_storage_options": "true"},
+    ).json()
+    _icechunk_datasets = [
+        d
+        for d in _all_datasets
+        if d.get("media_type") == "application/vnd.icechunk+zarr"
+    ]
+
+    # 3. Worker: open the IceChunk store and read one IDS group.
+    # Imports are repeated inside the function because it runs in a separate
+    # Dask worker process where cell-local bindings are not available.
+    def read_group_mean(root_url, group_name, storage_options):
+        from urllib.parse import urlparse
+
+        import numpy as np
+        import zarr
+        from icechunk import Repository, s3_storage
+
+        parsed = urlparse(root_url)
+        opts = {k: v for k, v in (storage_options or {}).items() if v is not None}
+        storage = s3_storage(
+            bucket=parsed.netloc,
+            prefix=parsed.path.strip("/"),
+            **opts,
         )
-        client = Client(cluster)
-        print(f"Created Dask Cluster: {client}")
+        repo = Repository.open(storage=storage)
+        session = repo.readonly_session(branch="main")
+        time_arr = zarr.open_array(
+            store=session.store, path=f"{group_name}/time", mode="r"
+        )
+        return float(np.mean(np.asarray(time_arr)))
 
-    # 2. Worker Function (local imports required — marimo module wrappers can't be pickled)
-    def process_signal_mean(url, storage_options):
-        import xarray as xr
-
-        ds = xr.open_dataset(url, engine="zarr", storage_options=storage_options)
-        return ds["val"].values.mean()
-
-    # 3. The "Grand Finale": Fetch Credentials & Compute in Parallel
+    # 4. Dispatch — one future per IDS group
     def run_benchmark():
-        print("\n--- Starting Full Workflow Benchmark ---")
+        print("\n--- IceChunk Parallel Read Benchmark ---")
         start_time = time.time()
+        futures = [
+            client.submit(
+                read_group_mean, _root_url, d["name"], d.get("storage_options")
+            )
+            for d in _icechunk_datasets
+        ]
+        results = client.gather(futures)
+        elapsed = time.time() - start_time
+        print(f"Read {len(results)} IDS groups in {elapsed:.2f}s")
+        for d, mean_t in zip(_icechunk_datasets, results):
+            print(f"  {d['name']:30s}  mean(time) = {mean_t:.4f} s")
 
-        # A. Request Datasets with native storage_options configured
-        print("1. Requesting Datasets for Shot 50000...")
-        datasets_new = httpx.get(
-            f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets",
-            headers=headers,
-            params={"include_storage_options": "true"},
-        ).json()
+    with LocalCluster(
+        n_workers=4, threads_per_worker=1, dashboard_address=None
+    ) as cluster:
+        with Client(cluster) as client:
+            run_benchmark()
 
-        print(f"   -> Received {len(datasets_new)} datasets.")
-
-        # B. Distribute Work
-        print("2. Distributing tasks to Dask Cluster...")
-        local_futures = []
-        for ds_meta in datasets_new:
-            if ds_meta.get("storage_options") and (
-                "signal_" in ds_meta["name"] or "restricted" in ds_meta["name"]
-            ):
-                local_futures.append(
-                    client.submit(
-                        process_signal_mean,
-                        ds_meta["url"],
-                        ds_meta["storage_options"],
-                    )
-                )
-
-        # C. Compute
-        bench_results = client.gather(local_futures)
-        end_time = time.time()
-
-        print("\n--- Benchmark Complete ---")
-        print(
-            f"Processed {len(bench_results)} datasets in {end_time - start_time:.2f} seconds."
-        )
-        print(f"Average Mean Value: {sum(bench_results) / len(bench_results):.4f}")
-
-    run_benchmark()
-
-    # 4. Cleanup Dask Cluster
     client.close()
     if "cluster" in locals():
         cluster.close()
+    return
+
+
+@app.cell
+def _():
     return
 
 

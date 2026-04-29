@@ -6,6 +6,7 @@ from app.auth.permissions import check_device_admin, check_is_admin
 from app.models.dataset import Dataset
 from app.models.distribution import Distribution, DistributionCreate, DistributionUpdate
 from app.models.identity import AuthenticatedUser
+from app.models.storage_options import derive_storage_options_type
 from app.services.base_service import BaseService
 from app.services.exceptions import ConflictError, ResourceNotFoundError
 
@@ -33,7 +34,12 @@ class DistributionService(
         if obj_in.default_distribution:
             self._clear_default(dataset_id)
 
-        db_obj = Distribution(dataset_id=dataset_id, **obj_in.model_dump())
+        payload = obj_in.model_dump()
+        if payload.get("storage_options_type") is None:
+            payload["storage_options_type"] = derive_storage_options_type(
+                payload.get("media_type"), payload.get("url")
+            )
+        db_obj = Distribution(dataset_id=dataset_id, **payload)
         self.session.add(db_obj)
         self.session.commit()
         self.session.refresh(db_obj)

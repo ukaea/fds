@@ -78,6 +78,7 @@ class S3CredentialProvider:
             session_token=creds["SessionToken"],
             expiration=creds["Expiration"],
             endpoint_url=self._provider_config.endpoint_url,
+            region=self._provider_config.region,
         )
 
         # 4. Return Bucket-Keyed Credential Map
@@ -118,7 +119,9 @@ class S3CredentialProvider:
                         "Effect": "Allow",
                         "Action": "s3:GetObject",
                         "Resource": [
-                            self._to_arn(prefix) for prefix in allowed_prefixes
+                            arn
+                            for prefix in allowed_prefixes
+                            for arn in self._to_arns(prefix)
                         ],
                     },
                     {
@@ -145,11 +148,14 @@ class S3CredentialProvider:
             separators=(",", ":"),
         )
 
-    def _to_arn(self, data_url: str) -> str:
-        clean = data_url.replace("s3://", "arn:aws:s3:::")
-        if not clean.endswith("*"):
-            clean = f"{clean.rstrip('/')}/*"
-        return clean
+    def _to_arns(self, data_url: str) -> list[str]:
+        clean = data_url.replace("s3://", "arn:aws:s3:::").rstrip("/")
+        if clean.endswith("*"):
+            return [clean]
+        # Grant both the exact-object ARN (NetCDF / blob file URLs) and the
+        # prefix ARN with /* (Zarr store / IceChunk group URLs). The caller's
+        # access pattern determines which one matches.
+        return [clean, f"{clean}/*"]
 
     def _to_prefix(self, data_url: str) -> str:
         parts = data_url.replace("s3://", "").split("/", 1)

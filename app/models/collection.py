@@ -57,6 +57,14 @@ class CollectionBase(DescriptiveMixin, TimestampMixin, SQLModel):
         device_name: Device that scopes this collection. ``None`` for Global.
         access_level: Direct access policy. ``None`` means inherit from the
             enclosing Shot or device policy.
+        root_url: Root access URL for all physical data in this collection.
+            Format-agnostic: may be an IceChunk repository root, an FTP
+            directory, an S3 prefix, or any other base location from which
+            member dataset distributions are addressed. Member dataset
+            ``url`` values are typically paths relative to or within this
+            root. Serialised as ``dcat:accessURL`` on the collection's
+            ``dcat:Distribution`` in JSON-LD. ``None`` for collections whose
+            members have independent, unrelated physical locations.
         required_scopes: OAuth scopes required to read this collection when
             access is restricted. ``None`` inherits from the enclosing
             Shot/device policy.
@@ -67,6 +75,15 @@ class CollectionBase(DescriptiveMixin, TimestampMixin, SQLModel):
     name: str = Field(index=True)
     device_name: str | None = Field(default=None, index=True)
     access_level: AccessLevel | None = Field(default=None, index=True)
+    root_url: str | None = Field(
+        default=None,
+        description=(
+            "Root access URL for the physical data backing this collection. "
+            "Format-agnostic: may be an IceChunk repo root, an FTP directory, "
+            "an S3 prefix, or similar. Member dataset urls are addressed relative "
+            "to or within this root. Serialised as dcat:accessURL in JSON-LD."
+        ),
+    )
     required_scopes: list[str] | None = Field(
         default=None,
         description=(

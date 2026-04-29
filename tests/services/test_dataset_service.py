@@ -9,6 +9,11 @@ from app.models.device import DeviceCreate
 from app.models.file_access import CredentialManifest, S3Credentials
 from app.models.policy import AccessLevel
 from app.models.shot import ShotCreate
+from app.models.storage_options import (
+    FsspecS3StorageOptions,
+    IcechunkS3StorageOptions,
+    StorageOptionsType,
+)
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.exceptions import ForbiddenError, ResourceNotFoundError
@@ -518,10 +523,11 @@ def test_enrich_with_storage_options_s3(
     enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
 
     assert len(enriched) == 1
-    assert enriched[0].storage_options is not None
-    assert enriched[0].storage_options["key"] == "mock_key"
-    assert enriched[0].storage_options["secret"] == "mock_secret"
-    assert enriched[0].storage_options["token"] == "mock_token"
+    opts = enriched[0].storage_options
+    assert isinstance(opts, FsspecS3StorageOptions)
+    assert opts.key == "mock_key"
+    assert opts.secret == "mock_secret"
+    assert opts.token == "mock_token"
 
 
 def test_enrich_with_storage_options_unsupported_protocol(
@@ -655,6 +661,166 @@ def test_enrich_with_storage_options_public_dataset_no_credentials(
     enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
 
     assert len(enriched) == 1
-    assert enriched[0].storage_options is not None
-    assert enriched[0].storage_options.get("anon") is True
+    opts = enriched[0].storage_options
+    assert isinstance(opts, FsspecS3StorageOptions)
+    assert opts.anon is True
     mock_provider.assert_not_called()
+
+
+def test_create_dataset_non_s3_url_has_no_storage_options_type(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+):
+    """Distributions on non-S3 URLs (HTTPS, MDSplus, etc.) opt out of automated
+    storage_options — the field stays ``None`` rather than getting a misleading
+    fsspec_s3 default."""
+    device_service.create(DeviceCreate(name="d-https", type="Test"), user=admin_user)
+    shot_service.create(
+        ShotCreate(id="s-https", device_name="d-https"), user=admin_user
+    )
+
+    ds = dataset_service.create(
+        DatasetCreate(
+            name="csv_https",
+            level=1,
+            url="https://example.org/data.csv",
+            media_type="text/csv",
+            shot_id="s-https",
+            device_name="d-https",
+            access_level=AccessLevel.PUBLIC,
+        ),
+        user=admin_user,
+    )
+    assert ds.distributions[0].storage_options_type is None
+
+    models = dataset_service.get_datasets_for_shot(
+        "s-https", "d-https", user=admin_user
+    )
+    read_models = [dataset_service.to_read_model(m) for m in models]
+    enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
+    assert enriched[0].storage_options is None
+
+
+def test_create_dataset_derives_icechunk_shape_from_media_type(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+):
+    """Omitting ``storage_options_type`` falls back to a media-type-driven
+    default: icechunk media type → icechunk_s3 on the created Distribution."""
+    device_service.create(DeviceCreate(name="d-derive", type="Test"), user=admin_user)
+    shot_service.create(
+        ShotCreate(id="s-derive", device_name="d-derive"), user=admin_user
+    )
+
+    ds = dataset_service.create(
+        DatasetCreate(
+            name="ic_derived",
+            level=2,
+            url="s3://bucket/shots/s-derive/analysed/equilibrium",
+            media_type="application/vnd.icechunk+zarr",
+            shot_id="s-derive",
+            device_name="d-derive",
+        ),
+        user=admin_user,
+    )
+    assert ds.distributions[0].storage_options_type is StorageOptionsType.ICECHUNK_S3
+
+
+def test_enrich_with_storage_options_icechunk_shape(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+):
+    """A distribution registered with ``storage_options_type=icechunk_s3``
+    yields ``IcechunkS3StorageOptions`` (not the default fsspec shape).
+    """
+    device_service.create(DeviceCreate(name="ic-dev", type="Test"), user=admin_user)
+    shot = shot_service.create(
+        ShotCreate(id="ic-shot", device_name="ic-dev"), user=admin_user
+    )
+
+    dataset_service.create(
+        DatasetCreate(
+            name="ds_icechunk",
+            level=2,
+            url="s3://bucket/shots/ic-shot/analysed/equilibrium",
+            endpoint_url="http://localhost:9000",
+            storage_options_type=StorageOptionsType.ICECHUNK_S3,
+            shot_id=shot.id,
+            device_name="ic-dev",
+            access_level=AccessLevel.PUBLIC,
+        ),
+        user=admin_user,
+    )
+
+    models = dataset_service.get_datasets_for_shot(shot.id, "ic-dev", user=admin_user)
+    read_models = [dataset_service.to_read_model(m) for m in models]
+    enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
+
+    assert len(enriched) == 1
+    opts = enriched[0].storage_options
+    assert isinstance(opts, IcechunkS3StorageOptions)
+    assert opts.endpoint_url == "http://localhost:9000"
+    assert opts.anonymous is True
+    assert opts.allow_http is True
+    assert opts.force_path_style is True
+
+
+def test_enrich_with_storage_options_distribution_region_override(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+    mocker,
+):
+    """When a distribution carries an explicit ``region``, the rendered
+    storage_options uses that value rather than the provider config default.
+    """
+    from app.core.config import S3StorageProvider
+
+    mocker.patch(
+        "app.services.dataset_service.config.STORAGE_PROVIDERS",
+        [
+            S3StorageProvider(
+                endpoint_url="http://localhost:9000",
+                region="us-east-1",
+                sts_role_arn="arn:test",
+            )
+        ],
+    )
+
+    device_service.create(DeviceCreate(name="region-dev", type="Test"), user=admin_user)
+    shot = shot_service.create(
+        ShotCreate(id="region-shot", device_name="region-dev"), user=admin_user
+    )
+
+    dataset_service.create(
+        DatasetCreate(
+            name="ds_eu",
+            level=1,
+            url="s3://eu-bucket/data",
+            endpoint_url="http://localhost:9000",
+            region="eu-west-2",
+            shot_id=shot.id,
+            device_name="region-dev",
+            access_level=AccessLevel.PUBLIC,
+        ),
+        user=admin_user,
+    )
+
+    models = dataset_service.get_datasets_for_shot(
+        shot.id, "region-dev", user=admin_user
+    )
+    read_models = [dataset_service.to_read_model(m) for m in models]
+    enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
+
+    assert len(enriched) == 1
+    opts = enriched[0].storage_options
+    assert isinstance(opts, FsspecS3StorageOptions)
+    assert opts.client_kwargs is not None
+    assert opts.client_kwargs["region_name"] == "eu-west-2"

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from sqlmodel import (
     JSON,
@@ -13,6 +13,7 @@ from sqlmodel import (
 
 from .mixins import DescriptiveMixin, TimestampMixin
 from .policy import AccessLevel
+from .storage_options import StorageOptions, StorageOptionsType
 
 if TYPE_CHECKING:
     from .activity import Activity
@@ -141,8 +142,10 @@ class DatasetCreate(DatasetBase):
     # default_distribution=True on create.
     url: str
     endpoint_url: str | None = None
+    region: str | None = None
     media_type: str | None = None
     format: str | None = None
+    storage_options_type: StorageOptionsType | None = None
 
 
 class DatasetRead(DatasetBase):
@@ -165,7 +168,7 @@ class DatasetRead(DatasetBase):
     url: str
     media_type: str | None = None
     format: str | None = None
-    storage_options: dict[str, Any] | None = None
+    storage_options: StorageOptions | None = None
     # All distributions (default flagged via default_distribution=True)
     distributions: list["DistributionRead"] | None = None
 

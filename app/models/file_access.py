@@ -4,6 +4,8 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
+from .storage_options import StorageOptions, StorageOptionsType, build_storage_options
+
 
 class S3Credentials(BaseModel):
     """
@@ -15,18 +17,26 @@ class S3Credentials(BaseModel):
     session_token: str
     expiration: datetime
     endpoint_url: str | None = None
+    region: str | None = None
 
-    def to_storage_options(self) -> dict[str, Any]:
-        """Convert STS token attributes into FSSpec kwargs seamlessly."""
-        opts: dict[str, Any] = {
-            "key": self.access_key_id,
-            "secret": self.secret_access_key,
-            "token": self.session_token,
-            "client_kwargs": {},
-        }
-        if self.endpoint_url:
-            opts["client_kwargs"]["endpoint_url"] = self.endpoint_url
-        return opts
+    def to_storage_options(
+        self,
+        target_type: StorageOptionsType = StorageOptionsType.FSSPEC_S3,
+        region: str | None = None,
+    ) -> StorageOptions:
+        """Render these credentials in the requested storage_options shape.
+
+        ``region`` overrides the credential's stored region when set, allowing
+        per-distribution region overrides to take effect at render time.
+        """
+        return build_storage_options(
+            target_type,
+            endpoint_url=self.endpoint_url,
+            region=region or self.region,
+            access_key_id=self.access_key_id,
+            secret_access_key=self.secret_access_key,
+            session_token=self.session_token,
+        )
 
 
 class AzureCredentials(BaseModel):
@@ -82,21 +92,28 @@ class CredentialManifest(BaseModel):
 
 
 def anonymous_storage_options(
-    data_url: str, endpoint_url: str | None = None
-) -> dict[str, Any] | None:
-    """
-    Return FSSpec storage options for anonymous/public access based on URL scheme.
-    Returns None for unsupported schemes.
+    data_url: str,
+    endpoint_url: str | None = None,
+    region: str | None = None,
+    target_type: StorageOptionsType = StorageOptionsType.FSSPEC_S3,
+) -> StorageOptions | dict[str, Any] | None:
+    """Return storage options for anonymous/public access based on URL scheme.
 
-    Note: Azure public blobs are accessible without credentials when no SAS token
-    is provided; adlfs infers anonymous access from the empty options dict.
+    For S3 URLs, returns a shape-specific :class:`StorageOptions` (``fsspec_s3``
+    by default; pass ``target_type="icechunk_s3"`` for icechunk consumers).
+    For Azure / GCS, returns the legacy plain-dict shape (Azure inherits public
+    blob access from an empty dict; GCS uses the ``"anon"`` token convention).
+    Returns ``None`` for unsupported schemes.
     """
+
     scheme = urlparse(data_url).scheme
     if scheme == "s3":
-        opts: dict[str, Any] = {"anon": True}
-        if endpoint_url:
-            opts["client_kwargs"] = {"endpoint_url": endpoint_url}
-        return opts
+        return build_storage_options(
+            target_type,
+            endpoint_url=endpoint_url,
+            region=region,
+            anonymous=True,
+        )
     if scheme in ("az", "abfs"):
         return {}
     if scheme == "gs":

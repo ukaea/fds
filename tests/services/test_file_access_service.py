@@ -190,14 +190,34 @@ def test_empty_request_returns_empty(access_service, mock_s3_provider):
 
 
 def test_s3_provider_policy():
+    """Single-object URLs must grant both the exact-object ARN (for NetCDF /
+    blob GetObject) and the prefix ARN with ``/*`` (for Zarr / IceChunk store
+    contents). See ``S3CredentialProvider._to_arns``.
+    """
     pytest.importorskip("boto3")
     provider = S3CredentialProvider(
-        S3StorageProvider(endpoint_url=None, sts_role_arn="arn:test")
+        S3StorageProvider(
+            endpoint_url=None, region="us-east-1", sts_role_arn="arn:test"
+        )
     )
 
-    # Simple check
     pol = provider._construct_policy(["s3://b/k"])
+    assert "arn:aws:s3:::b/k" in pol
     assert "arn:aws:s3:::b/k/*" in pol
+
+
+def test_s3_provider_policy_wildcard_url():
+    """URLs already ending in ``*`` are preserved as-is — no double-suffix."""
+    pytest.importorskip("boto3")
+    provider = S3CredentialProvider(
+        S3StorageProvider(
+            endpoint_url=None, region="us-east-1", sts_role_arn="arn:test"
+        )
+    )
+
+    pol = provider._construct_policy(["s3://b/prefix/*"])
+    assert "arn:aws:s3:::b/prefix/*" in pol
+    assert "arn:aws:s3:::b/prefix/*/*" not in pol
 
 
 def test_generate_session_credentials_integration(session, admin_user, mocker):
