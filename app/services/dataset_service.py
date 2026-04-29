@@ -10,13 +10,18 @@ from app.auth.access_control import (
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
-from app.core.config import config
+from app.core.config import S3StorageProvider, config
 from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
 from app.models.device import Device
 from app.models.distribution import Distribution, DistributionRead
-from app.models.file_access import CredentialRequest, anonymous_storage_options
+from app.models.file_access import (
+    CredentialRequest,
+    S3Credentials,
+    anonymous_storage_options,
+)
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
+from app.models.storage_options import derive_storage_options_type
 from app.services.base_service import BaseService
 from app.services.exceptions import (
     ConflictError,
@@ -143,8 +148,11 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         distribution = Distribution(
             url=obj_in.url,
             endpoint_url=obj_in.endpoint_url,
+            region=obj_in.region,
             media_type=obj_in.media_type,
             format=obj_in.format,
+            storage_options_type=obj_in.storage_options_type
+            or derive_storage_options_type(obj_in.media_type, obj_in.url),
             default_distribution=True,
         )
         db_obj.distributions.append(distribution)
@@ -339,9 +347,11 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         self, read_models: list[DatasetRead], user: AuthenticatedUser
     ) -> list[DatasetRead]:
         """
-        Batch-injects FSSpec `storage_options` into DatasetRead models.
-        Public datasets receive anonymous options directly; non-public datasets
-        go through credential vending via FileAccessService.
+        Batch-injects ``storage_options`` into DatasetRead models in the shape
+        declared by the default distribution's ``storage_options_type``
+        (``fsspec_s3`` or ``icechunk_s3``). Public datasets receive anonymous
+        options directly; non-public datasets go through credential vending via
+        FileAccessService.
         """
         if not read_models:
             return read_models
@@ -354,20 +364,35 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         ]
 
         for model in public:
-            if model.url:
-                default_dist = next(
-                    (d for d in (model.distributions or []) if d.default_distribution),
-                    None,
+            if not model.url:
+                continue
+            default_dist = self._default_distribution(model)
+            target_type = default_dist.storage_options_type if default_dist else None
+            if target_type is None:
+                # Distribution opted out of automated storage_options
+                # (e.g. plain HTTPS download, MDSplus reference, etc.).
+                continue
+            endpoint_url = default_dist.endpoint_url if default_dist else None
+            region = (
+                default_dist.region if default_dist and default_dist.region else None
+            ) or self._region_for_endpoint(endpoint_url)
+            opts = anonymous_storage_options(
+                model.url, endpoint_url, region, target_type
+            )
+            if opts is None:
+                logger.warning(
+                    "No anonymous storage options for scheme",
+                    extra={"url": model.url},
                 )
-                endpoint_url = default_dist.endpoint_url if default_dist else None
-                opts = anonymous_storage_options(model.url, endpoint_url)
-                if opts is None:
-                    logger.warning(
-                        "No anonymous storage options for scheme",
-                        extra={"url": model.url},
-                    )
-                else:
-                    model.storage_options = opts
+            elif isinstance(opts, dict):
+                # Azure / GCS plain-dict shapes — not yet typed as StorageOptions.
+                # Skip injection rather than violate the field's declared type.
+                logger.warning(
+                    "Anonymous options for non-S3 scheme are not typed yet",
+                    extra={"url": model.url},
+                )
+            else:
+                model.storage_options = opts
 
         credentialed_urls = [m.url for m in non_public if m.url]
         if credentialed_urls:
@@ -377,6 +402,34 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             )
             for model in non_public:
                 if model.url and (cred := manifest.resource_map.get(model.url)):
-                    model.storage_options = cred.to_storage_options()
+                    default_dist = self._default_distribution(model)
+                    target_type = (
+                        default_dist.storage_options_type if default_dist else None
+                    )
+                    if target_type is None:
+                        continue
+                    region_override = (
+                        default_dist.region
+                        if default_dist and default_dist.region
+                        else None
+                    )
+                    if isinstance(cred, S3Credentials):
+                        model.storage_options = cred.to_storage_options(
+                            target_type, region=region_override
+                        )
 
         return read_models
+
+    @staticmethod
+    def _default_distribution(model: DatasetRead) -> DistributionRead | None:
+        return next(
+            (d for d in (model.distributions or []) if d.default_distribution),
+            None,
+        )
+
+    @staticmethod
+    def _region_for_endpoint(endpoint_url: str | None) -> str | None:
+        for pc in config.STORAGE_PROVIDERS:
+            if isinstance(pc, S3StorageProvider) and pc.endpoint_url == endpoint_url:
+                return pc.region
+        return None

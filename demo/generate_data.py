@@ -1,19 +1,20 @@
 # /// script
 # requires-python = ">=3.14"
 # dependencies = [
-#     "xarray",
+#     "xarray[io]",
 #     "numpy",
 #     "s3fs",
-#     "zarr",
-#     "netCDF4",
 #     "tqdm",
+#     "icechunk",
 # ]
 # ///
 """Generate and upload demo data for FDS.
 
 - Shot 30420 (real MAST data): Fetched from STFC public S3 if not already in MinIO
 - Shot 30421 (real MAST data): Fetched from STFC public S3 if not already in MinIO
-- Shot 50000 (synthetic data): Generated and uploaded programmatically
+- Shot 50000 (synthetic MAST-U data):
+    - raw/: 3 restricted NetCDF files (thomson_scattering, charge_exchange, magnetics)
+    - analysed/: 1 public IceChunk store with 9 IMAS IDS groups
 """
 
 import os
@@ -24,6 +25,7 @@ import numpy as np
 import s3fs
 import xarray as xr
 import zarr
+from icechunk import Repository, s3_storage
 from tqdm import tqdm
 
 warnings.filterwarnings("ignore", message=".*does not have a Zarr V3 specification.*")
@@ -100,44 +102,115 @@ ensure_shot_data("30420")
 ensure_shot_data("30421")
 
 # ---------------------------------------------------------
-# 2. Generate Synthetic Data (Shot 50000)
+# 2. Generate Synthetic MAST-U Data (Shot 50000)
 # ---------------------------------------------------------
+# 2a: Raw diagnostic data — 3 NetCDF files, restricted access
+# 2b: Analysed experimental data — IceChunk store with 9 IMAS IDS groups, public
+# ---------------------------------------------------------
+
 shot_id = "50000"
-synth_base_path = f"{bucket_name}/shots/{shot_id}"
+rng = np.random.default_rng(42)
+time_50000 = np.linspace(0.1, 0.35, 100)  # 100 time points, 0.1–0.35 s
 
-if fs.exists(synth_base_path):
-    print(f"Synthetic data for Shot {shot_id} already exists. Skipping generation.")
+# 2a. Raw diagnostic NetCDF files
+raw_specs = [
+    (
+        "thomson_scattering",
+        {"t_e": (100, 50), "n_e": (100, 50)},
+        {"r": np.linspace(0.3, 1.5, 50)},
+    ),
+    (
+        "charge_exchange",
+        {"t_i": (100, 30), "rotation": (100, 30)},
+        {"r": np.linspace(0.3, 1.2, 30)},
+    ),
+    ("magnetics", {"flux_loop": (100, 12), "b_field_probe": (100, 20)}, {}),
+]
+for stem, vars_, extra_coords in raw_specs:
+    s3_path = f"{bucket_name}/shots/{shot_id}/raw/{stem}.nc"
+    if fs.exists(s3_path):
+        print(f"Raw {stem} already exists. Skipping.")
+        continue
+    print(f"Generating raw {stem}...")
+    coords: dict = {"time": time_50000, **extra_coords}
+    data_vars = {}
+    for var, shape in vars_.items():
+        extra_dims = (
+            list(extra_coords.keys())[: len(shape) - 1]
+            if extra_coords
+            else [f"{var}_n"] * (len(shape) - 1)
+        )
+        data_vars[var] = (["time"] + extra_dims, rng.standard_normal(shape))
+    with tempfile.NamedTemporaryFile(suffix=".nc") as tmp:
+        xr.Dataset(data_vars, coords=coords).to_netcdf(tmp.name)
+        fs.put(tmp.name, s3_path)
+    print(f"  Written to s3://{s3_path}")
+
+# 2b. Analysed experimental IceChunk store
+analysed_prefix = f"shots/{shot_id}/analysed"
+
+if fs.exists(f"{bucket_name}/{analysed_prefix}/repo"):
+    print(f"Analysed IceChunk store for shot {shot_id} already exists. Skipping.")
 else:
-    print(f"Generating Shot {shot_id} (Synthetic Demo)...")
+    print(f"Generating analysed IceChunk store for shot {shot_id}...")
 
-    def create_dataset(name, path, title):
-        data = np.random.rand(10, 10)
-        ds = xr.Dataset(
-            {"val": (["x", "y"], data)}, coords={"x": np.arange(10), "y": np.arange(10)}
-        )
-        ds.attrs["title"] = title
+    storage = s3_storage(
+        bucket=bucket_name,
+        prefix=analysed_prefix,
+        endpoint_url=minio_url,
+        access_key_id=access_key,
+        secret_access_key=secret_key,
+        region="us-east-1",
+        allow_http=True,
+        force_path_style=True,
+    )
+    repo = Repository.create(storage=storage)
+    session = repo.writable_session("main")
+    root = zarr.open_group(store=session.store, mode="w")
 
-        s3_path_full = f"{bucket_name}/{path}"
-        print(f"Writing {name} to {s3_path_full}...")
-        store = s3fs.S3Map(root=s3_path_full, s3=fs, check=False)
-        ds.to_zarr(store=store, mode="w", consolidated=True)
+    eq = root.require_group("equilibrium")
+    eq.create_array("time", data=time_50000)
+    eq.create_array("psi", data=rng.standard_normal((100, 50)))
+    eq.create_array("r_boundary", data=rng.uniform(0.2, 1.8, (100, 64)))
+    eq.create_array("z_boundary", data=rng.uniform(-1.5, 1.5, (100, 64)))
 
-    # 50 Public Signals
-    for i in range(50):
-        create_dataset(
-            f"signal_{i:02d}",
-            f"shots/{shot_id}/signals/signal_{i:02d}",
-            f"Public Signal {i}",
-        )
+    gas = root.require_group("gas_injection")
+    gas.create_array("time", data=time_50000)
+    gas.create_array("flow_rate", data=rng.uniform(0, 1e20, (100, 8)))
 
-    # 10 Restricted Signals
-    for i in range(10):
-        create_dataset(
-            f"restricted_{i:02d}",
-            f"shots/{shot_id}/restricted/data_{i:02d}",
-            f"Restricted Data {i}",
-        )
-    print("Synthetic data generation complete.")
+    intfm = root.require_group("interferometer")
+    intfm.create_array("time", data=time_50000)
+    intfm.create_array("n_e_line", data=rng.uniform(1e18, 5e19, (100, 4)))
+
+    mag = root.require_group("magnetics")
+    mag.create_array("time", data=time_50000)
+    mag.create_array("flux_loop", data=rng.uniform(-1, 1, (100, 12)))
+    mag.create_array("b_field_probe", data=rng.uniform(-2, 2, (100, 20)))
+
+    pfa = root.require_group("pf_active")
+    pfa.create_array("time", data=time_50000)
+    pfa.create_array("current", data=rng.uniform(-30e3, 30e3, (100, 6)))
+
+    pfp = root.require_group("pf_passive")
+    pfp.create_array("time", data=time_50000)
+    pfp.create_array("current", data=rng.uniform(-5e3, 5e3, (100, 3)))
+
+    sxr = root.require_group("soft_x_rays")
+    sxr.create_array("time", data=time_50000)
+    sxr.create_array("brightness", data=rng.uniform(0, 1e6, (100, 35)))
+
+    vis = root.require_group("spectrometer_visible")
+    vis.create_array("time", data=time_50000)
+    vis.create_array("intensity", data=rng.uniform(0, 1e4, (100, 16)))
+
+    ts = root.require_group("thomson_scattering")
+    ts.create_array("time", data=time_50000)
+    ts.create_array("r", data=np.linspace(0.3, 1.5, 50))
+    ts.create_array("t_e", data=rng.uniform(100, 5000, (100, 50)))
+    ts.create_array("n_e", data=rng.uniform(1e18, 1e20, (100, 50)))
+
+    session.commit("MAST-U shot 50000 analysed experimental data — initial commit")
+    print(f"  IceChunk store written to s3://{bucket_name}/{analysed_prefix}")
 
 
 # ---------------------------------------------------------

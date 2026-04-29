@@ -8,7 +8,7 @@ services:
     environment:
       - FDS_TRUSTED_IDPS=[{"issuer":"http://localhost:8080/realms/fds","allowed_scopes":["*"]}]
       - FDS_OIDC_AUDIENCE=fds-client
-      - FDS_STORAGE_PROVIDERS=[{"type":"s3","endpoint_url":"http://localhost:9000","sts_endpoint_url":"http://minio:9000","sts_role_arn":"arn:aws:iam::123456789012:role/fds-role"}]
+      - FDS_STORAGE_PROVIDERS=[{"type":"s3","endpoint_url":"http://localhost:9000","region":"us-east-1","sts_endpoint_url":"http://minio:9000","sts_role_arn":"arn:aws:iam::123456789012:role/fds-role"}]
       - AWS_ACCESS_KEY_ID=fds-sa
       - AWS_SECRET_ACCESS_KEY=fds-sa-secret
       - AWS_DEFAULT_REGION=us-east-1
@@ -41,8 +41,9 @@ services:
     environment:
       - MINIO_ROOT_USER=admin
       - MINIO_ROOT_PASSWORD=password
+      - MINIO_API_CORS_ALLOW_ORIGIN=*
     volumes:
-      - ./minio-data:/data
+      - minio-data:/data
     command: server /data --console-address ":9001"
 
   minio-setup:
@@ -99,3 +100,6 @@ services:
     depends_on:
       - fds
       - idp
+
+volumes:
+  minio-data:

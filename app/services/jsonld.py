@@ -195,6 +195,15 @@ def map_collection_to_dcat(
     if collection.access_level:
         data["accessRights"] = collection.access_level.value
 
+    # Collection root → dcat:distribution (DCAT 3: dcat:Catalog is a dcat:Dataset subclass)
+    # root_url is the format-agnostic access root for all physical data in this collection.
+    root_url: str | None = getattr(collection, "root_url", None)
+    if root_url:
+        data["dcat:distribution"] = {
+            "@type": "dcat:Distribution",
+            "dcat:accessURL": root_url,
+        }
+
     # Member Datasets → dcat:dataset references
     member_datasets: list[Any] = getattr(collection, "datasets", []) or []
     if member_datasets:

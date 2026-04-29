@@ -36,6 +36,7 @@ class S3StorageProvider(BaseModel):
 
     type: Literal["s3"] = "s3"
     endpoint_url: str | None
+    region: str
     sts_endpoint_url: str | None = None
     sts_role_arn: str
     sts_region: str = "us-east-1"

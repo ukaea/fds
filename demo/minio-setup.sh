@@ -37,24 +37,27 @@ mc admin policy create local fds-policy /tmp/fds-policy.json
 mc admin user add local fds-sa fds-sa-secret
 mc admin policy attach local fds-policy --user fds-sa
 
-# Configure CORS for browser access
-cat <<EOF > /tmp/cors.xml
-<?xml version="1.0" encoding="UTF-8"?>
-<CORSConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-  <CORSRule>
-    <AllowedOrigin>*</AllowedOrigin>
-    <AllowedMethod>GET</AllowedMethod>
-    <AllowedMethod>HEAD</AllowedMethod>
-    <AllowedHeader>*</AllowedHeader>
-    <ExposeHeader>ETag</ExposeHeader>
-    <ExposeHeader>Accept-Ranges</ExposeHeader>
-    <ExposeHeader>Content-Encoding</ExposeHeader>
-    <ExposeHeader>Content-Length</ExposeHeader>
-    <ExposeHeader>Content-Range</ExposeHeader>
-  </CORSRule>
-</CORSConfiguration>
+# Anonymous read policy: public prefixes only. Restricted prefixes (raw diagnostics)
+# are not anonymously accessible and require FDS-issued STS credentials.
+# Authenticated access via fds-sa/STS is unaffected by this policy (Allow-only, no Deny).
+cat <<EOF > /tmp/bucket-policy.json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AnonymousReadPublic",
+            "Effect": "Allow",
+            "Principal": {"AWS": ["*"]},
+            "Action": ["s3:GetObject"],
+            "Resource": [
+                "arn:aws:s3:::fds-data/shots/30420/*",
+                "arn:aws:s3:::fds-data/shots/30421/*",
+                "arn:aws:s3:::fds-data/shots/*/analysed/*"
+            ]
+        }
+    ]
+}
 EOF
-mc anonymous set download local/fds-data
-mc cors set local/fds-data /tmp/cors.xml
+mc anonymous set-json /tmp/bucket-policy.json local/fds-data
 
 echo "MinIO setup complete."

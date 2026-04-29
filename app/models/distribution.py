@@ -1,8 +1,9 @@
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from sqlmodel import Field, Relationship, SQLModel
 
 from .policy import AccessLevel
+from .storage_options import StorageOptions, StorageOptionsType
 
 if TYPE_CHECKING:
     from .dataset import Dataset
@@ -18,6 +19,11 @@ class DistributionBase(SQLModel):
     Fields:
         url: The download or access URL for this distribution
             (``dcat:downloadURL``).
+        endpoint_url: Storage endpoint hosting the data.  Used by FDS to look
+            up the matching provider config for credential vending.
+        region: Storage region for this distribution.  When set, overrides the
+            matching provider config's region.  Useful for multi-region setups
+            where one logical provider serves data across several regions.
         media_type: IANA media type / MIME type of the file, e.g.
             ``application/x-hdf5`` or ``text/csv``  (``dcat:mediaType``).
             Use this when you need machine-readable type identification — it
@@ -35,14 +41,22 @@ class DistributionBase(SQLModel):
             response.  Exactly one distribution per Dataset should carry this
             flag.  Set by an appropriate admin; the first distribution created
             for a Dataset is promoted automatically.
+        storage_options_type: Discriminator selecting which consumer-library
+            shape ``storage_options`` is rendered in (e.g. ``"fsspec_s3"`` for
+            s3fs/xarray/zarr/pyarrow consumers, ``"icechunk_s3"`` for icechunk
+            ``s3_storage`` consumers).  ``None`` means the distribution is
+            accessed by its URL directly (e.g. an HTTPS download) and FDS will
+            not generate ``storage_options`` for it.
     """
 
     url: str
     endpoint_url: str | None = Field(default=None)
+    region: str | None = Field(default=None)
     media_type: str | None = Field(default=None)
     format: str | None = Field(default=None)
     access_level: AccessLevel | None = Field(default=None)
     default_distribution: bool = Field(default=False)
+    storage_options_type: StorageOptionsType | None = Field(default=None)
 
 
 class Distribution(DistributionBase, table=True):
@@ -61,12 +75,15 @@ class DistributionCreate(DistributionBase):
 class DistributionRead(DistributionBase):
     id: int
     dataset_id: int | None
-    storage_options: dict[str, Any] | None = None
+    storage_options: StorageOptions | None = None
 
 
 class DistributionUpdate(SQLModel):
     url: str | None = None
+    endpoint_url: str | None = None
+    region: str | None = None
     media_type: str | None = None
     format: str | None = None
     access_level: AccessLevel | None = None
     default_distribution: bool | None = None
+    storage_options_type: StorageOptionsType | None = None

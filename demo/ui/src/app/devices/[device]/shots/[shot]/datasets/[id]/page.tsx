@@ -86,6 +86,45 @@ function formatMediaType(mediaType?: string | null): string {
   return mediaType.split('/').pop() || mediaType;
 }
 
+function buildSnippet(
+  mediaType: string | null | undefined,
+  creds: { access_key_id: string; secret_access_key: string; session_token: string },
+  s3Path: string,
+): string {
+  const storageOptions = `storage_options = {
+    "key": "${creds.access_key_id}",
+    "secret": "${creds.secret_access_key}",
+    "token": "${creds.session_token}",
+    "client_kwargs": {
+        "endpoint_url": "http://localhost:9000"
+    }
+}`;
+
+  if (isZarr(mediaType)) {
+    return `import xarray as xr
+
+${storageOptions}
+
+ds = xr.open_zarr("${s3Path}", storage_options=storage_options)
+print(ds)`;
+  }
+
+  // NetCDF / HDF5: fs.cat + BytesIO avoids the HeadObject call that
+  // xr.open_dataset(s3_url, ...) makes — our STS session policy grants
+  // s3:GetObject only.
+  return `import io
+
+import s3fs
+import xarray as xr
+
+${storageOptions}
+
+fs = s3fs.S3FileSystem(**storage_options)
+data = fs.cat("${s3Path}")
+ds = xr.open_dataset(io.BytesIO(data), engine="h5netcdf")
+print(ds)`;
+}
+
 export default function DatasetPage() {
   const params = useParams();
   const { device, shot, id } = params;
@@ -355,46 +394,26 @@ export default function DatasetPage() {
               </div>
               <div className="p-6">
                   <p className="text-sm text-slate-300 mb-4">
-                      To prevent dark repositories and ensure you always analyze the latest version of the data, we recommend streaming the Zarr chunk store natively into Python. Your temporary access token has been injected below.
+                      To prevent dark repositories and ensure you always analyze the latest version of the data, we recommend streaming directly into Python. Your temporary access token has been injected below.
                   </p>
                   <div className="bg-slate-950 p-4 rounded-lg overflow-x-auto border border-slate-800 relative group">
-                      <button
-                          onClick={() => {
-                              const activeCreds = (() => {
-                                  const url = new URL(accessValues.s3Path!.replace("s3://", "http://localhost:9000/"));
-                                  const bucket = url.pathname.split('/')[1];
-                                  return accessValues.token[bucket] || accessValues.token;
-                              })();
-                              const code = `import xarray as xr\n\nstorage_options = {\n    "key": "${activeCreds.access_key_id}",\n    "secret": "${activeCreds.secret_access_key}",\n    "token": "${activeCreds.session_token}",\n    "client_kwargs": {\n        "endpoint_url": "http://localhost:9000"\n    }\n}\n\nds = xr.open_zarr("${accessValues.s3Path}", storage_options=storage_options)\nprint(ds)`;
-                              navigator.clipboard.writeText(code);
-                          }}
-                          className="absolute top-2 right-2 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                      >Copy Snippet</button>
-                      <pre className="text-emerald-400 text-sm font-mono whitespace-pre-wrap">
-                          {(() => {
-                              const activeCreds = (() => {
-                                  const url = new URL(accessValues.s3Path!.replace("s3://", "http://localhost:9000/"));
-                                  const bucket = url.pathname.split('/')[1];
-                                  return accessValues.token[bucket] || accessValues.token;
-                              })();
-
-                              return (
-                                  <>
-                                      <span className="text-fuchsia-400">import</span> xarray <span className="text-fuchsia-400">as</span> xr{'\n\n'}
-                                      storage_options = {'{\n'}
-                                      {'    '}<span className="text-amber-300">"key"</span>: <span className="text-blue-300">"{activeCreds.access_key_id}"</span>,{'\n'}
-                                      {'    '}<span className="text-amber-300">"secret"</span>: <span className="text-blue-300">"{activeCreds.secret_access_key}"</span>,{'\n'}
-                                      {'    '}<span className="text-amber-300">"token"</span>: <span className="text-blue-300">"{activeCreds.session_token}"</span>,{'\n'}
-                                      {'    '}<span className="text-amber-300">"client_kwargs"</span>: {'{\n'}
-                                      {'        '}<span className="text-amber-300">"endpoint_url"</span>: <span className="text-blue-300">"http://localhost:9000"</span>{'\n'}
-                                      {'    }\n'}
-                                      {'}\n\n'}
-                                      ds = xr.open_zarr(<span className="text-blue-300">"{accessValues.s3Path}"</span>, storage_options=storage_options){'\n'}
-                                      <span className="text-amber-200">print</span>(ds)
-                                  </>
-                              );
-                          })()}
-                      </pre>
+                      {(() => {
+                          const activeCreds = (() => {
+                              const url = new URL(accessValues.s3Path!.replace("s3://", "http://localhost:9000/"));
+                              const bucket = url.pathname.split('/')[1];
+                              return accessValues.token[bucket] || accessValues.token;
+                          })();
+                          const snippet = buildSnippet(datasetData?.media_type, activeCreds, accessValues.s3Path!);
+                          return (
+                              <>
+                                  <button
+                                      onClick={() => navigator.clipboard.writeText(snippet)}
+                                      className="absolute top-2 right-2 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                  >Copy Snippet</button>
+                                  <pre className="text-emerald-400 text-sm font-mono whitespace-pre-wrap">{snippet}</pre>
+                              </>
+                          );
+                      })()}
                   </div>
                   <div className="mt-4 bg-blue-900/20 border border-blue-900/50 p-3 rounded flex gap-3 text-sm text-blue-300">
                       <span className="font-bold shrink-0">Note:</span>
