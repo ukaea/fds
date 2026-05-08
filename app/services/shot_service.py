@@ -28,37 +28,62 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
     def __init__(self, session: Session):
         super().__init__(Shot, session)
 
-    def check_read_access(self, shot: Shot, user: AuthenticatedUser) -> None:
-        """
-        Enforces read access for shot metadata.
-        Uses the full effective policy from the Shot → Device hierarchy.
+    def _resolve_access(self, shot: Shot, user: AuthenticatedUser) -> str | None:
+        """Canonical read-access resolution for a shot.
+
+        Returns ``None`` when the user is permitted to read ``shot``.
+        Returns a human-readable denial reason otherwise.
+
+        This is the single source of truth that backs both ``check_read_access``
+        (which raises) and ``is_accessible`` (which returns ``bool``).
 
         - PUBLIC: accessible to everyone.
-        - RESTRICTED / EMBARGOED: must be authenticated; then IdP and scope gates if set.
-          No capability check for metadata reads — that belongs to credential vending.
+        - RESTRICTED / EMBARGOED: must be authenticated; then IdP and scope
+          gates if set. No capability check for metadata reads — that belongs
+          to credential vending.
         """
         policy = get_effective_policy(shot, self.session)
 
         if policy.access_level == AccessLevel.PUBLIC:
-            return
+            return None
 
         if user.is_anonymous:
-            raise ForbiddenError("Authentication required for this resource")
+            return "Authentication required for this resource"
 
-        # Enforce IdP restriction if specified
         if policy.allowed_idps is not None:
             if user.issuer not in policy.allowed_idps:
-                raise ForbiddenError(
+                return (
                     "Access denied: your identity provider is not permitted "
                     "for this resource"
                 )
 
-        # Enforce required scopes if explicitly set
         # None → auth gate only (already passed); [] → same; [...] → all must be present
         if policy.required_scopes is not None:
             for scope in policy.required_scopes:
                 if scope not in user.scopes:
-                    raise ForbiddenError(f"Not authorized, requires scope: {scope}")
+                    return f"Not authorized, requires scope: {scope}"
+
+        return None
+
+    def check_read_access(self, shot: Shot, user: AuthenticatedUser) -> None:
+        """Raise ``ForbiddenError`` if ``user`` cannot read ``shot``.
+
+        Used by single-resource endpoints to surface 403 responses with the
+        denial reason.
+        """
+        reason = self._resolve_access(shot, user)
+        if reason is not None:
+            raise ForbiddenError(reason)
+
+    def is_accessible(self, shot: Shot, user: AuthenticatedUser) -> bool:
+        """Pure read-access predicate; returns ``True`` if ``user`` can read
+        ``shot``, ``False`` otherwise. Never raises.
+
+        Used by list filtering and the streaming export generator. The latter
+        depends on this predicate being raise-free so a per-row failure cannot
+        abort an in-flight HTTP response after headers have been sent.
+        """
+        return self._resolve_access(shot, user) is None
 
     def create(
         self,
@@ -171,16 +196,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
             .limit(limit)
         )
         result = self.session.exec(statement).all()
-
-        accessible_shots = []
-        for s in result:
-            try:
-                self.check_read_access(s, user)
-                accessible_shots.append(s)
-            except ForbiddenError:
-                continue
-
-        return accessible_shots
+        return [s for s in result if self.is_accessible(s, user)]
 
     def update(
         self,

@@ -53,31 +53,32 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         """Initialise the service with a database session."""
         super().__init__(model=Collection, session=session)
 
-    def check_read_access(
+    def _resolve_access(
         self, collection: Collection, user: AuthenticatedUser
-    ) -> None:
-        """Enforce read access for a Collection's metadata.
+    ) -> str | None:
+        """Canonical read-access resolution for a Collection.
 
-        Uses the full effective policy (inherited ``access_level``,
-        ``required_scopes``, ``allowed_idps``) resolved from the
-        Collection → Shot → Device hierarchy.
+        Returns ``None`` when the user is permitted to read ``collection``.
+        Returns a human-readable denial reason otherwise.
 
-        Raises ``ForbiddenError`` when the user does not satisfy the policy.
+        This is the single source of truth that backs both ``check_read_access``
+        (which raises) and ``is_accessible`` (which returns ``bool``). Walks the
+        Collection → Shot → Device inheritance chain via ``get_effective_policy``.
         """
         policy = get_effective_policy(collection, self.session)
 
         # PUBLIC and EMBARGOED: metadata is discoverable by everyone
         if policy.access_level in (AccessLevel.PUBLIC, AccessLevel.EMBARGOED):
-            return
+            return None
 
         # RESTRICTED: must be authenticated
         if user.is_anonymous:
-            raise ForbiddenError("Authentication required for this resource")
+            return "Authentication required for this resource"
 
         # Enforce IdP restriction if specified
         if policy.allowed_idps is not None:
             if user.issuer not in policy.allowed_idps:
-                raise ForbiddenError(
+                return (
                     "Access denied: your identity provider is not permitted "
                     "for this resource"
                 )
@@ -87,14 +88,43 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         if policy.required_scopes is not None:
             for scope in policy.required_scopes:
                 if scope not in user.scopes:
-                    raise ForbiddenError(f"Not authorized, requires scope: {scope}")
-            return
+                    return f"Not authorized, requires scope: {scope}"
+            return None
 
-        # Capability fallback (no explicit required_scopes at any level)
-        if collection.device_name:
-            check_device_admin(user, collection.device_name)
-        else:
-            check_is_admin(user)
+        # Capability fallback (no explicit required_scopes at any level).
+        # The capability helpers raise ``ForbiddenError``; localise the
+        # exception-as-control-flow boundary here rather than letting it
+        # propagate into the predicate's hot path.
+        try:
+            if collection.device_name:
+                check_device_admin(user, collection.device_name)
+            else:
+                check_is_admin(user)
+        except ForbiddenError as e:
+            return str(e)
+        return None
+
+    def check_read_access(
+        self, collection: Collection, user: AuthenticatedUser
+    ) -> None:
+        """Raise ``ForbiddenError`` if ``user`` cannot read ``collection``.
+
+        Used by single-resource endpoints to surface 403 responses with the
+        denial reason.
+        """
+        reason = self._resolve_access(collection, user)
+        if reason is not None:
+            raise ForbiddenError(reason)
+
+    def is_accessible(self, collection: Collection, user: AuthenticatedUser) -> bool:
+        """Pure read-access predicate; returns ``True`` if ``user`` can read
+        ``collection``, ``False`` otherwise. Never raises.
+
+        Used by list filtering and the streaming export generator. The latter
+        depends on this predicate being raise-free so a per-row failure cannot
+        abort an in-flight HTTP response after headers have been sent.
+        """
+        return self._resolve_access(collection, user) is None
 
     def create(self, obj_in: CollectionCreate, user: AuthenticatedUser) -> Collection:
         """Create a new Collection at Global, Device, or Shot scope.
@@ -541,14 +571,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         self, collections: Sequence[Collection], user: AuthenticatedUser
     ) -> list[Collection]:
         """Return only the Collections the user is permitted to read."""
-        result = []
-        for collection in collections:
-            try:
-                self.check_read_access(collection, user)
-                result.append(collection)
-            except ForbiddenError:
-                continue
-        return result
+        return [c for c in collections if self.is_accessible(c, user)]
 
     def get_member_datasets(self, collection_id: int | None) -> list[Dataset]:
         """Return the Datasets that are members of a given Collection.

@@ -54,11 +54,14 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         datasets = self.session.exec(statement).all()
         return self._filter_accessible_datasets(datasets, user)
 
-    def check_read_access(self, dataset: Dataset, user: AuthenticatedUser) -> None:
-        """
-        Enforces read access for dataset metadata.
-        Uses the full effective policy (inherited access_level, required_scopes,
-        allowed_idps) from the Dataset → Shot → Device hierarchy.
+    def _resolve_access(self, dataset: Dataset, user: AuthenticatedUser) -> str | None:
+        """Canonical read-access resolution for a dataset.
+
+        Returns ``None`` when the user is permitted to read ``dataset``.
+        Returns a human-readable denial reason otherwise.
+
+        This is the single source of truth that backs both ``check_read_access``
+        (which raises) and ``is_accessible`` (which returns ``bool``).
         """
         policy = get_effective_policy(dataset, self.session)
 
@@ -67,16 +70,16 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             policy.access_level == AccessLevel.PUBLIC
             or policy.access_level == AccessLevel.EMBARGOED
         ):
-            return
+            return None
 
         # RESTRICTED: must be authenticated
         if user.is_anonymous:
-            raise ForbiddenError("Authentication required for this resource")
+            return "Authentication required for this resource"
 
         # Enforce IdP restriction if specified
         if policy.allowed_idps is not None:
             if user.issuer not in policy.allowed_idps:
-                raise ForbiddenError(
+                return (
                     "Access denied: your identity provider is not permitted "
                     "for this resource"
                 )
@@ -86,17 +89,44 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         if policy.required_scopes is not None:
             for scope in policy.required_scopes:
                 if scope not in user.scopes:
-                    raise ForbiddenError(f"Not authorized, requires scope: {scope}")
-            return
+                    return f"Not authorized, requires scope: {scope}"
+            return None
 
-        # Capability fallback (no explicit required_scopes at any level)
-        if dataset.device_name:
-            if dataset.shot_id:
-                check_shot_operator(user, dataset.device_name)
+        # Capability fallback (no explicit required_scopes at any level).
+        # The capability helpers raise ``ForbiddenError``; localise the
+        # exception-as-control-flow boundary here rather than letting it
+        # propagate into the predicate's hot path.
+        try:
+            if dataset.device_name:
+                if dataset.shot_id:
+                    check_shot_operator(user, dataset.device_name)
+                else:
+                    check_device_admin(user, dataset.device_name)
             else:
-                check_device_admin(user, dataset.device_name)
-        else:
-            check_is_admin(user)
+                check_is_admin(user)
+        except ForbiddenError as e:
+            return str(e)
+        return None
+
+    def check_read_access(self, dataset: Dataset, user: AuthenticatedUser) -> None:
+        """Raise ``ForbiddenError`` if ``user`` cannot read ``dataset``.
+
+        Used by single-resource endpoints to surface 403 responses with the
+        denial reason.
+        """
+        reason = self._resolve_access(dataset, user)
+        if reason is not None:
+            raise ForbiddenError(reason)
+
+    def is_accessible(self, dataset: Dataset, user: AuthenticatedUser) -> bool:
+        """Pure read-access predicate; returns ``True`` if ``user`` can read
+        ``dataset``, ``False`` otherwise. Never raises.
+
+        Used by list filtering and the streaming export generator. The latter
+        depends on this predicate being raise-free so a per-row failure cannot
+        abort an in-flight HTTP response after headers have been sent.
+        """
+        return self._resolve_access(dataset, user) is None
 
     def create(self, obj_in: DatasetCreate, user: AuthenticatedUser) -> Dataset:
         """
@@ -331,17 +361,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     def _filter_accessible_datasets(
         self, datasets: Sequence[Dataset], user: AuthenticatedUser
     ) -> list[Dataset]:
-        """
-        Helper to filter a list of datasets, returning only those the user can read.
-        """
-        accessible_datasets = []
-        for dataset in datasets:
-            try:
-                self.check_read_access(dataset, user)
-                accessible_datasets.append(dataset)
-            except ForbiddenError:
-                continue
-        return accessible_datasets
+        """Filter a materialised list of datasets to those the user can read."""
+        return [d for d in datasets if self.is_accessible(d, user)]
 
     def enrich_with_storage_options(
         self, read_models: list[DatasetRead], user: AuthenticatedUser
