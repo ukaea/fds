@@ -1,8 +1,9 @@
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Query
 
 from app.auth.security import get_current_user
+from app.core.config import config
 from app.core.db import SessionDep
 from app.models.identity import AuthenticatedUser
 from app.services.activity_service import ActivityService
@@ -60,3 +61,14 @@ DistributionServiceDep = Annotated[
 ]
 
 CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]
+BoundedLimit = Annotated[
+    int,
+    Query(
+        ge=1,
+        le=config.MAX_LIMIT,
+        description=(
+            f"Maximum items per page; bounded to {config.MAX_LIMIT}. "
+            "For bulk metadata egress, use the corresponding /export endpoint."
+        ),
+    ),
+]

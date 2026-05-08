@@ -1,6 +1,11 @@
 from fastapi import APIRouter, status
 
-from app.api.deps import ActivityServiceDep, CurrentUserDep, DatasetServiceDep
+from app.api.deps import (
+    ActivityServiceDep,
+    BoundedLimit,
+    CurrentUserDep,
+    DatasetServiceDep,
+)
 from app.models.activity import ActivityCreate, ActivityRead, ActivityUpdate
 from app.models.dataset import DatasetRead
 
@@ -99,7 +104,7 @@ def list_activity_inputs(
     activity_service: ActivityServiceDep,
     dataset_service: DatasetServiceDep,
     offset: int = 0,
-    limit: int = 100,
+    limit: BoundedLimit = 100,
 ) -> list[DatasetRead]:
     """
     List the datasets consumed as inputs by this Activity.

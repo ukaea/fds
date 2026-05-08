@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import (
     ActivityServiceDep,
+    BoundedLimit,
     CurrentUserDep,
     DatasetServiceDep,
     DistributionServiceDep,
@@ -51,7 +52,7 @@ def read_datasets_global(
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     offset: int = 0,
-    limit: int = 100,
+    limit: BoundedLimit = 100,
     include_storage_options: bool = False,
 ) -> list[DatasetRead]:
     """
@@ -119,7 +120,7 @@ def read_datasets_shot(
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     offset: int = 0,
-    limit: int = 100,
+    limit: BoundedLimit = 100,
     include_storage_options: bool = False,
 ) -> list[DatasetRead]:
     """
@@ -223,7 +224,7 @@ def read_datasets_device(
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     offset: int = 0,
-    limit: int = 100,
+    limit: BoundedLimit = 100,
     include_storage_options: bool = False,
 ) -> list[DatasetRead]:
     """

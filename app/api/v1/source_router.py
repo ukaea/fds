@@ -2,7 +2,12 @@ from collections.abc import Sequence
 
 from fastapi import APIRouter, status
 
-from app.api.deps import CollectionServiceDep, CurrentUserDep, SourceServiceDep
+from app.api.deps import (
+    BoundedLimit,
+    CollectionServiceDep,
+    CurrentUserDep,
+    SourceServiceDep,
+)
 from app.models.collection import CollectionRead
 from app.models.source import SourceCreate, SourceRead, SourceUpdate
 
@@ -25,7 +30,7 @@ def create_source(
 
 @router.get("/", response_model=list[SourceRead])
 def read_sources(
-    source_service: SourceServiceDep, offset: int = 0, limit: int = 100
+    source_service: SourceServiceDep, offset: int = 0, limit: BoundedLimit = 100
 ) -> Sequence[SourceRead]:
     """
     Retrieve all sources.
@@ -40,7 +45,7 @@ def read_collections_for_source(
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     offset: int = 0,
-    limit: int = 100,
+    limit: BoundedLimit = 100,
 ) -> Sequence[CollectionRead]:
     """
     Return all Collections whose linked Activity was produced by the named Source.

@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
-from app.api.deps import CurrentUserDep, DeviceServiceDep, SourceServiceDep
+from app.api.deps import (
+    BoundedLimit,
+    CurrentUserDep,
+    DeviceServiceDep,
+    SourceServiceDep,
+)
 from app.models.device import DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.source import SourceCreate, SourceRead
 from app.services.jsonld import map_device_to_dcat
@@ -29,7 +34,7 @@ def read_devices(
     device_service: DeviceServiceDep,
     user: CurrentUserDep,
     offset: int = 0,
-    limit: int = 100,
+    limit: BoundedLimit = 100,
 ) -> list[DeviceRead]:
     """
     Retrieve all devices.
@@ -120,7 +125,7 @@ def read_sources_for_device(
     device_name: str,
     source_service: SourceServiceDep,
     offset: int = 0,
-    limit: int = 100,
+    limit: BoundedLimit = 100,
 ) -> list[SourceRead]:
     """
     Retrieve sources associated with a specific device.

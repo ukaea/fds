@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import (
     ActivityServiceDep,
+    BoundedLimit,
     CollectionServiceDep,
     CurrentUserDep,
 )
@@ -42,7 +43,7 @@ def read_collections_global(
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     offset: int = 0,
-    limit: int = 100,
+    limit: BoundedLimit = 100,
     include_storage_options: bool = False,
 ) -> list[CollectionRead]:
     """Retrieve all global Collections accessible to the current user."""
@@ -110,7 +111,7 @@ def read_collections_device(
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     offset: int = 0,
-    limit: int = 100,
+    limit: BoundedLimit = 100,
     include_storage_options: bool = False,
 ) -> list[CollectionRead]:
     """Retrieve all device-level Collections accessible to the current user."""
@@ -184,7 +185,7 @@ def read_collections_shot(
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     offset: int = 0,
-    limit: int = 100,
+    limit: BoundedLimit = 100,
     include_storage_options: bool = False,
 ) -> list[CollectionRead]:
     """Retrieve all Collections scoped to a specific shot."""

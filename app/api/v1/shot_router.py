@@ -1,6 +1,6 @@
 from fastapi import APIRouter, status
 
-from app.api.deps import CurrentUserDep, ShotServiceDep
+from app.api.deps import BoundedLimit, CurrentUserDep, ShotServiceDep
 from app.models.shot import (
     ShotCreate,
     ShotRead,
@@ -41,7 +41,7 @@ def read_shots(
     shot_service: ShotServiceDep,
     user: CurrentUserDep,
     offset: int = 0,
-    limit: int = 100,
+    limit: BoundedLimit = 100,
     include_device: bool = False,
 ) -> list[ShotRead]:
     """

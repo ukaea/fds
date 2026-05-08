@@ -111,6 +111,11 @@ class Config(BaseSettings):
         default=[], validation_alias="FDS_STORAGE_PROVIDERS"
     )
 
+    MAX_LIMIT: int = Field(default=1000, validation_alias="FDS_MAX_LIMIT")
+    EXPORT_BATCH_SIZE: int = Field(
+        default=1000, validation_alias="FDS_EXPORT_BATCH_SIZE"
+    )
+
     @property
     def db_url(self) -> str:
         return f"sqlite:///./{self.db_name}"
