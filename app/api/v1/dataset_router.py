@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.api.deps import (
     ActivityServiceDep,
@@ -9,6 +9,7 @@ from app.api.deps import (
     DistributionServiceDep,
     SourceServiceDep,
 )
+from app.api.streaming import ndjson_response
 from app.models.activity import ActivityRead
 from app.models.dataset import DatasetCreate, DatasetRead, DatasetUpdate
 from app.models.distribution import (
@@ -62,6 +63,42 @@ def read_datasets_global(
     return dataset_service.to_read_models(
         datasets, include_storage_options=include_storage_options, user=user
     )
+
+
+@router.get(
+    "/datasets/export",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {"application/x-ndjson": {}},
+            "description": (
+                "NDJSON stream of DatasetRead records, one per line. "
+                "Optional `device_name` and `shot_id` query parameters narrow "
+                "the scope to mirror the path-based list endpoints."
+            ),
+        }
+    },
+)
+def export_datasets(
+    *,
+    dataset_service: DatasetServiceDep,
+    user: CurrentUserDep,
+    device_name: str | None = None,
+    shot_id: str | None = None,
+) -> StreamingResponse:
+    """Stream every Dataset the caller can read as NDJSON (ADR-0020).
+
+    Auth posture mirrors the corresponding list endpoint: open to anonymous
+    callers; per-row access filtering silently drops records the caller
+    cannot see. An empty result set returns 200 with an empty body.
+    """
+    rows = (
+        dataset_service.to_read_model(d)
+        for d in dataset_service.stream(
+            user=user, device_name=device_name, shot_id=shot_id
+        )
+    )
+    return ndjson_response(rows)
 
 
 @router.post(

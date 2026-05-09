@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.api.deps import (
     ActivityServiceDep,
@@ -7,6 +7,7 @@ from app.api.deps import (
     CollectionServiceDep,
     CurrentUserDep,
 )
+from app.api.streaming import ndjson_response
 from app.models.activity import ActivityRead
 from app.models.collection import CollectionCreate, CollectionRead, CollectionUpdate
 from app.services.exceptions import ResourceNotFoundError
@@ -49,6 +50,45 @@ def read_collections_global(
     """Retrieve all global Collections accessible to the current user."""
     collections = collection_service.get_multi(user=user, offset=offset, limit=limit)
     return collection_service.to_read_models(collections, include_storage_options, user)
+
+
+@router.get(
+    "/collections/export",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {"application/x-ndjson": {}},
+            "description": (
+                "NDJSON stream of CollectionRead records, one per line. "
+                "Optional `device_name` and `shot_id` query parameters narrow "
+                "the scope to mirror the path-based list endpoints. "
+                "Member datasets and child collections are omitted from the "
+                "stream — clients pull membership separately by Collection ID."
+            ),
+        }
+    },
+)
+def export_collections(
+    *,
+    collection_service: CollectionServiceDep,
+    user: CurrentUserDep,
+    device_name: str | None = None,
+    shot_id: str | None = None,
+) -> StreamingResponse:
+    """Stream every Collection the caller can read as NDJSON (ADR-0020).
+
+    Emits flat metadata only (no inlined member datasets or child
+    collections), so the per-row payload stays bounded. Auth posture
+    mirrors the list endpoint: open to anonymous callers, with per-row
+    access filtering silently dropping records the caller cannot see.
+    """
+    rows = (
+        collection_service.to_flat_read_model(c)
+        for c in collection_service.stream(
+            user=user, device_name=device_name, shot_id=shot_id
+        )
+    )
+    return ndjson_response(rows)
 
 
 @router.get(
