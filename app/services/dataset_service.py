@@ -1,7 +1,8 @@
 import logging
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, select
 
 from app.auth.access_control import (
@@ -21,6 +22,7 @@ from app.models.file_access import (
 )
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
+from app.models.shot import Shot
 from app.models.storage_options import derive_storage_options_type
 from app.services.base_service import BaseService
 from app.services.exceptions import (
@@ -308,6 +310,46 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         )
         datasets = self.session.exec(statement).all()
         return self._filter_accessible_datasets(datasets, user)
+
+    def stream(
+        self,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        *,
+        device_name: str | None = None,
+        shot_id: str | None = None,
+        batch_size: int | None = None,
+    ) -> Iterator[Dataset]:
+        """Yield datasets the user can read, fetched in batches via ``yield_per``.
+
+        Mirrors the list endpoint's filter semantics: passing ``device_name``
+        and/or ``shot_id`` narrows the scope. With no filters, every dataset
+        the user can read is yielded.
+
+        Per-row access filtering uses :meth:`is_accessible`, which never raises;
+        rows the user cannot read are silently skipped, matching the existing
+        list endpoint contract.
+
+        ``Dataset.distributions`` and the ``Dataset → Shot → Device`` chain are
+        eager-loaded so the per-row read-model conversion (which walks the
+        access-level inheritance chain) does not trigger N+1 queries inside
+        the stream.
+        """
+        if batch_size is None:
+            batch_size = config.EXPORT_BATCH_SIZE
+
+        statement = select(Dataset).options(
+            selectinload(Dataset.distributions),  # type: ignore[arg-type]
+            selectinload(Dataset.shot).selectinload(Shot.device),  # type: ignore[arg-type]
+        )
+        if device_name is not None:
+            statement = statement.where(Dataset.device_name == device_name)
+        if shot_id is not None:
+            statement = statement.where(Dataset.shot_id == shot_id)
+        statement = statement.execution_options(yield_per=batch_size)
+
+        for dataset in self.session.exec(statement):
+            if self.is_accessible(dataset, user):
+                yield dataset
 
     def to_read_model(
         self,

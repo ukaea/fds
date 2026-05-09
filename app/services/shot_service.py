@@ -1,7 +1,8 @@
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from app.auth.access_control import (
@@ -10,6 +11,7 @@ from app.auth.access_control import (
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_shot_operator
+from app.core.config import config
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
@@ -197,6 +199,35 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         )
         result = self.session.exec(statement).all()
         return [s for s in result if self.is_accessible(s, user)]
+
+    def stream_by_device_name(
+        self,
+        device_name: str,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        *,
+        batch_size: int | None = None,
+    ) -> Iterator[Shot]:
+        """Yield shots for a device that the user can read, batched via ``yield_per``.
+
+        Per-row access filtering uses :meth:`is_accessible`, which never raises;
+        rows the user cannot read are silently skipped.
+
+        ``Shot.device`` is eager-loaded so the read-model conversion (which
+        walks the access-level inheritance chain) does not trigger N+1 queries
+        inside the stream.
+        """
+        if batch_size is None:
+            batch_size = config.EXPORT_BATCH_SIZE
+
+        statement = (
+            select(Shot)
+            .where(Shot.device_name == device_name)
+            .options(selectinload(Shot.device))  # type: ignore[arg-type]
+            .execution_options(yield_per=batch_size)
+        )
+        for shot in self.session.exec(statement):
+            if self.is_accessible(shot, user):
+                yield shot
 
     def update(
         self,

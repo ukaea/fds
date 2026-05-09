@@ -1,7 +1,8 @@
 import logging
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, select
 
 from app.auth.access_control import (
@@ -24,6 +25,7 @@ from app.models.dataset import Dataset
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
+from app.models.shot import Shot
 from app.models.source import Source
 from app.services.base_service import BaseService
 from app.services.dataset_service import DatasetService
@@ -362,6 +364,45 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         collections = self.session.exec(statement).all()
         return self._filter_accessible(collections, user)
 
+    def stream(
+        self,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        *,
+        device_name: str | None = None,
+        shot_id: str | None = None,
+        batch_size: int | None = None,
+    ) -> Iterator[Collection]:
+        """Yield Collections the user can read, fetched in batches via ``yield_per``.
+
+        Mirrors the list endpoint filter semantics: passing ``device_name``
+        and/or ``shot_id`` narrows the scope. With no filters, every
+        Collection the user can read is yielded.
+
+        Per-row access filtering uses :meth:`is_accessible`, which never raises.
+        Rows the user cannot read are silently skipped.
+
+        The ``Collection → Shot → Device`` chain is eager-loaded so the
+        per-row access-level inheritance walk does not trigger N+1 queries
+        inside the stream. Member datasets and child collections are *not*
+        eager-loaded — the streaming export emits flat metadata only;
+        clients pull membership separately by Collection ID.
+        """
+        if batch_size is None:
+            batch_size = config.EXPORT_BATCH_SIZE
+
+        statement = select(Collection).options(
+            selectinload(Collection.shot).selectinload(Shot.device),  # type: ignore[arg-type]
+        )
+        if device_name is not None:
+            statement = statement.where(Collection.device_name == device_name)
+        if shot_id is not None:
+            statement = statement.where(Collection.shot_id == shot_id)
+        statement = statement.execution_options(yield_per=batch_size)
+
+        for collection in self.session.exec(statement):
+            if self.is_accessible(collection, user):
+                yield collection
+
     def get_for_source(
         self,
         source_name: str,
@@ -553,6 +594,25 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             )
             for c in collections
         ]
+
+    def to_flat_read_model(self, collection: Collection) -> CollectionRead:
+        """Convert a Collection to a ``CollectionRead`` without inlined members.
+
+        Used by the streaming export so the per-row payload stays bounded:
+        ``datasets`` and ``child_collections`` are set to ``None``; clients
+        fetch membership separately by Collection ID. ``effective_access_level``
+        is still resolved via the inheritance chain.
+        """
+        return CollectionRead.model_validate(
+            collection,
+            update={
+                "effective_access_level": get_effective_access_level(
+                    collection, self.session
+                ),
+                "datasets": None,
+                "child_collections": None,
+            },
+        )
 
     def _check_write_auth(
         self, collection: Collection, user: AuthenticatedUser
