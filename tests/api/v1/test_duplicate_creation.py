@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
-from app.models.activity import ActivityCreate
+from app.models.activity import ActivityCreate, ActivityType
 from app.models.device import Device
 from app.models.shot import Shot
 from app.models.source import SourceCreate
@@ -91,10 +91,12 @@ def test_duplicate_dataset_name_allowed_with_different_activities(
     source = SourceService(session).create(SourceCreate(name="dup-source"), user=admin)
     assert source.id is not None
     activity1 = ActivityService(session).create(
-        ActivityCreate(source_id=source.id, activity_type="RUN_1"), user=admin
+        ActivityCreate(source_id=source.id, activity_type=ActivityType.SIMULATION),
+        user=admin,
     )
     activity2 = ActivityService(session).create(
-        ActivityCreate(source_id=source.id, activity_type="RUN_2"), user=admin
+        ActivityCreate(source_id=source.id, activity_type=ActivityType.MEASUREMENT),
+        user=admin,
     )
 
     response1 = test_client.post(

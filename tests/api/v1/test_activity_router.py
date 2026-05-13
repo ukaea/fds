@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
-from app.models.activity import ActivityCreate
+from app.models.activity import ActivityCreate, ActivityType
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
 from app.models.shot import ShotCreate
@@ -26,7 +26,7 @@ def source_fixture(session: Session, admin_user: AuthenticatedUser):
 def activity_fixture(session: Session, source, admin_user: AuthenticatedUser):
     assert source.id is not None
     return ActivityService(session).create(
-        ActivityCreate(source_id=source.id, activity_type="SIMULATION"),
+        ActivityCreate(source_id=source.id, activity_type=ActivityType.SIMULATION),
         user=admin_user,
     )
 
@@ -58,13 +58,13 @@ def test_create_activity(
 ):
     resp = test_client.post(
         "/api/v1/activities/",
-        json={"source_id": source.id, "activity_type": "SIMULATION"},
+        json={"source_id": source.id, "activity_type": "simulation"},
         headers=admin_user_token,
     )
     assert resp.status_code == 201
     data = resp.json()
     assert data["source_id"] == source.id
-    assert data["activity_type"] == "SIMULATION"
+    assert data["activity_type"] == "simulation"
     assert "id" in data
 
 
@@ -77,7 +77,7 @@ def test_create_activity_with_full_metadata(
         "/api/v1/activities/",
         json={
             "source_id": source.id,
-            "activity_type": "MEASUREMENT",
+            "activity_type": "measurement",
             "source_version": "v2.1",
             "parameters": {"sample_rate": 1000},
             "started_at": "2024-01-01T10:00:00",
@@ -125,7 +125,7 @@ def test_get_activity(
 ):
     create_resp = test_client.post(
         "/api/v1/activities/",
-        json={"source_id": source.id, "activity_type": "SIMULATION"},
+        json={"source_id": source.id, "activity_type": "simulation"},
         headers=admin_user_token,
     )
     activity_id = create_resp.json()["id"]
@@ -147,19 +147,19 @@ def test_update_activity(
 ):
     create_resp = test_client.post(
         "/api/v1/activities/",
-        json={"source_id": source.id, "activity_type": "MEASUREMENT"},
+        json={"source_id": source.id, "activity_type": "measurement"},
         headers=admin_user_token,
     )
     activity_id = create_resp.json()["id"]
 
     resp = test_client.put(
         f"/api/v1/activities/{activity_id}",
-        json={"activity_type": "SIMULATION", "source_version": "v3.0"},
+        json={"activity_type": "simulation", "source_version": "v3.0"},
         headers=admin_user_token,
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert data["activity_type"] == "SIMULATION"
+    assert data["activity_type"] == "simulation"
     assert data["source_version"] == "v3.0"
 
 

@@ -13,6 +13,7 @@ METADATA_CONTEXT = {
     "dct": "http://purl.org/dc/terms/",
     "prov": "http://www.w3.org/ns/prov#",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "dqv": "http://www.w3.org/ns/dqv#",
     "title": "dct:title",
     "description": "dct:description",
     "publisher": "dct:publisher",
@@ -99,6 +100,9 @@ def map_dataset_to_dcat(
     # Access Rights mapping
     if dataset.access_level:
         data["accessRights"] = dataset.access_level.value
+
+    if dataset.quality_flag:
+        data["dqv:hasQualityAnnotation"] = dataset.quality_flag
 
     # DCAT Distribution mapping
     distributions: list[Distribution] = getattr(dataset, "distributions", []) or []
