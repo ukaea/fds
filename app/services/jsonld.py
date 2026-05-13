@@ -14,6 +14,7 @@ METADATA_CONTEXT = {
     "prov": "http://www.w3.org/ns/prov#",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
     "dqv": "http://www.w3.org/ns/dqv#",
+    "oa": "http://www.w3.org/ns/oa#",
     "title": "dct:title",
     "description": "dct:description",
     "publisher": "dct:publisher",
@@ -102,7 +103,11 @@ def map_dataset_to_dcat(
         data["accessRights"] = dataset.access_level.value
 
     if dataset.quality_flag:
-        data["dqv:hasQualityAnnotation"] = dataset.quality_flag
+        data["dqv:hasQualityAnnotation"] = {
+            "@type": "dqv:QualityAnnotation",
+            "oa:motivatedBy": {"@id": "dqv:qualityAssessment"},
+            "oa:hasBody": dataset.quality_flag,
+        }
 
     # DCAT Distribution mapping
     distributions: list[Distribution] = getattr(dataset, "distributions", []) or []
