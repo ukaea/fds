@@ -22,6 +22,7 @@ from .distribution import (
     DistributionUpdate,
 )
 from .policy import AccessLevel
+from .scientific_metadata import ScientificProperty
 from .shot import Shot, ShotCreate, ShotRead, ShotUpdate
 from .source import Source, SourceCreate, SourceRead, SourceUpdate
 
@@ -70,4 +71,5 @@ __all__ = [
     "CollectionDataset",
     "CollectionMember",
     "AccessLevel",
+    "ScientificProperty",
 ]

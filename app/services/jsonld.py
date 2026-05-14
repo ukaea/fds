@@ -4,6 +4,7 @@ from app.models.collection import Collection, CollectionRead
 from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device, DeviceRead
 from app.models.distribution import Distribution
+from app.models.shot import Shot, ShotRead
 
 if TYPE_CHECKING:
     from app.models.activity import Activity
@@ -12,6 +13,7 @@ METADATA_CONTEXT = {
     "dcat": "http://www.w3.org/ns/dcat#",
     "dct": "http://purl.org/dc/terms/",
     "prov": "http://www.w3.org/ns/prov#",
+    "schema": "https://schema.org/",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
     "title": "dct:title",
     "description": "dct:description",
@@ -36,6 +38,43 @@ def generate_context() -> dict[str, Any]:
     Returns the JSON-LD @context for FDS metadata.
     """
     return METADATA_CONTEXT
+
+
+def _map_scientific_metadata_to_jsonld(metadata: list[Any]) -> list[dict[str, Any]]:
+    result = []
+    for prop in metadata:
+        name = prop["name"] if isinstance(prop, dict) else prop.name
+        value = prop["value"] if isinstance(prop, dict) else prop.value
+        unit = prop.get("unit") if isinstance(prop, dict) else prop.unit
+        desc = prop.get("description") if isinstance(prop, dict) else prop.description
+        node: dict[str, Any] = {
+            "@type": "schema:PropertyValue",
+            "schema:name": name,
+            "schema:value": value,
+        }
+        if unit is not None:
+            node["schema:unitText"] = unit
+        if desc is not None:
+            node["schema:description"] = desc
+        result.append(node)
+    return result
+
+
+def map_shot_to_dcat(shot: Shot | ShotRead, base_url: str) -> dict[str, Any]:
+    shot_uri = f"{base_url}/api/v1/devices/{shot.device_name}/shots/{shot.id}"
+    data: dict[str, Any] = {
+        "@context": METADATA_CONTEXT,
+        "@type": "dcat:Dataset",
+        "@id": shot_uri,
+        "title": f"Shot {shot.id}",
+        "identifier": shot.id,
+    }
+    if shot.access_level:
+        data["accessRights"] = shot.access_level.value
+    sci_meta = getattr(shot, "scientific_metadata", None)
+    if sci_meta:
+        data["schema:additionalProperty"] = _map_scientific_metadata_to_jsonld(sci_meta)
+    return {k: v for k, v in data.items() if v is not None}
 
 
 def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, Any]:
@@ -156,6 +195,10 @@ def map_dataset_to_dcat(
                 for ds in input_datasets
             ]
         data["prov:wasGeneratedBy"] = prov_node
+
+    sci_meta = getattr(dataset, "scientific_metadata", None)
+    if sci_meta:
+        data["schema:additionalProperty"] = _map_scientific_metadata_to_jsonld(sci_meta)
 
     return {k: v for k, v in data.items() if v is not None}
 

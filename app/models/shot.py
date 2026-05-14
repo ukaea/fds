@@ -4,6 +4,7 @@ from sqlmodel import JSON, Column, Field, PrimaryKeyConstraint, Relationship, SQ
 
 from .mixins import DescriptiveMixin, TimestampMixin
 from .policy import AccessLevel
+from .scientific_metadata import ScientificProperty
 
 if TYPE_CHECKING:
     from .collection import Collection
@@ -29,6 +30,9 @@ class ShotBase(DescriptiveMixin, TimestampMixin, SQLModel):
             "inherit from the enclosing device policy."
         ),
         sa_column=Column(JSON, nullable=True),
+    )
+    scientific_metadata: list[ScientificProperty] | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
     )
 
 
@@ -63,46 +67,14 @@ class Shot(ShotBase, table=True):
     )
 
 
-class ShotCreate(SQLModel):
-    id: str
-    access_level: AccessLevel | None = None
+class ShotCreate(ShotBase):
     device_name: str | None = None
-    required_scopes: list[str] | None = Field(
-        default=None,
-        description=(
-            "OAuth scopes required to read this shot when access is restricted. "
-            "If null, scope requirements inherit from the enclosing device policy."
-        ),
-    )
-    allowed_idps: list[str] | None = Field(
-        default=None,
-        description=(
-            "Trusted issuer allowlist for this shot. If null, allowed issuers "
-            "inherit from the enclosing device policy."
-        ),
-    )
 
 
-class ShotRead(SQLModel):
-    id: str
-    access_level: AccessLevel | None = None
+class ShotRead(ShotBase):
     effective_access_level: AccessLevel | None = None
     device_name: str | None = None
     device: "DeviceRead | None" = None
-    required_scopes: list[str] | None = Field(
-        default=None,
-        description=(
-            "OAuth scopes defined directly on this shot. Null means scope policy is "
-            "inherited from a broader context."
-        ),
-    )
-    allowed_idps: list[str] | None = Field(
-        default=None,
-        description=(
-            "Trusted issuers defined directly on this shot. Null means issuer policy "
-            "is inherited from a broader context."
-        ),
-    )
 
 
 class ShotUpdate(SQLModel):
@@ -125,3 +97,4 @@ class ShotUpdate(SQLModel):
             "inherit from the enclosing device policy."
         ),
     )
+    scientific_metadata: list[ScientificProperty] | None = None

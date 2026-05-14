@@ -13,6 +13,7 @@ from sqlmodel import (
 
 from .mixins import DescriptiveMixin, TimestampMixin
 from .policy import AccessLevel
+from .scientific_metadata import ScientificProperty
 from .storage_options import StorageOptions, StorageOptionsType
 
 if TYPE_CHECKING:
@@ -72,6 +73,9 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
             "inherit from the enclosing shot or device policy."
         ),
         sa_column=Column(JSON, nullable=True),
+    )
+    scientific_metadata: list[ScientificProperty] | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
     )
 
 
@@ -202,3 +206,4 @@ class DatasetUpdate(SQLModel):
             "inherit from the enclosing shot or device policy."
         ),
     )
+    scientific_metadata: list[ScientificProperty] | None = None
