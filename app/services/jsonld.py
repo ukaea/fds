@@ -105,11 +105,14 @@ def map_dataset_to_dcat(
     if distributions:
         dist_nodes = []
         for dist in distributions:
-            node: dict[str, Any] = {
-                "@type": "dcat:Distribution",
-                "dcat:accessURL": dist.url,
-            }
+            node: dict[str, Any] = {"@type": "dcat:Distribution"}
             if dist.url.startswith(("http://", "https://")):
+                # Public HTTPS: accessURL = downloadURL = the URL
+                node["dcat:accessURL"] = dist.url
+                node["dcat:downloadURL"] = dist.url
+            else:
+                # Cloud storage: accessURL = FDS credential-vending endpoint, downloadURL = raw URI
+                node["dcat:accessURL"] = dataset_uri
                 node["dcat:downloadURL"] = dist.url
             if dist.media_type:
                 node["dcat:mediaType"] = dist.media_type
