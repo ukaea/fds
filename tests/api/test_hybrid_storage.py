@@ -56,4 +56,6 @@ def test_hybrid_storage_fields(
     dist = ld_data["dcat:distribution"][0]
     assert dist["dcat:mediaType"] == "application/vnd.icechunk+zarr"
     assert dist["dct:format"] == "icechunk"
-    assert ld_data["dcat:downloadURL"] == "s3://bucket/hybrid"
+    # S3 URIs use accessURL only; downloadURL is reserved for HTTP/S direct downloads
+    assert dist["dcat:accessURL"] == "s3://bucket/hybrid"
+    assert "dcat:downloadURL" not in ld_data

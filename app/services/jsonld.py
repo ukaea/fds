@@ -107,8 +107,10 @@ def map_dataset_to_dcat(
         for dist in distributions:
             node: dict[str, Any] = {
                 "@type": "dcat:Distribution",
-                "dcat:downloadURL": dist.url,
+                "dcat:accessURL": dist.url,
             }
+            if dist.url.startswith(("http://", "https://")):
+                node["dcat:downloadURL"] = dist.url
             if dist.media_type:
                 node["dcat:mediaType"] = dist.media_type
             if dist.format:
@@ -117,9 +119,9 @@ def map_dataset_to_dcat(
                 node["dct:accessRights"] = dist.access_level.value
             dist_nodes.append(node)
         data["dcat:distribution"] = dist_nodes
-        # Convenience shorthand: downloadURL of the default distribution
+        # Convenience shorthand: downloadURL of the default distribution (HTTP/S only)
         default = next((d for d in distributions if d.default_distribution), None)
-        if default:
+        if default and default.url.startswith(("http://", "https://")):
             data["dcat:downloadURL"] = default.url
 
     # PROV-O Mapping (Provenance)

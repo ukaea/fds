@@ -43,5 +43,8 @@ nav = [
     { "0026 — Persistent Identifier Strategy" = "adrs/0026-persistent-identifier-strategy.md" },
     { "0027 — Field-Level Attribution Access Control" = "adrs/0027-field-level-attribution-access-control.md" },
     { "0028 — Dataset Identity by ID" = "adrs/0028-dataset-identity-by-id.md" },
+    { "0029 — IceChunk Collection Model" = "adrs/0029-icechunk-collection-model.md" },
+    { "0030 — Controlled Vocabularies" = "adrs/0030-controlled-vocabularies.md" },
+    { "0031 — Scientific Metadata" = "adrs/0031-scientific-metadata.md" },
   ]},
 ]
