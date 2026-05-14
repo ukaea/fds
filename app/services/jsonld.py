@@ -4,6 +4,7 @@ from app.models.collection import Collection, CollectionRead
 from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device, DeviceRead
 from app.models.distribution import Distribution
+from app.models.shot import Shot, ShotRead
 
 if TYPE_CHECKING:
     from app.models.activity import Activity
@@ -63,6 +64,29 @@ def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, 
         else None,
     }
 
+    return {k: v for k, v in data.items() if v is not None}
+
+
+def map_shot_to_dcat(shot: Shot | ShotRead, base_url: str) -> dict[str, Any]:
+    """Maps a Shot to a dcat:Dataset JSON-LD document."""
+    shot_uri = f"{base_url}/api/v1/devices/{shot.device_name}/shots/{shot.id}"
+    data: dict[str, Any] = {
+        "@context": METADATA_CONTEXT,
+        "@type": "dcat:Dataset",
+        "@id": shot_uri,
+        "title": f"Shot {shot.id}",
+        "description": shot.description,
+        "identifier": shot.id,
+        "publisher": shot.publisher,
+        "creator": shot.creator,
+        "created": shot.created_at.isoformat() if hasattr(shot, "created_at") else None,
+        "modified": shot.updated_at.isoformat()
+        if hasattr(shot, "updated_at")
+        else None,
+        "temporal": shot.shot_at.isoformat() if shot.shot_at else None,
+    }
+    if shot.access_level:
+        data["accessRights"] = shot.access_level.value
     return {k: v for k, v in data.items() if v is not None}
 
 

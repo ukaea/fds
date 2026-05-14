@@ -1,11 +1,16 @@
+from datetime import datetime, timezone
+
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.models.dataset import DatasetCreate
-from app.models.device import Device
+from app.models.device import Device, DeviceCreate
 from app.models.identity import AuthenticatedUser
 from app.models.policy import AccessLevel
+from app.models.shot import ShotCreate
 from app.services.dataset_service import DatasetService
+from app.services.device_service import DeviceService
+from app.services.shot_service import ShotService
 
 
 def test_content_negotiation_device(test_client: TestClient, session: Session):
@@ -61,6 +66,37 @@ def test_creator_in_device_jsonld(test_client: TestClient, session: Session):
     data = response.json()
     assert data["creator"] == "Dr. A. Example"
     assert data["@context"]["creator"] == "dct:creator"
+
+
+def test_content_negotiation_shot(test_client: TestClient, session: Session):
+    admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    DeviceService(session).create(DeviceCreate(name="MAST", type="Tokamak"), user=admin)
+    shot = ShotService(session).create(
+        ShotCreate(
+            id="30420",
+            device_name="MAST",
+            shot_at=datetime(2024, 3, 15, 14, 32, tzinfo=timezone.utc),
+            creator="J. Smith",
+            publisher="UKAEA",
+            access_level=AccessLevel.PUBLIC,
+        ),
+        user=admin,
+    )
+    session.commit()
+
+    response = test_client.get(
+        f"/api/v1/devices/MAST/shots/{shot.id}",
+        headers={"Accept": "application/ld+json"},
+    )
+    assert response.status_code == 200
+    assert "application/ld+json" in response.headers["content-type"]
+    data = response.json()
+    assert data["@type"] == "dcat:Dataset"
+    assert data["identifier"] == "30420"
+    assert data["creator"] == "J. Smith"
+    assert data["publisher"] == "UKAEA"
+    assert "temporal" in data
+    assert data["@context"]["temporal"]["@id"] == "dct:temporal"
 
 
 def test_content_negotiation_dataset(test_client: TestClient, session: Session):
