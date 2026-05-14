@@ -19,6 +19,8 @@ METADATA_CONTEXT = {
     "identifier": "dct:identifier",
     "created": {"@id": "dct:created", "@type": "xsd:dateTime"},
     "modified": {"@id": "dct:modified", "@type": "xsd:dateTime"},
+    "temporal": {"@id": "dct:temporal", "@type": "xsd:dateTime"},
+    "creator": "dct:creator",
     "keywords": "dcat:keyword",
     "license": "dct:license",
     "version": "dcat:version",
@@ -52,6 +54,7 @@ def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, 
         "description": device.description or f"Data catalog for device {device.name}",
         "identifier": device.name,
         "publisher": device.publisher,
+        "creator": device.creator,
         "created": device.created_at.isoformat()
         if hasattr(device, "created_at")
         else None,
@@ -85,6 +88,7 @@ def map_dataset_to_dcat(
         "description": dataset.description,
         "identifier": str(dataset.id) if hasattr(dataset, "id") else dataset.name,
         "publisher": dataset.publisher,
+        "creator": dataset.creator,
         "created": dataset.created_at.isoformat()
         if hasattr(dataset, "created_at")
         else None,
@@ -184,6 +188,7 @@ def map_collection_to_dcat(
         "description": collection.description,
         "identifier": str(collection_id) if collection_id else collection.name,
         "publisher": collection.publisher,
+        "creator": collection.creator,
         "created": collection.created_at.isoformat()
         if hasattr(collection, "created_at")
         else None,

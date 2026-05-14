@@ -43,6 +43,26 @@ def test_content_negotiation_device(test_client: TestClient, session: Session):
     assert data["title"] == "Negotiation Test Device"
 
 
+def test_creator_in_device_jsonld(test_client: TestClient, session: Session):
+    device = Device(
+        name="test-device-creator",
+        title="Creator Test Device",
+        publisher="UKAEA",
+        creator="Dr. A. Example",
+        access_level=AccessLevel.PUBLIC,
+    )
+    session.add(device)
+    session.commit()
+
+    response = test_client.get(
+        f"/api/v1/devices/{device.name}", headers={"Accept": "application/ld+json"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["creator"] == "Dr. A. Example"
+    assert data["@context"]["creator"] == "dct:creator"
+
+
 def test_content_negotiation_dataset(test_client: TestClient, session: Session):
     """
     Test that the dataset endpoint (by ID) respects the Accept header.

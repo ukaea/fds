@@ -36,3 +36,4 @@ class DescriptiveMixin(SQLModel):
     title: str | None = Field(default=None, index=True)
     description: str | None = Field(default=None)
     publisher: str | None = Field(default=None, index=True)
+    creator: str | None = Field(default=None, index=True)
