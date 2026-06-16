@@ -21,6 +21,8 @@ METADATA_CONTEXT = {
     "identifier": "dct:identifier",
     "created": {"@id": "dct:created", "@type": "xsd:dateTime"},
     "modified": {"@id": "dct:modified", "@type": "xsd:dateTime"},
+    "startDate": {"@id": "dcat:startDate", "@type": "xsd:dateTime"},
+    "endDate": {"@id": "dcat:endDate", "@type": "xsd:dateTime"},
     "keywords": "dcat:keyword",
     "license": "dct:license",
     "version": "dcat:version",
@@ -98,7 +100,6 @@ def map_dataset_to_dcat(
         "version": dataset.version,
     }
 
-    # Access Rights mapping
     if dataset.access_level:
         data["accessRights"] = dataset.access_level.value
 
@@ -108,6 +109,15 @@ def map_dataset_to_dcat(
             "oa:motivatedBy": {"@id": "dqv:qualityAssessment"},
             "oa:hasBody": dataset.quality_flag,
         }
+
+    # dct:temporal → dct:PeriodOfTime
+    if dataset.temporal_start or dataset.temporal_end:
+        period: dict[str, Any] = {"@type": "dct:PeriodOfTime"}
+        if dataset.temporal_start:
+            period["startDate"] = dataset.temporal_start.isoformat()
+        if dataset.temporal_end:
+            period["endDate"] = dataset.temporal_end.isoformat()
+        data["dct:temporal"] = period
 
     # DCAT Distribution mapping
     distributions: list[Distribution] = getattr(dataset, "distributions", []) or []
