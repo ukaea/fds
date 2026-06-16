@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlmodel import (
@@ -52,6 +53,8 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
     name: str = Field(index=True)
     level: int = Field(index=True)
     quality_flag: str | None = Field(default=None, index=True)
+    temporal_start: datetime | None = Field(default=None)
+    temporal_end: datetime | None = Field(default=None)
     device_name: str | None = Field(default=None, index=True)
     access_level: AccessLevel | None = Field(default=None, index=True)
     license: str | None = Field(default=None)
@@ -181,6 +184,8 @@ class DatasetUpdate(SQLModel):
     name: str | None = None
     level: int | None = None
     quality_flag: str | None = None
+    temporal_start: datetime | None = None
+    temporal_end: datetime | None = None
     device_name: str | None = None
     shot_id: str | None = None
     activity_id: int | None = None
