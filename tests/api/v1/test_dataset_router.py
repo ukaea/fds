@@ -8,6 +8,7 @@ from app.models.activity import ActivityCreate
 from app.models.dataset import Dataset, DatasetCreate
 from app.models.device import DeviceCreate
 from app.models.file_access import S3Credentials
+from app.models.policy import AccessLevel
 from app.models.shot import ShotCreate
 from app.models.source import SourceCreate
 from app.services.activity_service import ActivityService
@@ -330,3 +331,39 @@ def test_get_datasets_with_storage_options(
     assert data.get("storage_options") is not None
     assert data["storage_options"]["key"] == "r_key"
     assert data["storage_options"]["secret"] == "r_sec"
+
+
+def test_temporal_coverage_roundtrip(
+    test_client: TestClient,
+    session: Session,
+):
+    from datetime import timezone
+
+    dataset = DatasetService(session).create(
+        DatasetCreate(
+            name="ts-data",
+            level=0,
+            url="s3://bucket/ts",
+            access_level=AccessLevel.PUBLIC,
+            temporal_start=datetime(2024, 3, 15, 14, 0, tzinfo=timezone.utc),
+            temporal_end=datetime(2024, 3, 15, 14, 30, tzinfo=timezone.utc),
+        ),
+        user=admin_user,
+    )
+    session.commit()
+
+    response = test_client.get(f"/api/v1/datasets/id/{dataset.id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["temporal_start"].startswith("2024-03-15T14:00:00")
+    assert data["temporal_end"].startswith("2024-03-15T14:30:00")
+
+    response = test_client.get(
+        f"/api/v1/datasets/id/{dataset.id}", headers={"Accept": "application/ld+json"}
+    )
+    assert response.status_code == 200
+    ld = response.json()
+    cov = ld["dct:temporal"]
+    assert cov["@type"] == "dct:PeriodOfTime"
+    assert cov["startDate"].startswith("2024-03-15T14:00:00")
+    assert cov["endDate"].startswith("2024-03-15T14:30:00")
