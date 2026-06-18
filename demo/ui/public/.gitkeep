@@ -1,0 +1,3 @@
+# Keeps demo/ui/public/ present so the Dockerfile's `COPY --from=builder /app/public ./public`
+# step works. The UKAEA logos that used to live here were removed for the brand-neutral UI;
+# add static assets here if the reference UI ever needs them.
