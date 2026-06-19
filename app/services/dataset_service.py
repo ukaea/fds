@@ -55,10 +55,19 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         return self._filter_accessible_datasets(datasets, user)
 
     def check_read_access(self, dataset: Dataset, user: AuthenticatedUser) -> None:
-        """
-        Enforces read access for dataset metadata.
-        Uses the full effective policy (inherited access_level, required_scopes,
-        allowed_idps) from the Dataset → Shot → Device hierarchy.
+        """Enforce read access for Dataset metadata.
+
+        Resolves the full effective policy (inherited ``access_level``,
+        ``required_scopes``, ``allowed_idps``) from the
+        Dataset → Shot → Device hierarchy.
+
+        - PUBLIC / EMBARGOED: metadata is discoverable by everyone (EMBARGOED
+          restricts data, not metadata — enforced at credential vending).
+        - RESTRICTED: requires an authenticated user, then any IdP and scope
+          gates set by the policy. With no explicit ``required_scopes`` it
+          falls back to a capability check (shot operator or device admin).
+
+        Raises ``ForbiddenError`` when the user does not satisfy the policy.
         """
         policy = get_effective_policy(dataset, self.session)
 

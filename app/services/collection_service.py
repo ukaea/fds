@@ -56,11 +56,17 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
     def check_read_access(
         self, collection: Collection, user: AuthenticatedUser
     ) -> None:
-        """Enforce read access for a Collection's metadata.
+        """Enforce read access for Collection metadata.
 
-        Uses the full effective policy (inherited ``access_level``,
-        ``required_scopes``, ``allowed_idps``) resolved from the
+        Resolves the full effective policy (inherited ``access_level``,
+        ``required_scopes``, ``allowed_idps``) from the
         Collection → Shot → Device hierarchy.
+
+        - PUBLIC / EMBARGOED: metadata is discoverable by everyone (EMBARGOED
+          restricts data, not metadata — enforced at credential vending).
+        - RESTRICTED: requires an authenticated user, then any IdP and scope
+          gates set by the policy. With no explicit ``required_scopes`` it
+          falls back to a capability check (device admin or global admin).
 
         Raises ``ForbiddenError`` when the user does not satisfy the policy.
         """

@@ -29,17 +29,23 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         super().__init__(Shot, session)
 
     def check_read_access(self, shot: Shot, user: AuthenticatedUser) -> None:
-        """
-        Enforces read access for shot metadata.
-        Uses the full effective policy from the Shot → Device hierarchy.
+        """Enforce read access for Shot metadata.
 
-        - PUBLIC: accessible to everyone.
-        - RESTRICTED / EMBARGOED: must be authenticated; then IdP and scope gates if set.
-          No capability check for metadata reads — that belongs to credential vending.
+        Resolves the full effective policy (inherited ``access_level``,
+        ``required_scopes``, ``allowed_idps``) from the Shot → Device hierarchy.
+
+        - PUBLIC / EMBARGOED: metadata is discoverable by everyone (EMBARGOED
+          restricts data, not metadata — enforced at credential vending).
+        - RESTRICTED: requires an authenticated user, then any IdP and scope
+          gates set by the policy. With no explicit ``required_scopes`` an
+          authenticated user from a trusted IdP suffices (no capability check
+          for metadata reads — that belongs to credential vending).
+
+        Raises ``ForbiddenError`` when the user does not satisfy the policy.
         """
         policy = get_effective_policy(shot, self.session)
 
-        if policy.access_level == AccessLevel.PUBLIC:
+        if policy.access_level in (AccessLevel.PUBLIC, AccessLevel.EMBARGOED):
             return
 
         if user.is_anonymous:
