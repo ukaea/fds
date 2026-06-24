@@ -56,4 +56,8 @@ def test_hybrid_storage_fields(
     dist = ld_data["dcat:distribution"][0]
     assert dist["dcat:mediaType"] == "application/vnd.icechunk+zarr"
     assert dist["dct:format"] == "icechunk"
-    assert ld_data["dcat:downloadURL"] == "s3://bucket/hybrid"
+    # S3 URIs: accessURL = FDS credential-vending endpoint, downloadURL = raw storage URI
+    assert dist["dcat:accessURL"] == f"http://testserver/api/v1/datasets/{dataset_id}"
+    assert dist["dcat:downloadURL"] == "s3://bucket/hybrid"
+    # Top-level dcat:downloadURL shorthand is HTTP/S only — not emitted for S3
+    assert "dcat:downloadURL" not in ld_data
