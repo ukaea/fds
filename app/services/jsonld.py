@@ -1,9 +1,11 @@
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from app.models.collection import Collection, CollectionRead
 from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device, DeviceRead
 from app.models.distribution import Distribution
+from app.models.shot import Shot, ShotRead
 
 if TYPE_CHECKING:
     from app.models.activity import Activity
@@ -21,6 +23,7 @@ METADATA_CONTEXT = {
     "identifier": "dct:identifier",
     "created": {"@id": "dct:created", "@type": "xsd:dateTime"},
     "modified": {"@id": "dct:modified", "@type": "xsd:dateTime"},
+    "creator": "dct:creator",
     "startDate": {"@id": "dcat:startDate", "@type": "xsd:dateTime"},
     "endDate": {"@id": "dcat:endDate", "@type": "xsd:dateTime"},
     "keywords": "dcat:keyword",
@@ -56,6 +59,7 @@ def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, 
         "description": device.description or f"Data catalog for device {device.name}",
         "identifier": device.name,
         "publisher": device.publisher,
+        "creator": device.creator,
         "created": device.created_at.isoformat()
         if hasattr(device, "created_at")
         else None,
@@ -64,6 +68,41 @@ def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, 
         else None,
     }
 
+    return {k: v for k, v in data.items() if v is not None}
+
+
+def map_shot_to_dcat(shot: Shot | ShotRead, base_url: str) -> dict[str, Any]:
+    """Maps a Shot to a dcat:Dataset JSON-LD document."""
+    shot_uri = f"{base_url}/api/v1/devices/{shot.device_name}/shots/{shot.id}"
+    data: dict[str, Any] = {
+        "@context": METADATA_CONTEXT,
+        "@type": "dcat:Dataset",
+        "@id": shot_uri,
+        "title": f"Shot {shot.id}",
+        "description": shot.description,
+        "identifier": shot.id,
+        "publisher": shot.publisher,
+        "creator": shot.creator,
+        "created": shot.created_at.isoformat() if hasattr(shot, "created_at") else None,
+        "modified": shot.updated_at.isoformat()
+        if hasattr(shot, "updated_at")
+        else None,
+    }
+    # dct:temporal → dct:PeriodOfTime. Emit a closed period when an end is known or
+    # derivable from the duration; otherwise an open period (start only).
+    if shot.shot_at:
+        end = shot.shot_end
+        if end is None and shot.shot_duration is not None:
+            end = shot.shot_at + timedelta(seconds=shot.shot_duration)
+        period: dict[str, Any] = {
+            "@type": "dct:PeriodOfTime",
+            "startDate": shot.shot_at.isoformat(),
+        }
+        if end is not None:
+            period["endDate"] = end.isoformat()
+        data["dct:temporal"] = period
+    if shot.access_level:
+        data["accessRights"] = shot.access_level.value
     return {k: v for k, v in data.items() if v is not None}
 
 
@@ -89,6 +128,7 @@ def map_dataset_to_dcat(
         "description": dataset.description,
         "identifier": str(dataset.id) if hasattr(dataset, "id") else dataset.name,
         "publisher": dataset.publisher,
+        "creator": dataset.creator,
         "created": dataset.created_at.isoformat()
         if hasattr(dataset, "created_at")
         else None,
@@ -208,6 +248,7 @@ def map_collection_to_dcat(
         "description": collection.description,
         "identifier": str(collection_id) if collection_id else collection.name,
         "publisher": collection.publisher,
+        "creator": collection.creator,
         "created": collection.created_at.isoformat()
         if hasattr(collection, "created_at")
         else None,

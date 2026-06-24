@@ -175,6 +175,44 @@ def test_delete_shot_unauthorized(
     assert shot_service.get((mast.name, shot.id)) is not None
 
 
+def test_shot_metadata_fields_roundtrip(
+    test_client: TestClient,
+    session: Session,
+    admin_user_token: dict,
+):
+    device_service = DeviceService(session)
+    device_service.create(DeviceCreate(name="MAST", type="Tokamak"), user=admin_user)
+    session.commit()
+
+    shot_at = "2024-03-15T14:32:00+00:00"
+    shot_data = {
+        "id": "30420",
+        "shot_at": shot_at,
+        "publisher": "UKAEA",
+        "creator": "J. Smith",
+        "access_level": "public",
+    }
+
+    response = test_client.post(
+        "/api/v1/devices/MAST/shots/",
+        headers=admin_user_token,
+        json=shot_data,
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["shot_at"].startswith("2024-03-15T14:32:00")
+    assert data["publisher"] == "UKAEA"
+    assert data["creator"] == "J. Smith"
+
+    response = test_client.get(
+        "/api/v1/devices/MAST/shots/30420", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["shot_at"].startswith("2024-03-15T14:32:00")
+    assert data["creator"] == "J. Smith"
+
+
 def test_read_shots_include_device(
     test_client: TestClient,
     session: Session,

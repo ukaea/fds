@@ -1,4 +1,5 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Request, status
+from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUserDep, ShotServiceDep
 from app.models.shot import (
@@ -6,6 +7,7 @@ from app.models.shot import (
     ShotRead,
     ShotUpdate,
 )
+from app.services.jsonld import map_shot_to_dcat
 
 router = APIRouter()
 
@@ -61,15 +63,22 @@ def read_shots(
 )
 def read_shot(
     *,
+    request: Request,
     device_name: str,
     shot_service: ShotServiceDep,
     shot_id: str,
     user: CurrentUserDep,
-) -> ShotRead:
+) -> ShotRead | JSONResponse:
     """
     Retrieve a shot specifically for a device context.
+    Supports content negotiation: Accept: application/ld+json returns DCAT JSON-LD.
     """
     shot = shot_service.get_by_device_name(shot_id, device_name, user)
+    if "application/ld+json" in request.headers.get("accept", ""):
+        return JSONResponse(
+            content=map_shot_to_dcat(shot, str(request.base_url).rstrip("/")),
+            media_type="application/ld+json",
+        )
     return shot_service.to_read_model(shot, include_device=True)
 
 
