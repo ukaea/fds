@@ -88,7 +88,7 @@ Collection: jintrac-v220922
 The standard JSON response includes `activity_id` on each Dataset. To get the full PROV-O graph as linked data, request `application/ld+json` — see [Semantic Metadata](dcat-jsonld.md).
 
 ```http
-GET /api/v1/datasets/id/{uuid}
+GET /api/v1/datasets/id/{id}
 Accept: application/ld+json
 ```
 
