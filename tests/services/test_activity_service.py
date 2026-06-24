@@ -2,7 +2,7 @@ import pytest
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
-from app.models.activity import ActivityCreate, ActivityUpdate
+from app.models.activity import ActivityCreate, ActivityType, ActivityUpdate
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
 from app.models.shot import ShotCreate
@@ -76,13 +76,13 @@ def test_create_activity(
 ):
     _, _, source1, _ = setup_data
     activity = activity_service.create(
-        ActivityCreate(source_id=source1.id, activity_type="SIMULATION"),
+        ActivityCreate(source_id=source1.id, activity_type=ActivityType.SIMULATION),
         user=admin_user,
     )
     assert activity is not None
     assert activity.id is not None
     assert activity.source_id == source1.id
-    assert activity.activity_type == "SIMULATION"
+    assert activity.activity_type == "simulation"
 
 
 def test_create_activity_with_metadata(
@@ -94,14 +94,14 @@ def test_create_activity_with_metadata(
     activity = activity_service.create(
         ActivityCreate(
             source_id=source1.id,
-            activity_type="SIMULATION",
+            activity_type=ActivityType.SIMULATION,
             source_version="v1.2.3",
             parameters={"dt": 0.01, "nodes": 100},
         ),
         user=admin_user,
     )
     assert activity.source_version == "v1.2.3"
-    assert activity.activity_type == "SIMULATION"
+    assert activity.activity_type == "simulation"
     assert activity.parameters == {"dt": 0.01, "nodes": 100}
 
 
@@ -139,16 +139,18 @@ def test_update_activity(
 ):
     _, _, source1, _ = setup_data
     activity = activity_service.create(
-        ActivityCreate(source_id=source1.id, activity_type="MEASUREMENT"),
+        ActivityCreate(source_id=source1.id, activity_type=ActivityType.MEASUREMENT),
         user=admin_user,
     )
     assert activity.id is not None
     updated = activity_service.update(
         id=activity.id,
-        obj_in=ActivityUpdate(activity_type="SIMULATION", source_version="v2.0"),
+        obj_in=ActivityUpdate(
+            activity_type=ActivityType.SIMULATION, source_version="v2.0"
+        ),
         user=admin_user,
     )
-    assert updated.activity_type == "SIMULATION"
+    assert updated.activity_type == "simulation"
     assert updated.source_version == "v2.0"
 
 
@@ -209,7 +211,7 @@ def test_multiple_datasets_share_activity(
     source = source_service.create(SourceCreate(name="pipeline"), user=admin_user)
     assert source.id is not None
     activity = activity_service.create(
-        ActivityCreate(source_id=source.id, activity_type="MEASUREMENT"),
+        ActivityCreate(source_id=source.id, activity_type=ActivityType.MEASUREMENT),
         user=admin_user,
     )
 

@@ -1,8 +1,9 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlmodel import JSON, Column, Field, PrimaryKeyConstraint, Relationship, SQLModel
 
-from .mixins import DescriptiveMixin, TimestampMixin
+from .mixins import TimestampMixin
 from .policy import AccessLevel
 from .scientific_metadata import ScientificProperty
 
@@ -12,8 +13,20 @@ if TYPE_CHECKING:
     from .device import Device, DeviceRead
 
 
-class ShotBase(DescriptiveMixin, TimestampMixin, SQLModel):
+class ShotBase(TimestampMixin, SQLModel):
     id: str = Field(index=True)
+    shot_at: datetime | None = Field(default=None, index=True)
+    shot_end: datetime | None = Field(default=None, index=True)
+    shot_duration: float | None = Field(
+        default=None,
+        description=(
+            "Shot duration in seconds. Optional. If shot_at and shot_end are both "
+            "set, shot_duration must equal the interval between them."
+        ),
+    )
+    description: str | None = Field(default=None)
+    publisher: str | None = Field(default=None, index=True)
+    creator: str | None = Field(default=None, index=True)
     access_level: AccessLevel | None = Field(default=None, index=True)
     required_scopes: list[str] | None = Field(
         default=None,
@@ -78,11 +91,14 @@ class ShotRead(ShotBase):
 
 
 class ShotUpdate(SQLModel):
-    access_level: AccessLevel | None = None
-    device_name: str | None = None
-    title: str | None = None
+    shot_at: datetime | None = None
+    shot_end: datetime | None = None
+    shot_duration: float | None = None
     description: str | None = None
     publisher: str | None = None
+    creator: str | None = None
+    access_level: AccessLevel | None = None
+    device_name: str | None = None
     required_scopes: list[str] | None = Field(
         default=None,
         description=(

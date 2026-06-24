@@ -32,28 +32,28 @@ function DatasetCard({ dataset, deviceName, shotId }: { dataset: Dataset; device
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <div className="bg-purple-500/20 p-2 rounded text-purple-400">
+          <div className="bg-muted p-2 rounded text-foreground">
             <Database className="w-5 h-5" />
           </div>
           <div>
             <h3 className="font-bold text-lg group-hover:text-primary transition-colors">{dataset.name}</h3>
-            <p className="text-xs text-slate-500 font-mono mt-1 truncate max-w-xs">{dataset.url}</p>
+            <p className="text-xs text-muted-foreground font-mono mt-1 truncate max-w-xs">{dataset.url}</p>
           </div>
         </div>
-        <ChevronRight className="text-slate-600 group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all" />
+        <ChevronRight className="text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all" />
       </div>
 
-      <div className="mt-4 flex items-center gap-4 text-sm text-slate-400">
+      <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
         <div className="flex items-center gap-1">
           <FileCode className="w-4 h-4" />
           {formatMediaType(dataset.media_type)}
         </div>
         {dataset.level !== undefined && (
-          <span className="text-xs px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-full">
+          <span className="text-xs px-2 py-0.5 bg-muted border border-border text-foreground rounded-full">
             L{dataset.level}
           </span>
         )}
-        <span className="text-emerald-400 text-xs px-2 py-0.5 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+        <span className="text-foreground text-xs px-2 py-0.5 bg-muted rounded-full border border-border">
           {dataset.effective_access_level || dataset.access_level || 'public'}
         </span>
       </div>
@@ -92,16 +92,16 @@ function CollectionSection({
   return (
     <div className="mb-10">
       <div className="flex items-center gap-3 mb-4">
-        <div className="bg-amber-500/20 p-2 rounded-lg text-amber-400">
+        <div className="bg-muted p-2 rounded-lg text-foreground">
           <Layers className="w-5 h-5" />
         </div>
         <div>
-          <h2 className="text-xl font-semibold text-white">{collection.title || collection.name}</h2>
+          <h2 className="text-xl font-semibold text-foreground">{collection.title || collection.name}</h2>
           {activityLabel && (
-            <p className="text-sm text-slate-400 mt-0.5">{activityLabel}</p>
+            <p className="text-sm text-muted-foreground mt-0.5">{activityLabel}</p>
           )}
         </div>
-        <span className="text-sm text-slate-500 ml-1">
+        <span className="text-sm text-muted-foreground ml-1">
           ({datasetCount} dataset{datasetCount !== 1 ? 's' : ''})
         </span>
       </div>
@@ -143,20 +143,20 @@ export default function ShotDetailPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <div className="flex items-center text-sm text-slate-400 mb-2">
+        <div className="flex items-center text-sm text-muted-foreground mb-2">
           <Link href={`/devices/${deviceName}`} className="hover:text-primary transition-colors">{deviceName}</Link>
           <ChevronRight className="w-4 h-4 mx-2" />
-          <span className="text-white font-medium">Shot #{shotId}</span>
+          <span className="text-foreground font-medium">Shot #{shotId}</span>
         </div>
-        <h1 className="text-3xl font-bold text-white mb-2">Shot #{shotId}</h1>
-        <p className="text-slate-400">Scientific data and collections for this shot.</p>
+        <h1 className="text-3xl font-bold text-foreground mb-2">Shot #{shotId}</h1>
+        <p className="text-muted-foreground">Scientific data and collections for this shot.</p>
       </div>
 
       {isLoading && (
-        <div className="card p-6 text-center text-slate-400">Loading datasets…</div>
+        <div className="card p-6 text-center text-muted-foreground">Loading datasets…</div>
       )}
       {error && (
-        <div className="card p-6 text-center text-red-400">Failed to load datasets.</div>
+        <div className="card p-6 text-center text-destructive">Failed to load datasets.</div>
       )}
 
       {/* One section per collection */}
@@ -174,11 +174,11 @@ export default function ShotDetailPage() {
       {uncollectedDatasets.length > 0 && (
         <div>
           <div className="flex items-center gap-3 mb-4">
-            <div className="bg-purple-500/20 p-2 rounded-lg text-purple-400">
+            <div className="bg-muted p-2 rounded-lg text-foreground">
               <Database className="w-5 h-5" />
             </div>
-            <h2 className="text-xl font-semibold text-white">Other Datasets</h2>
-            <span className="text-sm text-slate-500">({uncollectedDatasets.length})</span>
+            <h2 className="text-xl font-semibold text-foreground">Other Datasets</h2>
+            <span className="text-sm text-muted-foreground">({uncollectedDatasets.length})</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {uncollectedDatasets.map((dataset) => (
@@ -189,7 +189,7 @@ export default function ShotDetailPage() {
       )}
 
       {!isLoading && !error && datasets?.length === 0 && (
-        <div className="py-12 text-center text-slate-500 border border-dashed border-slate-800 rounded-lg">
+        <div className="py-12 text-center text-muted-foreground border border-dashed border-border rounded-lg">
           No datasets found for this shot.
         </div>
       )}

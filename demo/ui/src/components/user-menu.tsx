@@ -49,14 +49,14 @@ export function UserMenu() {
   };
 
   if (status === "loading") {
-    return <Loader2 className="w-4 h-4 animate-spin text-slate-500" />;
+    return <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />;
   }
 
   if (status === "authenticated" && session?.user) {
     const role = getUserRole(session.scopes);
     const roleColor = getRoleColor(role);
     // Use the helper, or fallback if not imported yet (though it is)
-    const roleBg = getRoleBgColor ? getRoleBgColor(role) : "bg-slate-800";
+    const roleBg = getRoleBgColor ? getRoleBgColor(role) : "bg-muted";
 
     return (
       <div className="flex items-center justify-end gap-4 ml-auto">
@@ -69,10 +69,10 @@ export function UserMenu() {
           </div>
         </div>
 
-        <div className="flex flex-col-reverse md:flex-row items-end md:items-center gap-1 md:gap-2 border-l border-slate-700 pl-4">
+        <div className="flex flex-col-reverse md:flex-row items-end md:items-center gap-1 md:gap-2 border-l border-border pl-4">
           <button
             onClick={handleSwitchAccount}
-            className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
             title="Switch Account"
           >
             <Users className="w-3 h-3" />
@@ -81,7 +81,7 @@ export function UserMenu() {
 
           <button
             onClick={() => signOut()}
-            className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1 whitespace-nowrap"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 whitespace-nowrap"
             title="Sign Out"
           >
             <LogOut className="w-3 h-3" />
@@ -95,7 +95,7 @@ export function UserMenu() {
   return (
     <button
       onClick={() => signIn("keycloak")}
-      className="text-sm font-medium text-primary hover:text-blue-400 transition-colors"
+      className="text-sm font-medium text-primary hover:text-foreground transition-colors"
     >
       Sign In
     </button>

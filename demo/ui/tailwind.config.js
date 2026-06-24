@@ -25,21 +25,6 @@ module.exports = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
-        ukaea: {
-          blue: "#002F56",
-          white: "#FFFFFF",
-          black: "#000000",
-          grey1: "#58585B",
-          grey2: "#808284",
-          grey3: "#A7A9AB",
-          grey4: "#D1D2D4",
-          secondary: {
-            yellow: "#F6D44D",
-            green: "#006F45",
-            blue: "#0082CA",
-            red: "#C9252C",
-          }
-        },
       },
       borderRadius: {
         lg: "var(--radius)",

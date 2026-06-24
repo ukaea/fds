@@ -3,6 +3,7 @@ from .activity import (
     ActivityCreate,
     ActivityInput,
     ActivityRead,
+    ActivityType,
     ActivityUpdate,
 )
 from .collection import (
@@ -72,4 +73,5 @@ __all__ = [
     "CollectionMember",
     "AccessLevel",
     "ScientificProperty",
+    "ActivityType",
 ]

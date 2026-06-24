@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from app.models.collection import Collection, CollectionRead
@@ -15,12 +16,15 @@ METADATA_CONTEXT = {
     "prov": "http://www.w3.org/ns/prov#",
     "schema": "https://schema.org/",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "dqv": "http://www.w3.org/ns/dqv#",
+    "oa": "http://www.w3.org/ns/oa#",
     "title": "dct:title",
     "description": "dct:description",
     "publisher": "dct:publisher",
     "identifier": "dct:identifier",
     "created": {"@id": "dct:created", "@type": "xsd:dateTime"},
     "modified": {"@id": "dct:modified", "@type": "xsd:dateTime"},
+    "creator": "dct:creator",
     "startDate": {"@id": "dcat:startDate", "@type": "xsd:dateTime"},
     "endDate": {"@id": "dcat:endDate", "@type": "xsd:dateTime"},
     "keywords": "dcat:keyword",
@@ -62,23 +66,6 @@ def _map_scientific_metadata_to_jsonld(metadata: list[Any]) -> list[dict[str, An
     return result
 
 
-def map_shot_to_dcat(shot: Shot | ShotRead, base_url: str) -> dict[str, Any]:
-    shot_uri = f"{base_url}/api/v1/devices/{shot.device_name}/shots/{shot.id}"
-    data: dict[str, Any] = {
-        "@context": METADATA_CONTEXT,
-        "@type": "dcat:Dataset",
-        "@id": shot_uri,
-        "title": f"Shot {shot.id}",
-        "identifier": shot.id,
-    }
-    if shot.access_level:
-        data["accessRights"] = shot.access_level.value
-    sci_meta = getattr(shot, "scientific_metadata", None)
-    if sci_meta:
-        data["schema:additionalProperty"] = _map_scientific_metadata_to_jsonld(sci_meta)
-    return {k: v for k, v in data.items() if v is not None}
-
-
 def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, Any]:
     """
     Maps a Device to a dcat:Catalog.
@@ -93,6 +80,7 @@ def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, 
         "description": device.description or f"Data catalog for device {device.name}",
         "identifier": device.name,
         "publisher": device.publisher,
+        "creator": device.creator,
         "created": device.created_at.isoformat()
         if hasattr(device, "created_at")
         else None,
@@ -101,6 +89,44 @@ def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, 
         else None,
     }
 
+    return {k: v for k, v in data.items() if v is not None}
+
+
+def map_shot_to_dcat(shot: Shot | ShotRead, base_url: str) -> dict[str, Any]:
+    """Maps a Shot to a dcat:Dataset JSON-LD document."""
+    shot_uri = f"{base_url}/api/v1/devices/{shot.device_name}/shots/{shot.id}"
+    data: dict[str, Any] = {
+        "@context": METADATA_CONTEXT,
+        "@type": "dcat:Dataset",
+        "@id": shot_uri,
+        "title": f"Shot {shot.id}",
+        "description": shot.description,
+        "identifier": shot.id,
+        "publisher": shot.publisher,
+        "creator": shot.creator,
+        "created": shot.created_at.isoformat() if hasattr(shot, "created_at") else None,
+        "modified": shot.updated_at.isoformat()
+        if hasattr(shot, "updated_at")
+        else None,
+    }
+    # dct:temporal → dct:PeriodOfTime. Emit a closed period when an end is known or
+    # derivable from the duration; otherwise an open period (start only).
+    if shot.shot_at:
+        end = shot.shot_end
+        if end is None and shot.shot_duration is not None:
+            end = shot.shot_at + timedelta(seconds=shot.shot_duration)
+        period: dict[str, Any] = {
+            "@type": "dct:PeriodOfTime",
+            "startDate": shot.shot_at.isoformat(),
+        }
+        if end is not None:
+            period["endDate"] = end.isoformat()
+        data["dct:temporal"] = period
+    if shot.access_level:
+        data["accessRights"] = shot.access_level.value
+    sci_meta = getattr(shot, "scientific_metadata", None)
+    if sci_meta:
+        data["schema:additionalProperty"] = _map_scientific_metadata_to_jsonld(sci_meta)
     return {k: v for k, v in data.items() if v is not None}
 
 
@@ -126,6 +152,7 @@ def map_dataset_to_dcat(
         "description": dataset.description,
         "identifier": str(dataset.id) if hasattr(dataset, "id") else dataset.name,
         "publisher": dataset.publisher,
+        "creator": dataset.creator,
         "created": dataset.created_at.isoformat()
         if hasattr(dataset, "created_at")
         else None,
@@ -139,6 +166,13 @@ def map_dataset_to_dcat(
 
     if dataset.access_level:
         data["accessRights"] = dataset.access_level.value
+
+    if dataset.quality_flag:
+        data["dqv:hasQualityAnnotation"] = {
+            "@type": "dqv:QualityAnnotation",
+            "oa:motivatedBy": {"@id": "dqv:qualityAssessment"},
+            "oa:hasBody": dataset.quality_flag,
+        }
 
     # dct:temporal → dct:PeriodOfTime
     if dataset.temporal_start or dataset.temporal_end:
@@ -154,10 +188,15 @@ def map_dataset_to_dcat(
     if distributions:
         dist_nodes = []
         for dist in distributions:
-            node: dict[str, Any] = {
-                "@type": "dcat:Distribution",
-                "dcat:downloadURL": dist.url,
-            }
+            node: dict[str, Any] = {"@type": "dcat:Distribution"}
+            if dist.url.startswith(("http://", "https://")):
+                # Public HTTPS: accessURL = downloadURL = the URL
+                node["dcat:accessURL"] = dist.url
+                node["dcat:downloadURL"] = dist.url
+            else:
+                # Cloud storage: accessURL = FDS credential-vending endpoint, downloadURL = raw URI
+                node["dcat:accessURL"] = dataset_uri
+                node["dcat:downloadURL"] = dist.url
             if dist.media_type:
                 node["dcat:mediaType"] = dist.media_type
             if dist.format:
@@ -166,9 +205,9 @@ def map_dataset_to_dcat(
                 node["dct:accessRights"] = dist.access_level.value
             dist_nodes.append(node)
         data["dcat:distribution"] = dist_nodes
-        # Convenience shorthand: downloadURL of the default distribution
+        # Convenience shorthand: downloadURL of the default distribution (HTTP/S only)
         default = next((d for d in distributions if d.default_distribution), None)
-        if default:
+        if default and default.url.startswith(("http://", "https://")):
             data["dcat:downloadURL"] = default.url
 
     # PROV-O Mapping (Provenance)
@@ -237,6 +276,7 @@ def map_collection_to_dcat(
         "description": collection.description,
         "identifier": str(collection_id) if collection_id else collection.name,
         "publisher": collection.publisher,
+        "creator": collection.creator,
         "created": collection.created_at.isoformat()
         if hasattr(collection, "created_at")
         else None,
