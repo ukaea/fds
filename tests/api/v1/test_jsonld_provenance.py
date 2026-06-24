@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
-from app.models.activity import ActivityCreate
+from app.models.activity import ActivityCreate, ActivityType
 from app.models.dataset import DatasetCreate
 from app.models.device import Device
 from app.models.policy import AccessLevel
@@ -40,7 +40,7 @@ def test_jsonld_provenance(
     activity = activity_service.create(
         ActivityCreate(
             source_id=source.id,
-            activity_type="SIMULATION",
+            activity_type=ActivityType.SIMULATION,
             source_version="v1.0",
             parameters={"run_id": 99},
         ),
@@ -80,7 +80,7 @@ def test_jsonld_provenance(
 
     prov = data["prov:wasGeneratedBy"]
     assert prov["@type"] == "prov:Activity"
-    assert prov["prov:type"] == "SIMULATION"
+    assert prov["prov:type"] == "simulation"
 
     # Verify Agent (Source) association
     agent = prov["prov:wasAssociatedWith"]
@@ -198,7 +198,7 @@ def test_jsonld_provenance_with_inputs(
     assert source.id is not None
 
     activity = ActivityService(session).create(
-        ActivityCreate(source_id=source.id, activity_type="SIMULATION"),
+        ActivityCreate(source_id=source.id, activity_type=ActivityType.SIMULATION),
         user=admin_user,
     )
 

@@ -13,6 +13,8 @@ METADATA_CONTEXT = {
     "dct": "http://purl.org/dc/terms/",
     "prov": "http://www.w3.org/ns/prov#",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "dqv": "http://www.w3.org/ns/dqv#",
+    "oa": "http://www.w3.org/ns/oa#",
     "title": "dct:title",
     "description": "dct:description",
     "publisher": "dct:publisher",
@@ -100,6 +102,13 @@ def map_dataset_to_dcat(
 
     if dataset.access_level:
         data["accessRights"] = dataset.access_level.value
+
+    if dataset.quality_flag:
+        data["dqv:hasQualityAnnotation"] = {
+            "@type": "dqv:QualityAnnotation",
+            "oa:motivatedBy": {"@id": "dqv:qualityAssessment"},
+            "oa:hasBody": dataset.quality_flag,
+        }
 
     # dct:temporal → dct:PeriodOfTime
     if dataset.temporal_start or dataset.temporal_end:

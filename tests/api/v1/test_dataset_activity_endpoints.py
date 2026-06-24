@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
-from app.models.activity import ActivityCreate
+from app.models.activity import ActivityCreate, ActivityType
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
 from app.models.shot import ShotCreate
@@ -30,7 +30,7 @@ def setup_fixture(session: Session, admin_user: AuthenticatedUser):
     activity = ActivityService(session).create(
         ActivityCreate(
             source_id=source.id,
-            activity_type="SIMULATION",
+            activity_type=ActivityType.SIMULATION,
             source_version="v1.0",
             parameters={"key": "val"},
         ),
@@ -73,7 +73,7 @@ def test_get_dataset_activity(
     assert resp.status_code == 200
     data = resp.json()
     assert data["id"] == activity.id
-    assert data["activity_type"] == "SIMULATION"
+    assert data["activity_type"] == "simulation"
     assert data["source_version"] == "v1.0"
     assert data["parameters"] == {"key": "val"}
 
