@@ -133,8 +133,8 @@ class DatasetCreate(DatasetBase):
 
     The fields below the dataset metadata are convenience pass-throughs that
     describe the initial default ``Distribution`` created alongside the dataset.
-    They are only relevant when creating the first distribution at the same time;
-    additional distributions can be added afterwards via the distributions
+    Supplying ``url`` is optional — a Dataset can be registered without any
+    physical distribution and distributions added later via the distributions
     sub-resource.
     """
 
@@ -142,8 +142,8 @@ class DatasetCreate(DatasetBase):
     activity_id: int | None = None
     origin: str | None = None
     # Default distribution fields — passed through to a Distribution row with
-    # default_distribution=True on create.
-    url: str
+    # default_distribution=True on create.  Only created when url is supplied.
+    url: str | None = None
     endpoint_url: str | None = None
     region: str | None = None
     media_type: str | None = None
@@ -167,8 +167,8 @@ class DatasetRead(DatasetBase):
     activity_id: int | None = None
     origin: str | None = None
     effective_access_level: AccessLevel | None = None
-    # Default distribution fields inlined for convenience
-    url: str
+    # Default distribution fields inlined for convenience (None when no distribution exists)
+    url: str | None = None
     media_type: str | None = None
     format: str | None = None
     storage_options: StorageOptions | None = None

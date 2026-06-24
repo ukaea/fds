@@ -333,6 +333,20 @@ def test_get_datasets_with_storage_options(
     assert data["storage_options"]["secret"] == "r_sec"
 
 
+def test_create_dataset_without_url(test_client: TestClient, admin_user_token: dict):
+    """A Dataset can be registered without a URL; url is null and no distribution is created."""
+    response = test_client.post(
+        "/api/v1/datasets/",
+        headers=admin_user_token,
+        json={"name": "metadata_only", "level": 1},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["name"] == "metadata_only"
+    assert "url" not in data
+    assert "distributions" not in data
+
+
 def test_temporal_coverage_roundtrip(
     test_client: TestClient,
     session: Session,
