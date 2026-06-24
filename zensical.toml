@@ -43,5 +43,7 @@ nav = [
     { "0026 — Persistent Identifier Strategy" = "adrs/0026-persistent-identifier-strategy.md" },
     { "0027 — Field-Level Attribution Access Control" = "adrs/0027-field-level-attribution-access-control.md" },
     { "0028 — Dataset Identity by ID" = "adrs/0028-dataset-identity-by-id.md" },
+    { "0029 — Icechunk Store Granularity & Collection Correspondence" = "adrs/0029-icechunk-collection-model.md" },
+    { "0033 — PostgreSQL for Production Persistence" = "adrs/0033-postgresql-for-production-persistence.md" },
   ]},
 ]

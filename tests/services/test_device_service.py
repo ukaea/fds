@@ -56,7 +56,7 @@ def test_get_devices(session: Session, admin_user: AuthenticatedUser):
         DeviceCreate(name="Device B", type="Type Y"), user=admin_user
     )
 
-    devices = service.get_multi()
+    devices = service.get_multi(user=admin_user)
     assert len(devices) == 2
     assert device1 in devices
     assert device2 in devices
@@ -70,13 +70,36 @@ def test_get_devices_with_limit_and_offset(
         service.create(DeviceCreate(name=f"Device {i}", type="Type A"), user=admin_user)
 
     # Test limit
-    devices_limited = service.get_multi(limit=5)
+    devices_limited = service.get_multi(user=admin_user, limit=5)
     assert len(devices_limited) == 5
 
     # Test offset
-    devices_offset = service.get_multi(offset=5, limit=5)
+    devices_offset = service.get_multi(user=admin_user, offset=5, limit=5)
     assert len(devices_offset) == 5
     assert devices_offset[0].name == "Device 5"
+
+
+def test_get_multi_anonymous_sees_only_public_and_embargoed(
+    session: Session, admin_user: AuthenticatedUser
+):
+    service = DeviceService(session)
+    service.create(
+        DeviceCreate(name="Pub", access_level=AccessLevel.PUBLIC), admin_user
+    )
+    service.create(
+        DeviceCreate(name="Emb", access_level=AccessLevel.EMBARGOED), admin_user
+    )
+    service.create(
+        DeviceCreate(name="Res", access_level=AccessLevel.RESTRICTED), admin_user
+    )
+
+    # No caller identity → treated as anonymous: RESTRICTED is filtered out,
+    # EMBARGOED metadata stays discoverable.
+    names = {d.name for d in service.get_multi()}
+    assert names == {"Pub", "Emb"}
+
+    # An admin sees everything.
+    assert len(service.get_multi(user=admin_user)) == 3
 
 
 def test_update_device(session: Session, admin_user: AuthenticatedUser):

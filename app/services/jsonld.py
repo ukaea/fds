@@ -13,12 +13,16 @@ METADATA_CONTEXT = {
     "dct": "http://purl.org/dc/terms/",
     "prov": "http://www.w3.org/ns/prov#",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "dqv": "http://www.w3.org/ns/dqv#",
+    "oa": "http://www.w3.org/ns/oa#",
     "title": "dct:title",
     "description": "dct:description",
     "publisher": "dct:publisher",
     "identifier": "dct:identifier",
     "created": {"@id": "dct:created", "@type": "xsd:dateTime"},
     "modified": {"@id": "dct:modified", "@type": "xsd:dateTime"},
+    "startDate": {"@id": "dcat:startDate", "@type": "xsd:dateTime"},
+    "endDate": {"@id": "dcat:endDate", "@type": "xsd:dateTime"},
     "keywords": "dcat:keyword",
     "license": "dct:license",
     "version": "dcat:version",
@@ -96,9 +100,24 @@ def map_dataset_to_dcat(
         "version": dataset.version,
     }
 
-    # Access Rights mapping
     if dataset.access_level:
         data["accessRights"] = dataset.access_level.value
+
+    if dataset.quality_flag:
+        data["dqv:hasQualityAnnotation"] = {
+            "@type": "dqv:QualityAnnotation",
+            "oa:motivatedBy": {"@id": "dqv:qualityAssessment"},
+            "oa:hasBody": dataset.quality_flag,
+        }
+
+    # dct:temporal → dct:PeriodOfTime
+    if dataset.temporal_start or dataset.temporal_end:
+        period: dict[str, Any] = {"@type": "dct:PeriodOfTime"}
+        if dataset.temporal_start:
+            period["startDate"] = dataset.temporal_start.isoformat()
+        if dataset.temporal_end:
+            period["endDate"] = dataset.temporal_end.isoformat()
+        data["dct:temporal"] = period
 
     # DCAT Distribution mapping
     distributions: list[Distribution] = getattr(dataset, "distributions", []) or []
