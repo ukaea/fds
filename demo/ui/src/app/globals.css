@@ -3,40 +3,72 @@
 @tailwind utilities;
 
 :root {
-  /* HSL Color Palette - Premium Scientific Aesthetic */
-  --background: 220 20% 10%;
-  --foreground: 220 20% 97%;
+  color-scheme: light dark;
 
-  --card: 220 20% 14%;
-  --card-foreground: 220 20% 97%;
+  /* Monochrome palette — light */
+  --background: 0 0% 100%;
+  --foreground: 0 0% 9%;
 
-  --popover: 220 20% 14%;
-  --popover-foreground: 220 20% 97%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 9%;
 
-  /* Use UKAEA Secondary Blue (#0082CA) for Primary Actions in Dark Mode for better contrast */
-  --primary: 202 100% 40%; /* UKAEA Secondary Blue #0082CA */
-  --primary-foreground: 0 0% 100%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 9%;
 
-  --secondary: 215 25% 27%;
-  --secondary-foreground: 210 40% 98%;
+  --primary: 0 0% 9%;
+  --primary-foreground: 0 0% 98%;
 
-  --muted: 215 25% 27%;
-  --muted-foreground: 215 20% 65%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 9%;
 
-  --accent: 207 100% 17%; /* UKAEA Blue #002F56 as Accent/Backgrounds */
-  --accent-foreground: 0 0% 100%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 40%;
 
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
+  --accent: 0 0% 93%;
+  --accent-foreground: 0 0% 9%;
 
-  --border: 215 25% 27%;
-  --input: 215 25% 27%;
-  --ring: 210 100% 50%;
+  --destructive: 0 70% 42%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 0 0% 89%;
+  --input: 0 0% 89%;
+  --ring: 0 0% 9%;
 
   --radius: 0.5rem;
-
-  /* Typography */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Monochrome palette — dark */
+    --background: 0 0% 7%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 64%;
+
+    --accent: 0 0% 18%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 63% 46%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
+    --ring: 0 0% 83%;
+  }
 }
 
 body {
@@ -48,11 +80,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Glassmorphism Utilities */
-/* Brand Header Utility */
+/* Neutral, theme-aware sticky header */
 .glass {
-  background: hsl(207 100% 17%); /* UKAEA Blue #002F56 */
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: hsl(var(--background) / 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .card {
@@ -60,14 +92,14 @@ body {
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   color: hsl(var(--card-foreground));
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
-  border-color: hsl(var(--primary)/20%);
+  box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.10);
+  border-color: hsl(var(--foreground) / 0.25);
 }
 
 .container {

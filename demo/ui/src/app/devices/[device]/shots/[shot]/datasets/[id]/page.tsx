@@ -64,10 +64,10 @@ function HeatmapCanvas({ data, width, height, title }: any) {
                 ref={canvasRef}
                 width={width}
                 height={height}
-                className="w-full max-w-[300px] aspect-square object-contain pixelated border border-slate-700 bg-black/50"
+                className="w-full max-w-[300px] aspect-square object-contain pixelated border border-border bg-black/50"
                 style={{ imageRendering: 'pixelated' }}
              />
-             <p className="text-xs text-slate-400 mt-4 bg-slate-900 px-3 py-1 rounded inline-flex font-mono">
+             <p className="text-xs text-muted-foreground mt-4 bg-card px-3 py-1 rounded inline-flex font-mono">
                  Heatmap: {title}
              </p>
         </div>
@@ -387,16 +387,16 @@ export default function DatasetPage() {
       {/* Code Snippet Modal */}
       {showCodeModal && accessValues.token && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-3xl w-full shadow-2xl relative overflow-hidden animate-fade-in">
-              <div className="flex justify-between items-center bg-slate-800 p-4 border-b border-slate-700">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2"><Activity className="w-5 h-5 text-primary"/> Connect via Python (Xarray)</h3>
-                  <button onClick={() => setShowCodeModal(false)} className="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+          <div className="bg-card border border-border rounded-xl max-w-3xl w-full shadow-2xl relative overflow-hidden animate-fade-in">
+              <div className="flex justify-between items-center bg-muted p-4 border-b border-border">
+                  <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Activity className="w-5 h-5 text-primary"/> Connect via Python (Xarray)</h3>
+                  <button onClick={() => setShowCodeModal(false)} className="text-muted-foreground hover:text-foreground text-2xl leading-none">&times;</button>
               </div>
               <div className="p-6">
-                  <p className="text-sm text-slate-300 mb-4">
+                  <p className="text-sm text-foreground mb-4">
                       To prevent dark repositories and ensure you always analyze the latest version of the data, we recommend streaming directly into Python. Your temporary access token has been injected below.
                   </p>
-                  <div className="bg-slate-950 p-4 rounded-lg overflow-x-auto border border-slate-800 relative group">
+                  <div className="bg-background p-4 rounded-lg overflow-x-auto border border-border relative group">
                       {(() => {
                           const activeCreds = (() => {
                               const url = new URL(accessValues.s3Path!.replace("s3://", "http://localhost:9000/"));
@@ -408,16 +408,16 @@ export default function DatasetPage() {
                               <>
                                   <button
                                       onClick={() => navigator.clipboard.writeText(snippet)}
-                                      className="absolute top-2 right-2 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                      className="absolute top-2 right-2 bg-muted hover:bg-muted text-xs text-foreground px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
                                   >Copy Snippet</button>
-                                  <pre className="text-emerald-400 text-sm font-mono whitespace-pre-wrap">{snippet}</pre>
+                                  <pre className="text-foreground text-sm font-mono whitespace-pre-wrap">{snippet}</pre>
                               </>
                           );
                       })()}
                   </div>
-                  <div className="mt-4 bg-blue-900/20 border border-blue-900/50 p-3 rounded flex gap-3 text-sm text-blue-300">
+                  <div className="mt-4 bg-muted border border-border p-3 rounded flex gap-3 text-sm text-foreground">
                       <span className="font-bold shrink-0">Note:</span>
-                      <p>This S3 STS token is temporary and scoped exclusively to your UKAEA Identity profile. Do not commit this code snippet to version control.</p>
+                      <p>This S3 STS token is temporary and scoped exclusively to your authenticated identity profile. Do not commit this code snippet to version control.</p>
                   </div>
               </div>
           </div>
@@ -426,27 +426,27 @@ export default function DatasetPage() {
 
       {/* Header */}
       <div className="mb-8">
-         <div className="flex items-center text-sm text-slate-400 mb-6 font-medium">
+         <div className="flex items-center text-sm text-muted-foreground mb-6 font-medium">
             <Link href="/devices" className="hover:text-primary transition-colors flex items-center">Devices</Link>
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
             <Link href={`/devices/${device}`} className="hover:text-primary transition-colors flex items-center">{device}</Link>
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
             <Link href={`/devices/${device}/shots/${shot}`} className="hover:text-primary transition-colors flex items-center">Shot #{shot}</Link>
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
-            <span className="text-white">{datasetData?.name || id}</span>
+            <span className="text-foreground">{datasetData?.name || id}</span>
          </div>
          <h1 className="text-4xl font-bold flex items-center gap-3 mb-4">
             <Database className="text-primary w-8 h-8" />
             {datasetData?.name || id}
          </h1>
-         <p className="text-lg text-slate-300 max-w-4xl leading-relaxed mb-6">
+         <p className="text-lg text-foreground max-w-4xl leading-relaxed mb-6">
             {datasetData?.description || "Scientific data array containing experimental measurements from the plasma discharge."}
          </p>
          <div className="flex flex-wrap gap-3">
-             <span className="bg-slate-800 text-slate-300 px-3 py-1 rounded-full text-sm border border-slate-700 font-mono">Device: {device}</span>
-             <span className="bg-slate-800 text-slate-300 px-3 py-1 rounded-full text-sm border border-slate-700 font-mono">Shot: {shot}</span>
-             {datasetData?.level !== undefined && <span className="bg-blue-900/30 text-blue-400 px-3 py-1 rounded-full text-sm border border-blue-800/50">Level {datasetData.level} processed</span>}
-             {datasetData?.publisher && <span className="bg-slate-800 text-slate-300 px-3 py-1 rounded-full text-sm border border-slate-700">Publisher: {datasetData.publisher}</span>}
+             <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Device: {device}</span>
+             <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Shot: {shot}</span>
+             {datasetData?.level !== undefined && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border">Level {datasetData.level} processed</span>}
+             {datasetData?.publisher && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border">Publisher: {datasetData.publisher}</span>}
          </div>
       </div>
 
@@ -455,32 +455,32 @@ export default function DatasetPage() {
         {/* Left Column: Zarr Visualizer (only rendered for Zarr datasets) */}
         {(!datasetData || isZarr(datasetData.media_type)) && (
           <div className="lg:col-span-2">
-            <div className="card h-[650px] flex flex-col relative overflow-hidden shadow-2xl shadow-black/50 border border-slate-700/50">
-                <div className="absolute inset-0 bg-slate-950/80 z-0">
+            <div className="card h-[650px] flex flex-col relative overflow-hidden shadow-2xl shadow-black/50 border border-border">
+                <div className="absolute inset-0 bg-background/80 z-0">
                     {/* Grid Background Pattern */}
                     <div className="h-full w-full opacity-30" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.2) 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
                 </div>
 
-                <div className="relative z-10 p-4 flex justify-between items-center border-b border-white/5 bg-slate-900/90 backdrop-blur">
-                    <h3 className="font-mono text-sm text-blue-400 flex items-center gap-2 font-bold tracking-wider">
+                <div className="relative z-10 p-4 flex justify-between items-center border-b border-border bg-card/90 backdrop-blur">
+                    <h3 className="font-mono text-sm text-foreground flex items-center gap-2 font-bold tracking-wider">
                         <Activity className="w-4 h-4" /> INTERACTIVE ZARR VISUALIZER
                     </h3>
                     <div className="flex gap-2">
                         {variables.length > 0 && (
-                            <span className="text-xs bg-emerald-900/30 border border-emerald-800/50 px-2 py-1 rounded text-emerald-400">{variables.length} array variables</span>
+                            <span className="text-xs bg-muted border border-border px-2 py-1 rounded text-foreground">{variables.length} array variables</span>
                         )}
                     </div>
                 </div>
 
                 <div className="flex-1 flex items-center justify-center relative z-10">
                     {!accessValues.granted ? (
-                        <div className="text-center p-8 bg-slate-900/50 backdrop-blur border border-slate-700 rounded-lg max-w-md">
-                            <Lock className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-                            <h4 className="text-lg font-bold text-white mb-2">Data Locked</h4>
-                            <p className="text-slate-400 text-sm mb-6">Authenticate to decrypt and visualize this Zarr store natively in your browser.</p>
+                        <div className="text-center p-8 bg-card/50 backdrop-blur border border-border rounded-lg max-w-md">
+                            <Lock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                            <h4 className="text-lg font-bold text-foreground mb-2">Data Locked</h4>
+                            <p className="text-muted-foreground text-sm mb-6">Authenticate to decrypt and visualize this Zarr store natively in your browser.</p>
                             <button
                                 onClick={handleRequestAccess}
-                                className="bg-primary hover:bg-blue-600 text-white font-bold py-2 px-6 rounded transition-colors flex items-center justify-center gap-2 mx-auto"
+                                className="bg-primary hover:bg-accent text-foreground font-bold py-2 px-6 rounded transition-colors flex items-center justify-center gap-2 mx-auto"
                             >
                                 <Unlock className="w-4 h-4" />
                                 {status === "authenticated" ? "Grant Access" : "Sign In"}
@@ -489,11 +489,11 @@ export default function DatasetPage() {
                     ) : (
                         <div className="w-full h-full flex flex-col items-start justify-start p-0">
                             {/* Visualizer Toolbar */}
-                            <div className="w-full bg-slate-900/80 border-b border-white/5 p-4 flex gap-4 items-center backdrop-blur">
-                                <span className="text-sm font-medium text-slate-400">Variable:</span>
+                            <div className="w-full bg-card/80 border-b border-border p-4 flex gap-4 items-center backdrop-blur">
+                                <span className="text-sm font-medium text-muted-foreground">Variable:</span>
                                 {variables.length > 0 ? (
                                     <select
-                                        className="bg-slate-950 border border-slate-700 text-white text-sm rounded focus:ring-primary focus:border-primary block p-2 shadow-inner min-w-[200px]"
+                                        className="bg-background border border-border text-foreground text-sm rounded focus:ring-primary focus:border-primary block p-2 shadow-inner min-w-[200px]"
                                         value={selectedVar || ''}
                                         onChange={(e: any) => {
                                            onSelectVariable(e.target.value);
@@ -502,23 +502,23 @@ export default function DatasetPage() {
                                         {variables.map((v: string) => <option key={v} value={v}>{v}</option>)}
                                     </select>
                                 ) : (
-                                    <span className="text-sm text-slate-500 italic">Scanning matrix...</span>
+                                    <span className="text-sm text-muted-foreground italic">Scanning matrix...</span>
                                 )}
                             </div>
 
                             <div className="flex-1 w-full p-6 relative flex items-center justify-center">
                                 {loadingData ? (
-                                    <div className="flex flex-col items-center bg-slate-900/50 p-6 rounded-lg backdrop-blur">
+                                    <div className="flex flex-col items-center bg-card/50 p-6 rounded-lg backdrop-blur">
                                         <Activity className="w-8 h-8 text-primary animate-spin mb-4" />
-                                        <p className="text-sm text-slate-300">Fetching chunks via WebAssembly...</p>
+                                        <p className="text-sm text-foreground">Fetching chunks via WebAssembly...</p>
                                     </div>
                                 ) : chunkData ? (
                                     <div className="w-full h-full flex flex-col items-center animate-fade-in relative z-10">
                                         {chunkData.sliders && chunkData.sliders.map((slider, i) => (
-                                            <div key={slider.name} className="w-full max-w-3xl bg-slate-900 border border-slate-700/50 p-3 rounded mb-2 flex gap-4 items-center shadow-lg">
-                                                <span className="text-xs font-bold text-slate-400 min-w-[120px] uppercase tracking-wider">
+                                            <div key={slider.name} className="w-full max-w-3xl bg-card border border-border p-3 rounded mb-2 flex gap-4 items-center shadow-lg">
+                                                <span className="text-xs font-bold text-muted-foreground min-w-[120px] uppercase tracking-wider">
                                                     {slider.name}:
-                                                    <span className="text-white ml-2 font-mono text-sm">
+                                                    <span className="text-foreground ml-2 font-mono text-sm">
                                                         {slider.data && slider.data[sliderIndices[i] || 0] !== undefined
                                                             ? slider.data[sliderIndices[i] || 0].toFixed(4)
                                                             : (sliderIndices[i] || 0)}
@@ -629,13 +629,13 @@ export default function DatasetPage() {
                                                         pathD += Array.from(yData.slice(0, sampleCount)).map((val, i) => `L${(i / sampleCount) * 400},${100 - (Number.isNaN(val) ? 0 : val * 50)}`).join(' ');
                                                     }
                                                     return (
-                                                        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center p-4 bg-slate-900/50 rounded-lg border border-slate-700/50 shadow-inner">
+                                                        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center p-4 bg-card/50 rounded-lg border border-border shadow-inner">
                                                             <svg viewBox="0 0 400 200" className="w-full flex-1 text-primary drop-shadow-[0_0_10px_rgba(59,130,246,0.6)]">
                                                                 <path d={pathD} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
                                                                 <line x1="0" y1="100" x2="400" y2="100" stroke="#334155" strokeWidth="1" strokeDasharray="4 4" />
                                                             </svg>
-                                                            <p className="text-xs text-slate-400 mt-4 bg-slate-900 px-3 py-1 rounded-full border border-slate-700 shadow flex items-center gap-2 font-mono">
-                                                                Plot: <span className="text-blue-400 font-bold">{chunkData.yL}</span> {chunkData.xL ? `vs ${chunkData.xL}` : ''} <span className="text-slate-500">({chunkData.shape[chunkData.xIdx !== undefined ? chunkData.xIdx : 0]} pts)</span>
+                                                            <p className="text-xs text-muted-foreground mt-4 bg-card px-3 py-1 rounded-full border border-border shadow flex items-center gap-2 font-mono">
+                                                                Plot: <span className="text-foreground font-bold">{chunkData.yL}</span> {chunkData.xL ? `vs ${chunkData.xL}` : ''} <span className="text-muted-foreground">({chunkData.shape[chunkData.xIdx !== undefined ? chunkData.xIdx : 0]} pts)</span>
                                                             </p>
                                                         </div>
                                                     );
@@ -644,9 +644,9 @@ export default function DatasetPage() {
                                         </div>
                                     </div>
                                 ) : zarrMetadata ? (
-                                     <div className="text-left w-full h-full overflow-auto pointer-events-auto p-4 bg-slate-900/50 rounded-lg">
-                                        <h4 className="font-bold text-emerald-400 mb-2 border-b border-emerald-900 pb-2">Zarr Array Mounted</h4>
-                                        <p className="text-slate-400 text-sm mb-4">Please select a variable from the dropdown above to begin visualization.</p>
+                                     <div className="text-left w-full h-full overflow-auto pointer-events-auto p-4 bg-card/50 rounded-lg">
+                                        <h4 className="font-bold text-foreground mb-2 border-b border-border pb-2">Zarr Array Mounted</h4>
+                                        <p className="text-muted-foreground text-sm mb-4">Please select a variable from the dropdown above to begin visualization.</p>
                                      </div>
                                 ) : null}
                             </div>
@@ -660,23 +660,23 @@ export default function DatasetPage() {
         {/* Right Column: Metadata & Controls Sidebar */}
         <div className="space-y-6">
 
-            <div className="card p-6 border-t-4 border-t-primary bg-slate-800/80 shadow-xl border-slate-700/50">
-                <h3 className="text-lg font-bold mb-4 flex items-center justify-between text-white">
+            <div className="card p-6 border-t-4 border-t-primary bg-muted/80 shadow-xl border-border">
+                <h3 className="text-lg font-bold mb-4 flex items-center justify-between text-foreground">
                     Data Access
-                    {accessValues.granted ? <Unlock className="w-5 h-5 text-emerald-400" /> : <Lock className="w-5 h-5 text-slate-500" />}
+                    {accessValues.granted ? <Unlock className="w-5 h-5 text-foreground" /> : <Lock className="w-5 h-5 text-muted-foreground" />}
                 </h3>
 
                 {!accessValues.granted ? (
                     <div className="text-left">
-                        <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                        <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
                           {datasetData?.effective_access_level === 'public'
                             ? 'This dataset is publicly accessible. Click below to load credentials.'
                             : 'Dataset files are secured in MinIO S3. Authenticate with an FDS account to acquire an S3 token.'}
                         </p>
-                        {accessValues.error && <p className="text-red-400 mb-4 text-sm bg-red-900/20 p-2 rounded border border-red-900/50">{accessValues.error}</p>}
+                        {accessValues.error && <p className="text-destructive mb-4 text-sm bg-destructive/10 p-2 rounded border border-destructive/40">{accessValues.error}</p>}
                         <button
                             onClick={handleRequestAccess}
-                            className="bg-primary hover:bg-blue-600 text-white font-bold py-3 px-4 rounded w-full transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/25"
+                            className="bg-primary hover:bg-accent text-foreground font-bold py-3 px-4 rounded w-full transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/25"
                         >
                             <Unlock className="w-4 h-4" />
                             {datasetData?.effective_access_level === 'public'
@@ -686,13 +686,13 @@ export default function DatasetPage() {
                     </div>
                 ) : (
                     <div className="animate-fade-in text-sm">
-                        <div className="bg-emerald-900/30 border border-emerald-500/30 text-emerald-400 p-3 rounded mb-4 flex items-center gap-2 shadow-inner">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Identity Verified
+                        <div className="bg-muted border border-border text-foreground p-3 rounded mb-4 flex items-center gap-2 shadow-inner">
+                            <span className="w-2 h-2 rounded-full bg-muted animate-pulse"></span> Identity Verified
                         </div>
                         <div className="space-y-2 text-xs">
-                           <p className="text-slate-500 font-medium uppercase tracking-wider">Mounted URI</p>
-                           <p className="break-all text-blue-300 font-mono bg-slate-900 border border-slate-700 p-2 rounded">{accessValues.s3Path}</p>
-                           <a href="#" onClick={(e) => { e.preventDefault(); setShowCodeModal(true); }} className="text-primary hover:text-white inline-flex items-center gap-1 mt-2">
+                           <p className="text-muted-foreground font-medium uppercase tracking-wider">Mounted URI</p>
+                           <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded">{accessValues.s3Path}</p>
+                           <a href="#" onClick={(e) => { e.preventDefault(); setShowCodeModal(true); }} className="text-primary hover:text-foreground inline-flex items-center gap-1 mt-2">
                                <Download className="w-3 h-3" /> Download Dataset
                            </a>
                         </div>
@@ -700,85 +700,85 @@ export default function DatasetPage() {
                 )}
             </div>
 
-            <div className="card p-6 bg-slate-900/60 shadow-xl border-slate-700/50">
-                <h3 className="text-lg font-bold mb-4 border-b border-slate-700 pb-2 text-white">Dataset Properties</h3>
+            <div className="card p-6 bg-card/60 shadow-xl border-border">
+                <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground">Dataset Properties</h3>
                 <div className="space-y-3 text-sm">
-                    <div className="flex flex-col justify-start py-1 border-b border-slate-800 pb-2">
-                        <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Created At</span>
-                        <span className="text-slate-200">{datasetData?.created_at ? new Date(datasetData.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric'}) : 'Unknown'}</span>
+                    <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Created At</span>
+                        <span className="text-foreground">{datasetData?.created_at ? new Date(datasetData.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric'}) : 'Unknown'}</span>
                     </div>
-                    <div className="flex flex-col justify-start py-1 border-b border-slate-800 pb-2">
-                        <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Media Type</span>
-                        <span className="text-slate-200">{datasetData?.media_type || 'Unknown'}</span>
+                    <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Media Type</span>
+                        <span className="text-foreground">{datasetData?.media_type || 'Unknown'}</span>
                     </div>
                     {datasetData?.license && (
-                        <div className="flex flex-col justify-start py-1 border-b border-slate-800 pb-2">
-                            <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">License</span>
-                            <span className="text-slate-200">{datasetData.license}</span>
+                        <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                            <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">License</span>
+                            <span className="text-foreground">{datasetData.license}</span>
                         </div>
                     )}
-                    <div className="flex flex-col justify-start py-1 border-b border-slate-800 pb-2">
-                        <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Processing Level</span>
-                        <span className="text-slate-200">Level {datasetData?.level !== undefined ? datasetData.level : 'Unknown'}</span>
+                    <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Processing Level</span>
+                        <span className="text-foreground">Level {datasetData?.level !== undefined ? datasetData.level : 'Unknown'}</span>
                     </div>
                      <div className="flex flex-col justify-start py-1">
-                        <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Access Policy</span>
-                        <span className="text-slate-200 capitalize">{datasetData?.effective_access_level || datasetData?.access_level || 'Unknown'}</span>
+                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Access Policy</span>
+                        <span className="text-foreground capitalize">{datasetData?.effective_access_level || datasetData?.access_level || 'Unknown'}</span>
                     </div>
                 </div>
             </div>
 
             {/* Provenance Card */}
-            <div className="card p-6 bg-slate-900/60 shadow-xl border-slate-700/50">
-                <h3 className="text-lg font-bold mb-4 border-b border-slate-700 pb-2 text-white flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-slate-400" /> Provenance
+            <div className="card p-6 bg-card/60 shadow-xl border-border">
+                <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-muted-foreground" /> Provenance
                 </h3>
                 {activityData ? (
                     <div className="space-y-3 text-sm">
                         {activityData.activity_type && (
-                            <div className="flex flex-col justify-start py-1 border-b border-slate-800 pb-2">
-                                <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Activity Type</span>
-                                <span className="text-slate-200">{activityData.activity_type}</span>
+                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Activity Type</span>
+                                <span className="text-foreground">{activityData.activity_type}</span>
                             </div>
                         )}
                         {activityData.source_version && (
-                            <div className="flex flex-col justify-start py-1 border-b border-slate-800 pb-2">
-                                <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Source Version</span>
-                                <span className="font-mono text-slate-200">{activityData.source_version}</span>
+                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Source Version</span>
+                                <span className="font-mono text-foreground">{activityData.source_version}</span>
                             </div>
                         )}
                         {activityData.started_at && (
-                            <div className="flex flex-col justify-start py-1 border-b border-slate-800 pb-2">
-                                <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Started</span>
-                                <span className="text-slate-200">{new Date(activityData.started_at).toLocaleString()}</span>
+                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Started</span>
+                                <span className="text-foreground">{new Date(activityData.started_at).toLocaleString()}</span>
                             </div>
                         )}
                         {activityData.ended_at && (
-                            <div className="flex flex-col justify-start py-1 border-b border-slate-800 pb-2">
-                                <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Ended</span>
-                                <span className="text-slate-200">{new Date(activityData.ended_at).toLocaleString()}</span>
+                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Ended</span>
+                                <span className="text-foreground">{new Date(activityData.ended_at).toLocaleString()}</span>
                             </div>
                         )}
                         {activityData.parameters && Object.keys(activityData.parameters).length > 0 && (
                             <div className="flex flex-col justify-start py-1">
-                                <span className="text-slate-500 uppercase text-xs font-bold tracking-wider mb-1">Parameters</span>
-                                <pre className="text-xs text-slate-300 font-mono bg-slate-950 border border-slate-800 p-2 rounded overflow-x-auto">
+                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Parameters</span>
+                                <pre className="text-xs text-foreground font-mono bg-background border border-border p-2 rounded overflow-x-auto">
                                     {JSON.stringify(activityData.parameters, null, 2)}
                                 </pre>
                             </div>
                         )}
                         <Link
                             href="/sources"
-                            className="text-xs text-primary hover:text-blue-300 inline-flex items-center gap-1 mt-2 transition-colors"
+                            className="text-xs text-primary hover:text-foreground inline-flex items-center gap-1 mt-2 transition-colors"
                         >
                             View Sources <ChevronRight className="w-3 h-3" />
                         </Link>
                     </div>
                 ) : datasetData?.activity_id ? (
-                    <p className="text-slate-500 text-sm">Loading provenance...</p>
+                    <p className="text-muted-foreground text-sm">Loading provenance...</p>
                 ) : (
-                    <div className="text-center py-4 bg-slate-900/30 rounded-lg border border-dashed border-slate-700">
-                        <p className="text-xs text-slate-500">No provenance recorded for this dataset.</p>
+                    <div className="text-center py-4 bg-card/30 rounded-lg border border-dashed border-border">
+                        <p className="text-xs text-muted-foreground">No provenance recorded for this dataset.</p>
                     </div>
                 )}
             </div>
