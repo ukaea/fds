@@ -4,6 +4,8 @@
 .ruff_cache/
 .pytest_cache/
 .mypy_cache/
+.claude
+CLAUDE.md
 
 # Demo environment (large data files)
 demo/

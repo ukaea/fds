@@ -55,10 +55,19 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         return self._filter_accessible_datasets(datasets, user)
 
     def check_read_access(self, dataset: Dataset, user: AuthenticatedUser) -> None:
-        """
-        Enforces read access for dataset metadata.
-        Uses the full effective policy (inherited access_level, required_scopes,
-        allowed_idps) from the Dataset → Shot → Device hierarchy.
+        """Enforce read access for Dataset metadata.
+
+        Resolves the full effective policy (inherited ``access_level``,
+        ``required_scopes``, ``allowed_idps``) from the
+        Dataset → Shot → Device hierarchy.
+
+        - PUBLIC / EMBARGOED: metadata is discoverable by everyone (EMBARGOED
+          restricts data, not metadata — enforced at credential vending).
+        - RESTRICTED: requires an authenticated user, then any IdP and scope
+          gates set by the policy. With no explicit ``required_scopes`` it
+          falls back to a capability check (shot operator or device admin).
+
+        Raises ``ForbiddenError`` when the user does not satisfy the policy.
         """
         policy = get_effective_policy(dataset, self.session)
 
@@ -145,17 +154,18 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             obj_in, update={"distributions": [], "origin": origin}
         )
 
-        distribution = Distribution(
-            url=obj_in.url,
-            endpoint_url=obj_in.endpoint_url,
-            region=obj_in.region,
-            media_type=obj_in.media_type,
-            format=obj_in.format,
-            storage_options_type=obj_in.storage_options_type
-            or derive_storage_options_type(obj_in.media_type, obj_in.url),
-            default_distribution=True,
-        )
-        db_obj.distributions.append(distribution)
+        if obj_in.url:
+            distribution = Distribution(
+                url=obj_in.url,
+                endpoint_url=obj_in.endpoint_url,
+                region=obj_in.region,
+                media_type=obj_in.media_type,
+                format=obj_in.format,
+                storage_options_type=obj_in.storage_options_type
+                or derive_storage_options_type(obj_in.media_type, obj_in.url),
+                default_distribution=True,
+            )
+            db_obj.distributions.append(distribution)
 
         self.session.add(db_obj)
         try:
@@ -297,7 +307,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         read_model = DatasetRead.model_validate(
             dataset,
             update={
-                "url": default_dist.url if default_dist else "",
+                "url": default_dist.url if default_dist else None,
                 "media_type": default_dist.media_type if default_dist else None,
                 "format": default_dist.format if default_dist else None,
                 "distributions": [

@@ -34,10 +34,23 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         )
 
     def check_read_access(self, device: Device, user: AuthenticatedUser) -> None:
-        """Enforce read access for device metadata."""
+        """Enforce read access for Device metadata.
+
+        Resolves the effective policy (``access_level``, ``required_scopes``,
+        ``allowed_idps``) for the Device, with the global default as fallback.
+
+        - PUBLIC / EMBARGOED: metadata is discoverable by everyone (EMBARGOED
+          restricts data, not metadata — enforced at credential vending).
+        - RESTRICTED: requires an authenticated user, then any IdP and scope
+          gates set by the policy. With no explicit ``required_scopes`` an
+          authenticated user from a trusted IdP suffices (no capability check
+          for metadata reads — that belongs to credential vending).
+
+        Raises ``ForbiddenError`` when the user does not satisfy the policy.
+        """
         policy = get_effective_policy(device, self.session)
 
-        if policy.access_level == AccessLevel.PUBLIC:
+        if policy.access_level in (AccessLevel.PUBLIC, AccessLevel.EMBARGOED):
             return
 
         if user.is_anonymous:
@@ -64,7 +77,7 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         """Get devices with metadata visibility filtering applied."""
         devices = list(super().get_multi(offset=offset, limit=limit))
         if user is None:
-            return devices
+            user = ANONYMOUS_USER
 
         accessible_devices: list[Device] = []
 

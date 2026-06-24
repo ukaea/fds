@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlmodel import (
@@ -51,6 +52,8 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
     name: str = Field(index=True)
     level: int = Field(index=True)
     quality_flag: str | None = Field(default=None, index=True)
+    temporal_start: datetime | None = Field(default=None)
+    temporal_end: datetime | None = Field(default=None)
     device_name: str | None = Field(default=None, index=True)
     access_level: AccessLevel | None = Field(default=None, index=True)
     license: str | None = Field(default=None)
@@ -130,8 +133,8 @@ class DatasetCreate(DatasetBase):
 
     The fields below the dataset metadata are convenience pass-throughs that
     describe the initial default ``Distribution`` created alongside the dataset.
-    They are only relevant when creating the first distribution at the same time;
-    additional distributions can be added afterwards via the distributions
+    Supplying ``url`` is optional — a Dataset can be registered without any
+    physical distribution and distributions added later via the distributions
     sub-resource.
     """
 
@@ -139,8 +142,8 @@ class DatasetCreate(DatasetBase):
     activity_id: int | None = None
     origin: str | None = None
     # Default distribution fields — passed through to a Distribution row with
-    # default_distribution=True on create.
-    url: str
+    # default_distribution=True on create.  Only created when url is supplied.
+    url: str | None = None
     endpoint_url: str | None = None
     region: str | None = None
     media_type: str | None = None
@@ -164,8 +167,8 @@ class DatasetRead(DatasetBase):
     activity_id: int | None = None
     origin: str | None = None
     effective_access_level: AccessLevel | None = None
-    # Default distribution fields inlined for convenience
-    url: str
+    # Default distribution fields inlined for convenience (None when no distribution exists)
+    url: str | None = None
     media_type: str | None = None
     format: str | None = None
     storage_options: StorageOptions | None = None
@@ -177,6 +180,8 @@ class DatasetUpdate(SQLModel):
     name: str | None = None
     level: int | None = None
     quality_flag: str | None = None
+    temporal_start: datetime | None = None
+    temporal_end: datetime | None = None
     device_name: str | None = None
     shot_id: str | None = None
     activity_id: int | None = None

@@ -1,7 +1,22 @@
 from datetime import datetime
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
+
+
+class ActivityType(str, Enum):
+    """
+    Controlled vocabulary for the type of activity that produced a dataset.
+
+    Maps to ``prov:type`` in PROV-O JSON-LD.
+    """
+
+    MEASUREMENT = "measurement"
+    SIMULATION = "simulation"
+    ANALYSIS = "analysis"
+    CALIBRATION = "calibration"
+
 
 if TYPE_CHECKING:
     from .collection import Collection
@@ -19,7 +34,7 @@ class ActivityInput(SQLModel, table=True):
 class ActivityBase(SQLModel):
     source_id: int = Field(foreign_key="source.id")
     source_version: str | None = None
-    activity_type: str | None = None  # e.g. "SIMULATION", "MEASUREMENT"
+    activity_type: ActivityType | None = None
     parameters: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     started_at: datetime | None = None
     ended_at: datetime | None = None
@@ -45,7 +60,7 @@ class ActivityRead(ActivityBase):
 class ActivityUpdate(SQLModel):
     source_id: int | None = None
     source_version: str | None = None
-    activity_type: str | None = None
+    activity_type: ActivityType | None = None
     parameters: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     started_at: datetime | None = None
     ended_at: datetime | None = None
