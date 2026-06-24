@@ -15,6 +15,14 @@ if TYPE_CHECKING:
 class ShotBase(TimestampMixin, SQLModel):
     id: str = Field(index=True)
     shot_at: datetime | None = Field(default=None, index=True)
+    shot_end: datetime | None = Field(default=None, index=True)
+    shot_duration: float | None = Field(
+        default=None,
+        description=(
+            "Shot duration in seconds. Optional. If shot_at and shot_end are both "
+            "set, shot_duration must equal the interval between them."
+        ),
+    )
     description: str | None = Field(default=None)
     publisher: str | None = Field(default=None, index=True)
     creator: str | None = Field(default=None, index=True)
@@ -80,6 +88,8 @@ class ShotRead(ShotBase):
 
 class ShotUpdate(SQLModel):
     shot_at: datetime | None = None
+    shot_end: datetime | None = None
+    shot_duration: float | None = None
     description: str | None = None
     publisher: str | None = None
     creator: str | None = None

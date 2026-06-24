@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from app.models.collection import Collection, CollectionRead
@@ -20,7 +21,6 @@ METADATA_CONTEXT = {
     "identifier": "dct:identifier",
     "created": {"@id": "dct:created", "@type": "xsd:dateTime"},
     "modified": {"@id": "dct:modified", "@type": "xsd:dateTime"},
-    "temporal": {"@id": "dct:temporal", "@type": "xsd:dateTime"},
     "creator": "dct:creator",
     "startDate": {"@id": "dcat:startDate", "@type": "xsd:dateTime"},
     "endDate": {"@id": "dcat:endDate", "@type": "xsd:dateTime"},
@@ -85,8 +85,20 @@ def map_shot_to_dcat(shot: Shot | ShotRead, base_url: str) -> dict[str, Any]:
         "modified": shot.updated_at.isoformat()
         if hasattr(shot, "updated_at")
         else None,
-        "temporal": shot.shot_at.isoformat() if shot.shot_at else None,
     }
+    # dct:temporal → dct:PeriodOfTime. Emit a closed period when an end is known or
+    # derivable from the duration; otherwise an open period (start only).
+    if shot.shot_at:
+        end = shot.shot_end
+        if end is None and shot.shot_duration is not None:
+            end = shot.shot_at + timedelta(seconds=shot.shot_duration)
+        period: dict[str, Any] = {
+            "@type": "dct:PeriodOfTime",
+            "startDate": shot.shot_at.isoformat(),
+        }
+        if end is not None:
+            period["endDate"] = end.isoformat()
+        data["dct:temporal"] = period
     if shot.access_level:
         data["accessRights"] = shot.access_level.value
     return {k: v for k, v in data.items() if v is not None}

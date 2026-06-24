@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import pytest
 from sqlmodel import Session
 
@@ -231,5 +233,127 @@ def test_update_shot_transition_to_public_with_scopes_rejected(
             shot_id=shot.id,
             device_name="DEV4",
             obj_in=ShotUpdate(access_level=AccessLevel.PUBLIC),
+            user=admin_user,
+        )
+
+
+_T0 = datetime(2024, 3, 15, 14, 32, tzinfo=timezone.utc)
+_T5 = datetime(2024, 3, 15, 14, 37, tzinfo=timezone.utc)  # +300s
+
+
+def test_create_shot_consistent_temporal(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    admin_user: AuthenticatedUser,
+):
+    device_service.create(DeviceCreate(name="DEVT"), user=admin_user)
+    shot = shot_service.create(
+        ShotCreate(
+            id="t-ok",
+            device_name="DEVT",
+            shot_at=_T0,
+            shot_end=_T5,
+            shot_duration=300.0,
+        ),
+        user=admin_user,
+    )
+    assert shot.shot_duration == 300.0
+    # Persisted datetimes round-trip as naive (SQLite drops tzinfo).
+    assert shot.shot_end is not None
+    assert shot.shot_end.replace(tzinfo=timezone.utc) == _T5
+
+
+def test_create_shot_duration_only(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    admin_user: AuthenticatedUser,
+):
+    """Under-determined combinations are allowed (no contradiction)."""
+    device_service.create(DeviceCreate(name="DEVT2"), user=admin_user)
+    shot = shot_service.create(
+        ShotCreate(id="t-dur", device_name="DEVT2", shot_at=_T0, shot_duration=300.0),
+        user=admin_user,
+    )
+    assert shot.shot_end is None
+    assert shot.shot_duration == 300.0
+
+
+def test_create_shot_inconsistent_duration_rejected(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    admin_user: AuthenticatedUser,
+):
+    device_service.create(DeviceCreate(name="DEVT3"), user=admin_user)
+    with pytest.raises(FDSValidationError, match="inconsistent"):
+        shot_service.create(
+            ShotCreate(
+                id="t-bad",
+                device_name="DEVT3",
+                shot_at=_T0,
+                shot_end=_T5,
+                shot_duration=999.0,
+            ),
+            user=admin_user,
+        )
+
+
+def test_create_shot_end_before_start_rejected(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    admin_user: AuthenticatedUser,
+):
+    device_service.create(DeviceCreate(name="DEVT4"), user=admin_user)
+    with pytest.raises(FDSValidationError, match="before"):
+        shot_service.create(
+            ShotCreate(id="t-rev", device_name="DEVT4", shot_at=_T5, shot_end=_T0),
+            user=admin_user,
+        )
+
+
+def test_create_shot_end_without_start_rejected(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    admin_user: AuthenticatedUser,
+):
+    device_service.create(DeviceCreate(name="DEVT5"), user=admin_user)
+    with pytest.raises(FDSValidationError, match="requires shot_at"):
+        shot_service.create(
+            ShotCreate(id="t-noend", device_name="DEVT5", shot_end=_T5),
+            user=admin_user,
+        )
+
+
+def test_create_shot_negative_duration_rejected(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    admin_user: AuthenticatedUser,
+):
+    device_service.create(DeviceCreate(name="DEVT6"), user=admin_user)
+    with pytest.raises(FDSValidationError, match="negative"):
+        shot_service.create(
+            ShotCreate(id="t-neg", device_name="DEVT6", shot_duration=-1.0),
+            user=admin_user,
+        )
+
+
+def test_update_shot_temporal_consistency_against_existing(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    admin_user: AuthenticatedUser,
+):
+    """Update is validated against the merged (existing + patch) state."""
+    device_service.create(DeviceCreate(name="DEVT7"), user=admin_user)
+    shot_service.create(
+        ShotCreate(id="t-upd", device_name="DEVT7", shot_at=_T0),
+        user=admin_user,
+    )
+
+    with pytest.raises(FDSValidationError, match="before"):
+        shot_service.update(
+            shot_id="t-upd",
+            device_name="DEVT7",
+            obj_in=ShotUpdate(
+                shot_end=datetime(2024, 3, 15, 14, 0, tzinfo=timezone.utc)
+            ),
             user=admin_user,
         )

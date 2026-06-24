@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -22,6 +23,52 @@ from app.services.exceptions import (
     ForbiddenError,
     ResourceNotFoundError,
 )
+
+# Tolerance (seconds) when checking an explicit shot_duration against the
+# shot_at/shot_end interval, so a whole-second duration is not rejected against a
+# sub-second-precise interval.
+_DURATION_TOLERANCE_S = 1.0
+
+
+def _as_utc(dt: datetime | None) -> datetime | None:
+    """Treat a naive datetime as UTC so naive/aware values can be compared."""
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def validate_temporal_fields(
+    shot_at: datetime | None,
+    shot_end: datetime | None,
+    shot_duration: float | None,
+) -> None:
+    """
+    Enforce internal consistency of a shot's temporal fields.
+
+    All three are optional, but when combinations are over-determined they must
+    agree: a shot cannot end without starting, cannot end before it starts, cannot
+    have a negative duration, and an explicit duration must match the start/end
+    interval.
+    """
+    if shot_end is not None and shot_at is None:
+        raise FDSValidationError("shot_end requires shot_at to be set.")
+
+    shot_at = _as_utc(shot_at)
+    shot_end = _as_utc(shot_end)
+
+    if shot_at is not None and shot_end is not None and shot_end < shot_at:
+        raise FDSValidationError("shot_end must not be before shot_at.")
+
+    if shot_duration is not None and shot_duration < 0:
+        raise FDSValidationError("shot_duration must not be negative.")
+
+    if shot_at is not None and shot_end is not None and shot_duration is not None:
+        interval = (shot_end - shot_at).total_seconds()
+        if abs(interval - shot_duration) > _DURATION_TOLERANCE_S:
+            raise FDSValidationError(
+                f"shot_duration ({shot_duration}s) is inconsistent with the "
+                f"shot_at/shot_end interval ({interval}s)."
+            )
 
 
 class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
@@ -86,6 +133,11 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
             obj_in.access_level,
             obj_in.required_scopes,
             obj_in.allowed_idps,
+        )
+        validate_temporal_fields(
+            obj_in.shot_at,
+            obj_in.shot_end,
+            obj_in.shot_duration,
         )
 
         # Permission check
@@ -203,6 +255,11 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
             update_data.get("access_level", db_obj.access_level),
             update_data.get("required_scopes", db_obj.required_scopes),
             update_data.get("allowed_idps", db_obj.allowed_idps),
+        )
+        validate_temporal_fields(
+            update_data.get("shot_at", db_obj.shot_at),
+            update_data.get("shot_end", db_obj.shot_end),
+            update_data.get("shot_duration", db_obj.shot_duration),
         )
 
         # Handle device change - this is complex with composite PKs, effectively a move/copy
