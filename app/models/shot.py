@@ -5,6 +5,7 @@ from sqlmodel import JSON, Column, Field, PrimaryKeyConstraint, Relationship, SQ
 
 from .mixins import TimestampMixin
 from .policy import AccessLevel
+from .scientific_metadata import ScientificProperty
 
 if TYPE_CHECKING:
     from .collection import Collection
@@ -42,6 +43,9 @@ class ShotBase(TimestampMixin, SQLModel):
             "inherit from the enclosing device policy."
         ),
         sa_column=Column(JSON, nullable=True),
+    )
+    scientific_metadata: list[ScientificProperty] | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
     )
 
 
@@ -109,3 +113,4 @@ class ShotUpdate(SQLModel):
             "inherit from the enclosing device policy."
         ),
     )
+    scientific_metadata: list[ScientificProperty] | None = None

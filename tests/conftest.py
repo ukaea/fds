@@ -9,14 +9,17 @@ from app.auth.security import (
     get_token_claims,
 )
 from app.core.config import TrustedIdP, config
-from app.core.db import get_session
+from app.core.db import _json_serializer, get_session
 from app.main import app
 
 
 @pytest.fixture(name="session")
 def session_fixture() -> Generator[Session, None, None]:
     engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        json_serializer=_json_serializer,
     )
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:

@@ -333,6 +333,33 @@ def test_get_datasets_with_storage_options(
     assert data["storage_options"]["secret"] == "r_sec"
 
 
+def test_scientific_metadata_roundtrip(
+    test_client: TestClient,
+    session: Session,
+    admin_user_token: dict,
+):
+    sci_meta = [
+        {"name": "plasma_current", "value": 0.8, "unit": "MA"},
+        {"name": "disrupted", "value": False},
+    ]
+    response = test_client.post(
+        "/api/v1/datasets/",
+        headers=admin_user_token,
+        json={
+            "name": "sci-dataset",
+            "level": 1,
+            "url": "s3://bucket/sci",
+            "scientific_metadata": sci_meta,
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["scientific_metadata"] is not None
+    assert len(data["scientific_metadata"]) == 2
+    assert data["scientific_metadata"][0]["name"] == "plasma_current"
+    assert data["scientific_metadata"][1]["value"] is False
+
+
 def test_create_dataset_without_url(test_client: TestClient, admin_user_token: dict):
     """A Dataset can be registered without a URL; url is null and no distribution is created."""
     response = test_client.post(

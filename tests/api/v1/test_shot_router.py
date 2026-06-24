@@ -175,6 +175,39 @@ def test_delete_shot_unauthorized(
     assert shot_service.get((mast.name, shot.id)) is not None
 
 
+def test_scientific_metadata_roundtrip(
+    test_client: TestClient,
+    session: Session,
+    admin_user_token: dict,
+):
+    DeviceService(session).create(
+        DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
+    )
+    session.commit()
+
+    sci_meta = [
+        {"name": "plasma_current", "value": 0.8, "unit": "MA"},
+        {"name": "confinement_mode", "value": "H-mode"},
+        {"name": "disrupted", "value": False},
+    ]
+    response = test_client.post(
+        "/api/v1/devices/MAST/shots/",
+        headers=admin_user_token,
+        json={
+            "id": "sci-30420",
+            "access_level": "public",
+            "scientific_metadata": sci_meta,
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["scientific_metadata"] is not None
+    assert len(data["scientific_metadata"]) == 3
+    assert data["scientific_metadata"][0]["name"] == "plasma_current"
+    assert data["scientific_metadata"][0]["unit"] == "MA"
+    assert data["scientific_metadata"][2]["value"] is False
+
+
 def test_shot_metadata_fields_roundtrip(
     test_client: TestClient,
     session: Session,

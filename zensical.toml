@@ -45,6 +45,7 @@ nav = [
     { "0028 — Dataset Identity by ID" = "adrs/0028-dataset-identity-by-id.md" },
     { "0029 — Icechunk Store Granularity & Collection Correspondence" = "adrs/0029-icechunk-collection-model.md" },
     { "0030 — Controlled Vocabularies" = "adrs/0030-controlled-vocabularies.md" },
+    { "0031 — Scientific Metadata" = "adrs/0031-scientific-metadata.md" },
     { "0033 — PostgreSQL for Production Persistence" = "adrs/0033-postgresql-for-production-persistence.md" },
   ]},
 ]
