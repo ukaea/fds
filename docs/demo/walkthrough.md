@@ -171,8 +171,53 @@ xr.open_dataset(eq["url"], engine="zarr", storage_options=eq["storage_options"])
 
 ---
 
-## 8. High-throughput parallel analysis (Dask)
+## 8. Parallel reads from the IceChunk collection (Dask)
 
-The "grand finale" demonstrates the **Credential Manifest** pattern at scale. All 60 datasets for MAST-Upgrade shot 50000 are fetched in one request (with `include_storage_options=true`), and their mean values are computed in parallel across a 4-worker Dask cluster. FDS resolves and deduplicates all tokens server-side; the client simply distributes the manifest.
+Each IDS group in the shared IceChunk store for MAST-Upgrade shot 50000 is read by a separate Dask worker. This demonstrates that multiple readers can open the same IceChunk repository concurrently without coordination.
 
-See [Access Control → Bulk access](../concepts/access-control.md#bulk-access-the-credential-manifest) and [ADR-0011](../adrs/0011-credential-manifest-pattern.md).
+The `analysed` collection is fetched to get the IceChunk `root_url`, then all analysed datasets are fetched in one request (with `include_storage_options=true`) so FDS resolves and vends the credentials server-side. Each `application/vnd.icechunk+zarr` dataset is dispatched as a future to a 4-worker `LocalCluster`:
+
+```python
+# 1. Fetch the collection to get the IceChunk root_url
+collection = httpx.get(
+    f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/collections/analysed"
+).json()
+root_url = collection["root_url"]
+
+# 2. Fetch all analysed datasets (public — no auth header needed)
+all_datasets = httpx.get(
+    f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets",
+    params={"include_storage_options": "true"},
+).json()
+icechunk_datasets = [
+    d for d in all_datasets
+    if d.get("media_type") == "application/vnd.icechunk+zarr"
+]
+
+# 3. Worker: open the IceChunk store and read one IDS group.
+def read_group_mean(root_url, group_name, storage_options):
+    from urllib.parse import urlparse
+
+    import numpy as np
+    import zarr
+    from icechunk import Repository, s3_storage
+
+    parsed = urlparse(root_url)
+    opts = {k: v for k, v in (storage_options or {}).items() if v is not None}
+    storage = s3_storage(bucket=parsed.netloc, prefix=parsed.path.strip("/"), **opts)
+    repo = Repository.open(storage=storage)
+    session = repo.readonly_session(branch="main")
+    time_arr = zarr.open_array(store=session.store, path=f"{group_name}/time", mode="r")
+    return float(np.mean(np.asarray(time_arr)))
+
+# 4. Dispatch — one future per IDS group across a 4-worker cluster
+with LocalCluster(n_workers=4, threads_per_worker=1, dashboard_address=None) as cluster:
+    with Client(cluster) as client:
+        futures = [
+            client.submit(read_group_mean, root_url, d["name"], d.get("storage_options"))
+            for d in icechunk_datasets
+        ]
+        results = client.gather(futures)
+```
+
+See [Access Control → Credential vending](../concepts/access-control.md#credential-vending-sts-token-pattern) and [ADR-0029](../adrs/0029-icechunk-collection-model.md).
