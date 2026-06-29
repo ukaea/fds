@@ -1,8 +1,8 @@
+from collections.abc import Iterable
+
 from fastapi import APIRouter, status
-from fastapi.responses import StreamingResponse
 
 from app.api.deps import BoundedLimit, CurrentUserDep, ShotServiceDep
-from app.api.streaming import ndjson_response
 from app.models.shot import (
     ShotCreate,
     ShotRead,
@@ -58,7 +58,6 @@ def read_shots(
 
 @router.get(
     "/devices/{device_name}/shots/export",
-    response_class=StreamingResponse,
     responses={
         200: {
             "content": {"application/x-ndjson": {}},
@@ -73,7 +72,7 @@ def export_shots(
     device_name: str,
     shot_service: ShotServiceDep,
     user: CurrentUserDep,
-) -> StreamingResponse:
+) -> Iterable[ShotRead]:
     """Stream every Shot for a device that the caller can read as NDJSON (ADR-0020).
 
     Auth posture mirrors the corresponding list endpoint: open to anonymous
@@ -84,7 +83,8 @@ def export_shots(
         shot_service.to_read_model(s)
         for s in shot_service.stream_by_device_name(device_name, user=user)
     )
-    return ndjson_response(rows)
+    for row in rows:
+        yield row
 
 
 @router.get(

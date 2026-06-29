@@ -1,5 +1,7 @@
+from collections.abc import Iterable
+
 from fastapi import APIRouter, Request, status
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 
 from app.api.deps import (
     ActivityServiceDep,
@@ -7,7 +9,6 @@ from app.api.deps import (
     CollectionServiceDep,
     CurrentUserDep,
 )
-from app.api.streaming import ndjson_response
 from app.models.activity import ActivityRead
 from app.models.collection import CollectionCreate, CollectionRead, CollectionUpdate
 from app.services.exceptions import ResourceNotFoundError
@@ -54,7 +55,6 @@ def read_collections_global(
 
 @router.get(
     "/collections/export",
-    response_class=StreamingResponse,
     responses={
         200: {
             "content": {"application/x-ndjson": {}},
@@ -74,7 +74,7 @@ def export_collections(
     user: CurrentUserDep,
     device_name: str | None = None,
     shot_id: str | None = None,
-) -> StreamingResponse:
+) -> Iterable[CollectionRead]:
     """Stream every Collection the caller can read as NDJSON (ADR-0020).
 
     Emits flat metadata only (no inlined member datasets or child
@@ -88,7 +88,8 @@ def export_collections(
             user=user, device_name=device_name, shot_id=shot_id
         )
     )
-    return ndjson_response(rows)
+    for row in rows:
+        yield row
 
 
 @router.get(

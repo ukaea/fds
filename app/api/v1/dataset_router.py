@@ -1,5 +1,7 @@
+from collections.abc import Iterable
+
 from fastapi import APIRouter, Request, status
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 
 from app.api.deps import (
     ActivityServiceDep,
@@ -9,7 +11,6 @@ from app.api.deps import (
     DistributionServiceDep,
     SourceServiceDep,
 )
-from app.api.streaming import ndjson_response
 from app.models.activity import ActivityRead
 from app.models.dataset import DatasetCreate, DatasetRead, DatasetUpdate
 from app.models.distribution import (
@@ -67,7 +68,6 @@ def read_datasets_global(
 
 @router.get(
     "/datasets/export",
-    response_class=StreamingResponse,
     responses={
         200: {
             "content": {"application/x-ndjson": {}},
@@ -85,7 +85,7 @@ def export_datasets(
     user: CurrentUserDep,
     device_name: str | None = None,
     shot_id: str | None = None,
-) -> StreamingResponse:
+) -> Iterable[DatasetRead]:
     """Stream every Dataset the caller can read as NDJSON (ADR-0020).
 
     Auth posture mirrors the corresponding list endpoint: open to anonymous
@@ -98,7 +98,8 @@ def export_datasets(
             user=user, device_name=device_name, shot_id=shot_id
         )
     )
-    return ndjson_response(rows)
+    for row in rows:
+        yield row
 
 
 @router.post(
