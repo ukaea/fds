@@ -32,6 +32,11 @@ docker compose up --build
 podman compose up --build
 ```
 
+> **Podman + git worktrees:** the compose project name is always `demo`, so
+> launching from a second worktree reuses the first's containers and can serve
+> stale code. `demo/run.sh` forces a clean, current stack from whichever worktree
+> you run it in. It's podman-only — docker users use the command above.
+
 Services started:
 
 - **FDS API**: `http://localhost:8000`
