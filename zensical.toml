@@ -12,7 +12,8 @@ nav = [
     { "Semantic Metadata (DCAT & JSON-LD)" = "concepts/dcat-jsonld.md" },
   ]},
   { Demo = [
-    { "Walkthrough" = "demo/walkthrough.md" },
+    { "Ingest" = "demo/ingest.md" },
+    { "Explore" = "demo/explore.md" },
   ]},
   { ADRs = [
     { "0001 — Flexible Data Hierarchy (superseded)" = "adrs/0001-flexible-multi-tier-data-hierarchy.md" },

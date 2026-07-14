@@ -114,5 +114,8 @@ cat <<EOF
    Docs    http://localhost:4001
    MinIO  http://localhost:9000
 
-Populate with sample data:  uv run demo/demonstration.py
+The catalog starts EMPTY. Populate it by walking through the ingest notebook:
+   uvx marimo edit demo/ingest.py --sandbox
+Or relaunch with the seed profile to auto-populate on startup:
+   podman compose --profile seed -p demo -f demo/docker-compose.yaml up -d
 EOF

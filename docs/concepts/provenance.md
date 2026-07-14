@@ -36,14 +36,14 @@ An Activity records a *specific execution* of a Source. It is a first-class tabl
 {
   "source_id": "...",
   "source_version": "efit-v2.8",
-  "activity_type": "ANALYSIS",
+  "activity_type": "analysis",
   "parameters": {"run_id": "30421-efit-standard"},
   "started_at": "2024-01-15T10:00:00",
   "ended_at": "2024-01-15T10:12:34"
 }
 ```
 
-`activity_type` is one of `ACQUISITION`, `ANALYSIS`, or `SIMULATION`.
+`activity_type` is one of `measurement`, `simulation`, `analysis`, or `calibration`.
 
 ## Relationships
 
@@ -68,7 +68,7 @@ Source: jintrac  (PROV-O: prov:SoftwareAgent)
 
 Activity: 30420-jintrac-v220922
   source:    jintrac  v220922
-  type:      SIMULATION
+  type:      simulation
   started:   2024-03-10T14:00:00
   ended:     2024-03-10T16:47:22
   inputs:    equilibrium, magnetics, thomson_scattering  (prov:used)
