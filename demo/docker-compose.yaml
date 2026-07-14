@@ -21,6 +21,12 @@ services:
     depends_on:
       - idp
       - minio
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/api/v1/devices/\")'"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   idp:
     image: quay.io/keycloak/keycloak:23.0.0
@@ -58,8 +64,10 @@ services:
   data-generator:
     image: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     depends_on:
-      - minio
-      - minio-setup
+      minio:
+        condition: service_started
+      minio-setup:
+        condition: service_completed_successfully
     environment:
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=password
@@ -69,6 +77,22 @@ services:
       - ./generate_data.py:/app/generate_data.py
     network_mode: host
     command: uv run /app/generate_data.py
+
+  metadata-seeder:
+    # Opt-in: only runs under the `seed` profile (`podman compose --profile seed up`).
+    # A plain `up` leaves FDS empty so the demo notebooks can populate it live.
+    profiles: ["seed"]
+    image: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+    depends_on:
+      fds:
+        condition: service_healthy
+    environment:
+      - FDS_API_URL=http://localhost:8000/api/v1
+      - KEYCLOAK_URL=http://localhost:8080/realms/fds/protocol/openid-connect/token
+    volumes:
+      - ./seed_metadata.py:/app/seed_metadata.py
+    network_mode: host
+    command: uv run /app/seed_metadata.py
 
   docs:
     image: zensical/zensical

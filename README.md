@@ -45,13 +45,26 @@ Services started:
 
 > **First run note:** On first launch, the demo automatically pulls real MAST shot data from the STFC public S3 store, which can take several minutes. Run without `-d` to see a progress bar in the terminal. Once downloaded, the data persists in `demo/minio-data/` across restarts, so subsequent launches are fast — unless you delete that directory.
 
-### 2. Run the Demonstration Notebook
+### 2. Populate & Explore
 
-The `demonstration.py` notebook walks through the FDS workflow (Auth -> Registration -> Token Exchange -> Data Access).
+The catalog starts **empty**. The marimo notebook `demo/ingest.py` demonstrates how to record the various types of entities in FDS, then `demo/explore.py` shows the various ways to read back information from FDS:
+
+**1. Ingest** — register devices, shots, datasets, collections, and provenance. Watch entries appear at `http://localhost:3000` (or via `GET /api/v1/devices/`) as you run each cell.
 
 ```bash
-# From the root of the repository
-uvx marimo edit demo/demonstration.py --sandbox
+uvx marimo edit demo/ingest.py --sandbox
+```
+
+**2. Explore** — read the data back: JSON-LD, access control, credential vending, and parallel reads.
+
+```bash
+uvx marimo edit demo/explore.py --sandbox
+```
+
+Want the catalog pre-filled with no manual step? Bring the stack up under the `seed` profile — the `metadata-seeder` service then runs `demo/seed_metadata.py` on startup:
+
+```bash
+podman compose --profile seed up --build   # or: docker compose --profile seed up --build
 ```
 
 ## Local Development Setup
@@ -102,6 +115,18 @@ Key configuration areas:
 ```bash
 uv run pytest
 ```
+
+This runs the unit and service tests only. Integration tests require the demo docker-compose stack to be running and are excluded by default:
+
+```bash
+# Start the demo stack first
+podman compose -f demo/docker-compose.yaml up -d
+
+# Then run integration tests
+uv run pytest -m integration
+```
+
+Integration tests exercise the full stack — real HTTP calls to FDS, real Keycloak auth, and real MinIO storage.
 
 ### Running Linting & Formatting
 
