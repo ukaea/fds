@@ -10,7 +10,6 @@ import json
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.api.streaming import NDJSON_MEDIA_TYPE
 from app.auth.security import AuthenticatedUser
 from app.models.collection import CollectionCreate
 from app.models.dataset import DatasetCreate
@@ -21,6 +20,8 @@ from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
+
+JSONL_MEDIA_TYPE = "application/jsonl"
 
 
 def _parse_ndjson(body: str) -> list[dict]:
@@ -55,7 +56,7 @@ def test_dataset_export_streams_ndjson(
 
     response = test_client.get("/api/v1/datasets/export")
     assert response.status_code == 200
-    assert response.headers["content-type"].startswith(NDJSON_MEDIA_TYPE)
+    assert response.headers["content-type"].startswith(JSONL_MEDIA_TYPE)
 
     rows = _parse_ndjson(response.text)
     assert len(rows) == 5
@@ -315,7 +316,7 @@ def test_shot_export_streams_for_device(
 
     response = test_client.get("/api/v1/devices/MAST/shots/export")
     assert response.status_code == 200
-    assert response.headers["content-type"].startswith(NDJSON_MEDIA_TYPE)
+    assert response.headers["content-type"].startswith(JSONL_MEDIA_TYPE)
     rows = _parse_ndjson(response.text)
     assert {r["id"] for r in rows} == {"0", "1", "2"}
 
@@ -359,7 +360,7 @@ def test_collection_export_streams_flat_records(
 
     response = test_client.get("/api/v1/collections/export?device_name=MAST")
     assert response.status_code == 200
-    assert response.headers["content-type"].startswith(NDJSON_MEDIA_TYPE)
+    assert response.headers["content-type"].startswith(JSONL_MEDIA_TYPE)
     rows = _parse_ndjson(response.text)
     assert {r["name"] for r in rows} == {"col_0", "col_1", "col_2"}
     # Flat metadata only — no inlined members or children.
