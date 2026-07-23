@@ -33,6 +33,7 @@ from app.services.exceptions import (
 )
 from app.services.file_access_service import FileAccessService
 from app.services.reference_service import (
+    CALIBRATION,
     GEOMETRY,
     REFERENCE_KINDS,
     ReferenceKind,
@@ -182,6 +183,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 obj_in.device_name,
                 getattr(obj_in, kind.roles_attr),
                 obj_in.applies_to,
+                order=getattr(obj_in, kind.order_attr) if kind.order_attr else None,
                 references=getattr(obj_in, kind.references_attr),
                 shot_id=obj_in.shot_id,
             )
@@ -266,10 +268,16 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             effective_references = update_data.get(
                 kind.references_attr, getattr(db_obj, kind.references_attr)
             )
+            effective_order = (
+                update_data.get(kind.order_attr, getattr(db_obj, kind.order_attr))
+                if kind.order_attr
+                else None
+            )
             ReferenceService(self.session, kind).validate_new_version(
                 db_obj.device_name,
                 effective_roles,
                 effective_applies_to,
+                order=effective_order,
                 references=effective_references,
                 shot_id=db_obj.shot_id,
                 exclude_id=db_obj.id,
@@ -349,13 +357,15 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         include_storage_options: bool = False,
         user: AuthenticatedUser | None = None,
         include_geometry: bool = False,
+        include_calibration: bool = False,
     ) -> DatasetRead:
         """
         Converts a Dataset ORM object to a DatasetRead DTO, including the effective access level.
         The default distribution's fields are inlined; other distributions appear in `formats`.
         Optionally enriches it with temporary storage credentials if permitted.
-        When ``include_geometry`` is set, resolves the signal's
-        ``geometry_references`` to their applicable versions.
+        When ``include_geometry`` / ``include_calibration`` is set, resolves the
+        signal's ``geometry_references`` / ``calibration_references`` to their
+        applicable versions.
         """
         default_dist = next(
             (d for d in dataset.distributions if d.default_distribution), None
@@ -385,6 +395,13 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 include_storage_options=include_storage_options,
                 user=user,
             )
+        if include_calibration:
+            read_model.calibration = self._resolve_reference_read_models(
+                dataset,
+                CALIBRATION,
+                include_storage_options=include_storage_options,
+                user=user,
+            )
         return read_model
 
     def _resolve_reference_read_models(
@@ -393,35 +410,84 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         kind: ReferenceKind,
         include_storage_options: bool = False,
         user: AuthenticatedUser | None = None,
+        shot: Shot | None = None,
+        visited: set[int] | None = None,
     ) -> list[DatasetRead] | None:
-        """Resolve a signal's references of ``kind`` to deduped read models, or
-        ``None`` if it declares none or has no resolvable shot."""
+        """Resolve ``dataset``'s references of ``kind`` to deduped read models, or
+        ``None`` if it declares none or has no resolvable shot.
+
+        Resolution is anchored to ``shot``. At the top level ``shot`` is ``None``
+        and taken from ``dataset``'s own shot; a nested reference *version* (a
+        device-level dataset with no shot of its own) is resolved at the *same*
+        anchoring shot, so calibrated geometry — a geometry version that itself
+        carries ``calibration_references`` — resolves at the original signal's
+        shot. ``visited`` carries the ancestor version ids to break cycles.
+        """
         references = getattr(dataset, kind.references_attr)
-        if not references or not dataset.shot_id:
+        if not references:
             return None
-        shot = self.session.exec(
-            select(Shot).where(
-                Shot.device_name == dataset.device_name,
-                Shot.id == dataset.shot_id,
-            )
-        ).first()
         if shot is None:
-            return None
-        resolved = ReferenceService(self.session, kind).resolve(shot, references)
+            if not dataset.shot_id:
+                return None
+            shot = self.session.exec(
+                select(Shot).where(
+                    Shot.device_name == dataset.device_name,
+                    Shot.id == dataset.shot_id,
+                )
+            ).first()
+            if shot is None:
+                return None
+        service = ReferenceService(self.session, kind)
+        if kind.order_attr is not None:
+            # Ordered kind: each role resolves to a stage-ordered chain.
+            chains = service.resolve_chain(shot, references)
+            ordered = [version for role in references for version in chains[role]]
+        else:
+            resolved = service.resolve(shot, references)
+            ordered = [resolved[role] for role in references]
         seen: set[int] = set()
         models: list[DatasetRead] = []
-        for version in resolved.values():
+        for version in ordered:
             if version is None or version.id is None or version.id in seen:
                 continue
             seen.add(version.id)
             models.append(
-                self.to_read_model(
-                    version,
-                    include_storage_options=include_storage_options,
-                    user=user,
+                self._reference_version_read_model(
+                    version, shot, include_storage_options, user, visited or set()
                 )
             )
         return models or None
+
+    def _reference_version_read_model(
+        self,
+        version: Dataset,
+        shot: Shot,
+        include_storage_options: bool,
+        user: AuthenticatedUser | None,
+        visited: set[int],
+    ) -> DatasetRead:
+        """Read model for a resolved reference ``version``, recursively resolving
+        its own reference kinds at the same anchoring ``shot`` (calibrated
+        geometry). ``visited`` (the ancestor version ids) breaks reference cycles:
+        a version already on the path is emitted but not descended into."""
+        model = self.to_read_model(
+            version, include_storage_options=include_storage_options, user=user
+        )
+        if version.id is None or version.id in visited:
+            return model
+        next_visited = visited | {version.id}
+        for nested_kind in REFERENCE_KINDS:
+            nested = self._resolve_reference_read_models(
+                version,
+                nested_kind,
+                include_storage_options=include_storage_options,
+                user=user,
+                shot=shot,
+                visited=next_visited,
+            )
+            if nested is not None:
+                setattr(model, nested_kind.name, nested)
+        return model
 
     def to_read_models(
         self,
@@ -429,6 +495,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         include_storage_options: bool = False,
         user: AuthenticatedUser | None = None,
         include_geometry: bool = False,
+        include_calibration: bool = False,
     ) -> list[DatasetRead]:
         """
         Batch converts ORM objects to DatasetRead DTOs, efficiently applying batch enrichment
@@ -442,6 +509,14 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 model.geometry = self._resolve_reference_read_models(
                     source,
                     GEOMETRY,
+                    include_storage_options=include_storage_options,
+                    user=user,
+                )
+        if include_calibration:
+            for source, model in zip(datasets, models):
+                model.calibration = self._resolve_reference_read_models(
+                    source,
+                    CALIBRATION,
                     include_storage_options=include_storage_options,
                     user=user,
                 )

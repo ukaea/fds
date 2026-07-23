@@ -120,10 +120,11 @@ def register_mast_datasets(client: httpx.Client, base_url: str) -> None:
                 "title": f"{ids_name.replace('_', ' ').title()} — Shot {shot_id}",
                 "media_type": "application/x-zarr",
             }
-            # thomson_scattering measurements resolve their chord positions from the
-            # versioned device-level geometry registered in register_mast_geometry.
+            # thomson_scattering resolves its chord positions and calibration chain
+            # from the versioned device-level references registered below.
             if ids_name == "thomson_scattering":
                 meta["geometry_references"] = ["thomson_positions"]
+                meta["calibration_references"] = ["thomson_calibration"]
             resp = client.post(
                 f"{base_url}/devices/{device}/shots/{shot_id}/datasets", json=meta
             )
@@ -162,6 +163,48 @@ def register_mast_geometry(client: httpx.Client, base_url: str) -> None:
             "media_type": "application/x-netcdf",
             "access_level": "public",
             "title": "MAST Thomson chord positions (v2, from shot 30421)",
+        },
+    ]
+    for version in versions:
+        resp = client.post(f"{base_url}/devices/mast/datasets", json=version)
+        if resp.status_code not in (201, 409):
+            resp.raise_for_status()
+
+
+def register_mast_calibration(client: httpx.Client, base_url: str) -> None:
+    """Register the staged device-level Thomson calibration chain on 'mast'.
+
+    Two versions of the ``thomson_calibration`` role at successive stages:
+    thomson_gain (stage 1) then thomson_absolute (stage 2). Non-overlap holds
+    per (role, stage), so both cover shots 30420 and 30421; resolving a signal's
+    reference returns them in stage order. Idempotent.
+    """
+    versions = [
+        {
+            "name": "thomson_gain",
+            "version": "1",
+            "level": 0,
+            "calibration_roles": ["thomson_calibration"],
+            "calibration_stage": 1,
+            "applies_to": {"shots": ["30420", "30421"]},
+            "url": "s3://fds-data/mast/calibration/thomson_gain.nc",
+            "endpoint_url": MINIO_ENDPOINT,
+            "media_type": "application/x-netcdf",
+            "access_level": "public",
+            "title": "MAST Thomson gain calibration (stage 1)",
+        },
+        {
+            "name": "thomson_absolute",
+            "version": "1",
+            "level": 0,
+            "calibration_roles": ["thomson_calibration"],
+            "calibration_stage": 2,
+            "applies_to": {"shots": ["30420", "30421"]},
+            "url": "s3://fds-data/mast/calibration/thomson_absolute.nc",
+            "endpoint_url": MINIO_ENDPOINT,
+            "media_type": "application/x-netcdf",
+            "access_level": "public",
+            "title": "MAST Thomson absolute calibration (stage 2)",
         },
     ]
     for version in versions:
@@ -503,6 +546,7 @@ def seed_all(base_url: str, headers: dict[str, str]) -> dict:
         register_devices_and_shots(client, base_url)
         register_mast_datasets(client, base_url)
         register_mast_geometry(client, base_url)
+        register_mast_calibration(client, base_url)
 
         scheduler_id = get_or_create_source(
             client,

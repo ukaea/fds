@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Dataset, Shot } from '@/lib/types';
-import { Calendar, Database, FileCode, ChevronRight, Server } from 'lucide-react';
+import { Calendar, Database, ChevronRight, Server } from 'lucide-react';
 import { ClientDate } from '@/components/client-date';
+import { DeviceDatasets } from '@/components/device-datasets';
 
 type Tab = 'shots' | 'datasets';
 
@@ -125,44 +126,14 @@ export default function DeviceDetailPage() {
 
       {/* Device Datasets Tab */}
       {activeTab === 'datasets' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {datasetsLoading && <div className="col-span-full py-8 text-muted-foreground">Loading datasets...</div>}
-          {datasetsError && <div className="col-span-full py-8 text-destructive">Failed to load datasets.</div>}
-          {!datasetsLoading && !datasetsError && datasets?.map((dataset) => (
-            <Link
-              key={dataset.name}
-              href={`/devices/${deviceName}/datasets/${dataset.id}`}
-              className="card p-6 hover:border-primary/50 transition-all group"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-muted p-2 rounded text-foreground">
-                    <Database className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg group-hover:text-primary transition-colors">{dataset.name}</h3>
-                    {dataset.url && (
-                      <p className="text-xs text-muted-foreground font-mono mt-1">{dataset.url}</p>
-                    )}
-                  </div>
-                </div>
-                <ChevronRight className="text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all" />
-              </div>
-              <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <FileCode className="w-4 h-4" />
-                  {dataset.media_type || 'Dataset'}
-                </div>
-                {dataset.level !== undefined && (
-                  <span className="text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border">
-                    Level {dataset.level}
-                  </span>
-                )}
-              </div>
-            </Link>
-          ))}
+        <div>
+          {datasetsLoading && <div className="py-8 text-muted-foreground">Loading datasets...</div>}
+          {datasetsError && <div className="py-8 text-destructive">Failed to load datasets.</div>}
+          {!datasetsLoading && !datasetsError && datasets && datasets.length > 0 && (
+            <DeviceDatasets datasets={datasets} deviceName={deviceName} />
+          )}
           {!datasetsLoading && !datasetsError && (!datasets || datasets.length === 0) && (
-            <div className="col-span-full text-center py-12 text-muted-foreground bg-muted/20 rounded-lg border border-dashed border-border">
+            <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-lg border border-dashed border-border">
               <Database className="w-10 h-10 mx-auto mb-3 opacity-30" />
               <p className="font-medium">No device-level datasets registered.</p>
               <p className="text-sm mt-1 text-muted-foreground">Device datasets are not tied to a specific shot — useful for calibration data, geometry files, and wall configurations.</p>

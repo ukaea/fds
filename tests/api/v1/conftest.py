@@ -86,3 +86,60 @@ def make_signal_fixture(
         return signal
 
     return make
+
+
+@pytest.fixture(name="make_cal_version")
+def make_cal_version_fixture(
+    session: Session,
+    datasets: DatasetService,
+    admin_user: AuthenticatedUser,
+    mast_shot: None,
+):
+    """Create a public device-level calibration version at ``stage`` and commit."""
+
+    def make(name: str, roles: list[str], coverage: ReferenceCoverage, *, stage: int):
+        version = datasets.create(
+            DatasetCreate(
+                name=name,
+                level=0,
+                device_name=DEVICE,
+                calibration_roles=roles,
+                calibration_stage=stage,
+                applies_to=coverage,
+                access_level=AccessLevel.PUBLIC,
+                url=f"s3://calibration/{name}.nc",
+            ),
+            admin_user,
+        )
+        session.commit()
+        return version
+
+    return make
+
+
+@pytest.fixture(name="make_cal_signal")
+def make_cal_signal_fixture(
+    session: Session,
+    datasets: DatasetService,
+    admin_user: AuthenticatedUser,
+    mast_shot: None,
+):
+    """Create a public shot-level signal using calibration ``references`` and commit."""
+
+    def make(references: list[str], *, name: str = "Te_raw"):
+        signal = datasets.create(
+            DatasetCreate(
+                name=name,
+                level=0,
+                device_name=DEVICE,
+                shot_id=SHOT,
+                calibration_references=references,
+                access_level=AccessLevel.PUBLIC,
+                url="s3://signals/te_raw.zarr",
+            ),
+            admin_user,
+        )
+        session.commit()
+        return signal
+
+    return make

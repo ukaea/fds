@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Dataset, Collection, Activity, Source } from '@/lib/types';
-import { Database, FileCode, ChevronRight, Layers } from 'lucide-react';
+import { Database, FileCode, ChevronRight, Layers, MapPin, SlidersHorizontal } from 'lucide-react';
+import { ResolvedRef, dedupeById } from '@/components/resolved-ref';
 
 function formatMediaType(mediaType?: string): string {
   if (!mediaType) return 'Zarr';
@@ -48,11 +49,6 @@ function DatasetCard({ dataset, deviceName, shotId }: { dataset: Dataset; device
           <FileCode className="w-4 h-4" />
           {formatMediaType(dataset.media_type)}
         </div>
-        {dataset.level !== undefined && (
-          <span className="text-xs px-2 py-0.5 bg-muted border border-border text-foreground rounded-full">
-            L{dataset.level}
-          </span>
-        )}
         <span className="text-foreground text-xs px-2 py-0.5 bg-muted rounded-full border border-border">
           {dataset.effective_access_level || dataset.access_level || 'public'}
         </span>
@@ -121,7 +117,9 @@ export default function ShotDetailPage() {
   const shotId = params.shot as string;
 
   const { data: datasets, error, isLoading } = useSWR<Dataset[]>(
-    deviceName && shotId ? `${API_BASE}/devices/${deviceName}/shots/${shotId}/datasets` : null,
+    deviceName && shotId
+      ? `${API_BASE}/devices/${deviceName}/shots/${shotId}/datasets?include_geometry=true&include_calibration=true`
+      : null,
     fetcher
   );
 
@@ -139,6 +137,12 @@ export default function ShotDetailPage() {
     collections?.flatMap(col => col.datasets?.map(ds => ds.id).filter((id): id is number => id != null) ?? []) ?? []
   );
   const uncollectedDatasets = datasets?.filter(ds => ds.id != null && !datasetIdsInCollections.has(ds.id!)) ?? [];
+
+  // Reference data resolved for this shot, aggregated across its datasets.
+  const resolvedGeometry = dedupeById((datasets ?? []).flatMap(ds => ds.geometry ?? []));
+  const resolvedCalibration = dedupeById((datasets ?? []).flatMap(ds => ds.calibration ?? [])).sort(
+    (a, b) => (a.calibration_stage ?? 0) - (b.calibration_stage ?? 0)
+  );
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -184,6 +188,46 @@ export default function ShotDetailPage() {
             {uncollectedDatasets.map((dataset) => (
               <DatasetCard key={dataset.id ?? dataset.name} dataset={dataset} deviceName={deviceName} shotId={shotId} />
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Reference data (geometry + calibration) resolved for this shot */}
+      {(resolvedGeometry.length > 0 || resolvedCalibration.length > 0) && (
+        <div className="mt-10">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-muted p-2 rounded-lg text-foreground">
+              <Database className="w-5 h-5" />
+            </div>
+            <h2 className="text-xl font-semibold text-foreground">Reference Data</h2>
+            <span className="text-sm text-muted-foreground">resolved for this shot</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {resolvedGeometry.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2 text-muted-foreground uppercase text-xs font-bold tracking-wider">
+                  <MapPin className="w-4 h-4" /> Geometry
+                </div>
+                <div className="space-y-2">
+                  {resolvedGeometry.map((v) => (
+                    <ResolvedRef key={v.id} version={v} />
+                  ))}
+                </div>
+              </div>
+            )}
+            {resolvedCalibration.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2 text-muted-foreground uppercase text-xs font-bold tracking-wider">
+                  <SlidersHorizontal className="w-4 h-4" /> Calibration
+                  <span className="normal-case font-normal text-muted-foreground">— applied in order</span>
+                </div>
+                <div className="space-y-2">
+                  {resolvedCalibration.map((v) => (
+                    <ResolvedRef key={v.id} version={v} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

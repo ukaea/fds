@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Database, Server, Search, FileCode } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Device, Dataset } from '@/lib/types';
+import { DeviceDatasets } from '@/components/device-datasets';
 
 function DatasetCard({ dataset }: { dataset: Dataset }) {
   const href =
@@ -212,11 +213,7 @@ export default function DatasetsPage() {
                         <span className="font-medium text-foreground">Device Datasets:</span>
                       </div>
                       {datasets.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {datasets.map((dataset) => (
-                            <DatasetCard key={dataset.id} dataset={dataset} />
-                          ))}
-                        </div>
+                        <DeviceDatasets datasets={datasets} deviceName={device.name} />
                       ) : (
                         <div className="text-center py-6 bg-card/30 rounded-lg border border-dashed border-border">
                           <p className="text-sm text-muted-foreground">

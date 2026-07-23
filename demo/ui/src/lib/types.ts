@@ -27,7 +27,13 @@ export interface Dataset {
   activity_id?: number;
   geometry_roles?: string[];
   geometry_references?: string[];
+  calibration_roles?: string[];
+  calibration_references?: string[];
+  calibration_stage?: number | null;
   applies_to?: ReferenceCoverage;
+  // Resolved reference versions, populated by ?include_geometry / ?include_calibration.
+  geometry?: Dataset[];
+  calibration?: Dataset[];
 }
 
 export interface ReferenceCoverage {

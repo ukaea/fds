@@ -4,22 +4,10 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import useSWR from 'swr';
-import { Database, ChevronRight, MapPin, Copy, Check } from 'lucide-react';
+import { Database, ChevronRight, MapPin, SlidersHorizontal, Copy, Check } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Dataset, ReferenceCoverage } from '@/lib/types';
-
-function coverageLines(coverage?: ReferenceCoverage): string[] {
-  if (!coverage) return [];
-  const lines: string[] = [];
-  if (coverage.shots?.length) lines.push(`Shots: ${coverage.shots.join(', ')}`);
-  coverage.shot_ranges?.forEach((range) =>
-    lines.push(`Shot range: ${range.from_shot} → ${range.to_shot ?? 'open-ended'}`)
-  );
-  coverage.date_ranges?.forEach((range) =>
-    lines.push(`Date range: ${range.from_date} → ${range.to_date ?? 'open-ended'}`)
-  );
-  return lines;
-}
+import { Dataset } from '@/lib/types';
+import { coverageSummary } from '@/lib/coverage';
 
 function readSnippet(dataset?: Dataset): string {
   if (!dataset?.url) return '';
@@ -69,9 +57,10 @@ export default function DeviceDatasetPage() {
     fetcher
   );
 
-  const coverage = coverageLines(dataset?.applies_to);
+  const coverage = coverageSummary(dataset?.applies_to);
   const snippet = readSnippet(dataset);
-  const hasGeometry = Boolean(dataset?.geometry_roles?.length) || coverage.length > 0;
+  const isGeometry = Boolean(dataset?.geometry_roles?.length);
+  const isCalibration = Boolean(dataset?.calibration_roles?.length);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -102,14 +91,6 @@ export default function DeviceDatasetPage() {
               <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">
                 Device: {device}
               </span>
-              <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border">
-                Device-level
-              </span>
-              {dataset.level !== undefined && (
-                <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border">
-                  Level {dataset.level}
-                </span>
-              )}
               {dataset.geometry_roles?.map((role) => (
                 <span
                   key={role}
@@ -117,6 +98,16 @@ export default function DeviceDatasetPage() {
                 >
                   <MapPin className="w-3.5 h-3.5" />
                   {role}
+                </span>
+              ))}
+              {dataset.calibration_roles?.map((role) => (
+                <span
+                  key={role}
+                  className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border flex items-center gap-1"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  {role}
+                  {dataset.calibration_stage != null && ` · stage ${dataset.calibration_stage}`}
                 </span>
               ))}
             </div>
@@ -130,11 +121,7 @@ export default function DeviceDatasetPage() {
                 <Property label="URL" value={dataset.url} mono />
                 <Property label="Media Type" value={dataset.media_type} />
                 <Property
-                  label="Processing Level"
-                  value={dataset.level !== undefined ? `Level ${dataset.level}` : 'Unknown'}
-                />
-                <Property
-                  label="Access Policy"
+                  label="Access Level"
                   value={dataset.effective_access_level || dataset.access_level || 'unknown'}
                   capitalize
                 />
@@ -153,31 +140,35 @@ export default function DeviceDatasetPage() {
               </div>
             </div>
 
-            {/* Reference geometry */}
-            {hasGeometry && (
+            {/* Reference version summary (geometry or calibration) */}
+            {(isGeometry || isCalibration) && (
               <div className="card p-6">
                 <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-muted-foreground" /> Reference Geometry
+                  {isGeometry ? (
+                    <MapPin className="w-5 h-5 text-muted-foreground" />
+                  ) : (
+                    <SlidersHorizontal className="w-5 h-5 text-muted-foreground" />
+                  )}
+                  {isGeometry ? 'Geometry' : 'Calibration'}
                 </h3>
                 <div className="space-y-3 text-sm">
-                  {dataset.geometry_roles?.length ? (
+                  <div className="flex flex-col">
+                    <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">
+                      Provides
+                    </span>
+                    <span className="text-foreground">
+                      {(isGeometry ? dataset.geometry_roles : dataset.calibration_roles)?.join(', ')}
+                      {isCalibration &&
+                        dataset.calibration_stage != null &&
+                        ` · stage ${dataset.calibration_stage}`}
+                    </span>
+                  </div>
+                  {coverage && (
                     <div className="flex flex-col">
                       <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">
-                        Provides roles
+                        Coverage
                       </span>
-                      <span className="text-foreground">{dataset.geometry_roles.join(', ')}</span>
-                    </div>
-                  ) : null}
-                  {coverage.length > 0 && (
-                    <div className="flex flex-col">
-                      <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">
-                        Applies to
-                      </span>
-                      <ul className="text-foreground list-disc list-inside space-y-1">
-                        {coverage.map((line) => (
-                          <li key={line}>{line}</li>
-                        ))}
-                      </ul>
+                      <span className="text-foreground font-mono text-xs">{coverage}</span>
                     </div>
                   )}
                 </div>

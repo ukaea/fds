@@ -78,6 +78,8 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 
 A `Dataset` can also link to **reference geometry** — a `Dataset` declares its related geometry via `geometry_references`, or a `Device`-level `Dataset` *provides* geometry via `geometry_roles` and `applies_to`. See [Reference Geometry](reference-geometry.md).
 
+The same machinery carries **reference calibration**: a `Dataset` names the calibration it needs via `calibration_references`, and a `Device`-level `Dataset` provides it via `calibration_roles`, `calibration_stage`, and `applies_to`. Unlike geometry, calibration can resolve to an ordered chain of stages. See [Reference Calibration](reference-calibration.md).
+
 ### Distribution
 
 A Distribution is a physical access path for a Dataset — it describes *how* to retrieve the data.

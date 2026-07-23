@@ -45,6 +45,7 @@ def _():
         register_efit_provenance,
         register_experiment_data_collections,
         register_jintrac_collection,
+        register_mast_calibration,
         register_mast_datasets,
         register_mast_geometry,
         register_mast_upgrade_datasets,
@@ -59,6 +60,7 @@ def _():
         register_efit_provenance,
         register_experiment_data_collections,
         register_jintrac_collection,
+        register_mast_calibration,
         register_mast_datasets,
         register_mast_geometry,
         register_mast_upgrade_datasets,
@@ -243,6 +245,36 @@ def _(FDS_API_URL, headers, httpx, mo, register_mast_geometry):
         mo.md(
             "Thomson geometry registered on device `mast`: "
             "`thomson_positions_v1` (shot 30420), `thomson_positions_v2` (from 30421)."
+        ),
+        kind="success",
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### 3.4 Reference Calibration — [docs](http://localhost:4001/demo/ingest/#34-reference-calibration)
+
+    A staged **Thomson calibration** chain on `mast`, both versions providing the
+    role `thomson_calibration` at successive stages: `thomson_gain` (stage 1) then
+    `thomson_absolute` (stage 2). Non-overlap holds per `(role, stage)`, so both
+    cover shots 30420 and 30421. `thomson_scattering` references the role via
+    `calibration_references`; resolving it returns the chain in stage order.
+
+    See [Reference Calibration](http://localhost:4001/concepts/reference-calibration/).
+    """)
+    return
+
+
+@app.cell
+def _(FDS_API_URL, headers, httpx, mo, register_mast_calibration):
+    with httpx.Client(headers=headers, timeout=30.0) as _client:
+        register_mast_calibration(_client, FDS_API_URL)
+    mo.callout(
+        mo.md(
+            "Thomson calibration chain registered on device `mast`: "
+            "`thomson_gain` (stage 1), `thomson_absolute` (stage 2)."
         ),
         kind="success",
     )

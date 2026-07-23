@@ -139,6 +139,44 @@ for stem, r_offset in geometry_specs:
     print(f"  Written to s3://{s3_path}")
 
 # ---------------------------------------------------------
+# 1c. MAST reference calibration — a staged Thomson chain
+# ---------------------------------------------------------
+# Two device-level calibration versions providing the `thomson_calibration`
+# role at successive stages: stage 1 (gain) then stage 2 (absolute). Both cover
+# shots 30420 and 30421; resolving the signal returns them in stage order.
+calibration_specs = [
+    ("thomson_gain", 1, "gain"),
+    ("thomson_absolute", 2, "absolute"),
+]
+for stem, stage, kind in calibration_specs:
+    s3_path = f"{bucket_name}/mast/calibration/{stem}.nc"
+    if fs.exists(s3_path):
+        print(f"Calibration {stem} already exists. Skipping.")
+        continue
+    print(f"Generating reference calibration {stem} (stage {stage})...")
+    n_channels = 50
+    # Per-channel coefficient applied at this stage.
+    coeff = (
+        1.0 + 0.05 * np.sin(np.linspace(0, np.pi, n_channels))
+        if kind == "gain"
+        else np.full(n_channels, 3.2e18)  # absolute scaling to m^-3
+    )
+    cal = xr.Dataset(
+        {"coefficient": ("channel", coeff)},
+        coords={"channel": np.arange(n_channels)},
+        attrs={
+            "title": f"MAST Thomson {kind} calibration ({stem})",
+            "role": "thomson_calibration",
+            "stage": stage,
+            "device": "mast",
+        },
+    )
+    with tempfile.NamedTemporaryFile(suffix=".nc") as tmp:
+        cal.to_netcdf(tmp.name)
+        fs.put(tmp.name, s3_path)
+    print(f"  Written to s3://{s3_path}")
+
+# ---------------------------------------------------------
 # 2. Generate Synthetic MAST-U Data (Shot 50000)
 # ---------------------------------------------------------
 # 2a: Raw diagnostic data — 3 NetCDF files, restricted access

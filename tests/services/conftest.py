@@ -10,7 +10,7 @@ from app.models.reference import ReferenceCoverage
 from app.models.shot import ShotCreate, ShotUpdate
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
-from app.services.reference_service import GEOMETRY, ReferenceService
+from app.services.reference_service import CALIBRATION, GEOMETRY, ReferenceService
 from app.services.shot_service import ShotService
 
 DEVICE = "MAST"
@@ -38,6 +38,40 @@ def shots_fixture(session: Session) -> ShotService:
 @pytest.fixture(name="geometry")
 def geometry_fixture(session: Session) -> ReferenceService:
     return ReferenceService(session, GEOMETRY)
+
+
+@pytest.fixture(name="calibration")
+def calibration_fixture(session: Session) -> ReferenceService:
+    return ReferenceService(session, CALIBRATION)
+
+
+@pytest.fixture(name="make_cal_version")
+def make_cal_version_fixture(datasets: DatasetService, admin_user: AuthenticatedUser):
+    """Create a MAST calibration version at a given chain ``stage``."""
+
+    def make(
+        name: str,
+        roles: list[str],
+        coverage: ReferenceCoverage,
+        *,
+        stage: int | None = None,
+        shot_id: str | None = None,
+    ):
+        return datasets.create(
+            DatasetCreate(
+                name=name,
+                level=0,
+                device_name=DEVICE,
+                shot_id=shot_id,
+                calibration_roles=roles,
+                calibration_stage=stage,
+                applies_to=coverage,
+                url=f"s3://calibration/{name}.nc",
+            ),
+            user=admin_user,
+        )
+
+    return make
 
 
 @pytest.fixture(name="device")

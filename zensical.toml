@@ -11,6 +11,7 @@ nav = [
     { "Provenance" = "concepts/provenance.md" },
     { "Access Control" = "concepts/access-control.md" },
     { "Reference Geometry" = "concepts/reference-geometry.md" },
+    { "Reference Calibration" = "concepts/reference-calibration.md" },
     { "Semantic Metadata (DCAT & JSON-LD)" = "concepts/dcat-jsonld.md" },
   ]},
   { Demo = [
@@ -51,5 +52,8 @@ nav = [
     { "0031 — Scientific Metadata" = "adrs/0031-scientific-metadata.md" },
     { "0033 — PostgreSQL for Production Persistence" = "adrs/0033-postgresql-for-production-persistence.md" },
     { "0036 — Versioned Reference Geometry" = "adrs/0036-versioned-reference-geometry.md" },
+    { "0037 — Versioned Reference Calibration" = "adrs/0037-versioned-reference-calibration.md" },
+    { "0038 — Typed Dataset Relationships" = "adrs/0038-typed-dataset-relationships.md" },
+    { "0039 — fuel:calibration Role" = "adrs/0039-fuel-calibration-role.md" },
   ]},
 ]
