@@ -101,6 +101,26 @@ POST /api/v1/devices/mast/datasets
 
 See [Reference Geometry](../concepts/reference-geometry.md). Resolving the reference on read is shown in [Explore](explore.md).
 
+### 3.4 Reference Calibration
+
+A staged **Thomson calibration** chain is registered on `mast`, both versions providing the role `thomson_calibration` at successive **stages**: `thomson_gain` (stage 1) then `thomson_absolute` (stage 2). Non-overlap holds per `(role, stage)`, so both cover shots `30420` and `30421`. The `thomson_scattering` dataset references the role via `calibration_references`.
+
+```python
+POST /api/v1/devices/mast/datasets
+{
+  "name": "thomson_absolute",
+  "level": 0,
+  "calibration_roles": ["thomson_calibration"],
+  "calibration_stage": 2,
+  "applies_to": {"shots": ["30420", "30421"]},
+  "url": "s3://fds-data/mast/calibration/thomson_absolute.nc",
+  "media_type": "application/x-netcdf",
+  "access_level": "public"
+}
+```
+
+Unlike geometry (one version per role per shot), calibration resolves to an ordered chain of stages. See [Reference Calibration](../concepts/reference-calibration.md). Resolving the chain on read is shown in [Explore](explore.md).
+
 ### 3b. MAST-U Shot 50000
 
 Shot 50000 demonstrates two access tiers and the IceChunk collection model ([ADR-0029](../adrs/0029-icechunk-collection-model.md)):

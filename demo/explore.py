@@ -273,18 +273,57 @@ def _(FDS_API_URL, headers, httpx, xr):
             params={"include_geometry": True, "include_storage_options": True},
         ).json()[0]
         _geom = _signal.get("geometry")[0]
-    
+
         _geometry_ds = xr.open_dataset(
             _geom["url"], engine="h5netcdf", storage_options=_geom["storage_options"]
         )
         _r = _geometry_ds["R"].values
-    
+
         print(
             f"  shot {_shot} -> {_geom['name']}: "
             f"R {_r[0]:.2f}..{_r[-1]:.2f} m across "
             f"{_geometry_ds.sizes['channel']} channels"
         )
     _geometry_ds
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 7c. Resolving Reference Calibration — [docs](http://localhost:4001/demo/explore/#7c-resolving-reference-calibration)
+
+    `thomson_scattering` also references the `thomson_calibration` role. Reading it
+    with `?include_calibration=true` resolves the reference to the ordered chain —
+    `[thomson_gain, thomson_absolute]` — under a `calibration` field. Unlike geometry
+    (one version per role), calibration is a chain of stages applied in order.
+
+    See [Reference Calibration](http://localhost:4001/concepts/reference-calibration/).
+    """)
+    return
+
+
+@app.cell
+def _(FDS_API_URL, headers, httpx, xr):
+    _calibration_ds = None
+    _signal = httpx.get(
+        f"{FDS_API_URL}/devices/mast/shots/30420/datasets/thomson_scattering",
+        headers=headers,
+        params={"include_calibration": True, "include_storage_options": True},
+    ).json()[0]
+    _chain = _signal.get("calibration") or []
+    print(f"  chain: {' -> '.join(_c['name'] for _c in _chain) or '(none)'}")
+    for _c in _chain:
+        _calibration_ds = xr.open_dataset(
+            _c["url"], engine="h5netcdf", storage_options=_c["storage_options"]
+        )
+        _coeff = _calibration_ds["coefficient"].values
+        print(
+            f"  {_c['name']}: coefficient "
+            f"{_coeff[0]:.3g}..{_coeff[-1]:.3g} across "
+            f"{_calibration_ds.sizes['channel']} channels"
+        )
+    _calibration_ds
     return
 
 

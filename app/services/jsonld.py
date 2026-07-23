@@ -11,14 +11,15 @@ if TYPE_CHECKING:
     from app.models.activity import Activity
 
 # Placeholder namespace for the Fusion Energy Lexicon (FuEL), still in
-# development. FuEL supplies SKOS role concepts used as ``dcat:hadRole`` values
-# on a ``dcat:qualifiedRelation`` (the typed-relationship pattern, ADR-0038);
-# ``fuel:geometry`` is the role marking a reference-geometry edge. Swap this
-# single constant for the canonical FuEL URI once it is published.
+# development. FuEL supplies SKOS role concepts used as ``dcat:hadRole`` values on
+# a ``dcat:qualifiedRelation`` (ADR-0038); ``fuel:geometry`` and
+# ``fuel:calibration`` mark the two reference edges. Swap this single constant for
+# the canonical FuEL URI once it is published.
 FUEL_NAMESPACE = "https://w3id.org/fuel/ns#"
 
-# FuEL role concept marking a qualified relation as a reference-geometry edge.
+# FuEL role concepts marking a qualified relation's reference kind.
 FUEL_GEOMETRY_ROLE = "fuel:geometry"
+FUEL_CALIBRATION_ROLE = "fuel:calibration"
 
 METADATA_CONTEXT = {
     "dcat": "http://www.w3.org/ns/dcat#",
@@ -29,6 +30,7 @@ METADATA_CONTEXT = {
     "xsd": "http://www.w3.org/2001/XMLSchema#",
     "dqv": "http://www.w3.org/ns/dqv#",
     "oa": "http://www.w3.org/ns/oa#",
+    "fuel": FUEL_NAMESPACE,
     "title": "dct:title",
     "description": "dct:description",
     "publisher": "dct:publisher",
@@ -145,14 +147,15 @@ def map_dataset_to_dcat(
     dataset: Dataset | DatasetRead,
     base_url: str,
     geometry: "list[DatasetRead] | None" = None,
+    calibration: "list[DatasetRead] | None" = None,
 ) -> dict[str, Any]:
     """
     Maps a Dataset to a dcat:Dataset.
 
-    ``geometry`` supplies resolved reference-geometry versions when
-    the source object does not itself carry them (e.g. an ORM ``Dataset``).
-    Each such version links via a ``dcat:qualifiedRelation`` carrying the
-    ``fuel:geometry`` role (the typed-relationship pattern).
+    ``geometry`` / ``calibration`` supply resolved reference versions when the
+    source object does not itself carry them (e.g. an ORM ``Dataset``). Both link
+    via a ``dcat:qualifiedRelation`` carrying a FuEL role — ``fuel:geometry`` or
+    ``fuel:calibration`` (calibration one per chain stage, in order).
     """
     # Construct URI
     # Note: Using the API path as the URI
@@ -267,26 +270,43 @@ def map_dataset_to_dcat(
     if sci_meta:
         data["schema:additionalProperty"] = _map_scientific_metadata_to_jsonld(sci_meta)
 
-    # Link resolved geometry versions via a dcat:qualifiedRelation carrying the
-    # fuel:geometry role (typed-relationship pattern).
+    # Link resolved reference versions as qualified relations, each tagged with its
+    # FuEL role: geometry via fuel:geometry, calibration (in stage order) via
+    # fuel:calibration. Both kinds share the one dcat:qualifiedRelation array.
     resolved_geometry: list[Any] = (
         geometry if geometry is not None else getattr(dataset, "geometry", None)
     ) or []
-    if resolved_geometry:
-        data["dcat:qualifiedRelation"] = [
-            {
-                "@type": "dcat:Relationship",
-                "dcat:hadRole": {"@id": FUEL_GEOMETRY_ROLE},
-                "dct:relation": _map_geometry_reference(version, base_url),
-            }
-            for version in resolved_geometry
-        ]
+    resolved_calibration: list[Any] = (
+        calibration
+        if calibration is not None
+        else getattr(dataset, "calibration", None)
+    ) or []
+    qualified_relations = [
+        _qualified_relation(version, FUEL_GEOMETRY_ROLE, base_url)
+        for version in resolved_geometry
+    ] + [
+        _qualified_relation(version, FUEL_CALIBRATION_ROLE, base_url)
+        for version in resolved_calibration
+    ]
+    if qualified_relations:
+        data["dcat:qualifiedRelation"] = qualified_relations
 
     return {k: v for k, v in data.items() if v is not None}
 
 
-def _map_geometry_reference(version: "DatasetRead", base_url: str) -> dict[str, Any]:
-    """A resolved geometry version as a dct:relation node."""
+def _qualified_relation(
+    version: "DatasetRead", role: str, base_url: str
+) -> dict[str, Any]:
+    """A resolved reference version as a dcat:Relationship carrying its FuEL role."""
+    return {
+        "@type": "dcat:Relationship",
+        "dcat:hadRole": {"@id": role},
+        "dct:relation": _map_reference_version(version, base_url),
+    }
+
+
+def _map_reference_version(version: "DatasetRead", base_url: str) -> dict[str, Any]:
+    """A resolved reference version (geometry or calibration) as a linked node."""
     node: dict[str, Any] = {
         "@id": f"{base_url}/api/v1/datasets/{version.id}",
         "@type": "dcat:Dataset",

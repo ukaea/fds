@@ -54,6 +54,7 @@ def read_datasets_global(
     limit: int = 100,
     include_storage_options: bool = False,
     include_geometry: bool = False,
+    include_calibration: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve global datasets.
@@ -64,6 +65,7 @@ def read_datasets_global(
         include_storage_options=include_storage_options,
         user=user,
         include_geometry=include_geometry,
+        include_calibration=include_calibration,
     )
 
 
@@ -126,6 +128,7 @@ def read_datasets_shot(
     limit: int = 100,
     include_storage_options: bool = False,
     include_geometry: bool = False,
+    include_calibration: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all datasets for a specific shot.
@@ -138,6 +141,7 @@ def read_datasets_shot(
         include_storage_options=include_storage_options,
         user=user,
         include_geometry=include_geometry,
+        include_calibration=include_calibration,
     )
 
 
@@ -155,6 +159,7 @@ def read_dataset_by_name(
     user: CurrentUserDep,
     include_storage_options: bool = False,
     include_geometry: bool = False,
+    include_calibration: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all datasets with the given name within a shot context.
@@ -168,6 +173,7 @@ def read_dataset_by_name(
         include_storage_options=include_storage_options,
         user=user,
         include_geometry=include_geometry,
+        include_calibration=include_calibration,
     )
 
 
@@ -184,6 +190,7 @@ def read_dataset_by_id(
     user: CurrentUserDep,
     include_storage_options: bool = False,
     include_geometry: bool = False,
+    include_calibration: bool = False,
 ) -> DatasetRead | JSONResponse:
     """
     Retrieve a single dataset by its internal integer ID.
@@ -196,13 +203,16 @@ def read_dataset_by_id(
     dataset_service.check_read_access(dataset, user)
 
     if "application/ld+json" in request.headers.get("accept", ""):
-        geometry = (
-            dataset_service.to_read_model(dataset, include_geometry=True).geometry
-            if include_geometry
-            else None
+        enriched = dataset_service.to_read_model(
+            dataset,
+            include_geometry=include_geometry,
+            include_calibration=include_calibration,
         )
         dcat_metadata = map_dataset_to_dcat(
-            dataset, str(request.base_url).rstrip("/"), geometry=geometry
+            dataset,
+            str(request.base_url).rstrip("/"),
+            geometry=enriched.geometry if include_geometry else None,
+            calibration=enriched.calibration if include_calibration else None,
         )
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
 
@@ -211,6 +221,7 @@ def read_dataset_by_id(
         include_storage_options=include_storage_options,
         user=user,
         include_geometry=include_geometry,
+        include_calibration=include_calibration,
     )
 
 
@@ -226,6 +237,7 @@ def read_dataset_global_by_name(
     user: CurrentUserDep,
     include_storage_options: bool = False,
     include_geometry: bool = False,
+    include_calibration: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all global datasets with the given name.
@@ -236,6 +248,7 @@ def read_dataset_global_by_name(
         include_storage_options=include_storage_options,
         user=user,
         include_geometry=include_geometry,
+        include_calibration=include_calibration,
     )
 
 
@@ -253,6 +266,7 @@ def read_datasets_device(
     limit: int = 100,
     include_storage_options: bool = False,
     include_geometry: bool = False,
+    include_calibration: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve datasets for a specific device (not tied to any shot).
@@ -265,6 +279,7 @@ def read_datasets_device(
         include_storage_options=include_storage_options,
         user=user,
         include_geometry=include_geometry,
+        include_calibration=include_calibration,
     )
 
 
@@ -281,6 +296,7 @@ def read_dataset_device_by_name(
     user: CurrentUserDep,
     include_storage_options: bool = False,
     include_geometry: bool = False,
+    include_calibration: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all device-level datasets with the given name.
@@ -293,6 +309,7 @@ def read_dataset_device_by_name(
         include_storage_options=include_storage_options,
         user=user,
         include_geometry=include_geometry,
+        include_calibration=include_calibration,
     )
 
 

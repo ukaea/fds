@@ -13,15 +13,28 @@ from app.services.exceptions import FDSValidationError
 @dataclass(frozen=True)
 class ReferenceKind:
     """The ``Dataset`` attributes naming the roles a version provides
-    (``roles_attr``) and the roles a signal uses (``references_attr``)."""
+    (``roles_attr``) and the roles a signal uses (``references_attr``).
+
+    ``order_attr`` names an integer attribute that orders a role's versions into
+    a chain (calibration stages); when set, a role resolves to an ordered *list*
+    of versions and non-overlap holds per ``(role, order)``. ``None`` is the
+    single-stage case (geometry): one version per role.
+    """
 
     name: str
     roles_attr: str
     references_attr: str
+    order_attr: str | None = None
 
 
 GEOMETRY = ReferenceKind("geometry", "geometry_roles", "geometry_references")
-REFERENCE_KINDS: list[ReferenceKind] = [GEOMETRY]
+CALIBRATION = ReferenceKind(
+    "calibration",
+    "calibration_roles",
+    "calibration_references",
+    order_attr="calibration_stage",
+)
+REFERENCE_KINDS: list[ReferenceKind] = [GEOMETRY, CALIBRATION]
 
 
 def _as_coverage(applies_to: object) -> ReferenceCoverage:
@@ -79,19 +92,53 @@ class ReferenceService:
     def _roles(self, dataset: Dataset) -> list[str]:
         return getattr(dataset, self.kind.roles_attr) or []
 
+    def _order_key(self, version: Dataset) -> int | None:
+        """The version's position in its chain, or ``None`` for a single-stage
+        kind (all versions then share the one bucket)."""
+        if self.kind.order_attr is None:
+            return None
+        return getattr(version, self.kind.order_attr)
+
+    def _role_scope(self, role: str, order: int | None) -> str:
+        """Human phrase for the non-overlap key, e.g. ``role 'gain' at stage 2``."""
+        if self.kind.order_attr is None:
+            return f"role '{role}'"
+        return f"role '{role}' at stage {order}"
+
+    def _one_version_rule(self) -> str:
+        if self.kind.order_attr is None:
+            return "every shot must resolve to exactly one version."
+        return "every shot must resolve to exactly one version per stage."
+
+    def _covering(
+        self, versions: list[Dataset], role: str, shot: Shot
+    ) -> list[Dataset]:
+        """Versions that provide ``role`` and cover ``shot``, ordered by the
+        kind's stage (ascending) when it has one."""
+        matches = [
+            version
+            for version in versions
+            if role in self._roles(version) and self._covers(version, shot)
+        ]
+        if self.kind.order_attr is not None:
+            matches.sort(key=lambda version: self._order_key(version) or 0)
+        return matches
+
     def resolve(self, shot: Shot, roles: list[str]) -> dict[str, Dataset | None]:
-        """Map each role to the version covering ``shot``, or ``None``. Only
-        versions of the shot's own device are candidates."""
+        """Map each role to the single version covering ``shot``, or ``None``.
+        Only versions of the shot's own device are candidates. For an ordered
+        kind this is the earliest stage; use :meth:`resolve_chain` for the chain."""
         versions = self._scope_versions(shot.device_name)
-        resolved: dict[str, Dataset | None] = {}
-        for role in roles:
-            match: Dataset | None = None
-            for version in versions:
-                if role in self._roles(version) and self._covers(version, shot):
-                    match = version
-                    break
-            resolved[role] = match
-        return resolved
+        return {
+            role: next(iter(self._covering(versions, role, shot)), None)
+            for role in roles
+        }
+
+    def resolve_chain(self, shot: Shot, roles: list[str]) -> dict[str, list[Dataset]]:
+        """Map each role to the ordered chain of versions covering ``shot`` (by
+        ascending stage); an empty list when none apply."""
+        versions = self._scope_versions(shot.device_name)
+        return {role: self._covering(versions, role, shot) for role in roles}
 
     def _covers(self, version: Dataset, shot: Shot) -> bool:
         coverage = _as_coverage(version.applies_to)
@@ -111,6 +158,7 @@ class ReferenceService:
         device_name: str | None,
         roles: list[str] | None,
         applies_to: ReferenceCoverage | None,
+        order: int | None = None,
         references: list[str] | None = None,
         shot_id: str | None = None,
         exclude_id: int | None = None,
@@ -119,9 +167,10 @@ class ReferenceService:
 
         Reference data (``roles`` or ``references``) requires a device; a version
         (``roles``) must be device-level (no ``shot_id``). A version is also
-        checked for range-endpoint integrity and per-role non-overlap with the
-        device's other versions. ``exclude_id`` omits the dataset itself when
-        re-validating.
+        checked for range-endpoint integrity and per-``(role, order)`` non-overlap
+        with the device's other versions — for a single-stage kind ``order`` is
+        ``None`` and the check is simply per-role. ``exclude_id`` omits the
+        dataset itself when re-validating.
         """
         if (roles or references) and device_name is None:
             raise FDSValidationError(
@@ -150,14 +199,15 @@ class ReferenceService:
             for other in existing:
                 if role not in self._roles(other):
                     continue
+                if self._order_key(other) != order:
+                    continue
                 if self._coverages_overlap(
                     device_name, coverage, _as_coverage(other.applies_to)
                 ):
                     raise FDSValidationError(
-                        f"{self.kind.name.capitalize()} coverage for role "
-                        f"'{role}' overlaps existing version (dataset "
-                        f"id={other.id}); every shot must resolve to exactly one "
-                        f"version."
+                        f"{self.kind.name.capitalize()} coverage for "
+                        f"{self._role_scope(role, order)} overlaps existing "
+                        f"version (dataset id={other.id}); {self._one_version_rule()}"
                     )
 
     def validate_device_coverage(self, device_name: str) -> None:
@@ -170,6 +220,8 @@ class ReferenceService:
         for index, version in enumerate(versions):
             version_coverage = _as_coverage(version.applies_to)
             for other in versions[index + 1 :]:
+                if self._order_key(version) != self._order_key(other):
+                    continue
                 shared_roles = set(self._roles(version)) & set(self._roles(other))
                 if not shared_roles:
                     continue
@@ -178,8 +230,9 @@ class ReferenceService:
                 ):
                     role = sorted(shared_roles)[0]
                     raise FDSValidationError(
-                        f"{self.kind.name.capitalize()} coverage for role "
-                        f"'{role}' overlaps between dataset ids {version.id} and "
+                        f"{self.kind.name.capitalize()} coverage for "
+                        f"{self._role_scope(role, self._order_key(version))} "
+                        f"overlaps between dataset ids {version.id} and "
                         f"{other.id} after this change."
                     )
 

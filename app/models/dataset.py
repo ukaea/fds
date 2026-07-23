@@ -100,6 +100,33 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
         ),
         sa_column=Column(JSON, nullable=True),
     )
+    calibration_references: list[str] | None = Field(
+        default=None,
+        description=(
+            "For a signal dataset: the calibration roles it uses. Names roles, not "
+            "versions; resolution finds the applicable version(s) per shot at read "
+            "time. A role may resolve to an ordered chain of stages (see "
+            "calibration_stage)."
+        ),
+        sa_column=Column(JSON, nullable=True),
+    )
+    calibration_roles: list[str] | None = Field(
+        default=None,
+        description=(
+            "For a calibration version (a device-level dataset): the calibration "
+            "components it provides."
+        ),
+        sa_column=Column(JSON, nullable=True),
+    )
+    calibration_stage: int | None = Field(
+        default=None,
+        description=(
+            "For a calibration version: its position in an ordered calibration "
+            "chain (lower applies first). Non-overlap is enforced per (role, "
+            "stage), so different stages of a role may cover the same shot. None "
+            "for single-stage calibration."
+        ),
+    )
     applies_to: ReferenceCoverage | None = Field(
         default=None,
         description=(
@@ -208,6 +235,7 @@ class DatasetRead(DatasetBase):
     # All distributions (default flagged via default_distribution=True)
     distributions: list["DistributionRead"] | None = None
     geometry: list["DatasetRead"] | None = None
+    calibration: list["DatasetRead"] | None = None
 
 
 class DatasetUpdate(SQLModel):
@@ -244,4 +272,7 @@ class DatasetUpdate(SQLModel):
     scientific_metadata: list[ScientificProperty] | None = None
     geometry_references: list[str] | None = None
     geometry_roles: list[str] | None = None
+    calibration_references: list[str] | None = None
+    calibration_roles: list[str] | None = None
+    calibration_stage: int | None = None
     applies_to: ReferenceCoverage | None = None

@@ -3,11 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Database, Lock, Unlock, Download, Activity, ArrowLeft, ChevronRight } from 'lucide-react';
+import { Database, Lock, Unlock, Download, Activity, ArrowLeft, ChevronRight, MapPin, SlidersHorizontal } from 'lucide-react';
 import { useSession, signIn } from "next-auth/react";
 import useSWR from 'swr';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Activity as ActivityType, Dataset } from '@/lib/types';
+import { ResolvedRef } from '@/components/resolved-ref';
 
 // Heatmap Color Scale Approximation (Viridis)
 const VIRIDIS_STOPS = [[68, 1, 84], [59, 82, 139], [33, 145, 140], [93, 201, 99], [253, 231, 37]];
@@ -141,7 +142,9 @@ export default function DatasetPage() {
   const [sliderIndices, setSliderIndices] = useState<number[]>([]);
 
   const { data: datasetData } = useSWR<Dataset>(
-    id ? `${API_BASE}/datasets/id/${id}` : null,
+    id
+      ? `${API_BASE}/datasets/id/${id}?include_geometry=true&include_calibration=true`
+      : null,
     fetcher
   );
 
@@ -445,7 +448,6 @@ export default function DatasetPage() {
          <div className="flex flex-wrap gap-3">
              <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Device: {device}</span>
              <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Shot: {shot}</span>
-             {datasetData?.level !== undefined && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border">Level {datasetData.level} processed</span>}
              {datasetData?.publisher && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border">Publisher: {datasetData.publisher}</span>}
          </div>
       </div>
@@ -717,16 +719,46 @@ export default function DatasetPage() {
                             <span className="text-foreground">{datasetData.license}</span>
                         </div>
                     )}
-                    <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Processing Level</span>
-                        <span className="text-foreground">Level {datasetData?.level !== undefined ? datasetData.level : 'Unknown'}</span>
-                    </div>
                      <div className="flex flex-col justify-start py-1">
-                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Access Policy</span>
+                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Access Level</span>
                         <span className="text-foreground capitalize">{datasetData?.effective_access_level || datasetData?.access_level || 'Unknown'}</span>
                     </div>
                 </div>
             </div>
+
+            {/* Resolved reference data (geometry + calibration) */}
+            {((datasetData?.geometry?.length ?? 0) > 0 || (datasetData?.calibration?.length ?? 0) > 0) && (
+                <div className="card p-6 bg-card/60 shadow-xl border-border">
+                    <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground">Reference Data</h3>
+                    <div className="space-y-4 text-sm">
+                        {(datasetData?.geometry?.length ?? 0) > 0 && (
+                            <div>
+                                <div className="flex items-center gap-2 mb-2 text-muted-foreground uppercase text-xs font-bold tracking-wider">
+                                    <MapPin className="w-4 h-4" /> Geometry
+                                </div>
+                                <div className="space-y-2">
+                                    {datasetData!.geometry!.map((v) => (
+                                        <ResolvedRef key={v.id} version={v} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {(datasetData?.calibration?.length ?? 0) > 0 && (
+                            <div>
+                                <div className="flex items-center gap-2 mb-2 text-muted-foreground uppercase text-xs font-bold tracking-wider">
+                                    <SlidersHorizontal className="w-4 h-4" /> Calibration
+                                    <span className="normal-case font-normal text-muted-foreground">— applied in order</span>
+                                </div>
+                                <div className="space-y-2">
+                                    {datasetData!.calibration!.map((v) => (
+                                        <ResolvedRef key={v.id} version={v} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Provenance Card */}
             <div className="card p-6 bg-card/60 shadow-xl border-border">

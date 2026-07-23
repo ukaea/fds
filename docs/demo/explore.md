@@ -126,6 +126,27 @@ See [Reference Geometry](../concepts/reference-geometry.md).
 
 ---
 
+## 7c. Resolving Reference Calibration
+
+`thomson_scattering` also references the `thomson_calibration` role. Reading it with
+`?include_calibration=true` resolves the reference to the ordered calibration **chain** —
+`[thomson_gain, thomson_absolute]` — under a `calibration` field. Unlike geometry (one version
+per role), calibration is a chain of stages applied in order:
+
+```python
+signal = httpx.get(
+    f"{FDS_API_URL}/devices/mast/shots/30420/datasets/thomson_scattering",
+    params={"include_calibration": True, "include_storage_options": True},
+).json()[0]
+
+for cal in signal["calibration"]:  # → [thomson_gain (stage 1), thomson_absolute (stage 2)]
+    xr.open_dataset(cal["url"], engine="h5netcdf", storage_options=cal["storage_options"])
+```
+
+See [Reference Calibration](../concepts/reference-calibration.md).
+
+---
+
 ## 8. Parallel IceChunk Reads (Dask)
 
 Each IDS group in the shared IceChunk store for MAST-Upgrade shot 50000 is read by a separate
