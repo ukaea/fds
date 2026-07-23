@@ -2,16 +2,16 @@ import pytest
 
 from tests.integration.conftest import FDS_URL
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("seeded_data")]
 
 
-def test_devices_registered(http_client, seeded_data):
+def test_devices_registered(http_client):
     for device in ("mast", "mast-upgrade"):
         resp = http_client.get(f"{FDS_URL}/devices/{device}")
         assert resp.status_code == 200, f"Device {device!r} not found"
 
 
-def test_shots_registered(http_client, seeded_data):
+def test_shots_registered(http_client):
     for device, shot_id in [
         ("mast", "30420"),
         ("mast", "30421"),
@@ -21,7 +21,7 @@ def test_shots_registered(http_client, seeded_data):
         assert resp.status_code == 200, f"Shot {device}/{shot_id} not found"
 
 
-def test_mast_datasets_registered(http_client, seeded_data):
+def test_mast_datasets_registered(http_client):
     for shot_id in ("30420", "30421"):
         resp = http_client.get(f"{FDS_URL}/devices/mast/shots/{shot_id}/datasets")
         assert resp.status_code == 200
@@ -31,13 +31,13 @@ def test_mast_datasets_registered(http_client, seeded_data):
         assert "thomson_scattering" in names
 
 
-def test_sources_registered(http_client, seeded_data):
+def test_sources_registered(http_client):
     for source in ("efit", "jintrac", "intershot-scheduler"):
         resp = http_client.get(f"{FDS_URL}/sources/{source}")
         assert resp.status_code == 200, f"Source {source!r} not found"
 
 
-def test_experiment_data_collections_registered(http_client, seeded_data):
+def test_experiment_data_collections_registered(http_client):
     for shot_id in ("30420", "30421"):
         resp = http_client.get(
             f"{FDS_URL}/devices/mast/shots/{shot_id}/collections/experiment-data"

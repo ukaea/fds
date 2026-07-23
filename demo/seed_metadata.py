@@ -90,15 +90,17 @@ def register_devices_and_shots(client: httpx.Client, base_url: str) -> None:
         if resp.status_code not in (201, 409):
             resp.raise_for_status()
 
-    for device_name, shot_id in [
-        ("mast", "30420"),
-        ("mast", "30421"),
-        ("mast-upgrade", "50000"),
+    # shot_at is required for reference-geometry/calibration resolution: shot-range
+    # coverage (e.g. "from shot 30421 onward") is evaluated against shot timestamps.
+    for device_name, shot_id, shot_at in [
+        ("mast", "30420", "2008-04-17T14:23:45"),
+        ("mast", "30421", "2008-04-17T15:41:22"),
+        ("mast-upgrade", "50000", None),
     ]:
-        resp = client.post(
-            f"{base_url}/devices/{device_name}/shots",
-            json={"id": shot_id, "access_level": "public", "device_name": device_name},
-        )
+        shot = {"id": shot_id, "access_level": "public", "device_name": device_name}
+        if shot_at is not None:
+            shot["shot_at"] = shot_at
+        resp = client.post(f"{base_url}/devices/{device_name}/shots", json=shot)
         if resp.status_code not in (201, 409):
             resp.raise_for_status()
 
@@ -109,20 +111,63 @@ def register_mast_datasets(client: httpx.Client, base_url: str) -> None:
         ("mast", "30421", SHOT_30421_IDS),
     ]:
         for ids_name in ids_list:
+            meta: dict[str, object] = {
+                "name": ids_name,
+                "level": 2,
+                "url": f"s3://fds-data/shots/{shot_id}/{ids_name}",
+                "endpoint_url": MINIO_ENDPOINT,
+                "access_level": "public",
+                "title": f"{ids_name.replace('_', ' ').title()} — Shot {shot_id}",
+                "media_type": "application/x-zarr",
+            }
+            # thomson_scattering measurements resolve their chord positions from the
+            # versioned device-level geometry registered in register_mast_geometry.
+            if ids_name == "thomson_scattering":
+                meta["geometry_references"] = ["thomson_positions"]
             resp = client.post(
-                f"{base_url}/devices/{device}/shots/{shot_id}/datasets",
-                json={
-                    "name": ids_name,
-                    "level": 2,
-                    "url": f"s3://fds-data/shots/{shot_id}/{ids_name}",
-                    "endpoint_url": MINIO_ENDPOINT,
-                    "access_level": "public",
-                    "title": f"{ids_name.replace('_', ' ').title()} — Shot {shot_id}",
-                    "media_type": "application/x-zarr",
-                },
+                f"{base_url}/devices/{device}/shots/{shot_id}/datasets", json=meta
             )
             if resp.status_code not in (201, 409):
                 resp.raise_for_status()
+
+
+def register_mast_geometry(client: httpx.Client, base_url: str) -> None:
+    """Register versioned device-level Thomson chord-position geometry on 'mast'.
+
+    Two versions of the ``thomson_positions`` role: v1 covers shot 30420, v2
+    (re-surveyed positions) covers shot 30421 onward. Each shot's
+    thomson_scattering dataset resolves to the version valid for it. Idempotent.
+    """
+    versions = [
+        {
+            "name": "thomson_positions_v1",
+            "version": "1",
+            "level": 0,
+            "geometry_roles": ["thomson_positions"],
+            "applies_to": {"shots": ["30420"]},
+            "url": "s3://fds-data/mast/geometry/thomson_positions_v1.nc",
+            "endpoint_url": MINIO_ENDPOINT,
+            "media_type": "application/x-netcdf",
+            "access_level": "public",
+            "title": "MAST Thomson chord positions (v1, shot 30420)",
+        },
+        {
+            "name": "thomson_positions_v2",
+            "version": "2",
+            "level": 0,
+            "geometry_roles": ["thomson_positions"],
+            "applies_to": {"shot_ranges": [{"from_shot": "30421"}]},
+            "url": "s3://fds-data/mast/geometry/thomson_positions_v2.nc",
+            "endpoint_url": MINIO_ENDPOINT,
+            "media_type": "application/x-netcdf",
+            "access_level": "public",
+            "title": "MAST Thomson chord positions (v2, from shot 30421)",
+        },
+    ]
+    for version in versions:
+        resp = client.post(f"{base_url}/devices/mast/datasets", json=version)
+        if resp.status_code not in (201, 409):
+            resp.raise_for_status()
 
 
 def register_experiment_data_collections(
@@ -457,6 +502,7 @@ def seed_all(base_url: str, headers: dict[str, str]) -> dict:
     with httpx.Client(headers=headers, timeout=60.0) as client:
         register_devices_and_shots(client, base_url)
         register_mast_datasets(client, base_url)
+        register_mast_geometry(client, base_url)
 
         scheduler_id = get_or_create_source(
             client,

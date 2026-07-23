@@ -14,6 +14,7 @@ from sqlmodel import (
 
 from .mixins import DescriptiveMixin, TimestampMixin
 from .policy import AccessLevel
+from .reference import ReferenceCoverage
 from .scientific_metadata import ScientificProperty
 from .storage_options import StorageOptions, StorageOptionsType
 
@@ -79,6 +80,34 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
     )
     scientific_metadata: list[ScientificProperty] | None = Field(
         default=None, sa_column=Column(JSON, nullable=True)
+    )
+
+    geometry_references: list[str] | None = Field(
+        default=None,
+        description=(
+            "For a signal dataset: the geometry roles it uses (e.g. "
+            "['thomson_positions']). Names roles, not versions; resolution finds "
+            "the correct version per shot at read time."
+        ),
+        sa_column=Column(JSON, nullable=True),
+    )
+    geometry_roles: list[str] | None = Field(
+        default=None,
+        description=(
+            "For a geometry version (a device-level dataset): the geometry "
+            "components it provides. Usually one, but a bundled store may provide "
+            "several."
+        ),
+        sa_column=Column(JSON, nullable=True),
+    )
+    applies_to: ReferenceCoverage | None = Field(
+        default=None,
+        description=(
+            "For a reference-resource version (geometry, calibration, …): which "
+            "shots this version covers. Shared across kinds; coverage must not "
+            "overlap another version of the same role within a kind."
+        ),
+        sa_column=Column(JSON, nullable=True),
     )
 
 
@@ -178,6 +207,7 @@ class DatasetRead(DatasetBase):
     storage_options: StorageOptions | None = None
     # All distributions (default flagged via default_distribution=True)
     distributions: list["DistributionRead"] | None = None
+    geometry: list["DatasetRead"] | None = None
 
 
 class DatasetUpdate(SQLModel):
@@ -212,3 +242,6 @@ class DatasetUpdate(SQLModel):
         ),
     )
     scientific_metadata: list[ScientificProperty] | None = None
+    geometry_references: list[str] | None = None
+    geometry_roles: list[str] | None = None
+    applies_to: ReferenceCoverage | None = None

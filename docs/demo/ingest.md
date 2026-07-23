@@ -82,15 +82,36 @@ equilibrium dataset via `activity_id` (`prov:wasGeneratedBy`).
 
 See [Provenance](../concepts/provenance.md) and [ADR-0025](../adrs/0025-prov-o-agent-activity-separation.md).
 
+### 3.3 Reference Geometry
+
+Two device-level **Thomson chord position** geometry versions are registered on `mast`, both providing the role `thomson_positions`: `v1` covers shot `30420`, and `v2` (re-surveyed positions) covers shot `30421` onward. Each shot's `thomson_scattering` dataset references the role via `geometry_references`, so reads resolve to the version valid for that shot. Shot-range coverage (`from_shot: 30421`) is evaluated against `shot_at`, so shots must be registered with a timestamp.
+
+```python
+POST /api/v1/devices/mast/datasets
+{
+  "name": "thomson_positions_v2",
+  "level": 0,
+  "geometry_roles": ["thomson_positions"],
+  "applies_to": {"shot_ranges": [{"from_shot": "30421"}]},
+  "url": "s3://fds-data/mast/geometry/thomson_positions_v2.nc",
+  "media_type": "application/x-netcdf",
+  "access_level": "public"
+}
+```
+
+See [Reference Geometry](../concepts/reference-geometry.md). Resolving the reference on read is shown in [Explore](explore.md).
+
 ### 3b. MAST-U Shot 50000
 
 Shot 50000 demonstrates two access tiers and the IceChunk collection model ([ADR-0029](../adrs/0029-icechunk-collection-model.md)):
 
 **raw-diagnostics** (restricted):
+
 - 3 NetCDF files: thomson-raw, charge-exchange-raw, magnetics-raw
 - Access level: `restricted` — requires authenticated token + FDS STS credential vending
 
 **analysed** (public, IceChunk):
+
 - 9 IDS datasets as groups in a single IceChunk repository
 - Shared `root_url: s3://fds-data/shots/50000/analysed/`
 - Access level: `public`

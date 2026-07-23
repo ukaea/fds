@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -11,6 +11,7 @@ from app.auth.access_control import (
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_shot_operator
+from app.core.timeutils import as_utc
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
@@ -23,18 +24,12 @@ from app.services.exceptions import (
     ForbiddenError,
     ResourceNotFoundError,
 )
+from app.services.reference_service import REFERENCE_KINDS, ReferenceService
 
 # Tolerance (seconds) when checking an explicit shot_duration against the
 # shot_at/shot_end interval, so a whole-second duration is not rejected against a
 # sub-second-precise interval.
 _DURATION_TOLERANCE_S = 1.0
-
-
-def _as_utc(dt: datetime | None) -> datetime | None:
-    """Treat a naive datetime as UTC so naive/aware values can be compared."""
-    if dt is not None and dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
 
 
 def validate_temporal_fields(
@@ -53,8 +48,8 @@ def validate_temporal_fields(
     if shot_end is not None and shot_at is None:
         raise FDSValidationError("shot_end requires shot_at to be set.")
 
-    shot_at = _as_utc(shot_at)
-    shot_end = _as_utc(shot_end)
+    shot_at = as_utc(shot_at)
+    shot_end = as_utc(shot_end)
 
     if shot_at is not None and shot_end is not None and shot_end < shot_at:
         raise FDSValidationError("shot_end must not be before shot_at.")
@@ -277,6 +272,19 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
 
         db_obj.sqlmodel_update(update_data)
         self.session.add(db_obj)
+
+        # A shot_at change can shift coverage into another version's window;
+        # re-validate every kind against the new value before committing.
+        if "shot_at" in update_data:
+            try:
+                for kind in REFERENCE_KINDS:
+                    ReferenceService(self.session, kind).validate_device_coverage(
+                        db_obj.device_name
+                    )
+            except FDSValidationError:
+                self.session.rollback()
+                raise
+
         self.session.commit()
         self.session.refresh(db_obj)
         return db_obj
@@ -293,6 +301,12 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         shot = self._resolve_shot(shot_id, device_name)
 
         check_device_admin(user, device_name)
+
+        # Block deletion of a shot that a reference-resource version depends on.
+        for kind in REFERENCE_KINDS:
+            ReferenceService(self.session, kind).check_shot_removable(
+                device_name, shot_id
+            )
 
         self.session.delete(shot)
         self.session.commit()

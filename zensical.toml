@@ -2,6 +2,7 @@
 site_name = "Fusion Data Service"
 site_description = "Scalable, FAIR-compliant access to fusion experiment metadata and data"
 docs_dir = "docs"
+extra_css = ["stylesheets/extra.css"]
 
 nav = [
   { Home = "index.md" },
@@ -9,6 +10,7 @@ nav = [
     { "Data Model" = "concepts/data-model.md" },
     { "Provenance" = "concepts/provenance.md" },
     { "Access Control" = "concepts/access-control.md" },
+    { "Reference Geometry" = "concepts/reference-geometry.md" },
     { "Semantic Metadata (DCAT & JSON-LD)" = "concepts/dcat-jsonld.md" },
   ]},
   { Demo = [
@@ -48,5 +50,6 @@ nav = [
     { "0030 — Controlled Vocabularies" = "adrs/0030-controlled-vocabularies.md" },
     { "0031 — Scientific Metadata" = "adrs/0031-scientific-metadata.md" },
     { "0033 — PostgreSQL for Production Persistence" = "adrs/0033-postgresql-for-production-persistence.md" },
+    { "0036 — Versioned Reference Geometry" = "adrs/0036-versioned-reference-geometry.md" },
   ]},
 ]

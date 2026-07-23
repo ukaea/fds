@@ -105,6 +105,27 @@ xr.open_dataset(eq["url"], engine="zarr", storage_options=eq["storage_options"])
 
 ---
 
+## 7b. Resolving Reference Geometry
+
+`thomson_scattering` references the `thomson_positions` role. Reading it with
+`?include_geometry=true` resolves the reference to the geometry version valid for each shot —
+shot `30420` → `v1`, shot `30421` → `v2` — returned under a `geometry` field. The resolved entry
+is an ordinary dataset reference, so it can be opened like any other dataset:
+
+```python
+signal = httpx.get(
+    f"{FDS_API_URL}/devices/mast/shots/30420/datasets/thomson_scattering",
+    params={"include_geometry": True, "include_storage_options": True},
+).json()[0]
+
+geom = signal["geometry"][0]  # → thomson_positions_v1 for shot 30420
+xr.open_dataset(geom["url"], engine="h5netcdf", storage_options=geom["storage_options"])
+```
+
+See [Reference Geometry](../concepts/reference-geometry.md).
+
+---
+
 ## 8. Parallel IceChunk Reads (Dask)
 
 Each IDS group in the shared IceChunk store for MAST-Upgrade shot 50000 is read by a separate

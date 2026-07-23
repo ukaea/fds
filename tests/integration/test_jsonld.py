@@ -2,7 +2,7 @@ import pytest
 
 from tests.integration.conftest import FDS_URL
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("seeded_data")]
 
 LD_HEADERS = {"Accept": "application/ld+json"}
 
@@ -34,7 +34,7 @@ def test_dataset_with_activity_has_provenance(http_client, seeded_data):
     assert "prov:wasGeneratedBy" in body
 
 
-def test_collection_jsonld_is_catalog(http_client, seeded_data):
+def test_collection_jsonld_is_catalog(http_client):
     resp = http_client.get(
         f"{FDS_URL}/devices/mast/shots/30420/collections/jintrac-v220922",
         headers=LD_HEADERS,

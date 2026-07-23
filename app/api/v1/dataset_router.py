@@ -53,13 +53,17 @@ def read_datasets_global(
     offset: int = 0,
     limit: int = 100,
     include_storage_options: bool = False,
+    include_geometry: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve global datasets.
     """
     datasets = dataset_service.get_multi(user=user, offset=offset, limit=limit)
     return dataset_service.to_read_models(
-        datasets, include_storage_options=include_storage_options, user=user
+        datasets,
+        include_storage_options=include_storage_options,
+        user=user,
+        include_geometry=include_geometry,
     )
 
 
@@ -121,6 +125,7 @@ def read_datasets_shot(
     offset: int = 0,
     limit: int = 100,
     include_storage_options: bool = False,
+    include_geometry: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all datasets for a specific shot.
@@ -129,7 +134,10 @@ def read_datasets_shot(
         shot_id, device_name, user=user, offset=offset, limit=limit
     )
     return dataset_service.to_read_models(
-        datasets, include_storage_options=include_storage_options, user=user
+        datasets,
+        include_storage_options=include_storage_options,
+        user=user,
+        include_geometry=include_geometry,
     )
 
 
@@ -146,6 +154,7 @@ def read_dataset_by_name(
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
+    include_geometry: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all datasets with the given name within a shot context.
@@ -155,7 +164,10 @@ def read_dataset_by_name(
         name=name, user=user, device_name=device_name, shot_id=shot_id
     )
     return dataset_service.to_read_models(
-        datasets, include_storage_options=include_storage_options, user=user
+        datasets,
+        include_storage_options=include_storage_options,
+        user=user,
+        include_geometry=include_geometry,
     )
 
 
@@ -171,6 +183,7 @@ def read_dataset_by_id(
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
+    include_geometry: bool = False,
 ) -> DatasetRead | JSONResponse:
     """
     Retrieve a single dataset by its internal integer ID.
@@ -183,11 +196,21 @@ def read_dataset_by_id(
     dataset_service.check_read_access(dataset, user)
 
     if "application/ld+json" in request.headers.get("accept", ""):
-        dcat_metadata = map_dataset_to_dcat(dataset, str(request.base_url).rstrip("/"))
+        geometry = (
+            dataset_service.to_read_model(dataset, include_geometry=True).geometry
+            if include_geometry
+            else None
+        )
+        dcat_metadata = map_dataset_to_dcat(
+            dataset, str(request.base_url).rstrip("/"), geometry=geometry
+        )
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
 
     return dataset_service.to_read_model(
-        dataset, include_storage_options=include_storage_options, user=user
+        dataset,
+        include_storage_options=include_storage_options,
+        user=user,
+        include_geometry=include_geometry,
     )
 
 
@@ -202,13 +225,17 @@ def read_dataset_global_by_name(
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
+    include_geometry: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all global datasets with the given name.
     """
     datasets = dataset_service.get_by_name_in_context(name=name, user=user)
     return dataset_service.to_read_models(
-        datasets, include_storage_options=include_storage_options, user=user
+        datasets,
+        include_storage_options=include_storage_options,
+        user=user,
+        include_geometry=include_geometry,
     )
 
 
@@ -225,6 +252,7 @@ def read_datasets_device(
     offset: int = 0,
     limit: int = 100,
     include_storage_options: bool = False,
+    include_geometry: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve datasets for a specific device (not tied to any shot).
@@ -233,7 +261,10 @@ def read_datasets_device(
         device_name, user=user, offset=offset, limit=limit
     )
     return dataset_service.to_read_models(
-        datasets, include_storage_options=include_storage_options, user=user
+        datasets,
+        include_storage_options=include_storage_options,
+        user=user,
+        include_geometry=include_geometry,
     )
 
 
@@ -249,6 +280,7 @@ def read_dataset_device_by_name(
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
+    include_geometry: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all device-level datasets with the given name.
@@ -257,7 +289,10 @@ def read_dataset_device_by_name(
         name=name, user=user, device_name=device_name
     )
     return dataset_service.to_read_models(
-        datasets, include_storage_options=include_storage_options, user=user
+        datasets,
+        include_storage_options=include_storage_options,
+        user=user,
+        include_geometry=include_geometry,
     )
 
 

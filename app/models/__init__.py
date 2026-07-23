@@ -23,6 +23,7 @@ from .distribution import (
     DistributionUpdate,
 )
 from .policy import AccessLevel
+from .reference import DateRange, ReferenceCoverage, ShotRange
 from .scientific_metadata import ScientificProperty
 from .shot import Shot, ShotCreate, ShotRead, ShotUpdate
 from .source import Source, SourceCreate, SourceRead, SourceUpdate
@@ -74,4 +75,7 @@ __all__ = [
     "AccessLevel",
     "ScientificProperty",
     "ActivityType",
+    "ShotRange",
+    "DateRange",
+    "ReferenceCoverage",
 ]

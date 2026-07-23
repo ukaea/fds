@@ -76,6 +76,8 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 | `scientific_metadata` | Diagnostic-specific parameters — see [Scientific metadata](#scientific-metadata) below |
 | `activity_id` | FK to the Activity that produced this dataset (provenance) |
 
+A `Dataset` can also link to **reference geometry** — a `Dataset` declares its related geometry via `geometry_references`, or a `Device`-level `Dataset` *provides* geometry via `geometry_roles` and `applies_to`. See [Reference Geometry](reference-geometry.md).
+
 ### Distribution
 
 A Distribution is a physical access path for a Dataset — it describes *how* to retrieve the data.

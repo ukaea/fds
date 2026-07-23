@@ -25,6 +25,15 @@ export interface Dataset {
   access_level?: string;
   effective_access_level?: string;
   activity_id?: number;
+  geometry_roles?: string[];
+  geometry_references?: string[];
+  applies_to?: ReferenceCoverage;
+}
+
+export interface ReferenceCoverage {
+  shots?: string[];
+  shot_ranges?: { from_shot: string; to_shot?: string | null }[];
+  date_ranges?: { from_date: string; to_date?: string | null }[];
 }
 
 export interface Collection {

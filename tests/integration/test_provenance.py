@@ -2,7 +2,7 @@ import pytest
 
 from tests.integration.conftest import FDS_URL
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("seeded_data")]
 
 
 def test_jintrac_activity_has_inputs(http_client, seeded_data):
@@ -13,7 +13,7 @@ def test_jintrac_activity_has_inputs(http_client, seeded_data):
     assert {"equilibrium", "magnetics", "thomson_scattering"}.issubset(input_names)
 
 
-def test_equilibrium_dataset_has_activity(http_client, seeded_data):
+def test_equilibrium_dataset_has_activity(http_client):
     resp = http_client.get(f"{FDS_URL}/devices/mast/shots/30421/datasets/equilibrium")
     assert resp.status_code == 200
     ds = resp.json()[0]
@@ -33,7 +33,7 @@ def test_jintrac_outputs_share_activity_id(http_client, seeded_data):
     assert {"equilibrium", "core_profiles", "core_sources"}.issubset(output_names)
 
 
-def test_jintrac_collection_activity_matches_outputs(http_client, seeded_data):
+def test_jintrac_collection_activity_matches_outputs(http_client):
     col_resp = http_client.get(
         f"{FDS_URL}/devices/mast/shots/30420/collections/jintrac-v220922"
     )

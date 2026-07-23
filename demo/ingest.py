@@ -46,6 +46,7 @@ def _():
         register_experiment_data_collections,
         register_jintrac_collection,
         register_mast_datasets,
+        register_mast_geometry,
         register_mast_upgrade_datasets,
     )
 
@@ -59,6 +60,7 @@ def _():
         register_experiment_data_collections,
         register_jintrac_collection,
         register_mast_datasets,
+        register_mast_geometry,
         register_mast_upgrade_datasets,
     )
 
@@ -210,6 +212,37 @@ def _(FDS_API_URL, headers, httpx, mo, register_efit_provenance):
     mo.callout(
         mo.md(
             f"EFIT source registered (id={_efit_id}). Activities attached to equilibrium on shots 30420 and 30421."
+        ),
+        kind="success",
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### 3.3 Reference Geometry — [docs](http://localhost:4001/demo/ingest/#33-reference-geometry)
+
+    Two device-level **Thomson chord position** geometry versions are registered on
+    `mast`, both providing the role `thomson_positions`: `v1` covers shot 30420, and
+    `v2` (re-surveyed positions) covers shot 30421 onward. Each shot's
+    `thomson_scattering` dataset references the role via `geometry_references`, so
+    reads resolve to the version valid for that shot.
+
+    See [Reference Geometry](http://localhost:4001/concepts/reference-geometry/) and
+    [ADR-0036](http://localhost:4001/adrs/0036-versioned-reference-geometry/).
+    """)
+    return
+
+
+@app.cell
+def _(FDS_API_URL, headers, httpx, mo, register_mast_geometry):
+    with httpx.Client(headers=headers, timeout=30.0) as _client:
+        register_mast_geometry(_client, FDS_API_URL)
+    mo.callout(
+        mo.md(
+            "Thomson geometry registered on device `mast`: "
+            "`thomson_positions_v1` (shot 30420), `thomson_positions_v2` (from 30421)."
         ),
         kind="success",
     )

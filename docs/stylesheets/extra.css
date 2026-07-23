@@ -1,0 +1,12 @@
+/* Prevent inline code inside tables from breaking mid-word */
+.md-content table code {
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+    white-space: nowrap;
+}
+
+/* Ensure table headers and columns scale nicely rather than collapsing */
+.md-content table th,
+.md-content table td {
+    word-break: keep-all;
+}

@@ -102,6 +102,43 @@ ensure_shot_data("30420")
 ensure_shot_data("30421")
 
 # ---------------------------------------------------------
+# 1b. MAST reference geometry — Thomson chord positions
+# ---------------------------------------------------------
+# Two device-level geometry versions holding the (R, Z) position of each Thomson
+# scattering volume: v1 for shot 30420, v2 for shot 30421 onward (chords
+# re-surveyed ~1 cm outward). Referenced by each shot's thomson_scattering
+# dataset via the `thomson_positions` role.
+geometry_specs = [
+    ("thomson_positions_v1", 0.00),
+    ("thomson_positions_v2", 0.01),
+]
+for stem, r_offset in geometry_specs:
+    s3_path = f"{bucket_name}/mast/geometry/{stem}.nc"
+    if fs.exists(s3_path):
+        print(f"Geometry {stem} already exists. Skipping.")
+        continue
+    print(f"Generating reference geometry {stem}...")
+    n_channels = 50
+    geom = xr.Dataset(
+        {
+            "R": ("channel", np.linspace(0.20, 1.40, n_channels) + r_offset),
+            "Z": ("channel", np.full(n_channels, 0.015)),
+        },
+        coords={"channel": np.arange(n_channels)},
+        attrs={
+            "title": f"MAST Thomson chord positions ({stem})",
+            "role": "thomson_positions",
+            "device": "mast",
+            "units_R": "m",
+            "units_Z": "m",
+        },
+    )
+    with tempfile.NamedTemporaryFile(suffix=".nc") as tmp:
+        geom.to_netcdf(tmp.name)
+        fs.put(tmp.name, s3_path)
+    print(f"  Written to s3://{s3_path}")
+
+# ---------------------------------------------------------
 # 2. Generate Synthetic MAST-U Data (Shot 50000)
 # ---------------------------------------------------------
 # 2a: Raw diagnostic data — 3 NetCDF files, restricted access

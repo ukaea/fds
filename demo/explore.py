@@ -251,6 +251,46 @@ def _(FDS_API_URL, httpx, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    ## 7b. Resolving Reference Geometry — [docs](http://localhost:4001/demo/explore/#7b-resolving-reference-geometry)
+
+    `thomson_scattering` references the `thomson_positions` role. Reading it with
+    `?include_geometry=true` resolves the reference to the geometry version valid for
+    each shot — shot 30420 → `v1`, shot 30421 → `v2` — returned under a `geometry`
+    field. Open the resolved dataset to read the (R, Z) chord positions.
+
+    See [Reference Geometry](http://localhost:4001/concepts/reference-geometry/).
+    """)
+    return
+
+
+@app.cell
+def _(FDS_API_URL, headers, httpx, xr):
+    _geometry_ds = None
+    for _shot in ("30420", "30421"):
+        _signal = httpx.get(
+            f"{FDS_API_URL}/devices/mast/shots/{_shot}/datasets/thomson_scattering",
+            headers=headers,
+            params={"include_geometry": True, "include_storage_options": True},
+        ).json()[0]
+        _geom = _signal.get("geometry")[0]
+    
+        _geometry_ds = xr.open_dataset(
+            _geom["url"], engine="h5netcdf", storage_options=_geom["storage_options"]
+        )
+        _r = _geometry_ds["R"].values
+    
+        print(
+            f"  shot {_shot} -> {_geom['name']}: "
+            f"R {_r[0]:.2f}..{_r[-1]:.2f} m across "
+            f"{_geometry_ds.sizes['channel']} channels"
+        )
+    _geometry_ds
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ## 8. Parallel `icechunk` Reads (Dask) — [docs](http://localhost:4001/concepts/access-control/#bulk-access-the-credential-manifest)
 
     The **Credential Manifest** pattern at scale. All datasets in the MAST-U `icechunk` store

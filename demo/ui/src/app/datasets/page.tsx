@@ -3,20 +3,74 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { Database, Server, Search, Filter } from 'lucide-react';
+import { Database, Server, Search, FileCode } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Device } from '@/lib/types';
+import { Device, Dataset } from '@/lib/types';
+
+function DatasetCard({ dataset }: { dataset: Dataset }) {
+  const href =
+    dataset.device_name && dataset.id
+      ? `/devices/${dataset.device_name}/datasets/${dataset.id}`
+      : null;
+  const content = (
+    <>
+      <div className="flex items-center gap-3">
+        <div className="bg-muted p-2 rounded text-foreground">
+          <Database className="w-5 h-5" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="font-bold text-lg text-foreground">{dataset.name}</h3>
+          {dataset.url && (
+            <p className="text-xs text-muted-foreground font-mono mt-1 break-all">{dataset.url}</p>
+          )}
+        </div>
+      </div>
+      <div className="mt-4 flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+        <div className="flex items-center gap-1">
+          <FileCode className="w-4 h-4" />
+          {dataset.media_type || 'Dataset'}
+        </div>
+        {dataset.level !== undefined && (
+          <span className="text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border">
+            Level {dataset.level}
+          </span>
+        )}
+        {dataset.geometry_roles && dataset.geometry_roles.length > 0 && (
+          <span className="text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border">
+            geometry: {dataset.geometry_roles.join(', ')}
+          </span>
+        )}
+      </div>
+    </>
+  );
+  return href ? (
+    <Link href={href} className="card p-6 block hover:border-primary/50 transition-colors">
+      {content}
+    </Link>
+  ) : (
+    <div className="card p-6">{content}</div>
+  );
+}
 
 export default function DatasetsPage() {
-  const { data: devices, error: devicesError, isLoading: devicesLoading } = useSWR<Device[]>(`${API_BASE}/devices/`, fetcher);
+  const { data: devices, error: devicesError, isLoading: devicesLoading } = useSWR<Device[]>(
+    `${API_BASE}/devices/`,
+    fetcher
+  );
+  const { data: allDatasets } = useSWR<Dataset[]>(`${API_BASE}/datasets?limit=1000`, fetcher);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'global' | 'device'>('all');
 
-  // Filter devices based on search query
-  const filteredDevices = devices?.filter(device =>
-    device.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    device.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  const query = searchQuery.toLowerCase();
+  const matches = (text?: string) => (text ?? '').toLowerCase().includes(query);
+
+  const globalDatasets = (allDatasets ?? []).filter((d) => !d.device_name && matches(d.name));
+  const filteredDevices = devices?.filter(
+    (device) => matches(device.name) || matches(device.description)
   );
+  // Device-level datasets only (shot-level datasets live under each shot).
+  const deviceDatasets = (name: string) =>
+    (allDatasets ?? []).filter((d) => d.device_name === name && !d.shot_id);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -43,9 +97,7 @@ export default function DatasetsPage() {
           <button
             onClick={() => setFilterType('all')}
             className={`px-4 py-2 rounded-lg transition-colors ${
-              filterType === 'all'
-                ? 'bg-muted text-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted'
+              filterType === 'all' ? 'bg-muted text-foreground' : 'bg-muted text-muted-foreground hover:bg-muted'
             }`}
           >
             All
@@ -53,9 +105,7 @@ export default function DatasetsPage() {
           <button
             onClick={() => setFilterType('global')}
             className={`px-4 py-2 rounded-lg transition-colors ${
-              filterType === 'global'
-                ? 'bg-muted text-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted'
+              filterType === 'global' ? 'bg-muted text-foreground' : 'bg-muted text-muted-foreground hover:bg-muted'
             }`}
           >
             Global
@@ -63,9 +113,7 @@ export default function DatasetsPage() {
           <button
             onClick={() => setFilterType('device')}
             className={`px-4 py-2 rounded-lg transition-colors ${
-              filterType === 'device'
-                ? 'bg-muted text-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted'
+              filterType === 'device' ? 'bg-muted text-foreground' : 'bg-muted text-muted-foreground hover:bg-muted'
             }`}
           >
             Device-Linked
@@ -83,12 +131,19 @@ export default function DatasetsPage() {
             <h2 className="text-xl font-semibold text-foreground">Global Datasets</h2>
             <span className="text-sm text-muted-foreground">(Standalone, not linked to devices)</span>
           </div>
-          <div className="card p-6">
-            <div className="text-center py-8 text-muted-foreground">
-              <p className="text-sm">No global datasets available yet.</p>
-              <p className="text-xs mt-2 text-muted-foreground">Global datasets will appear here when added to the system.</p>
+          {globalDatasets.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {globalDatasets.map((dataset) => (
+                <DatasetCard key={dataset.id} dataset={dataset} />
+              ))}
             </div>
-          </div>
+          ) : (
+            <div className="card p-6">
+              <div className="text-center py-8 text-muted-foreground">
+                <p className="text-sm">No global datasets available.</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -99,20 +154,15 @@ export default function DatasetsPage() {
             <div className="bg-muted p-2 rounded-lg text-foreground">
               <Server className="w-5 h-5" />
             </div>
-            <h2 className="text-xl font-semibold text-foreground">Devices & Their Datasets</h2>
-            <span className="text-sm text-muted-foreground">(Device-level and shot-level datasets)</span>
+            <h2 className="text-xl font-semibold text-foreground">Devices &amp; Their Datasets</h2>
+            <span className="text-sm text-muted-foreground">(Device-level datasets)</span>
           </div>
 
           {devicesLoading && (
-            <div className="card p-6 text-center text-muted-foreground">
-              Loading devices...
-            </div>
+            <div className="card p-6 text-center text-muted-foreground">Loading devices...</div>
           )}
-
           {devicesError && (
-            <div className="card p-6 text-center text-destructive">
-              Failed to load devices
-            </div>
+            <div className="card p-6 text-center text-destructive">Failed to load devices</div>
           )}
 
           {!devicesLoading && !devicesError && filteredDevices && filteredDevices.length === 0 && (
@@ -130,42 +180,57 @@ export default function DatasetsPage() {
 
           {!devicesLoading && !devicesError && filteredDevices && filteredDevices.length > 0 && (
             <div className="space-y-4">
-              {filteredDevices.map((device) => (
-                <div key={device.name} className="card overflow-hidden">
-                  <div className="p-6 bg-muted/30">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-muted p-2 rounded-lg text-foreground">
-                          <Server className="w-5 h-5" />
+              {filteredDevices.map((device) => {
+                const datasets = deviceDatasets(device.name);
+                return (
+                  <div key={device.name} className="card overflow-hidden">
+                    <div className="p-6 bg-muted/30">
+                      <div className="flex items-center justify-between">
+                        <Link href={`/devices/${device.name}`} className="flex items-center gap-3 group">
+                          <div className="bg-muted p-2 rounded-lg text-foreground">
+                            <Server className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+                              {device.name}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {device.description || 'No description available'}
+                            </p>
+                          </div>
+                        </Link>
+                        <Link
+                          href={`/devices/${device.name}/shots`}
+                          className="px-4 py-2 bg-muted hover:bg-accent text-foreground text-sm rounded-lg transition-colors"
+                        >
+                          View Shots
+                        </Link>
+                      </div>
+                    </div>
+                    <div className="p-6">
+                      <div className="text-sm text-muted-foreground mb-3">
+                        <span className="font-medium text-foreground">Device Datasets:</span>
+                      </div>
+                      {datasets.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {datasets.map((dataset) => (
+                            <DatasetCard key={dataset.id} dataset={dataset} />
+                          ))}
                         </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-foreground">{device.name}</h3>
+                      ) : (
+                        <div className="text-center py-6 bg-card/30 rounded-lg border border-dashed border-border">
                           <p className="text-sm text-muted-foreground">
-                            {device.description || 'No description available'}
+                            No device-level datasets for {device.name}.
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Navigate to shots to view shot-level datasets.
                           </p>
                         </div>
-                      </div>
-                      <Link
-                        href={`/devices/${device.name}/shots`}
-                        className="px-4 py-2 bg-muted hover:bg-accent text-foreground text-sm rounded-lg transition-colors"
-                      >
-                        View Shots
-                      </Link>
+                      )}
                     </div>
                   </div>
-                  <div className="p-6">
-                    <div className="text-sm text-muted-foreground mb-3">
-                      <span className="font-medium text-foreground">Device Datasets:</span>
-                    </div>
-                    <div className="text-center py-6 bg-card/30 rounded-lg border border-dashed border-border">
-                      <p className="text-sm text-muted-foreground">No device-level datasets available for {device.name}.</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Navigate to shots to view shot-level datasets.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

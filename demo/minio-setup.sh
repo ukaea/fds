@@ -52,7 +52,8 @@ cat <<EOF > /tmp/bucket-policy.json
             "Resource": [
                 "arn:aws:s3:::fds-data/shots/30420/*",
                 "arn:aws:s3:::fds-data/shots/30421/*",
-                "arn:aws:s3:::fds-data/shots/*/analysed/*"
+                "arn:aws:s3:::fds-data/shots/*/analysed/*",
+                "arn:aws:s3:::fds-data/mast/geometry/*"
             ]
         }
     ]

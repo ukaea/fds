@@ -10,10 +10,21 @@ from app.models.shot import Shot, ShotRead
 if TYPE_CHECKING:
     from app.models.activity import Activity
 
+# Placeholder namespace for the Fusion Energy Lexicon (FuEL), still in
+# development. FuEL supplies SKOS role concepts used as ``dcat:hadRole`` values
+# on a ``dcat:qualifiedRelation`` (the typed-relationship pattern, ADR-0038);
+# ``fuel:geometry`` is the role marking a reference-geometry edge. Swap this
+# single constant for the canonical FuEL URI once it is published.
+FUEL_NAMESPACE = "https://w3id.org/fuel/ns#"
+
+# FuEL role concept marking a qualified relation as a reference-geometry edge.
+FUEL_GEOMETRY_ROLE = "fuel:geometry"
+
 METADATA_CONTEXT = {
     "dcat": "http://www.w3.org/ns/dcat#",
     "dct": "http://purl.org/dc/terms/",
     "prov": "http://www.w3.org/ns/prov#",
+    "fuel": FUEL_NAMESPACE,
     "schema": "https://schema.org/",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
     "dqv": "http://www.w3.org/ns/dqv#",
@@ -131,10 +142,17 @@ def map_shot_to_dcat(shot: Shot | ShotRead, base_url: str) -> dict[str, Any]:
 
 
 def map_dataset_to_dcat(
-    dataset: Dataset | DatasetRead, base_url: str
+    dataset: Dataset | DatasetRead,
+    base_url: str,
+    geometry: "list[DatasetRead] | None" = None,
 ) -> dict[str, Any]:
     """
     Maps a Dataset to a dcat:Dataset.
+
+    ``geometry`` supplies resolved reference-geometry versions when
+    the source object does not itself carry them (e.g. an ORM ``Dataset``).
+    Each such version links via a ``dcat:qualifiedRelation`` carrying the
+    ``fuel:geometry`` role (the typed-relationship pattern).
     """
     # Construct URI
     # Note: Using the API path as the URI
@@ -249,7 +267,60 @@ def map_dataset_to_dcat(
     if sci_meta:
         data["schema:additionalProperty"] = _map_scientific_metadata_to_jsonld(sci_meta)
 
+    # Link resolved geometry versions via a dcat:qualifiedRelation carrying the
+    # fuel:geometry role (typed-relationship pattern).
+    resolved_geometry: list[Any] = (
+        geometry if geometry is not None else getattr(dataset, "geometry", None)
+    ) or []
+    if resolved_geometry:
+        data["dcat:qualifiedRelation"] = [
+            {
+                "@type": "dcat:Relationship",
+                "dcat:hadRole": {"@id": FUEL_GEOMETRY_ROLE},
+                "dct:relation": _map_geometry_reference(version, base_url),
+            }
+            for version in resolved_geometry
+        ]
+
     return {k: v for k, v in data.items() if v is not None}
+
+
+def _map_geometry_reference(version: "DatasetRead", base_url: str) -> dict[str, Any]:
+    """A resolved geometry version as a dct:relation node."""
+    node: dict[str, Any] = {
+        "@id": f"{base_url}/api/v1/datasets/{version.id}",
+        "@type": "dcat:Dataset",
+        "dct:title": version.title or version.name,
+    }
+    coverage = getattr(version, "applies_to", None)
+    period = _coverage_to_period(coverage)
+    if period is not None:
+        node["dct:temporal"] = period
+    return node
+
+
+def _coverage_to_period(coverage: Any) -> dict[str, Any] | None:
+    """Map a coverage's date ranges to a dct:PeriodOfTime, if it has any."""
+    if coverage is None:
+        return None
+    date_ranges = (
+        coverage.get("date_ranges")
+        if isinstance(coverage, dict)
+        else getattr(coverage, "date_ranges", None)
+    )
+    if not date_ranges:
+        return None
+    first = date_ranges[0]
+    from_date = first["from_date"] if isinstance(first, dict) else first.from_date
+    to_date = first.get("to_date") if isinstance(first, dict) else first.to_date
+    if isinstance(from_date, str):
+        start = from_date
+    else:
+        start = from_date.isoformat()
+    period: dict[str, Any] = {"@type": "dct:PeriodOfTime", "startDate": start}
+    if to_date is not None:
+        period["endDate"] = to_date if isinstance(to_date, str) else to_date.isoformat()
+    return period
 
 
 def map_collection_to_dcat(

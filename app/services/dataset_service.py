@@ -21,6 +21,7 @@ from app.models.file_access import (
 )
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
+from app.models.shot import Shot
 from app.models.storage_options import derive_storage_options_type
 from app.services.base_service import BaseService
 from app.services.exceptions import (
@@ -31,6 +32,12 @@ from app.services.exceptions import (
     ResourceNotFoundError,
 )
 from app.services.file_access_service import FileAccessService
+from app.services.reference_service import (
+    GEOMETRY,
+    REFERENCE_KINDS,
+    ReferenceKind,
+    ReferenceService,
+)
 from app.services.shot_service import ShotService
 
 logger = logging.getLogger(__name__)
@@ -108,74 +115,117 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             check_is_admin(user)
 
     def create(self, obj_in: DatasetCreate, user: AuthenticatedUser) -> Dataset:
-        """
-        Create a new dataset. Handles global, device, or shot context.
-        """
-        # 0. Validate policy invariants before any DB work
+        """Create a new dataset. Handles global, device, or shot context."""
         validate_policy_fields(
-            obj_in.access_level,
-            obj_in.required_scopes,
-            obj_in.allowed_idps,
+            obj_in.access_level, obj_in.required_scopes, obj_in.allowed_idps
         )
+        self._resolve_and_authorize_context(obj_in, user)
 
-        # 1. Determine and Validate Context
+        origin = obj_in.origin or config.catalog_uri
+        self._reject_duplicate(obj_in, origin)
+        self._validate_references(obj_in)
+
+        db_obj = Dataset.model_validate(
+            obj_in, update={"distributions": [], "origin": origin}
+        )
+        if obj_in.url:
+            db_obj.distributions.append(self._build_distribution(obj_in, obj_in.url))
+        return self._persist(db_obj, obj_in.name)
+
+    def _resolve_and_authorize_context(
+        self, obj_in: DatasetCreate, user: AuthenticatedUser
+    ) -> None:
+        """Validate the dataset's context (global / device / shot) and authorize the
+        caller for it. Raises if the shot or device is missing, or the user lacks the
+        required admin capability."""
         if obj_in.shot_id:
             if not obj_in.device_name:
                 raise FDSValidationError(
                     "Device name is required when specifying a shot_id"
                 )
-
-            # Verify the shot exists under this device
-            shot_service = ShotService(self.session)
-            shot = shot_service.get((obj_in.device_name, obj_in.shot_id))
+            shot = ShotService(self.session).get((obj_in.device_name, obj_in.shot_id))
             if not shot:
                 raise ResourceNotFoundError(
                     f"Shot {obj_in.shot_id} not found for device {obj_in.device_name}"
                 )
-
-            # Auth: Device Admin
-            check_device_admin(user, obj_in.device_name)
-
         elif obj_in.device_name:
-            # Verify device exists
             stmt = select(Device).where(Device.name == obj_in.device_name)
             if not self.session.exec(stmt).first():
                 raise DeviceNotFoundError(f"Device '{obj_in.device_name}' not found")
+        self._authorize_write(obj_in.device_name, user)
 
-            # Auth: Device Admin
-            check_device_admin(user, obj_in.device_name)
+    def _reject_duplicate(self, obj_in: DatasetCreate, origin: str) -> None:
+        """Reject an exact duplicate up front so a re-POST of an identical dataset
+        reads as 409 (already exists) rather than the reference-overlap 422 that
+        validation would raise first — a version trivially overlaps itself, which
+        would otherwise mask the duplicate behind a misleading error."""
+        duplicate = select(Dataset).where(
+            Dataset.name == obj_in.name,
+            Dataset.device_name == obj_in.device_name,
+            Dataset.shot_id == obj_in.shot_id,
+        )
+        if obj_in.activity_id is not None:
+            duplicate = duplicate.where(Dataset.activity_id == obj_in.activity_id)
         else:
-            # Global dataset
-            check_is_admin(user)
+            duplicate = duplicate.where(
+                col(Dataset.activity_id).is_(None), Dataset.origin == origin
+            )
+        if self.session.exec(duplicate).first() is not None:
+            raise ConflictError(
+                f"Dataset '{obj_in.name}' already exists in this context"
+            )
 
-        # 2. Create DB Object — device_name flows through from obj_in directly
-        origin = obj_in.origin or config.catalog_uri
-        db_obj = Dataset.model_validate(
-            obj_in, update={"distributions": [], "origin": origin}
+    def _validate_references(self, obj_in: DatasetCreate) -> None:
+        """Enforce reference (geometry / calibration) write rules before any DB work."""
+        for kind in REFERENCE_KINDS:
+            ReferenceService(self.session, kind).validate_new_version(
+                obj_in.device_name,
+                getattr(obj_in, kind.roles_attr),
+                obj_in.applies_to,
+                references=getattr(obj_in, kind.references_attr),
+                shot_id=obj_in.shot_id,
+            )
+
+    def _build_distribution(self, obj_in: DatasetCreate, url: str) -> Distribution:
+        """Build the default distribution for a dataset's ``url``."""
+        return Distribution(
+            url=url,
+            endpoint_url=obj_in.endpoint_url,
+            region=obj_in.region,
+            media_type=obj_in.media_type,
+            format=obj_in.format,
+            storage_options_type=obj_in.storage_options_type
+            or derive_storage_options_type(obj_in.media_type, url),
+            default_distribution=True,
         )
 
-        if obj_in.url:
-            distribution = Distribution(
-                url=obj_in.url,
-                endpoint_url=obj_in.endpoint_url,
-                region=obj_in.region,
-                media_type=obj_in.media_type,
-                format=obj_in.format,
-                storage_options_type=obj_in.storage_options_type
-                or derive_storage_options_type(obj_in.media_type, obj_in.url),
-                default_distribution=True,
-            )
-            db_obj.distributions.append(distribution)
-
+    def _persist(self, db_obj: Dataset, name: str) -> Dataset:
+        """Add, commit (mapping a uniqueness violation to 409), refresh, and return."""
         self.session.add(db_obj)
         try:
             self.session.commit()
         except IntegrityError as e:
             self.session.rollback()
             raise ConflictError(
-                f"Dataset '{obj_in.name}' already exists in this context"
+                f"Dataset '{name}' already exists in this context"
             ) from e
         self.session.refresh(db_obj)
+        return db_obj
+
+    def _authorize_write(
+        self, device_name: str | None, user: AuthenticatedUser
+    ) -> None:
+        """Authorize a write: device admin if device-scoped, else global admin."""
+        if device_name:
+            check_device_admin(user, device_name)
+        else:
+            check_is_admin(user)
+
+    def _get_or_raise(self, id: int) -> Dataset:
+        """Fetch a dataset by id or raise ``ResourceNotFoundError``."""
+        db_obj = self.get(id)
+        if not db_obj:
+            raise ResourceNotFoundError(f"Dataset {id} not found")
         return db_obj
 
     def update(
@@ -184,15 +234,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         Update a dataset. Resolves by ID internally.
         """
-        db_obj = self.get(id)
-        if not db_obj:
-            raise ResourceNotFoundError(f"Dataset {id} not found")
-
-        # Auth check based on existing context
-        if db_obj.device_name:
-            check_device_admin(user, db_obj.device_name)
-        else:
-            check_is_admin(user)
+        db_obj = self._get_or_raise(id)
+        self._authorize_write(db_obj.device_name, user)
 
         # Prevent changing context during update
         if obj_in.device_name and obj_in.device_name != db_obj.device_name:
@@ -214,21 +257,32 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             effective_allowed_idps,
         )
 
+        # Re-validate reference resources against the merged state.
+        effective_applies_to = update_data.get("applies_to", db_obj.applies_to)
+        for kind in REFERENCE_KINDS:
+            effective_roles = update_data.get(
+                kind.roles_attr, getattr(db_obj, kind.roles_attr)
+            )
+            effective_references = update_data.get(
+                kind.references_attr, getattr(db_obj, kind.references_attr)
+            )
+            ReferenceService(self.session, kind).validate_new_version(
+                db_obj.device_name,
+                effective_roles,
+                effective_applies_to,
+                references=effective_references,
+                shot_id=db_obj.shot_id,
+                exclude_id=db_obj.id,
+            )
+
         return self.update_unchecked(db_obj=db_obj, obj_in=obj_in)
 
     def delete(self, id: int, user: AuthenticatedUser) -> bool:
         """
         Delete a dataset with authorization.
         """
-        db_obj = self.get(id)
-        if not db_obj:
-            raise ResourceNotFoundError(f"Dataset {id} not found")
-
-        if db_obj.device_name:
-            check_device_admin(user, db_obj.device_name)
-        else:
-            check_is_admin(user)
-
+        db_obj = self._get_or_raise(id)
+        self._authorize_write(db_obj.device_name, user)
         return self.delete_unchecked(id)
 
     def get_by_name_in_context(
@@ -294,11 +348,14 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         dataset: Dataset,
         include_storage_options: bool = False,
         user: AuthenticatedUser | None = None,
+        include_geometry: bool = False,
     ) -> DatasetRead:
         """
         Converts a Dataset ORM object to a DatasetRead DTO, including the effective access level.
         The default distribution's fields are inlined; other distributions appear in `formats`.
         Optionally enriches it with temporary storage credentials if permitted.
+        When ``include_geometry`` is set, resolves the signal's
+        ``geometry_references`` to their applicable versions.
         """
         default_dist = next(
             (d for d in dataset.distributions if d.default_distribution), None
@@ -321,13 +378,57 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         )
         if include_storage_options and user:
             read_model = self.enrich_with_storage_options([read_model], user)[0]
+        if include_geometry:
+            read_model.geometry = self._resolve_reference_read_models(
+                dataset,
+                GEOMETRY,
+                include_storage_options=include_storage_options,
+                user=user,
+            )
         return read_model
+
+    def _resolve_reference_read_models(
+        self,
+        dataset: Dataset,
+        kind: ReferenceKind,
+        include_storage_options: bool = False,
+        user: AuthenticatedUser | None = None,
+    ) -> list[DatasetRead] | None:
+        """Resolve a signal's references of ``kind`` to deduped read models, or
+        ``None`` if it declares none or has no resolvable shot."""
+        references = getattr(dataset, kind.references_attr)
+        if not references or not dataset.shot_id:
+            return None
+        shot = self.session.exec(
+            select(Shot).where(
+                Shot.device_name == dataset.device_name,
+                Shot.id == dataset.shot_id,
+            )
+        ).first()
+        if shot is None:
+            return None
+        resolved = ReferenceService(self.session, kind).resolve(shot, references)
+        seen: set[int] = set()
+        models: list[DatasetRead] = []
+        for version in resolved.values():
+            if version is None or version.id is None or version.id in seen:
+                continue
+            seen.add(version.id)
+            models.append(
+                self.to_read_model(
+                    version,
+                    include_storage_options=include_storage_options,
+                    user=user,
+                )
+            )
+        return models or None
 
     def to_read_models(
         self,
         datasets: Sequence[Dataset],
         include_storage_options: bool = False,
         user: AuthenticatedUser | None = None,
+        include_geometry: bool = False,
     ) -> list[DatasetRead]:
         """
         Batch converts ORM objects to DatasetRead DTOs, efficiently applying batch enrichment
@@ -336,6 +437,14 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         models = [self.to_read_model(d) for d in datasets]
         if include_storage_options and user:
             models = self.enrich_with_storage_options(models, user)
+        if include_geometry:
+            for source, model in zip(datasets, models):
+                model.geometry = self._resolve_reference_read_models(
+                    source,
+                    GEOMETRY,
+                    include_storage_options=include_storage_options,
+                    user=user,
+                )
         return models
 
     def _filter_accessible_datasets(

@@ -1,13 +1,8 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
-
-def utcnow():
-    """
-    Returns the current time in UTC, timezone-aware.
-    """
-    return datetime.now(timezone.utc)
+from app.core.timeutils import utcnow
 
 
 class TimestampMixin(SQLModel):

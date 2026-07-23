@@ -70,7 +70,7 @@ export default function Home() {
             {devices.map((device) => (
               <Link
                 key={device.name}
-                href={`/devices/${device.name}/shots`}
+                href={`/devices/${device.name}`}
                 className="card p-6 group hover:bg-muted transition-colors"
               >
                 <div className="flex items-start gap-3 mb-3">
