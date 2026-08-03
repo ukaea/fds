@@ -79,9 +79,8 @@ services:
     command: uv run /app/generate_data.py
 
   metadata-seeder:
-    # Opt-in: only runs under the `seed` profile (`podman compose --profile seed up`).
-    # A plain `up` leaves FDS empty so the demo notebooks can populate it live.
-    profiles: ["seed"]
+    # Runs on every `up`, once FDS is healthy, to populate the demo catalog so the
+    # documented examples work against a live instance out of the box.
     image: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     depends_on:
       fds:

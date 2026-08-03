@@ -1,6 +1,6 @@
 # Semantic Metadata (DCAT & JSON-LD)
 
-FDS exposes its metadata as proper linked data via HTTP content negotiation. This satisfies the **Findable** and **Interoperable** pillars of FAIR. See [ADR-0009](../adrs/0009-content-negotiation-for-dcat.md) and [ADR-0019](../adrs/0019-two-tier-schema-driven-semantic-projection.md).
+FDS exposes its metadata as proper linked data via HTTP content negotiation. This satisfies the **Findable** and **Interoperable** pillars of FAIR.
 
 ## Content negotiation
 
@@ -57,10 +57,41 @@ When you request `application/ld+json`, FDS re-separates these back into the cor
 
 A **Shot** maps to `dcat:Dataset`. Requesting a shot endpoint with `Accept: application/ld+json` returns a document that includes the experimental temporal coverage, creator, and scientific metadata. Temporal coverage is emitted as a `dct:PeriodOfTime`: a closed period (`startDate`+`endDate`) when an end is known or derivable from `shot_duration`, or an open period (`startDate` only) when just `shot_at` is set, as below:
 
-```http
-GET /api/v1/devices/mast/shots/30421
-Accept: application/ld+json
-```
+=== "curl"
+
+    ```bash
+    curl -H "Accept: application/ld+json" "$API/devices/mast/shots/30421"
+    ```
+
+=== "Python (requests)"
+
+    ```python
+    doc = requests.get(
+        f"{API}/devices/mast/shots/30421",
+        headers={"Accept": "application/ld+json"},
+    ).json()
+    ```
+
+=== "Python (httpx)"
+
+    ```python
+    doc = httpx.get(
+        f"{API}/devices/mast/shots/30421",
+        headers={"Accept": "application/ld+json"},
+    ).json()
+    ```
+
+=== "JavaScript (fetch)"
+
+    ```javascript
+    const doc = await (
+      await fetch(`${API}/devices/mast/shots/30421`, {
+        headers: { Accept: "application/ld+json" },
+      })
+    ).json();
+    ```
+
+The response:
 
 ```json
 {
@@ -101,10 +132,82 @@ Accept: application/ld+json
 
 A **Collection** maps to `dcat:Catalog`. Requesting a collection endpoint with `Accept: application/ld+json` returns the catalog document with member datasets listed as `dcat:dataset` references and the provenance Activity embedded as `prov:wasGeneratedBy`.
 
-```http
-GET /api/v1/devices/mast/shots/30420/collections/jintrac-v220922
-Accept: application/ld+json
-```
+=== "curl"
+
+    ```bash
+    curl -H "Accept: application/ld+json" \
+      "$API/devices/mast/shots/30420/collections/jintrac-v220922"
+    ```
+
+=== "Python (requests)"
+
+    ```python
+    catalog = requests.get(
+        f"{API}/devices/mast/shots/30420/collections/jintrac-v220922",
+        headers={"Accept": "application/ld+json"},
+    ).json()
+    ```
+
+=== "Python (httpx)"
+
+    ```python
+    catalog = httpx.get(
+        f"{API}/devices/mast/shots/30420/collections/jintrac-v220922",
+        headers={"Accept": "application/ld+json"},
+    ).json()
+    ```
+
+=== "JavaScript (fetch)"
+
+    ```javascript
+    const catalog = await (
+      await fetch(`${API}/devices/mast/shots/30420/collections/jintrac-v220922`, {
+        headers: { Accept: "application/ld+json" },
+      })
+    ).json();
+    ```
+
+## Provenance graph
+
+The standard JSON response carries `activity_id` on each Dataset. Requesting a Dataset as
+`application/ld+json` instead returns its full PROV-O provenance graph — the producing
+Activity, the Source that ran it, and the input datasets it used:
+
+=== "curl"
+
+    ```bash
+    curl -H "Accept: application/ld+json" "$API/datasets/id/$DATASET_ID"
+    ```
+
+=== "Python (requests)"
+
+    ```python
+    doc = requests.get(
+        f"{API}/datasets/id/{dataset_id}",
+        headers={"Accept": "application/ld+json"},
+    ).json()
+    ```
+
+=== "Python (httpx)"
+
+    ```python
+    doc = httpx.get(
+        f"{API}/datasets/id/{dataset_id}",
+        headers={"Accept": "application/ld+json"},
+    ).json()
+    ```
+
+=== "JavaScript (fetch)"
+
+    ```javascript
+    const doc = await (
+      await fetch(`${API}/datasets/id/${datasetId}`, {
+        headers: { Accept: "application/ld+json" },
+      })
+    ).json();
+    ```
+
+The response contains `prov:wasGeneratedBy`, `prov:wasAssociatedWith`, and input dataset references as proper PROV-O triples. See [Provenance](provenance.md) for the model behind them.
 
 ## Namespaces
 

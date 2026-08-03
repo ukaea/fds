@@ -22,21 +22,22 @@ def _(mo):
     mo.md(r"""
     # FDS — Reading Data
 
-    Demonstrates reading data back from a populated FDS instance: browsing the catalog,
-    fetching semantic metadata, access control, credential vending, and high-throughput
-    parallel reads.
+    The parts of reading data back from FDS that are best seen running live: access
+    enforcement at the storage layer, credential vending, opening real data with
+    `xarray`, and high-throughput parallel reads.
 
-    **Prerequisite:** data must be populated first. Run `demo/ingest.py` or let
-    docker-compose start the `metadata-seeder` service.
+    The metadata side — content negotiation, DCAT/JSON-LD, and provenance graphs — is
+    documented with copy-pasteable examples in the concept pages:
+    **[http://localhost:4001](http://localhost:4001)**.
 
-    Full docs: **[http://localhost:4001/demo/explore/](http://localhost:4001/demo/explore/)**
+    **Prerequisite:** a populated FDS instance. The demo stack seeds itself on startup;
+    to reseed manually run `uv run demo/seed_metadata.py`.
     """)
     return
 
 
 @app.cell
 def _():
-    import json
     import time
 
     import httpx
@@ -44,7 +45,7 @@ def _():
     import xarray as xr
     from dask.distributed import Client, LocalCluster
 
-    return Client, LocalCluster, httpx, json, mo, time, xr
+    return Client, LocalCluster, httpx, mo, time, xr
 
 
 @app.cell(hide_code=True)
@@ -111,59 +112,7 @@ def _(KEYCLOAK_URL, httpx, mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 3. Semantic Metadata (JSON-LD) — [docs](http://localhost:4001/concepts/dcat-jsonld/)
-
-    Requesting a dataset with `Accept: application/ld+json` returns a `dcat:Dataset` document
-    with nested `dcat:Distribution` nodes and embedded `prov:wasGeneratedBy` triples.
-
-    See [ADR-0009](http://localhost:4001/adrs/0009-content-negotiation-for-dcat/) and
-    [ADR-0019](http://localhost:4001/adrs/0019-two-tier-schema-driven-semantic-projection/).
-    """)
-    return
-
-
-@app.cell
-def _(FDS_API_URL, headers, httpx, json):
-    _ds_list = httpx.get(
-        f"{FDS_API_URL}/devices/mast/shots/30421/datasets/equilibrium", headers=headers
-    ).json()
-    eq_id = _ds_list[0]["id"]
-
-    _ld_resp = httpx.get(
-        f"{FDS_API_URL}/datasets/id/{eq_id}",
-        headers={**headers, "Accept": "application/ld+json"},
-    )
-    _ld_resp.raise_for_status()
-    print(json.dumps(_ld_resp.json(), indent=2))
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 4. Collection as `dcat:Catalog` — [docs](http://localhost:4001/concepts/dcat-jsonld/#collection-as-dcatcatalog)
-
-    Collections are returned as `dcat:Catalog` when requested with `Accept: application/ld+json`.
-    The JINTRAC collection also shows the full provenance graph: `prov:wasGeneratedBy` on each
-    output dataset points back to the simulation activity.
-    """)
-    return
-
-
-@app.cell
-def _(FDS_API_URL, headers, httpx, json):
-    _col = httpx.get(
-        f"{FDS_API_URL}/devices/mast/shots/30420/collections/jintrac-v220922",
-        headers={**headers, "Accept": "application/ld+json"},
-    ).json()
-    print(json.dumps(_col, indent=2))
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 5. Attempting Unauthorised Access — [docs](http://localhost:4001/concepts/access-control/#what-fds-does-not-do)
+    ## 3. Attempting Unauthorised Access — [docs](http://localhost:4001/access-control/#what-fds-does-not-do)
 
     FDS is a metadata catalog — bucket access policies are enforced by the object store.
     Opening a `restricted` dataset directly without credentials fails at the storage layer.
@@ -193,14 +142,11 @@ def _(MINIO_URL, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 6. Credential Vending with `include_storage_options` — [docs](http://localhost:4001/concepts/access-control/#credential-vending-sts-token-pattern)
+    ## 4. Credential Vending with `include_storage_options` — [docs](http://localhost:4001/access-control/#credential-vending-sts-token-pattern)
 
     FDS vends short-lived STS tokens at query time. The client requests a dataset with
     `include_storage_options=true` and uses the embedded dict directly — no long-lived
     keys are ever handled by the client.
-
-    See [ADR-0010](http://localhost:4001/adrs/0010-tiered-data-access-strategy/) and
-    [ADR-0011](http://localhost:4001/adrs/0011-credential-manifest-pattern/).
     """)
     return
 
@@ -226,7 +172,7 @@ def _(FDS_API_URL, headers, httpx, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 7. Real MAST Data — Shot 30421 Equilibrium
+    ## 5. Real MAST Data — Shot 30421 Equilibrium
 
     Opening real IMAS-structured Zarr data from MAST shot 30421 via FDS-vended storage options.
     Public datasets return anonymous-compatible credentials; no auth header required.
@@ -251,14 +197,14 @@ def _(FDS_API_URL, httpx, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 7b. Resolving Reference Geometry — [docs](http://localhost:4001/demo/explore/#7b-resolving-reference-geometry)
+    ## 6. Resolving Reference Geometry — [docs](http://localhost:4001/data-model/reference-datasets/#reference-geometry)
 
     `thomson_scattering` references the `thomson_positions` role. Reading it with
     `?include_geometry=true` resolves the reference to the geometry version valid for
     each shot — shot 30420 → `v1`, shot 30421 → `v2` — returned under a `geometry`
     field. Open the resolved dataset to read the (R, Z) chord positions.
 
-    See [Reference Geometry](http://localhost:4001/concepts/reference-geometry/).
+    See [Reference Geometry](http://localhost:4001/data-model/reference-datasets/#reference-geometry).
     """)
     return
 
@@ -291,14 +237,14 @@ def _(FDS_API_URL, headers, httpx, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 7c. Resolving Reference Calibration — [docs](http://localhost:4001/demo/explore/#7c-resolving-reference-calibration)
+    ## 7. Resolving Reference Calibration — [docs](http://localhost:4001/data-model/reference-datasets/#reference-calibration)
 
     `thomson_scattering` also references the `thomson_calibration` role. Reading it
     with `?include_calibration=true` resolves the reference to the ordered chain —
     `[thomson_gain, thomson_absolute]` — under a `calibration` field. Unlike geometry
     (one version per role), calibration is a chain of stages applied in order.
 
-    See [Reference Calibration](http://localhost:4001/concepts/reference-calibration/).
+    See [Reference Calibration](http://localhost:4001/data-model/reference-datasets/#reference-calibration).
     """)
     return
 
@@ -330,13 +276,11 @@ def _(FDS_API_URL, headers, httpx, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 8. Parallel `icechunk` Reads (Dask) — [docs](http://localhost:4001/concepts/access-control/#bulk-access-the-credential-manifest)
+    ## 8. Parallel `icechunk` Reads (Dask) — [docs](http://localhost:4001/access-control/#bulk-access-the-credential-manifest)
 
     The **Credential Manifest** pattern at scale. All datasets in the MAST-U `icechunk` store
     are fetched in one request with embedded `storage_options`. A 4-worker Dask cluster
     reads each IDS group concurrently — FDS resolves and deduplicates all tokens server-side.
-
-    See [ADR-0011](http://localhost:4001/adrs/0011-credential-manifest-pattern/).
     """)
     return
 

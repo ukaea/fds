@@ -3,10 +3,14 @@ from enum import Enum
 
 class AccessLevel(str, Enum):
     """
-    Enum for the access level of an entity.
-    - PUBLIC: Metadata and Data are accessible to everyone (Open Access).
-    - EMBARGOED: Metadata is Public (Discoverable), but Data requires specific authorization.
-    - RESTRICTED: Metadata and Data require authorization to access.
+    Access level for an entity.
+
+    - PUBLIC: Metadata visible to everyone; credentials vended to anyone
+      (anonymous-compatible).
+    - EMBARGOED: Metadata discoverable by everyone; credentials vended only to
+      authorised users.
+    - RESTRICTED: Metadata visible only to authorised users; credentials vended
+      only to authorised users.
     """
 
     PUBLIC = "public"
