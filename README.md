@@ -20,7 +20,7 @@ Detailed architectural decisions for the Fusion Data Service are recorded as Arc
 
 ## Quick Start Demo
 
-A self-contained demo environment is available in the `demo/` directory. It includes FDS, Keycloak, MinIO, and a [Marimo](https://marimo.io/) notebook to demonstrate the authentication and data access workflow.
+A self-contained demo environment is available in the `demo/` directory. It includes FDS, Keycloak, MinIO, a documentation site, and a [Marimo](https://marimo.io/) notebook for the live data-access workflows.
 
 ### 1. Start the Environment
 
@@ -45,26 +45,20 @@ Services started:
 
 > **First run note:** On first launch, the demo automatically pulls real MAST shot data from the STFC public S3 store, which can take several minutes. Run without `-d` to see a progress bar in the terminal. Once downloaded, the data persists in `demo/minio-data/` across restarts, so subsequent launches are fast — unless you delete that directory.
 
-### 2. Populate & Explore
+### 2. Explore
 
-The catalog starts **empty**. The marimo notebook `demo/ingest.py` demonstrates how to record the various types of entities in FDS, then `demo/explore.py` shows the various ways to read back information from FDS:
+The stack **auto-populates** the catalog on startup — the `metadata-seeder` service runs `demo/seed_metadata.py` once FDS is healthy. Browse it at `http://localhost:3000`, via `GET /api/v1/devices/`, or read the docs at `http://localhost:4001`.
 
-**1. Ingest** — register devices, shots, datasets, collections, and provenance. Watch entries appear at `http://localhost:3000` (or via `GET /api/v1/devices/`) as you run each cell.
-
-```bash
-uvx marimo edit demo/ingest.py --sandbox
-```
-
-**2. Explore** — read the data back: JSON-LD, access control, credential vending, and parallel reads.
+The docs walk through registering and reading data with copy-pasteable `curl` / Python / JavaScript examples. A few read-back workflows are best seen running live — storage-layer access enforcement, credential vending, and parallel Dask reads — and those are in a marimo notebook:
 
 ```bash
 uvx marimo edit demo/explore.py --sandbox
 ```
 
-Want the catalog pre-filled with no manual step? Bring the stack up under the `seed` profile — the `metadata-seeder` service then runs `demo/seed_metadata.py` on startup:
+To reseed the catalog by hand at any time:
 
 ```bash
-podman compose --profile seed up --build   # or: docker compose --profile seed up --build
+uv run demo/seed_metadata.py
 ```
 
 ## Local Development Setup

@@ -9,9 +9,44 @@ The **Fusion Data Service (FDS)** is a metadata catalog and access broker for fu
 | **Metadata catalog** | Organises data into `Device → Shot → Dataset / Collection` hierarchies |
 | **Provenance tracking** | Records who produced what, when, and from which inputs (PROV-O) |
 | **Access control** | Public / Embargoed / Restricted with hierarchical inheritance |
-| **Credential vending** | Issues short-lived STS tokens so clients never hold long-lived cloud keys |
+| **Credential vending** | Issues short-lived STS tokens so clients never hold long-lived cloud keys (for data on cloud storage) |
 | **Semantic metadata** | Full DCAT + PROV-O via `Accept: application/ld+json` content negotiation |
-| **Federation** | Datasets can be registered from remote FDS nodes and accessed transparently |
+| **Federation** | Datasets from other catalogues and FDS instances can be included, improving findability |
+
+## Running the demo
+
+The demo stack runs FDS, Keycloak, MinIO, these docs, and the UI — and **auto-populates
+the catalogue** on startup via the `metadata-seeder` service:
+
+```bash
+podman compose -f demo/docker-compose.yaml up -d --build   # or: docker compose -f demo/docker-compose.yaml up -d --build
+```
+
+Give Keycloak a few seconds to finish importing its realm. The catalogue is then filled
+with the example data used throughout these pages. To reseed by hand at any time:
+
+```bash
+uv run demo/seed_metadata.py
+```
+
+A few read-back workflows are best seen running live — storage-layer access enforcement,
+credential vending, and parallel Dask reads. Those are in a marimo notebook:
+
+```bash
+uvx marimo edit demo/explore.py --sandbox
+```
+
+### Conventions for the examples
+
+The code examples throughout these pages use a base-URL variable and, where a call needs
+authentication, a bearer token from [Access Control →
+Authentication](access-control.md#authentication):
+
+- **Shell:** `API=http://localhost:8000/api/v1`, `TOKEN=<jwt>`
+- **Python:** `API = "http://localhost:8000/api/v1"`, `headers = {"Authorization": f"Bearer {TOKEN}"}`
+- **JavaScript:** `const API = "http://localhost:8000/api/v1"`, `const TOKEN = "<jwt>"`
+
+Public reads need no token; creating data or reading restricted data does.
 
 ## Services in the demo environment
 
@@ -26,8 +61,7 @@ The **Fusion Data Service (FDS)** is a metadata catalog and access broker for fu
 
 ## Where to start
 
-- **[Data Model](concepts/data-model.md)** — understand the hierarchy and core entities
-- **[Provenance](concepts/provenance.md)** — how FDS tracks the origin of datasets
-- **[Access Control](concepts/access-control.md)** — access levels and credential vending
-- **[Semantic Metadata](concepts/dcat-jsonld.md)** — DCAT / PROV-O and content negotiation
-- **[Demo walkthrough](demo/walkthrough.md)** — annotated guide to the demonstration notebook
+- **[Access Control](access-control.md)** — authenticate (get a `TOKEN`), access levels, and credential vending
+- **[Data Model](data-model/index.md)** — the hierarchy and core entities, and how to register them
+- **[Provenance](provenance.md)** — how FDS tracks the origin of datasets
+- **[Semantic Metadata](dcat-jsonld.md)** — DCAT / PROV-O and content negotiation

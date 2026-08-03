@@ -1,14 +1,14 @@
 # Provenance
 
-FDS tracks provenance using the **PROV-O ontology**, making the origin of every dataset auditable and reproducible. The model is defined in [ADR-0025](../adrs/0025-prov-o-agent-activity-separation.md) (superseding [ADR-0004](../adrs/0004-prov-o-activity-mapping-for-provenance.md)).
+FDS tracks provenance using the **PROV-O ontology**, making the origin of every dataset auditable and reproducible.
 
 ## Core concepts
 
 FDS maps cleanly onto three PROV-O primitives:
 
 | PROV-O term | FDS entity | Description |
-|---|---|---|
-| `prov:Agent` / `prov:SoftwareAgent` | **Source** | The system or code that *can* produce data (e.g. EFIT, JINTRAC, an intershot scheduler) |
+| --- | --- | --- |
+| `prov:Agent` / `prov:SoftwareAgent` | **Source** | The system or code that *can* produce data (e.g. EFIT, JINTRAC, some diagnostic system) |
 | `prov:Activity` | **Activity** | A *specific execution* of a Source — with timestamps, version, and parameters |
 | `prov:Entity` | **Dataset** / **Collection** | The data produced |
 
@@ -16,12 +16,7 @@ FDS maps cleanly onto three PROV-O primitives:
 
 A Source is a global, reusable entity. It represents a diagnostic system, analysis code, or automated process — not a specific run.
 
-```json
-{
-  "name": "efit",
-  "description": "EFIT equilibrium reconstruction code"
-}
-```
+Register one with a `POST /sources/` — see [Data Model → Source](data-model/source.md) for the fields and a worked example.
 
 ### Activity (`prov:Activity`)
 
@@ -45,6 +40,9 @@ An Activity records a *specific execution* of a Source. It is a first-class tabl
 
 `activity_type` is one of `measurement`, `simulation`, `analysis`, or `calibration`.
 
+Register one with a `POST /activities/`, referencing the Source it executed — see
+[Data Model → Activity](data-model/activity.md) for the full field list and a worked example.
+
 ## Relationships
 
 ```
@@ -56,10 +54,42 @@ Dataset  ──prov:wasGeneratedBy──►  Activity  ──prov:wasAssociatedW
                                    Dataset (input)
 ```
 
-- A **Dataset** carries a FK `activity_id` → the Activity that produced it.
-- An **Activity** carries a FK `source_id` → the Source (agent) that ran.
-- The `ActivityInput` join records which Datasets an Activity *consumed* as inputs (`prov:used`).
-- A **Collection** also carries `activity_id`, so a set of outputs from a single run can be cited as a unit.
+- Each **Dataset** records the Activity that produced it (`prov:wasGeneratedBy`).
+- Each **Activity** records the Source that ran it (`prov:wasAssociatedWith`).
+- An Activity also records the Datasets it *consumed* as inputs (`prov:used`).
+- A **Collection** can record a producing Activity too, so the whole output of a single run can be cited as one unit.
+
+Outputs are linked by setting `activity_id` when the Dataset is registered (see
+[Data Model → Dataset](data-model/dataset.md)). Inputs are recorded separately — a bodyless
+`POST` per consumed Dataset:
+
+=== "curl"
+
+    ```bash
+    curl -X POST "$API/activities/$ACTIVITY_ID/inputs/$DATASET_ID" \
+      -H "Authorization: Bearer $TOKEN"
+    ```
+
+=== "Python (requests)"
+
+    ```python
+    requests.post(f"{API}/activities/{activity['id']}/inputs/{dataset_id}", headers=headers)
+    ```
+
+=== "Python (httpx)"
+
+    ```python
+    httpx.post(f"{API}/activities/{activity['id']}/inputs/{dataset_id}", headers=headers)
+    ```
+
+=== "JavaScript (fetch)"
+
+    ```javascript
+    await fetch(`${API}/activities/${activity.id}/inputs/${datasetId}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    ```
 
 ## Example: JINTRAC simulation
 
@@ -85,11 +115,4 @@ Collection: jintrac-v220922
 
 ## Querying provenance
 
-The standard JSON response includes `activity_id` on each Dataset. To get the full PROV-O graph as linked data, request `application/ld+json` — see [Semantic Metadata](dcat-jsonld.md).
-
-```http
-GET /api/v1/datasets/id/{id}
-Accept: application/ld+json
-```
-
-The response contains `prov:wasGeneratedBy`, `prov:wasAssociatedWith`, and input dataset references as proper PROV-O triples.
+A dataset's standard JSON already carries `activity_id`; the full PROV-O graph (`prov:wasGeneratedBy`, `prov:wasAssociatedWith`, and the inputs it used) is returned as linked data via content negotiation — see [Semantic Metadata → Provenance graph](dcat-jsonld.md#provenance-graph).

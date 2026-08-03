@@ -6,54 +6,30 @@ extra_css = ["stylesheets/extra.css"]
 
 nav = [
   { Home = "index.md" },
-  { Concepts = [
-    { "Data Model" = "concepts/data-model.md" },
-    { "Provenance" = "concepts/provenance.md" },
-    { "Access Control" = "concepts/access-control.md" },
-    { "Reference Geometry" = "concepts/reference-geometry.md" },
-    { "Reference Calibration" = "concepts/reference-calibration.md" },
-    { "Semantic Metadata (DCAT & JSON-LD)" = "concepts/dcat-jsonld.md" },
+  { "Access Control" = "access-control.md" },
+  { "Data Model" = [
+    "data-model/index.md",
+    { "Device" = "data-model/device.md" },
+    { "Shot" = "data-model/shot.md" },
+    { "Dataset & Distribution" = "data-model/dataset.md" },
+    { "Collection" = "data-model/collection.md" },
+    { "Source" = "data-model/source.md" },
+    { "Activity" = "data-model/activity.md" },
+    { "Reference Datasets" = "data-model/reference-datasets.md" },
   ]},
-  { Demo = [
-    { "Ingest" = "demo/ingest.md" },
-    { "Explore" = "demo/explore.md" },
-  ]},
-  { ADRs = [
-    { "0001 — Flexible Data Hierarchy (superseded)" = "adrs/0001-flexible-multi-tier-data-hierarchy.md" },
-    { "0002 — Distributions Pattern" = "adrs/0002-distributions-pattern-for-hybrid-storage.md" },
-    { "0003 — Descriptive Names & Composite Identity" = "adrs/0003-descriptive-names-and-composite-identity.md" },
-    { "0004 — PROV-O Activity Mapping (superseded)" = "adrs/0004-prov-o-activity-mapping-for-provenance.md" },
-    { "0005 — Multi-Device Path-Based API" = "adrs/0005-multi-device-path-based-api.md" },
-    { "0006 — Built-in Security Model" = "adrs/0006-built-in-security-model.md" },
-    { "0007 — Externalized Identity & Trust Registry" = "adrs/0007-externalized-identity-and-trust-registry.md" },
-    { "0008 — Three-Tier Access Levels" = "adrs/0008-three-tier-data-access-levels.md" },
-    { "0009 — Content Negotiation for DCAT" = "adrs/0009-content-negotiation-for-dcat.md" },
-    { "0010 — Tiered Data Access Strategy" = "adrs/0010-tiered-data-access-strategy.md" },
-    { "0011 — Credential Manifest Pattern" = "adrs/0011-credential-manifest-pattern.md" },
-    { "0012 — Icechunk Monolithic Shot Pattern" = "adrs/0012-icechunk-monolithic-shot-pattern.md" },
-    { "0013 — IMAS-Centric Intra-Shot Layout" = "adrs/0013-imas-centric-intra-shot-layout.md" },
-    { "0014 — Flexible Persistent Identifiers" = "adrs/0014-flexible-persistent-identifiers.md" },
-    { "0015 — Pydantic Model Hierarchy" = "adrs/0015-pydantic-model-hierarchy.md" },
-    { "0016 — User-Driven Data Ingestion" = "adrs/0016-user-driven-data-ingestion.md" },
-    { "0017 — Structured JSON Logging" = "adrs/0017-structured-json-logging.md" },
-    { "0018 — Code-First Test-Driven Schema Alignment" = "adrs/0018-code-first-test-driven-schema-alignment.md" },
-    { "0019 — Two-Tier Schema-Driven Semantic Projection" = "adrs/0019-two-tier-schema-driven-semantic-projection.md" },
-    { "0020 — Bounded Lists & NDJSON Streaming" = "adrs/0020-bounded-lists-and-ndjson-streaming-exports.md" },
-    { "0021 — Physical Data Endpoints" = "adrs/0021-physical-data-endpoints.md" },
-    { "0022 — SciTokens Support" = "adrs/0022-scitokens-support.md" },
-    { "0023 — Federated Dataset Access" = "adrs/0023-federated-dataset-access.md" },
-    { "0024 — Multi-Tier Hierarchy with Collections" = "adrs/0024-multi-tier-hierarchy-with-collections.md" },
-    { "0025 — PROV-O Agent & Activity Separation" = "adrs/0025-prov-o-agent-activity-separation.md" },
-    { "0026 — Persistent Identifier Strategy" = "adrs/0026-persistent-identifier-strategy.md" },
-    { "0027 — Field-Level Attribution Access Control" = "adrs/0027-field-level-attribution-access-control.md" },
-    { "0028 — Dataset Identity by ID" = "adrs/0028-dataset-identity-by-id.md" },
-    { "0029 — Icechunk Store Granularity & Collection Correspondence" = "adrs/0029-icechunk-collection-model.md" },
-    { "0030 — Controlled Vocabularies" = "adrs/0030-controlled-vocabularies.md" },
-    { "0031 — Scientific Metadata" = "adrs/0031-scientific-metadata.md" },
-    { "0033 — PostgreSQL for Production Persistence" = "adrs/0033-postgresql-for-production-persistence.md" },
-    { "0036 — Versioned Reference Geometry" = "adrs/0036-versioned-reference-geometry.md" },
-    { "0037 — Versioned Reference Calibration" = "adrs/0037-versioned-reference-calibration.md" },
-    { "0038 — Typed Dataset Relationships" = "adrs/0038-typed-dataset-relationships.md" },
-    { "0039 — fuel:calibration Role" = "adrs/0039-fuel-calibration-role.md" },
-  ]},
+  { "Semantic Metadata (DCAT & JSON-LD)" = "dcat-jsonld.md" },
+  { "Provenance" = "provenance.md" },
 ]
+
+# content.tabs.link syncs content tabs by label across the whole site: pick a language
+# once and every code example follows. navigation.footer adds previous/next links so the
+# pages read as an ordered sequence.
+[project.theme]
+features = ["content.tabs.link", "navigation.footer", "navigation.indexes"]
+
+# Content tabs (=== "Label") for the per-language API examples. superfences lets a
+# tab hold a fenced code block; tabbed renders the tab strip.
+[project.markdown_extensions.pymdownx.superfences]
+
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true
