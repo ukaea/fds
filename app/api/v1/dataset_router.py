@@ -9,7 +9,12 @@ from app.api.deps import (
     SourceServiceDep,
 )
 from app.models.activity import ActivityRead
-from app.models.dataset import DatasetCreate, DatasetRead, DatasetUpdate
+from app.models.dataset import (
+    DatasetCreate,
+    DatasetRead,
+    DatasetScope,
+    DatasetUpdate,
+)
 from app.models.distribution import (
     DistributionCreate,
     DistributionRead,
@@ -262,6 +267,7 @@ def read_datasets_device(
     device_name: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
+    scope: DatasetScope = DatasetScope.ALL,
     offset: int = 0,
     limit: int = 100,
     include_storage_options: bool = False,
@@ -269,10 +275,15 @@ def read_datasets_device(
     include_calibration: bool = False,
 ) -> list[DatasetRead]:
     """
-    Retrieve datasets for a specific device (not tied to any shot).
+    Retrieve datasets hosted by a device.
+
+    By default this returns every dataset for the device, device-level and
+    shot-level alike. Narrow it with `scope`: `device` for the datasets
+    attached to no shot (e.g., reference geometry and calibration versions), `shot`
+    for those belonging to the device's shots.
     """
-    datasets = dataset_service.get_device_level_datasets(
-        device_name, user=user, offset=offset, limit=limit
+    datasets = dataset_service.get_datasets_for_device(
+        device_name, user=user, scope=scope, offset=offset, limit=limit
     )
     return dataset_service.to_read_models(
         datasets,

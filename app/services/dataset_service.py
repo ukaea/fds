@@ -11,7 +11,13 @@ from app.auth.access_control import (
 )
 from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
 from app.core.config import S3StorageProvider, config
-from app.models.dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
+from app.models.dataset import (
+    Dataset,
+    DatasetCreate,
+    DatasetRead,
+    DatasetScope,
+    DatasetUpdate,
+)
 from app.models.device import Device
 from app.models.distribution import Distribution, DistributionRead
 from app.models.file_access import (
@@ -58,7 +64,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         Global list of datasets. Filters by access level.
         """
-        statement = select(self.model).offset(offset).limit(limit)
+        statement = (
+            select(self.model).order_by(col(Dataset.id)).offset(offset).limit(limit)
+        )
         datasets = self.session.exec(statement).all()
         return self._filter_accessible_datasets(datasets, user)
 
@@ -312,22 +320,28 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         datasets = self.session.exec(statement).all()
         return self._filter_accessible_datasets(datasets, user)
 
-    def get_device_level_datasets(
+    def get_datasets_for_device(
         self,
         device_name: str,
         user: AuthenticatedUser = ANONYMOUS_USER,
+        scope: DatasetScope = DatasetScope.ALL,
         offset: int = 0,
         limit: int = 100,
     ) -> Sequence[Dataset]:
         """
-        Get datasets belonging to a device (but not to a specific shot), filtering by access.
+        Get datasets hosted by a device, filtering by access.
+
+        ``scope`` narrows the listing: ``ALL`` returns device-level and
+        shot-level datasets together, ``DEVICE`` only those belonging to the
+        device as a whole rather than to any one shot, ``SHOT`` only those
+        attached to one of the device's shots.
         """
-        statement = (
-            select(Dataset)
-            .where(Dataset.device_name == device_name, col(Dataset.shot_id).is_(None))
-            .offset(offset)
-            .limit(limit)
-        )
+        statement = select(Dataset).where(Dataset.device_name == device_name)
+        if scope is DatasetScope.DEVICE:
+            statement = statement.where(col(Dataset.shot_id).is_(None))
+        elif scope is DatasetScope.SHOT:
+            statement = statement.where(col(Dataset.shot_id).is_not(None))
+        statement = statement.order_by(col(Dataset.id)).offset(offset).limit(limit)
         datasets = self.session.exec(statement).all()
         return self._filter_accessible_datasets(datasets, user)
 
@@ -345,6 +359,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         statement = (
             select(Dataset)
             .where(Dataset.shot_id == shot_id, Dataset.device_name == device_name)
+            .order_by(col(Dataset.id))
             .offset(offset)
             .limit(limit)
         )

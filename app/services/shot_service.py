@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.auth.access_control import (
     get_effective_access_level,
@@ -220,6 +220,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         statement = (
             select(Shot)
             .where(Shot.device_name == device_name)
+            .order_by(col(Shot.id))
             .offset(offset)
             .limit(limit)
         )

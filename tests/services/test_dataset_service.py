@@ -4,7 +4,7 @@ import pytest
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
-from app.models.dataset import DatasetCreate, DatasetUpdate
+from app.models.dataset import DatasetCreate, DatasetScope, DatasetUpdate
 from app.models.device import DeviceCreate
 from app.models.file_access import CredentialManifest, S3Credentials
 from app.models.policy import AccessLevel
@@ -283,15 +283,19 @@ def test_get_datasets_for_shot(
     assert all(ds.shot_id == shot2.id for ds in datasets_shot2)
 
 
-def test_get_datasets_for_device_excludes_shot_scoped(
+def test_get_datasets_for_device_scopes(
     device_service: DeviceService,
     shot_service: ShotService,
     dataset_service: DatasetService,
     admin_user: AuthenticatedUser,
 ):
     device_service.create(DeviceCreate(name="Device X", type="Type X"), user=admin_user)
+    device_service.create(DeviceCreate(name="Device Y", type="Type Y"), user=admin_user)
     shot = shot_service.create(
         ShotCreate(id="shot-1", device_name="Device X"), user=admin_user
+    )
+    shot_service.create(
+        ShotCreate(id="shot-2", device_name="Device Y"), user=admin_user
     )
 
     device_ds = dataset_service.create(
@@ -303,7 +307,7 @@ def test_get_datasets_for_device_excludes_shot_scoped(
         ),
         user=admin_user,
     )
-    dataset_service.create(
+    shot_ds = dataset_service.create(
         DatasetCreate(
             name="shot_data",
             level=1,
@@ -313,13 +317,71 @@ def test_get_datasets_for_device_excludes_shot_scoped(
         ),
         user=admin_user,
     )
-
-    datasets_device = dataset_service.get_device_level_datasets(
-        "Device X", user=admin_user
+    # Another device's shot dataset must not leak into Device X's listing.
+    dataset_service.create(
+        DatasetCreate(
+            name="other_device_data",
+            level=1,
+            url="url_other",
+            device_name="Device Y",
+            shot_id="shot-2",
+        ),
+        user=admin_user,
     )
-    assert len(datasets_device) == 1
-    assert datasets_device[0].id == device_ds.id
-    assert datasets_device[0].shot_id is None
+
+    all_datasets = dataset_service.get_datasets_for_device("Device X", user=admin_user)
+    assert {ds.id for ds in all_datasets} == {device_ds.id, shot_ds.id}
+
+    device_only = dataset_service.get_datasets_for_device(
+        "Device X", user=admin_user, scope=DatasetScope.DEVICE
+    )
+    assert [ds.id for ds in device_only] == [device_ds.id]
+    assert device_only[0].shot_id is None
+
+    shot_only = dataset_service.get_datasets_for_device(
+        "Device X", user=admin_user, scope=DatasetScope.SHOT
+    )
+    assert [ds.id for ds in shot_only] == [shot_ds.id]
+    assert shot_only[0].shot_id == shot.id
+
+
+def test_get_datasets_for_device_pages_without_repeats_or_gaps(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+):
+    """Paging a device listing larger than one page must cover it exactly once."""
+    device_service.create(DeviceCreate(name="Device P", type="Type P"), user=admin_user)
+    shot_service.create(
+        ShotCreate(id="shot-p1", device_name="Device P"), user=admin_user
+    )
+
+    expected = set()
+    for i in range(25):
+        # Alternate device-level and shot-level so both are spread across pages.
+        dataset = dataset_service.create(
+            DatasetCreate(
+                name=f"paged_{i:02d}",
+                level=1,
+                url=f"url_paged_{i}",
+                device_name="Device P",
+                shot_id="shot-p1" if i % 2 else None,
+            ),
+            user=admin_user,
+        )
+        expected.add(dataset.id)
+
+    page_size = 10
+    seen = []
+    for offset in range(0, 30, page_size):
+        page = dataset_service.get_datasets_for_device(
+            "Device P", user=admin_user, offset=offset, limit=page_size
+        )
+        seen.extend(ds.id for ds in page)
+
+    assert len(seen) == len(set(seen))
+    assert set(seen) == expected
 
 
 def test_create_global_dataset(
