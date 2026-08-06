@@ -23,7 +23,7 @@ export default function DeviceDetailPage() {
   );
 
   const { data: datasets, error: datasetsError, isLoading: datasetsLoading } = useSWR<Dataset[]>(
-    deviceName ? `${API_BASE}/devices/${deviceName}/datasets` : null,
+    deviceName ? `${API_BASE}/devices/${deviceName}/datasets?scope=device` : null,
     fetcher
   );
 

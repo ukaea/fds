@@ -47,7 +47,8 @@ In JSON-LD, these are mapped to `schema:additionalProperty` / `schema:PropertyVa
 ```text
 GET /api/v1/devices/{device}/shots/{shot_id}/datasets/{name}
 GET /api/v1/devices/{device}/shots/{shot_id}/collections/{name}
-GET /api/v1/devices/{device}/shots/{shot_id}/datasets          # list
+GET /api/v1/devices/{device}/shots/{shot_id}/datasets          # list, one shot
+GET /api/v1/devices/{device}/datasets                          # list, whole device
 GET /api/v1/datasets/id/{id}                                   # stable ID-based lookup
 ```
 

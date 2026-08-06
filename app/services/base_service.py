@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import Any, Generic, Type, TypeVar
 
-from sqlmodel import Session, SQLModel, select
+from sqlmodel import Session, SQLModel, inspect, select
 
 ModelType = TypeVar("ModelType", bound=SQLModel)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=SQLModel)
@@ -27,9 +27,18 @@ class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     def get_multi(self, *, offset: int = 0, limit: int = 100) -> Sequence[ModelType]:
         """
-        Get multiple objects with pagination.
+        Get multiple objects with pagination, ordered by primary key.
+
+        Without a deterministic order the database may return rows in any
+        order, so paging over an unordered set can repeat or skip rows between
+        requests.
         """
-        statement = select(self.model).offset(offset).limit(limit)
+        statement = (
+            select(self.model)
+            .order_by(*inspect(self.model).primary_key)
+            .offset(offset)
+            .limit(limit)
+        )
         result = self.session.exec(statement)
         objects = result.all()
         return objects

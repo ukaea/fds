@@ -199,6 +199,47 @@ def test_list_device_datasets(
     assert len(data) == 2
 
 
+def test_list_device_datasets_includes_shot_datasets(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    DeviceService(session).create(
+        DeviceCreate(name="W7-X", type="Stellarator"), user=admin_user
+    )
+    ShotService(session).create(
+        ShotCreate(id="200", device_name="W7-X"), user=admin_user
+    )
+    session.commit()
+
+    test_client.post(
+        "/api/v1/devices/W7-X/datasets/",
+        headers=admin_user_token,
+        json={"name": "coil_geometry", "level": 0, "url": "url_geom"},
+    )
+    test_client.post(
+        "/api/v1/devices/W7-X/shots/200/datasets/",
+        headers=admin_user_token,
+        json={"name": "electron_density", "level": 1, "url": "url_ne"},
+    )
+
+    response = test_client.get("/api/v1/devices/W7-X/datasets/")
+    assert response.status_code == 200
+    assert {ds["name"] for ds in response.json()} == {
+        "coil_geometry",
+        "electron_density",
+    }
+
+    response = test_client.get("/api/v1/devices/W7-X/datasets/?scope=device")
+    assert response.status_code == 200
+    assert [ds["name"] for ds in response.json()] == ["coil_geometry"]
+
+    response = test_client.get("/api/v1/devices/W7-X/datasets/?scope=shot")
+    assert response.status_code == 200
+    assert [ds["name"] for ds in response.json()] == ["electron_density"]
+
+    response = test_client.get("/api/v1/devices/W7-X/datasets/?scope=nonsense")
+    assert response.status_code == 422
+
+
 def test_read_global_dataset_by_name(test_client: TestClient, admin_user_token: dict):
     test_client.post(
         "/api/v1/datasets/",

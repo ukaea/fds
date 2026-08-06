@@ -239,6 +239,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 col(Collection.device_name).is_(None),
                 col(Collection.shot_id).is_(None),
             )
+            .order_by(col(Collection.id))
             .offset(offset)
             .limit(limit)
         )

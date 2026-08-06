@@ -242,6 +242,16 @@ Reading a signal with `?include_calibration=true` resolves its `calibration_refe
 
 Apply the chain in order. As with geometry, resolution is `Device`-scoped and each resolved version carries the `fuel:calibration` role in JSON-LD. A geometry version may itself carry `calibration_references` — resolution recurses, anchored to the original shot.
 
+## Find the registered versions
+
+`GET /devices/{device}/datasets` lists everything a device hosts, its shots' datasets included. A reference version is registered at `Device` level, so `scope=device` narrows the listing to the datasets it sits among:
+
+```bash
+curl "$API/devices/mast/datasets?scope=device"
+```
+
+That is the listing to reach for when you want to see which versions of a role exist and what each one covers. `scope=device` is a filter on the hierarchy, so it returns any other `Device`-level `Dataset` too; the versions are the ones carrying `geometry_roles` or `calibration_roles`. See [Datasets](dataset.md#listing-datasets) for the other scopes.
+
 ## Rules FDS enforces
 
 - **`Device`-level only.** A version must have no `shot_id` and is hosted within a `Device`; resolution never crosses devices.

@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from sqlmodel import (
@@ -22,6 +23,20 @@ if TYPE_CHECKING:
     from .activity import Activity
     from .distribution import Distribution, DistributionRead
     from .shot import Shot
+
+
+class DatasetScope(str, Enum):
+    """Which datasets a device listing returns.
+
+    - ALL: every dataset hosted by the device, device-level and shot-level.
+    - DEVICE: only datasets that belong to the device as a whole rather than
+      to any one shot.
+    - SHOT: only datasets attached to one of the device's shots.
+    """
+
+    ALL = "all"
+    DEVICE = "device"
+    SHOT = "shot"
 
 
 class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
