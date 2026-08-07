@@ -30,7 +30,6 @@ METADATA_CONTEXT = {
     "xsd": "http://www.w3.org/2001/XMLSchema#",
     "dqv": "http://www.w3.org/ns/dqv#",
     "oa": "http://www.w3.org/ns/oa#",
-    "fuel": FUEL_NAMESPACE,
     "title": "dct:title",
     "description": "dct:description",
     "publisher": "dct:publisher",
