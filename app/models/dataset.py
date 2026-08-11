@@ -49,8 +49,10 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
 
     Fields:
         name: Stable, URL-safe identifier within the scope of a Shot/device.
-            Immutable once created (see ADR-0026).
-        level: Numeric processing level (e.g. 0 = raw, 1 = calibrated).
+            Immutable once created.
+        level: Numeric processing level.  Optional: there is no controlled
+            vocabulary for processing levels yet, so a dataset carries one only
+            where the producer has a meaning for it.
         quality_flag: Free-form quality annotation (e.g. ``"good"``,
             ``"suspect"``).
         device_name: Name of the device that produced this dataset.
@@ -67,7 +69,7 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
     """
 
     name: str = Field(index=True)
-    level: int = Field(index=True)
+    level: int | None = Field(default=None, index=True)
     quality_flag: str | None = Field(default=None, index=True)
     temporal_start: datetime | None = Field(default=None)
     temporal_end: datetime | None = Field(default=None)

@@ -64,8 +64,8 @@ Device: mast
     │   scientific_metadata:
     │     - {name: "plasma_current", value: 0.4, unit: "MA"}
     │     - {name: "confinement_mode", value: "L-mode"}
-    ├── Dataset: equilibrium   (level=2, EFIT reconstruction)
-    ├── Dataset: magnetics      (level=1, calibrated IDS)
+    ├── Dataset: equilibrium    (EFIT reconstruction)
+    ├── Dataset: magnetics      (calibrated IDS)
     ├── Dataset: thomson_scattering
     ├── … (10 more IDS datasets)
     └── Collection: experiment-data

@@ -113,7 +113,6 @@ def register_mast_datasets(client: httpx.Client, base_url: str) -> None:
         for ids_name in ids_list:
             meta: dict[str, object] = {
                 "name": ids_name,
-                "level": 2,
                 "url": f"s3://fds-data/shots/{shot_id}/{ids_name}",
                 "endpoint_url": MINIO_ENDPOINT,
                 "access_level": "public",
@@ -143,7 +142,6 @@ def register_mast_geometry(client: httpx.Client, base_url: str) -> None:
         {
             "name": "thomson_positions_v1",
             "version": "1",
-            "level": 0,
             "geometry_roles": ["thomson_positions"],
             "applies_to": {"shots": ["30420"]},
             "url": "s3://fds-data/mast/geometry/thomson_positions_v1.nc",
@@ -155,7 +153,6 @@ def register_mast_geometry(client: httpx.Client, base_url: str) -> None:
         {
             "name": "thomson_positions_v2",
             "version": "2",
-            "level": 0,
             "geometry_roles": ["thomson_positions"],
             "applies_to": {"shot_ranges": [{"from_shot": "30421"}]},
             "url": "s3://fds-data/mast/geometry/thomson_positions_v2.nc",
@@ -183,7 +180,6 @@ def register_mast_calibration(client: httpx.Client, base_url: str) -> None:
         {
             "name": "thomson_gain",
             "version": "1",
-            "level": 0,
             "calibration_roles": ["thomson_calibration"],
             "calibration_stage": 1,
             "applies_to": {"shots": ["30420", "30421"]},
@@ -196,7 +192,6 @@ def register_mast_calibration(client: httpx.Client, base_url: str) -> None:
         {
             "name": "thomson_absolute",
             "version": "1",
-            "level": 0,
             "calibration_roles": ["thomson_calibration"],
             "calibration_stage": 2,
             "applies_to": {"shots": ["30420", "30421"]},
@@ -364,7 +359,6 @@ def register_mast_upgrade_datasets(
                 json={
                     "name": name,
                     "title": f"MAST-U {stem.replace('_', ' ').title()} Raw — Shot 50000",
-                    "level": 1,
                     "url": f"s3://fds-data/shots/50000/raw/{stem}.nc",
                     "endpoint_url": MINIO_ENDPOINT,
                     "media_type": "application/netcdf",
@@ -407,7 +401,6 @@ def register_mast_upgrade_datasets(
                 json={
                     "name": ids_name,
                     "title": f"MAST-U {ids_name.replace('_', ' ').title()} — Shot 50000",
-                    "level": 2,
                     "url": f"s3://fds-data/shots/50000/analysed/{ids_name}",
                     "endpoint_url": MINIO_ENDPOINT,
                     "media_type": "application/vnd.icechunk+zarr",
@@ -475,7 +468,6 @@ def register_jintrac_collection(
             json={
                 "name": stem,
                 "title": f"JINTRAC {stem.replace('_', ' ').title()} — Shot 30420",
-                "level": 3,
                 "url": f"s3://fds-data/shots/30420/jintrac/{stem}.nc",
                 "endpoint_url": MINIO_ENDPOINT,
                 "media_type": "application/netcdf",

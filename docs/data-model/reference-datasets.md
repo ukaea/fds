@@ -33,7 +33,7 @@ A version is an ordinary `Device`-level `Dataset` (no shot) that provides the ro
     ```bash
     curl -X POST "$API/devices/mast/datasets" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-      -d '{"name": "thomson_positions_v2", "level": 0,
+      -d '{"name": "thomson_positions_v2",
            "geometry_roles": ["thomson_positions"],
            "applies_to": {"shot_ranges": [{"from_shot": "30421"}]},
            "url": "s3://fds-data/mast/geometry/thomson_positions_v2.nc",
@@ -48,7 +48,6 @@ A version is an ordinary `Device`-level `Dataset` (no shot) that provides the ro
         headers=headers,
         json={
             "name": "thomson_positions_v2",
-            "level": 0,
             "geometry_roles": ["thomson_positions"],
             "applies_to": {"shot_ranges": [{"from_shot": "30421"}]},
             "url": "s3://fds-data/mast/geometry/thomson_positions_v2.nc",
@@ -66,7 +65,6 @@ A version is an ordinary `Device`-level `Dataset` (no shot) that provides the ro
         headers=headers,
         json={
             "name": "thomson_positions_v2",
-            "level": 0,
             "geometry_roles": ["thomson_positions"],
             "applies_to": {"shot_ranges": [{"from_shot": "30421"}]},
             "url": "s3://fds-data/mast/geometry/thomson_positions_v2.nc",
@@ -84,7 +82,6 @@ A version is an ordinary `Device`-level `Dataset` (no shot) that provides the ro
       headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         name: "thomson_positions_v2",
-        level: 0,
         geometry_roles: ["thomson_positions"],
         applies_to: { shot_ranges: [{ from_shot: "30421" }] },
         url: "s3://fds-data/mast/geometry/thomson_positions_v2.nc",
@@ -162,7 +159,7 @@ Each stage is its own `Device`-level dataset. Here, stage 1 of a two-step Thomso
     ```bash
     curl -X POST "$API/devices/mast/datasets" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-      -d '{"name": "thomson_gain", "level": 0,
+      -d '{"name": "thomson_gain",
            "calibration_roles": ["thomson_calibration"], "calibration_stage": 1,
            "applies_to": {"shots": ["30420", "30421"]},
            "url": "s3://fds-data/mast/calibration/thomson_gain.nc",
@@ -177,7 +174,6 @@ Each stage is its own `Device`-level dataset. Here, stage 1 of a two-step Thomso
         headers=headers,
         json={
             "name": "thomson_gain",
-            "level": 0,
             "calibration_roles": ["thomson_calibration"],
             "calibration_stage": 1,
             "applies_to": {"shots": ["30420", "30421"]},
@@ -196,7 +192,6 @@ Each stage is its own `Device`-level dataset. Here, stage 1 of a two-step Thomso
         headers=headers,
         json={
             "name": "thomson_gain",
-            "level": 0,
             "calibration_roles": ["thomson_calibration"],
             "calibration_stage": 1,
             "applies_to": {"shots": ["30420", "30421"]},
@@ -215,7 +210,6 @@ Each stage is its own `Device`-level dataset. Here, stage 1 of a two-step Thomso
       headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         name: "thomson_gain",
-        level: 0,
         calibration_roles: ["thomson_calibration"],
         calibration_stage: 1,
         applies_to: { shots: ["30420", "30421"] },

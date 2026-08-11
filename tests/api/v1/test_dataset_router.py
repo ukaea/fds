@@ -415,6 +415,17 @@ def test_create_dataset_without_url(test_client: TestClient, admin_user_token: d
     assert "distributions" not in data
 
 
+def test_create_dataset_without_level(test_client: TestClient, admin_user_token: dict):
+    """Processing level is optional; when unset it is omitted from the response."""
+    response = test_client.post(
+        "/api/v1/datasets/",
+        headers=admin_user_token,
+        json={"name": "no_level", "url": "s3://bucket/no_level"},
+    )
+    assert response.status_code == 201
+    assert "level" not in response.json()
+
+
 def test_temporal_coverage_roundtrip(
     test_client: TestClient,
     session: Session,

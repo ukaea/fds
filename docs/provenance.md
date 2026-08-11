@@ -104,9 +104,9 @@ Activity: 30420-jintrac-v220922
   inputs:    equilibrium, magnetics, thomson_scattering  (prov:used)
 
 Outputs (prov:wasGeneratedBy → the Activity above):
-  Dataset: equilibrium   (level=3, s3://…/jintrac/equilibrium.nc)
-  Dataset: core_profiles (level=3, s3://…/jintrac/core_profiles.nc)
-  Dataset: core_sources  (level=3, s3://…/jintrac/core_sources.nc)
+  Dataset: equilibrium   (s3://…/jintrac/equilibrium.nc)
+  Dataset: core_profiles (s3://…/jintrac/core_profiles.nc)
+  Dataset: core_sources  (s3://…/jintrac/core_sources.nc)
 
 Collection: jintrac-v220922
   activity_id → same Activity

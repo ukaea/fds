@@ -10,7 +10,7 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 | `url` | string | No | Physical location (`s3://`, `gs://`, `az://`) — from the primary Distribution, absent if none exists yet |
 | `media_type` | string | No | MIME type of the primary distribution (e.g. `application/x-zarr`) |
 | `format` | string | No | Format label (e.g. `NetCDF4`) |
-| `level` | integer | Yes | Numeric processing level: `0` = raw, `1` = calibrated, `2` = processed, `3` = modelled |
+| `level` | integer | No | Numeric processing level. No controlled vocabulary, so set it only where the producer has a meaning for it |
 | `quality_flag` | string | No | Free-form quality annotation (e.g. `good`, `suspect`) — no controlled vocabulary |
 | `access_level` | enum | No | `public`, `embargoed`, or `restricted` |
 | `publisher` | string | No | Institution making the data available (`dct:publisher`) |
@@ -28,7 +28,7 @@ same call:
     ```bash
     curl -X POST "$API/devices/mast/shots/30421/datasets" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-      -d '{"name": "equilibrium", "level": 2,
+      -d '{"name": "equilibrium",
            "url": "s3://fds-data/shots/30421/equilibrium",
            "media_type": "application/x-zarr", "access_level": "public"}'
     ```
@@ -41,7 +41,6 @@ same call:
         headers=headers,
         json={
             "name": "equilibrium",
-            "level": 2,
             "url": "s3://fds-data/shots/30421/equilibrium",
             "media_type": "application/x-zarr",
             "access_level": "public",
@@ -57,7 +56,6 @@ same call:
         headers=headers,
         json={
             "name": "equilibrium",
-            "level": 2,
             "url": "s3://fds-data/shots/30421/equilibrium",
             "media_type": "application/x-zarr",
             "access_level": "public",
@@ -73,7 +71,6 @@ same call:
       headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         name: "equilibrium",
-        level: 2,
         url: "s3://fds-data/shots/30421/equilibrium",
         media_type: "application/x-zarr",
         access_level: "public",
