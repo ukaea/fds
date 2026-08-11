@@ -4,7 +4,9 @@ from sqlmodel import Session
 from app.auth.security import AuthenticatedUser
 from app.models.device import DeviceCreate
 from app.models.policy import AccessLevel
+from app.models.shot import ShotCreate
 from app.services.device_service import DeviceService
+from app.services.shot_service import ShotService
 
 # Dummy admin user for test setup
 admin_user = AuthenticatedUser(id="test-admin", scopes=("fds-admin",))
@@ -19,7 +21,7 @@ def test_create_device(test_client: TestClient, admin_user_token: dict[str, str]
     )
     assert response.status_code == 201
     data = response.json()
-    assert data["name"] == "MAST-U"
+    assert data["name"] == "mast-u"
 
 
 def test_update_device(
@@ -36,7 +38,7 @@ def test_update_device(
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["name"] == "Updated Name"
+    assert data["name"] == "updated name"
 
 
 def test_delete_device(
@@ -84,8 +86,8 @@ def test_read_devices(test_client: TestClient, session: Session):
 
     data = response.json()
     assert len(data) == 2
-    assert data[0]["name"] == "Device 1"
-    assert data[1]["name"] == "Device 2"
+    assert data[0]["name"] == "device 1"
+    assert data[1]["name"] == "device 2"
 
 
 def test_read_device(test_client: TestClient, session: Session):
@@ -99,8 +101,32 @@ def test_read_device(test_client: TestClient, session: Session):
     assert device.id is not None
 
     data = response.json()
-    assert data["name"] == "JET"
+    assert data["name"] == "jet"
     assert data["type"] == "Tokamak"
+
+
+def test_device_lookup_is_case_insensitive(test_client: TestClient, session: Session):
+    """A device registered as "MAST" resolves through any casing of its name."""
+    DeviceService(session).create(
+        DeviceCreate(name="MAST", type="Tokamak", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    ShotService(session).create(
+        ShotCreate(id="30420", device_name="MAST", access_level=AccessLevel.PUBLIC),
+        admin_user,
+    )
+
+    upper = test_client.get("/api/v1/devices/MAST")
+    lower = test_client.get("/api/v1/devices/mast")
+    assert upper.status_code == 200
+    assert upper.json() == lower.json()
+    assert upper.json()["name"] == "mast"
+
+    # Nested resources resolve through either casing of the device segment.
+    for name in ("MAST", "mast"):
+        response = test_client.get(f"/api/v1/devices/{name}/shots/30420")
+        assert response.status_code == 200
+        assert response.json()["device_name"] == "mast"
 
 
 def test_read_device_not_found(test_client: TestClient):
@@ -144,5 +170,5 @@ def test_read_devices_filters_restricted_for_anonymous(
     assert response.status_code == 200
 
     names = [device["name"] for device in response.json()]
-    assert "Public Device" in names
-    assert "Private Device" not in names
+    assert "public device" in names
+    assert "private device" not in names

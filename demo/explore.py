@@ -154,7 +154,7 @@ def _(mo):
 @app.cell
 def _(FDS_API_URL, headers, httpx, xr):
     _meta = httpx.get(
-        f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets/thomson-raw",
+        f"{FDS_API_URL}/devices/mastu/shots/50000/datasets/thomson-raw",
         headers=headers,
         params={"include_storage_options": True},
     ).json()[0]
@@ -288,12 +288,12 @@ def _(mo):
 @app.cell
 def _(Client, FDS_API_URL, LocalCluster, httpx, time):
     _collection = httpx.get(
-        f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/collections/analysed"
+        f"{FDS_API_URL}/devices/mastu/shots/50000/collections/analysed"
     ).json()
     _root_url = _collection["root_url"]
 
     _all_datasets = httpx.get(
-        f"{FDS_API_URL}/devices/mast-upgrade/shots/50000/datasets",
+        f"{FDS_API_URL}/devices/mastu/shots/50000/datasets",
         params={"include_storage_options": "true"},
     ).json()
     _icechunk_datasets = [

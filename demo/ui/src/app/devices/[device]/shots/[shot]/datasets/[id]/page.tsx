@@ -9,6 +9,7 @@ import useSWR from 'swr';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Activity as ActivityType, Dataset } from '@/lib/types';
 import { ResolvedRef } from '@/components/resolved-ref';
+import { useDeviceLabel } from '@/lib/use-device-label';
 
 // Heatmap Color Scale Approximation (Viridis)
 const VIRIDIS_STOPS = [[68, 1, 84], [59, 82, 139], [33, 145, 140], [93, 201, 99], [253, 231, 37]];
@@ -129,6 +130,7 @@ print(ds)`;
 export default function DatasetPage() {
   const params = useParams();
   const { device, shot, id } = params;
+  const deviceLabel = useDeviceLabel(device as string);
 
   const { data: session, status } = useSession();
   const [accessValues, setAccessValues] = useState<{granted: boolean, token?: any, s3Path?: string, error?: string}>({ granted: false });
@@ -432,7 +434,7 @@ export default function DatasetPage() {
          <div className="flex items-center text-sm text-muted-foreground mb-6 font-medium">
             <Link href="/devices" className="hover:text-primary transition-colors flex items-center">Devices</Link>
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
-            <Link href={`/devices/${device}`} className="hover:text-primary transition-colors flex items-center">{device}</Link>
+            <Link href={`/devices/${device}`} className="hover:text-primary transition-colors flex items-center">{deviceLabel}</Link>
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
             <Link href={`/devices/${device}/shots/${shot}`} className="hover:text-primary transition-colors flex items-center">Shot #{shot}</Link>
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
@@ -446,7 +448,7 @@ export default function DatasetPage() {
             {datasetData?.description || "Scientific data array containing experimental measurements from the plasma discharge."}
          </p>
          <div className="flex flex-wrap gap-3">
-             <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Device: {device}</span>
+             <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Device: {deviceLabel}</span>
              <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Shot: {shot}</span>
              {datasetData?.publisher && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border">Publisher: {datasetData.publisher}</span>}
          </div>

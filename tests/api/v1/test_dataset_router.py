@@ -51,7 +51,7 @@ def test_create_device_dataset(
     assert response.status_code == 201
     data = response.json()
     assert data["name"] == "machine_params"
-    assert data["device_name"] == "NSTX"
+    assert data["device_name"] == "nstx"
 
 
 def test_create_shot_dataset(
@@ -73,7 +73,7 @@ def test_create_shot_dataset(
     assert response.status_code == 201
     data = response.json()
     assert data["name"] == "efit"
-    assert data["device_name"] == "MAST"
+    assert data["device_name"] == "mast"
     assert data["shot_id"] == "123"
 
 

@@ -7,6 +7,7 @@ import useSWR from 'swr';
 import { Database, ChevronRight, MapPin, SlidersHorizontal, Copy, Check } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Dataset } from '@/lib/types';
+import { useDeviceLabel } from '@/lib/use-device-label';
 import { coverageSummary } from '@/lib/coverage';
 
 function readSnippet(dataset?: Dataset): string {
@@ -49,6 +50,7 @@ function Property({
 export default function DeviceDatasetPage() {
   const params = useParams();
   const device = params.device as string;
+  const deviceLabel = useDeviceLabel(device);
   const id = params.id as string;
   const [copied, setCopied] = useState(false);
 
@@ -68,7 +70,7 @@ export default function DeviceDatasetPage() {
       <div className="flex items-center text-sm text-muted-foreground mb-6 font-medium">
         <Link href="/devices" className="hover:text-primary transition-colors">Devices</Link>
         <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
-        <Link href={`/devices/${device}`} className="hover:text-primary transition-colors">{device}</Link>
+        <Link href={`/devices/${device}`} className="hover:text-primary transition-colors">{deviceLabel}</Link>
         <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
         <span className="text-foreground">{dataset?.name || id}</span>
       </div>
@@ -89,7 +91,7 @@ export default function DeviceDatasetPage() {
             )}
             <div className="flex flex-wrap gap-3">
               <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">
-                Device: {device}
+                Device: {deviceLabel}
               </span>
               {dataset.geometry_roles?.map((role) => (
                 <span

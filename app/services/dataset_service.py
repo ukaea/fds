@@ -11,6 +11,7 @@ from app.auth.access_control import (
 )
 from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
 from app.core.config import S3StorageProvider, config
+from app.core.naming import normalise_device_name
 from app.models.dataset import (
     Dataset,
     DatasetCreate,
@@ -128,6 +129,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         validate_policy_fields(
             obj_in.access_level, obj_in.required_scopes, obj_in.allowed_idps
         )
+        obj_in.device_name = normalise_device_name(obj_in.device_name)
         self._resolve_and_authorize_context(obj_in, user)
 
         origin = obj_in.origin or config.catalog_uri
@@ -247,6 +249,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         db_obj = self._get_or_raise(id)
         self._authorize_write(db_obj.device_name, user)
 
+        if obj_in.device_name is not None:
+            obj_in.device_name = normalise_device_name(obj_in.device_name)
+
         # Prevent changing context during update
         if obj_in.device_name and obj_in.device_name != db_obj.device_name:
             raise ForbiddenError("Cannot move a dataset between device contexts")
@@ -314,7 +319,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         statement = select(Dataset).where(
             Dataset.name == name,
-            Dataset.device_name == device_name,
+            Dataset.device_name == normalise_device_name(device_name),
             Dataset.shot_id == shot_id,
         )
         datasets = self.session.exec(statement).all()
@@ -336,7 +341,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         device as a whole rather than to any one shot, ``SHOT`` only those
         attached to one of the device's shots.
         """
-        statement = select(Dataset).where(Dataset.device_name == device_name)
+        statement = select(Dataset).where(
+            Dataset.device_name == normalise_device_name(device_name)
+        )
         if scope is DatasetScope.DEVICE:
             statement = statement.where(col(Dataset.shot_id).is_(None))
         elif scope is DatasetScope.SHOT:
@@ -358,7 +365,10 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         statement = (
             select(Dataset)
-            .where(Dataset.shot_id == shot_id, Dataset.device_name == device_name)
+            .where(
+                Dataset.shot_id == shot_id,
+                Dataset.device_name == normalise_device_name(device_name),
+            )
             .order_by(col(Dataset.id))
             .offset(offset)
             .limit(limit)

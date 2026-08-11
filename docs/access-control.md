@@ -128,14 +128,14 @@ inline under `storage_options`:
 
     ```bash
     curl -s -H "Authorization: Bearer $TOKEN" \
-      "$API/devices/mast-upgrade/shots/50000/datasets/thomson-raw?include_storage_options=true"
+      "$API/devices/mastu/shots/50000/datasets/thomson-raw?include_storage_options=true"
     ```
 
 === "Python (requests)"
 
     ```python
     meta = requests.get(
-        f"{API}/devices/mast-upgrade/shots/50000/datasets/thomson-raw",
+        f"{API}/devices/mastu/shots/50000/datasets/thomson-raw",
         headers=headers,
         params={"include_storage_options": True},
     ).json()[0]
@@ -146,7 +146,7 @@ inline under `storage_options`:
 
     ```python
     meta = httpx.get(
-        f"{API}/devices/mast-upgrade/shots/50000/datasets/thomson-raw",
+        f"{API}/devices/mastu/shots/50000/datasets/thomson-raw",
         headers=headers,
         params={"include_storage_options": True},
     ).json()[0]
@@ -157,7 +157,7 @@ inline under `storage_options`:
 
     ```javascript
     const res = await fetch(
-      `${API}/devices/mast-upgrade/shots/50000/datasets/thomson-raw?include_storage_options=true`,
+      `${API}/devices/mastu/shots/50000/datasets/thomson-raw?include_storage_options=true`,
       { headers: { Authorization: `Bearer ${TOKEN}` } },
     );
     const [meta] = await res.json();

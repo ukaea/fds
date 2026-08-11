@@ -43,7 +43,7 @@ def test_create_shot_for_device(
     shot = shot_service.create(shot_create, admin_user)
     assert shot is not None
     assert shot.id == "shot-101"
-    assert shot.device_name == "Test Device"
+    assert shot.device_name == "test device"
 
 
 def test_create_shot_with_device_scope(
@@ -117,7 +117,7 @@ def test_get_shots_for_device(
     # Get shots for device 1
     device1_shots = shot_service.get_multi_by_device_name("Device 1", user=admin_user)
     assert len(device1_shots) == 2
-    assert all(shot.device_name == "Device 1" for shot in device1_shots)
+    assert all(shot.device_name == "device 1" for shot in device1_shots)
     assert {shot.id for shot in device1_shots} == {"shot-1001", "shot-1002"}
 
 

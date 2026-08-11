@@ -133,7 +133,7 @@ def test_create_device_collection(
     assert response.status_code == 201
     data = response.json()
     assert data["name"] == "machine-diags"
-    assert data["device_name"] == "DEV"
+    assert data["device_name"] == "dev"
     assert "shot_id" not in data
 
 
@@ -183,7 +183,7 @@ def test_create_shot_collection(
     assert response.status_code == 201
     data = response.json()
     assert data["name"] == "jintrac-outputs"
-    assert data["device_name"] == "DEV"
+    assert data["device_name"] == "dev"
     assert data["shot_id"] == "s1"
 
 

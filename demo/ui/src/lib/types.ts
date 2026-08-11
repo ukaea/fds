@@ -1,5 +1,6 @@
 export interface Device {
   name: string;
+  title?: string;
   description?: string;
   // Add other fields as per backend response
 }

@@ -3,12 +3,14 @@
 import useSWR from 'swr';
 import Link from 'next/link';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Source, Collection } from '@/lib/types';
+import { Source, Collection, Device } from '@/lib/types';
 import { Layers, Database, ChevronRight, Activity, Server } from 'lucide-react';
 
-function formatScope(col: Collection): string {
-  if (col.device_name && col.shot_id) return `${col.device_name} / Shot ${col.shot_id}`;
-  if (col.device_name) return col.device_name;
+function formatScope(col: Collection, deviceLabel: (name: string) => string): string {
+  if (col.device_name && col.shot_id) {
+    return `${deviceLabel(col.device_name)} / Shot ${col.shot_id}`;
+  }
+  if (col.device_name) return deviceLabel(col.device_name);
   return 'Global';
 }
 
@@ -28,6 +30,10 @@ function SourceCollections({ source }: { source: Source }) {
     `${API_BASE}/sources/${source.name}/collections`,
     fetcher
   );
+  // One devices fetch backs the scope labels, rather than one per collection row.
+  const { data: devices } = useSWR<Device[]>(`${API_BASE}/devices/`, fetcher);
+  const deviceLabel = (name: string) =>
+    devices?.find((d) => d.name === name)?.title || name;
 
   if (isLoading || !collections || collections.length === 0) return null;
 
@@ -76,7 +82,7 @@ function SourceCollections({ source }: { source: Source }) {
             <div className="mt-4 flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Server className="w-3.5 h-3.5" />
-                {formatScope(col)}
+                {formatScope(col, deviceLabel)}
               </span>
               <span className="px-2.5 py-0.5 rounded-full border text-foreground bg-muted border-border">
                 {col.effective_access_level || col.access_level}

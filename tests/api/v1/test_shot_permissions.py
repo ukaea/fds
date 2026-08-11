@@ -21,7 +21,7 @@ def test_create_shot_as_operator_success(
     # Override auth to be a shot operator for MAST
     app.dependency_overrides[get_token_claims] = lambda: {
         "sub": "operator-user",
-        "scp": "shot-operator:MAST",
+        "scp": "shot-operator:mast",
         "iss": "https://test-idp.com",
     }
 
@@ -54,7 +54,7 @@ def test_create_shot_as_operator_wrong_device(
     # Override auth to be a shot operator for JET (not MAST)
     app.dependency_overrides[get_token_claims] = lambda: {
         "sub": "operator-user",
-        "scp": "shot-operator:JET",
+        "scp": "shot-operator:jet",
         "iss": "https://test-idp.com",
     }
 
@@ -119,7 +119,7 @@ def test_create_shot_untrusted_issuer_rejected(
     # _filter_scopes will strip all scopes to [], causing check_shot_operator to raise.
     app.dependency_overrides[get_token_claims] = lambda: {
         "sub": "operator-user",
-        "scp": "shot-operator:MAST",
+        "scp": "shot-operator:mast",
         "iss": "https://untrusted-idp.example.com",
     }
 

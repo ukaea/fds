@@ -41,6 +41,6 @@ def check_shot_operator(user: AuthenticatedUser, device_name: str) -> None:
         return
 
     # granular scope check
-    required_scope = f"shot-operator:{device_name}"
+    required_scope = f"shot-operator:{device_name.lower()}"
     if required_scope not in user_scopes:
         raise ForbiddenError(f"Not authorized, requires scope: {required_scope}")

@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.auth.permissions import check_device_admin, check_is_admin
+from app.core.naming import normalise_device_name
 from app.models.device import Device
 from app.models.identity import AuthenticatedUser
 from app.models.source import Source, SourceCreate, SourceRead, SourceUpdate
@@ -33,6 +34,7 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
         Create a new source.
         """
         device_id = None
+        obj_in.device_name = normalise_device_name(obj_in.device_name)
         if obj_in.device_name:
             device = self.session.exec(
                 select(Device).where(Device.name == obj_in.device_name)
@@ -104,7 +106,7 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
         Retrieve sources associated with a specific device by name.
         """
         device = self.session.exec(
-            select(Device).where(Device.name == device_name)
+            select(Device).where(Device.name == normalise_device_name(device_name))
         ).first()
         if not device:
             raise DeviceNotFoundError(f"Device '{device_name}' not found")

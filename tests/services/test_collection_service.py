@@ -92,7 +92,7 @@ def test_create_device_collection(
         CollectionCreate(name="machine-diagnostics", device_name="DEV"),
         admin_user,
     )
-    assert col.device_name == "DEV"
+    assert col.device_name == "dev"
     assert col.shot_id is None
 
 
@@ -109,7 +109,7 @@ def test_create_shot_collection(
         CollectionCreate(name="jintrac-outputs", device_name="DEV", shot_id="s1"),
         admin_user,
     )
-    assert col.device_name == "DEV"
+    assert col.device_name == "dev"
     assert col.shot_id == "s1"
 
 
@@ -169,7 +169,7 @@ def test_create_collection_same_name_different_scope(
     col = collection_service.create(
         CollectionCreate(name="results", device_name="DEV"), admin_user
     )
-    assert col.device_name == "DEV"
+    assert col.device_name == "dev"
 
 
 def test_create_collection_unauthorized_global(

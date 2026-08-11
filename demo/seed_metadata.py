@@ -75,12 +75,14 @@ def register_devices_and_shots(client: httpx.Client, base_url: str) -> None:
     for device in [
         {
             "name": "mast",
+            "title": "MAST",
             "description": "Mega Ampere Spherical Tokamak (MAST)",
             "type": "tokamak",
             "access_level": "public",
         },
         {
-            "name": "mast-upgrade",
+            "name": "mastu",
+            "title": "MAST Upgrade",
             "description": "Mega Ampere Spherical Tokamak Upgrade (MAST-U)",
             "type": "tokamak",
             "access_level": "public",
@@ -95,7 +97,7 @@ def register_devices_and_shots(client: httpx.Client, base_url: str) -> None:
     for device_name, shot_id, shot_at in [
         ("mast", "30420", "2008-04-17T14:23:45"),
         ("mast", "30421", "2008-04-17T15:41:22"),
-        ("mast-upgrade", "50000", None),
+        ("mastu", "50000", None),
     ]:
         shot = {"id": shot_id, "access_level": "public", "device_name": device_name}
         if shot_at is not None:
@@ -332,13 +334,13 @@ def register_mast_upgrade_datasets(
 
     # Raw diagnostics (restricted NetCDF)
     existing = client.get(
-        f"{base_url}/devices/mast-upgrade/shots/50000/collections/raw-diagnostics"
+        f"{base_url}/devices/mastu/shots/50000/collections/raw-diagnostics"
     )
     if existing.status_code == 200:
         raw_collection_id = existing.json()["id"]
     else:
         raw_col = client.post(
-            f"{base_url}/devices/mast-upgrade/shots/50000/collections",
+            f"{base_url}/devices/mastu/shots/50000/collections",
             json={
                 "name": "raw-diagnostics",
                 "title": "MAST-U Shot 50000 — Raw Diagnostic Data",
@@ -355,7 +357,7 @@ def register_mast_upgrade_datasets(
             ("magnetics-raw", "magnetics"),
         ]:
             ds = client.post(
-                f"{base_url}/devices/mast-upgrade/shots/50000/datasets",
+                f"{base_url}/devices/mastu/shots/50000/datasets",
                 json={
                     "name": name,
                     "title": f"MAST-U {stem.replace('_', ' ').title()} Raw — Shot 50000",
@@ -372,14 +374,12 @@ def register_mast_upgrade_datasets(
             )
 
     # Analysed experimental data (public, IceChunk)
-    existing = client.get(
-        f"{base_url}/devices/mast-upgrade/shots/50000/collections/analysed"
-    )
+    existing = client.get(f"{base_url}/devices/mastu/shots/50000/collections/analysed")
     if existing.status_code == 200:
         analysed_collection_id = existing.json()["id"]
     else:
         analysed_col = client.post(
-            f"{base_url}/devices/mast-upgrade/shots/50000/collections",
+            f"{base_url}/devices/mastu/shots/50000/collections",
             json={
                 "name": "analysed",
                 "title": "MAST-U Shot 50000 — Analysed Experimental Data",
@@ -397,7 +397,7 @@ def register_mast_upgrade_datasets(
 
         for ids_name in MAST_U_IDS_GROUPS:
             ds = client.post(
-                f"{base_url}/devices/mast-upgrade/shots/50000/datasets",
+                f"{base_url}/devices/mastu/shots/50000/datasets",
                 json={
                     "name": ids_name,
                     "title": f"MAST-U {ids_name.replace('_', ' ').title()} — Shot 50000",

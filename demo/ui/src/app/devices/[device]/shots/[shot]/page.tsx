@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Dataset, Collection, Activity, Source } from '@/lib/types';
+import { useDeviceLabel } from '@/lib/use-device-label';
 import { Database, FileCode, ChevronRight, Layers, MapPin, SlidersHorizontal } from 'lucide-react';
 import { ResolvedRef, dedupeById } from '@/components/resolved-ref';
 
@@ -114,6 +115,7 @@ function CollectionSection({
 export default function ShotDetailPage() {
   const params = useParams();
   const deviceName = params.device as string;
+  const deviceLabel = useDeviceLabel(deviceName);
   const shotId = params.shot as string;
 
   const { data: datasets, error, isLoading } = useSWR<Dataset[]>(
@@ -148,7 +150,7 @@ export default function ShotDetailPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <div className="flex items-center text-sm text-muted-foreground mb-2">
-          <Link href={`/devices/${deviceName}`} className="hover:text-primary transition-colors">{deviceName}</Link>
+          <Link href={`/devices/${deviceName}`} className="hover:text-primary transition-colors">{deviceLabel}</Link>
           <ChevronRight className="w-4 h-4 mx-2" />
           <span className="text-foreground font-medium">Shot #{shotId}</span>
         </div>

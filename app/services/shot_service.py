@@ -11,6 +11,7 @@ from app.auth.access_control import (
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_shot_operator
+from app.core.naming import normalise_device_name
 from app.core.timeutils import as_utc
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
@@ -117,7 +118,8 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         """
         Create a new shot. Enforces device admin permissions and context consistency.
         """
-        target_device_name = obj_in.device_name
+        target_device_name = normalise_device_name(obj_in.device_name)
+        expected_device_name = normalise_device_name(expected_device_name)
 
         if expected_device_name:
             if target_device_name and target_device_name != expected_device_name:
@@ -174,7 +176,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         device_name, shot_id = id
 
         statement = select(Shot).where(
-            Shot.id == shot_id, Shot.device_name == device_name
+            Shot.id == shot_id, Shot.device_name == normalise_device_name(device_name)
         )
         return self.session.exec(statement).first()
 
@@ -184,7 +186,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         Raises DeviceNotFoundError or ResourceNotFoundError.
         """
         device = self.session.exec(
-            select(Device).where(Device.name == device_name)
+            select(Device).where(Device.name == normalise_device_name(device_name))
         ).first()
         if not device:
             raise DeviceNotFoundError(f"Device '{device_name}' not found")
@@ -219,7 +221,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         """
         statement = (
             select(Shot)
-            .where(Shot.device_name == device_name)
+            .where(Shot.device_name == normalise_device_name(device_name))
             .order_by(col(Shot.id))
             .offset(offset)
             .limit(limit)
@@ -301,12 +303,12 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         """
         shot = self._resolve_shot(shot_id, device_name)
 
-        check_device_admin(user, device_name)
+        check_device_admin(user, shot.device_name)
 
         # Block deletion of a shot that a reference-resource version depends on.
         for kind in REFERENCE_KINDS:
             ReferenceService(self.session, kind).check_shot_removable(
-                device_name, shot_id
+                shot.device_name, shot_id
             )
 
         self.session.delete(shot)

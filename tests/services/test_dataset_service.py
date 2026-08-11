@@ -406,7 +406,7 @@ def test_create_device_dataset(
         name="machine_config", level=1, url="s3://nstx/config", device_name="NSTX"
     )
     dataset = dataset_service.create(dataset_create, user=admin_user)
-    assert dataset.device_name == "NSTX"
+    assert dataset.device_name == "nstx"
     assert dataset.shot_id is None
 
 

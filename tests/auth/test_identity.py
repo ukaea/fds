@@ -84,8 +84,9 @@ def test_check_shot_operator_via_device_admin():
 
 
 def test_check_shot_operator_via_granular_scope():
+    """Device-scoped grants are lower-cased, matching the ``{device}_admin`` form."""
     check_shot_operator(
-        AuthenticatedUser(id="u", scopes=("shot-operator:MAST",)), "MAST"
+        AuthenticatedUser(id="u", scopes=("shot-operator:mast",)), "MAST"
     )
 
 

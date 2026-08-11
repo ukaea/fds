@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Collection, Activity } from '@/lib/types';
+import { useDeviceLabel } from '@/lib/use-device-label';
 import { Layers, Database, FileCode, ChevronRight, Activity as ActivityIcon, Clock, ExternalLink } from 'lucide-react';
 
 function formatMediaType(mediaType?: string): string {
@@ -26,6 +27,7 @@ function formatDate(iso?: string): string {
 export default function CollectionDetailPage() {
   const params = useParams();
   const deviceName = params.device as string;
+  const deviceLabel = useDeviceLabel(deviceName);
   const shotId = params.shot as string;
   const collectionName = params.collection as string;
 
@@ -61,7 +63,7 @@ export default function CollectionDetailPage() {
     <div className="container mx-auto px-4 py-8">
       {/* Breadcrumb */}
       <div className="flex items-center text-sm text-muted-foreground mb-6 flex-wrap gap-1">
-        <Link href={`/devices/${deviceName}`} className="hover:text-primary transition-colors">{deviceName}</Link>
+        <Link href={`/devices/${deviceName}`} className="hover:text-primary transition-colors">{deviceLabel}</Link>
         <ChevronRight className="w-4 h-4" />
         <Link href={`/devices/${deviceName}/shots/${shotId}`} className="hover:text-primary transition-colors">Shot #{shotId}</Link>
         <ChevronRight className="w-4 h-4" />

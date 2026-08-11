@@ -1,3 +1,5 @@
+from typing import cast
+
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -7,6 +9,7 @@ from app.auth.access_control import (
     validate_policy_fields,
 )
 from app.auth.permissions import check_is_admin
+from app.core.naming import normalise_device_name
 from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
@@ -19,6 +22,8 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
     Service for device CRUD operations.
 
     Devices are identified externally by *name* (e.g. "MAST", "JET").
+    Names are case-insensitive: they are stored lower-cased and every lookup
+    normalises its input, so ``title`` carries the canonical display form.
     The surrogate ``id`` column is a persistence detail for ORM relations;
     it is not a valid retrieval key at the service boundary.
     Use ``get_by_name`` for all external lookups.
@@ -111,7 +116,9 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         should not gate the operation.  Raises ``DeviceNotFoundError``
         if the device does not exist.
         """
-        result = self.session.exec(select(Device).where(Device.name == name))
+        result = self.session.exec(
+            select(Device).where(Device.name == normalise_device_name(name))
+        )
         device = result.first()
         if not device:
             raise DeviceNotFoundError(f"Device '{name}' not found")
@@ -127,6 +134,7 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
             obj_in.allowed_idps,
         )
         check_is_admin(user)
+        obj_in.name = cast(str, normalise_device_name(obj_in.name))
         try:
             return self.create_unchecked(obj_in)
         except IntegrityError as e:
@@ -146,6 +154,8 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         """
         check_is_admin(user)
         db_obj = self._get_by_name(device_name)
+        if obj_in.name is not None:
+            obj_in.name = normalise_device_name(obj_in.name)
         update_data = obj_in.model_dump(exclude_unset=True)
         validate_policy_fields(
             update_data.get("access_level", db_obj.access_level),

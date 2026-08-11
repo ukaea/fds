@@ -67,7 +67,7 @@ export default function DatasetsPage() {
 
   const globalDatasets = (allDatasets ?? []).filter((d) => !d.device_name && matches(d.name));
   const filteredDevices = devices?.filter(
-    (device) => matches(device.name) || matches(device.description)
+    (device) => matches(device.name) || matches(device.title) || matches(device.description)
   );
   // Device-level datasets only (shot-level datasets live under each shot).
   const deviceDatasets = (name: string) =>
@@ -193,7 +193,7 @@ export default function DatasetsPage() {
                           </div>
                           <div>
                             <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-                              {device.name}
+                              {device.title || device.name}
                             </h3>
                             <p className="text-sm text-muted-foreground">
                               {device.description || 'No description available'}
@@ -217,7 +217,7 @@ export default function DatasetsPage() {
                       ) : (
                         <div className="text-center py-6 bg-card/30 rounded-lg border border-dashed border-border">
                           <p className="text-sm text-muted-foreground">
-                            No device-level datasets for {device.name}.
+                            No device-level datasets for {device.title || device.name}.
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             Navigate to shots to view shot-level datasets.

@@ -24,11 +24,7 @@ def test_jintrac_outputs_share_activity_id(http_client, seeded_data):
     activity_id = seeded_data["jintrac_activity_id"]
     resp = http_client.get(f"{FDS_URL}/devices/mast/shots/30420/datasets")
     assert resp.status_code == 200
-    jintrac_outputs = [
-        ds
-        for ds in resp.json()
-        if ds.get("level") == 3 and ds.get("activity_id") == activity_id
-    ]
+    jintrac_outputs = [ds for ds in resp.json() if ds.get("activity_id") == activity_id]
     output_names = {ds["name"] for ds in jintrac_outputs}
     assert {"equilibrium", "core_profiles", "core_sources"}.issubset(output_names)
 

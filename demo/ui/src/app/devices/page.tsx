@@ -10,7 +10,7 @@ import { Device } from '@/lib/types';
 export default function DevicesPage() {
   const { data: devices, error, isLoading, mutate } = useSWR<Device[]>(`${API_BASE}/devices/`, fetcher);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', title: '', description: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -25,7 +25,7 @@ export default function DevicesPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, title: formData.title || undefined }),
       });
 
       if (!response.ok) {
@@ -34,7 +34,7 @@ export default function DevicesPage() {
       }
 
       // Reset form and refresh data
-      setFormData({ name: '', description: '' });
+      setFormData({ name: '', title: '', description: '' });
       setShowForm(false);
       mutate(); // Refresh the device list
     } catch (err) {
@@ -80,7 +80,23 @@ export default function DevicesPage() {
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g., MAST, JET, ITER"
+                placeholder="e.g., mast, jet, iter"
+                className="w-full px-4 py-2 bg-card/50 border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-border transition-colors"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Used in URLs and stored lower-cased.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="title" className="block text-sm font-medium text-foreground mb-2">
+                Display Title
+              </label>
+              <input
+                type="text"
+                id="title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="e.g., MAST Upgrade"
                 className="w-full px-4 py-2 bg-card/50 border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-border transition-colors"
               />
             </div>
@@ -114,7 +130,7 @@ export default function DevicesPage() {
                 type="button"
                 onClick={() => {
                   setShowForm(false);
-                  setFormData({ name: '', description: '' });
+                  setFormData({ name: '', title: '', description: '' });
                   setFormError('');
                 }}
                 className="px-6 py-2 bg-muted hover:bg-accent text-foreground rounded-lg transition-colors"
@@ -142,7 +158,7 @@ export default function DevicesPage() {
                 <div className="bg-muted p-2 rounded-lg text-foreground">
                   <Activity className="w-5 h-5" />
                 </div>
-                <h2 className="text-xl font-bold">{device.name}</h2>
+                <h2 className="text-xl font-bold">{device.title || device.name}</h2>
               </div>
 
               <p className="text-muted-foreground mb-6 line-clamp-2">

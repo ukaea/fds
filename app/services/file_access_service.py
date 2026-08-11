@@ -6,6 +6,7 @@ from sqlmodel import Session, col, select
 
 from app.auth.access_control import get_effective_policy
 from app.auth.permissions import check_shot_operator
+from app.core.naming import normalise_device_name
 from app.core.storage.providers import get_provider_for_endpoint
 from app.models.dataset import Dataset
 from app.models.distribution import Distribution
@@ -133,7 +134,9 @@ class FileAccessService:
             query = query.where(Dataset.shot_id == request.shot_id)
 
         if request.device_name:
-            query = query.where(Dataset.device_name == request.device_name)
+            query = query.where(
+                Dataset.device_name == normalise_device_name(request.device_name)
+            )
 
         if request.data_urls:
             query = query.where(col(Distribution.url).in_(request.data_urls))

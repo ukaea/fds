@@ -11,6 +11,7 @@ from app.auth.access_control import (
 )
 from app.auth.permissions import check_device_admin, check_is_admin
 from app.core.config import config
+from app.core.naming import normalise_device_name
 from app.models.activity import Activity
 from app.models.collection import (
     Collection,
@@ -116,6 +117,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             obj_in.required_scopes,
             obj_in.allowed_idps,
         )
+        obj_in.device_name = normalise_device_name(obj_in.device_name)
 
         # 1. Determine and validate context
         if obj_in.shot_id:
@@ -184,6 +186,9 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             check_device_admin(user, db_obj.device_name)
         else:
             check_is_admin(user)
+
+        if obj_in.device_name is not None:
+            obj_in.device_name = normalise_device_name(obj_in.device_name)
 
         # Prevent context moves
         if obj_in.device_name and obj_in.device_name != db_obj.device_name:
@@ -260,7 +265,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         """
         statement = select(Collection).where(
             Collection.name == name,
-            Collection.device_name == device_name,
+            Collection.device_name == normalise_device_name(device_name),
             Collection.shot_id == shot_id,
         )
         collection = self.session.exec(statement).first()
@@ -309,7 +314,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         statement = (
             select(Collection)
             .where(
-                Collection.device_name == device_name,
+                Collection.device_name == normalise_device_name(device_name),
                 col(Collection.shot_id).is_(None),
             )
             .offset(offset)
@@ -331,7 +336,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             select(Collection)
             .where(
                 Collection.shot_id == shot_id,
-                Collection.device_name == device_name,
+                Collection.device_name == normalise_device_name(device_name),
             )
             .offset(offset)
             .limit(limit)

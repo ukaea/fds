@@ -5,7 +5,11 @@ from app.auth.security import AuthenticatedUser
 from app.models.device import Device, DeviceCreate, DeviceUpdate
 from app.models.policy import AccessLevel
 from app.services.device_service import DeviceService
-from app.services.exceptions import DeviceNotFoundError, FDSValidationError
+from app.services.exceptions import (
+    ConflictError,
+    DeviceNotFoundError,
+    FDSValidationError,
+)
 
 IDP_A = "https://idp-a.example.com"
 
@@ -17,14 +21,14 @@ def test_create_device(session: Session, admin_user: AuthenticatedUser):
     )
     device = service.create(device_create, user=admin_user)
     assert device.id is not None
-    assert device.name == "MAST"
+    assert device.name == "mast"
     assert device.type == "Tokamak"
     assert device.began_operations == "2000-01-01"
     assert device.status == "Retired"
 
     db_device = session.get(Device, device.id)
     assert db_device is not None
-    assert db_device.name == "MAST"
+    assert db_device.name == "mast"
 
 
 def test_get_device_by_name(session: Session, admin_user: AuthenticatedUser):
@@ -32,7 +36,18 @@ def test_get_device_by_name(session: Session, admin_user: AuthenticatedUser):
     service.create(DeviceCreate(name="JET", type="Tokamak"), user=admin_user)
 
     retrieved = service.get_by_name("JET", admin_user)
-    assert retrieved.name == "JET"
+    assert retrieved.name == "jet"
+
+
+def test_create_device_rejects_case_variant_of_existing_name(
+    session: Session, admin_user: AuthenticatedUser
+):
+    """Names are stored lower-cased, so casing cannot be used to register twice."""
+    service = DeviceService(session)
+    service.create(DeviceCreate(name="MAST", type="Tokamak"), user=admin_user)
+
+    with pytest.raises(ConflictError):
+        service.create(DeviceCreate(name="mast", type="Tokamak"), user=admin_user)
 
 
 def test_get_device_by_name_not_found(session: Session, admin_user: AuthenticatedUser):
@@ -76,7 +91,7 @@ def test_get_devices_with_limit_and_offset(
     # Test offset
     devices_offset = service.get_multi(user=admin_user, offset=5, limit=5)
     assert len(devices_offset) == 5
-    assert devices_offset[0].name == "Device 5"
+    assert devices_offset[0].name == "device 5"
 
 
 def test_get_multi_anonymous_sees_only_public_and_embargoed(
@@ -96,7 +111,7 @@ def test_get_multi_anonymous_sees_only_public_and_embargoed(
     # No caller identity → treated as anonymous: RESTRICTED is filtered out,
     # EMBARGOED metadata stays discoverable.
     names = {d.name for d in service.get_multi()}
-    assert names == {"Pub", "Emb"}
+    assert names == {"pub", "emb"}
 
     # An admin sees everything.
     assert len(service.get_multi(user=admin_user)) == 3
@@ -115,13 +130,13 @@ def test_update_device(session: Session, admin_user: AuthenticatedUser):
         device_name="Update Test", obj_in=device_update, user=admin_user
     )
     assert updated_device is not None
-    assert updated_device.name == "Updated Test"
+    assert updated_device.name == "updated test"
     assert updated_device.type == "Initial"
     assert updated_device.status == "Updated Status"
 
     db_device = session.get(Device, created_device.id)
     assert db_device is not None
-    assert db_device.name == "Updated Test"
+    assert db_device.name == "updated test"
 
 
 def test_delete_device(session: Session, admin_user: AuthenticatedUser):

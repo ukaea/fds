@@ -78,7 +78,7 @@ export default function Home() {
                     <Server className="w-5 h-5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-foreground mb-1 truncate">{device.name}</h3>
+                    <h3 className="text-lg font-semibold text-foreground mb-1 truncate">{device.title || device.name}</h3>
                     <p className="text-sm text-muted-foreground line-clamp-2">
                       {device.description || 'No description available'}
                     </p>

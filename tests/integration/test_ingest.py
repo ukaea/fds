@@ -6,7 +6,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("seeded_data")]
 
 
 def test_devices_registered(http_client):
-    for device in ("mast", "mast-upgrade"):
+    for device in ("mast", "mastu"):
         resp = http_client.get(f"{FDS_URL}/devices/{device}")
         assert resp.status_code == 200, f"Device {device!r} not found"
 
@@ -15,7 +15,7 @@ def test_shots_registered(http_client):
     for device, shot_id in [
         ("mast", "30420"),
         ("mast", "30421"),
-        ("mast-upgrade", "50000"),
+        ("mastu", "50000"),
     ]:
         resp = http_client.get(f"{FDS_URL}/devices/{device}/shots/{shot_id}")
         assert resp.status_code == 200, f"Shot {device}/{shot_id} not found"
@@ -61,7 +61,7 @@ def test_mast_upgrade_raw_collection_registered(
     http_client, seeded_data, admin_headers
 ):
     resp = http_client.get(
-        f"{FDS_URL}/devices/mast-upgrade/shots/50000/collections/raw-diagnostics",
+        f"{FDS_URL}/devices/mastu/shots/50000/collections/raw-diagnostics",
         headers=admin_headers,
     )
     assert resp.status_code == 200
@@ -69,9 +69,7 @@ def test_mast_upgrade_raw_collection_registered(
 
 
 def test_mast_upgrade_analysed_collection_registered(http_client, seeded_data):
-    resp = http_client.get(
-        f"{FDS_URL}/devices/mast-upgrade/shots/50000/collections/analysed"
-    )
+    resp = http_client.get(f"{FDS_URL}/devices/mastu/shots/50000/collections/analysed")
     assert resp.status_code == 200
     col = resp.json()
     assert col["id"] == seeded_data["mast_upgrade_analysed_collection_id"]

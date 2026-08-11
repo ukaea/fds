@@ -4,8 +4,8 @@ Represents a physical machine or facility.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `name` | string | Yes | Short, unique name (e.g. `mast`, `mast-upgrade`) |
-| `title` | string | No | Human-readable label |
+| `name` | string | Yes | Short, unique name (e.g. `mast`, `mastu`). Stored lower-cased, so `/devices/MAST` and `/devices/mast` resolve the same device |
+| `title` | string | No | Display name, e.g. `MAST Upgrade` for the device named `mastu`. Clients show this in preference to `name` |
 | `description` | string | No | Extended description |
 | `type` | string | No | Machine type (`tokamak`, `stellarator`, …) |
 | `publisher` | string | No | Institution making the device catalog available (`dct:publisher`) |
@@ -20,7 +20,7 @@ for `TOKEN`):
     ```bash
     curl -X POST "$API/devices/" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-      -d '{"name": "mast", "title": "Mega Ampere Spherical Tokamak", "type": "tokamak",
+      -d '{"name": "mast", "title": "MAST", "type": "tokamak",
            "description": "Spherical tokamak experiment at UKAEA Culham, studying plasma confinement at low aspect ratio.",
            "access_level": "public"}'
     ```
@@ -33,7 +33,7 @@ for `TOKEN`):
         headers=headers,
         json={
             "name": "mast",
-            "title": "Mega Ampere Spherical Tokamak",
+            "title": "MAST",
             "type": "tokamak",
             "description": "Spherical tokamak experiment at UKAEA Culham, studying plasma confinement at low aspect ratio.",
             "access_level": "public",
@@ -49,7 +49,7 @@ for `TOKEN`):
         headers=headers,
         json={
             "name": "mast",
-            "title": "Mega Ampere Spherical Tokamak",
+            "title": "MAST",
             "type": "tokamak",
             "description": "Spherical tokamak experiment at UKAEA Culham, studying plasma confinement at low aspect ratio.",
             "access_level": "public",
@@ -65,7 +65,7 @@ for `TOKEN`):
       headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         name: "mast",
-        title: "Mega Ampere Spherical Tokamak",
+        title: "MAST",
         type: "tokamak",
         description: "Spherical tokamak experiment at UKAEA Culham, studying plasma confinement at low aspect ratio.",
         access_level: "public",

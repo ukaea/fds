@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Dataset, Shot } from '@/lib/types';
+import { useDeviceLabel } from '@/lib/use-device-label';
 import { Calendar, Database, ChevronRight, Server } from 'lucide-react';
 import { ClientDate } from '@/components/client-date';
 import { DeviceDatasets } from '@/components/device-datasets';
@@ -15,6 +16,7 @@ type Tab = 'shots' | 'datasets';
 export default function DeviceDetailPage() {
   const params = useParams();
   const deviceName = params.device as string;
+  const deviceLabel = useDeviceLabel(deviceName);
   const [activeTab, setActiveTab] = useState<Tab>('shots');
 
   const { data: shots, error: shotsError, isLoading: shotsLoading } = useSWR<Shot[]>(
@@ -34,13 +36,13 @@ export default function DeviceDetailPage() {
         <div className="flex items-center text-sm text-muted-foreground mb-2">
           <Link href="/devices" className="hover:text-primary transition-colors">Devices</Link>
           <ChevronRight className="w-4 h-4 mx-2" />
-          <span className="text-foreground font-medium">{deviceName}</span>
+          <span className="text-foreground font-medium">{deviceLabel}</span>
         </div>
         <div className="flex items-center gap-3 mb-2">
           <div className="bg-muted p-2 rounded-lg text-foreground">
             <Server className="w-6 h-6" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground">{deviceName}</h1>
+          <h1 className="text-3xl font-bold text-foreground">{deviceLabel}</h1>
         </div>
       </div>
 

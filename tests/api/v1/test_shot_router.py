@@ -91,7 +91,7 @@ def test_update_shot_nested_device_change(
     # Verify it did NOT move
     updated_shot = shot_service.get(("MAST", shot.id))
     assert updated_shot is not None
-    assert updated_shot.device_name == "MAST"
+    assert updated_shot.device_name == "mast"
 
 
 def test_update_shot_nested_mismatch_404(
@@ -279,5 +279,5 @@ def test_read_shots_include_device(
     data = response.json()
     assert len(data) == 1
     assert "device" in data[0]
-    assert data[0]["device"]["name"] == "MAST"
+    assert data[0]["device"]["name"] == "mast"
     assert "device_id" not in data[0]
