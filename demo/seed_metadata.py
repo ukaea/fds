@@ -94,17 +94,115 @@ def register_devices_and_shots(client: httpx.Client, base_url: str) -> None:
 
     # shot_at is required for reference-geometry/calibration resolution: shot-range
     # coverage (e.g. "from shot 30421 onward") is evaluated against shot timestamps.
-    for device_name, shot_id, shot_at in [
-        ("mast", "30420", "2008-04-17T14:23:45"),
-        ("mast", "30421", "2008-04-17T15:41:22"),
-        ("mastu", "50000", None),
+    # Shot 30421 also carries features on its own axes, for the feature-overlay demo in
+    # explore.py: two on the time base (an H-mode window and a disruption, in seconds
+    # relative to t=0) and one on the frequency axis (an MHD mode). Time is not
+    # privileged, so the mode does not fall on the IP-vs-time trace.
+    # `elm` is the fourth: its presence and rough window are annotated inline, while the
+    # train's individual event times are too many for the catalogue and live in the
+    # annotation dataset registered by register_mast_annotations, tied to this annotation by
+    # the shared name. Appended last — explore.py indexes the first three by position.
+    features_30421 = [
+        {
+            "name": "confinement_mode",
+            "value": "H-mode",
+            "extent": {"dimension": "time", "start": 0.20, "end": 0.45, "unit": "s"},
+        },
+        {
+            "name": "disruption",
+            "value": True,
+            "extent": {"dimension": "time", "start": 0.606, "unit": "s"},
+        },
+        {
+            "name": "mode",
+            "value": "n=1 tearing",
+            "extent": {
+                "dimension": "frequency",
+                "start": 12000,
+                "end": 18000,
+                "unit": "Hz",
+            },
+        },
+        {
+            "name": "elm",
+            "value": "type-I",
+            "description": "ELM train through the H-mode window; event times are in "
+            "the elm_times annotation dataset.",
+            "extent": {"dimension": "time", "start": 0.205, "end": 0.45, "unit": "s"},
+        },
+    ]
+    # The two MAST-U shots are a matched pair for catalogue filtering: 50000 ran up in
+    # L-mode, transitioned to H-mode and ELMed; 50001 never left L-mode, so has no ELMs
+    # to annotate. Both carry an equilibrium dataset, so a filter for "equilibrium
+    # datasets from ELMy MAST-U shots" has something to exclude as well as return.
+    #
+    # 50000 carries `confinement_mode` twice, which is the ordinary case: a mode holds
+    # over a window, not over a shot. It is also what makes the transition query
+    # meaningful, since each annotation is matched against the whole list
+    # independently: asking for L-mode and H-mode together finds the shot that was in
+    # both at some point, which is 50000 alone.
+    features_50000 = [
+        {
+            "name": "confinement_mode",
+            "value": "L-mode",
+            "extent": {"dimension": "time", "start": 0.10, "end": 0.18, "unit": "s"},
+        },
+        {
+            "name": "confinement_mode",
+            "value": "H-mode",
+            "extent": {"dimension": "time", "start": 0.18, "end": 0.33, "unit": "s"},
+        },
+        {
+            "name": "elm",
+            "value": "type-I",
+            "extent": {"dimension": "time", "start": 0.19, "end": 0.33, "unit": "s"},
+        },
+    ]
+    features_50001 = [
+        {
+            "name": "confinement_mode",
+            "value": "L-mode",
+            "extent": {"dimension": "time", "start": 0.10, "end": 0.29, "unit": "s"},
+        },
+    ]
+    for device_name, shot_id, shot_at, sci_meta in [
+        ("mast", "30420", "2008-04-17T14:23:45", None),
+        ("mast", "30421", "2008-04-17T15:41:22", features_30421),
+        ("mastu", "50000", None, features_50000),
+        ("mastu", "50001", None, features_50001),
     ]:
         shot = {"id": shot_id, "access_level": "public", "device_name": device_name}
         if shot_at is not None:
             shot["shot_at"] = shot_at
+        if sci_meta is not None:
+            shot["scientific_metadata"] = sci_meta
         resp = client.post(f"{base_url}/devices/{device_name}/shots", json=shot)
         if resp.status_code not in (201, 409):
             resp.raise_for_status()
+
+
+# Annotations on the *data* rather than on the plasma, so a dataset listing has
+# something of its own to filter on: the shot's annotations say what happened in
+# the discharge, these say what happened to the recording of it. Both live in
+# scientific_metadata and both answer to ?annotation, at their own level.
+DATASET_FEATURES_30421 = {
+    "thomson_scattering": [
+        {
+            "name": "laser_dropout",
+            "value": True,
+            "description": "Laser failed to fire; no profiles in this window.",
+            "extent": {"dimension": "time", "start": 0.31, "end": 0.34, "unit": "s"},
+        }
+    ],
+    "soft_x_rays": [
+        {
+            "name": "saturated_channel",
+            "value": "HCAM_12",
+            "description": "Channel railed through the disruption.",
+            "extent": {"dimension": "time", "start": 0.60, "end": 0.62, "unit": "s"},
+        }
+    ],
+}
 
 
 def register_mast_datasets(client: httpx.Client, base_url: str) -> None:
@@ -126,6 +224,8 @@ def register_mast_datasets(client: httpx.Client, base_url: str) -> None:
             if ids_name == "thomson_scattering":
                 meta["geometry_references"] = ["thomson_positions"]
                 meta["calibration_references"] = ["thomson_calibration"]
+            if shot_id == "30421" and ids_name in DATASET_FEATURES_30421:
+                meta["scientific_metadata"] = DATASET_FEATURES_30421[ids_name]
             resp = client.post(
                 f"{base_url}/devices/{device}/shots/{shot_id}/datasets", json=meta
             )
@@ -208,6 +308,40 @@ def register_mast_calibration(client: httpx.Client, base_url: str) -> None:
         resp = client.post(f"{base_url}/devices/mast/datasets", json=version)
         if resp.status_code not in (201, 409):
             resp.raise_for_status()
+
+
+def register_mast_annotations(client: httpx.Client, base_url: str) -> None:
+    """Register the shot-frame ELM annotation for MAST shot 30421.
+
+    A feature annotation is an ordinary Dataset marked with ``annotates``, naming
+    the feature it localises. Its subject fixes its frame: this one belongs to the
+    shot (``shot_id`` set, no ``subject_dataset_id``), so its event times are on
+    the shot's own time base and a Shot read with ``?include_annotations=true``
+    resolves it. The name matches the shot's inline ``elm`` annotation, which carries the
+    feature's presence and rough window. Idempotent.
+
+    Seeded after the experiment-data collections so it is not swept into them:
+    that collection lists the diagnostics acquired during the shot, and an
+    annotation is not one of them.
+    """
+    annotation = {
+        "name": "elm_times",
+        "annotates": "elm",
+        "level": 2,
+        "url": "s3://fds-data/shots/30421/annotations/elm_times.nc",
+        "endpoint_url": MINIO_ENDPOINT,
+        "media_type": "application/x-netcdf",
+        "access_level": "public",
+        "title": "ELM event times — MAST shot 30421",
+        "description": (
+            "Times of each ELM in the shot's H-mode window, on the shot's time "
+            "base. Too many events to annotate inline, so the shot annotates the "
+            "train's presence and window and this dataset holds the individual times."
+        ),
+    }
+    resp = client.post(f"{base_url}/devices/mast/shots/30421/datasets", json=annotation)
+    if resp.status_code not in (201, 409):
+        resp.raise_for_status()
 
 
 def register_experiment_data_collections(
@@ -413,10 +547,59 @@ def register_mast_upgrade_datasets(
                 f"{base_url}/collections/{analysed_collection_id}/datasets/{ds.json()['id']}"
             )
 
+    register_mast_upgrade_50001(client, base_url)
+
     return {
         "raw_collection_id": raw_collection_id,
         "analysed_collection_id": analysed_collection_id,
     }
+
+
+def register_mast_upgrade_50001(client: httpx.Client, base_url: str) -> None:
+    """Register MAST-U shot 50001's analysed data.
+
+    The L-mode counterpart to 50000: same equilibrium dataset name, no ELM annotation, so a
+    annotation filter over MAST-U equilibrium datasets returns 50000 and not this one.
+    """
+    existing = client.get(f"{base_url}/devices/mastu/shots/50001/collections/analysed")
+    if existing.status_code == 200:
+        return
+
+    collection = client.post(
+        f"{base_url}/devices/mastu/shots/50001/collections",
+        json={
+            "name": "analysed",
+            "title": "MAST-U Shot 50001 — Analysed Experimental Data",
+            "description": (
+                "Post-processed MAST-U diagnostic data in IMAS IDS format, stored as "
+                "a single IceChunk repository. This L-mode discharge was reconstructed "
+                "for equilibrium and magnetics only."
+            ),
+            "access_level": "public",
+            "root_url": "s3://fds-data/shots/50001/analysed/",
+        },
+    )
+    collection.raise_for_status()
+    collection_id = collection.json()["id"]
+
+    for ids_name in ["equilibrium", "magnetics"]:
+        ds = client.post(
+            f"{base_url}/devices/mastu/shots/50001/datasets",
+            json={
+                "name": ids_name,
+                "title": f"MAST-U {ids_name.replace('_', ' ').title()} — Shot 50001",
+                "level": 2,
+                "url": f"s3://fds-data/shots/50001/analysed/{ids_name}",
+                "endpoint_url": MINIO_ENDPOINT,
+                "media_type": "application/vnd.icechunk+zarr",
+                "format": "icechunk",
+                "access_level": "public",
+            },
+        )
+        ds.raise_for_status()
+        client.post(
+            f"{base_url}/collections/{collection_id}/datasets/{ds.json()['id']}"
+        )
 
 
 def register_jintrac_collection(
@@ -549,6 +732,7 @@ def seed_all(base_url: str, headers: dict[str, str]) -> dict:
         experiment_collections = register_experiment_data_collections(
             client, base_url, scheduler_id
         )
+        register_mast_annotations(client, base_url)
         efit_source_id = register_efit_provenance(client, base_url)
         mast_upgrade = register_mast_upgrade_datasets(client, base_url)
         jintrac = register_jintrac_collection(client, base_url)

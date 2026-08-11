@@ -1,13 +1,13 @@
-"""API surfacing of resolved reference geometry (ADR-0036)."""
+"""API surfacing of resolved reference geometry."""
 
 from datetime import datetime
 
 from fastapi.testclient import TestClient
 
-from app.models.reference import DateRange, ReferenceCoverage, ShotRange
+from app.models.coverage import Coverage, DateRange, ShotRange
 from app.services.jsonld import map_dataset_to_dcat
 
-THOMSON = ReferenceCoverage(shot_ranges=[ShotRange(from_shot="150")])
+THOMSON = Coverage(shot_ranges=[ShotRange(from_shot="150")])
 
 
 def test_include_geometry_off_by_default(
@@ -57,7 +57,7 @@ def test_multi_role_bundle_deduped(
     test_client: TestClient, make_version, make_signal, admin_user_token: dict
 ):
     roles = ["thomson_positions", "bolometer_chords"]
-    bundle = make_version("bundle", roles, ReferenceCoverage(shots=["150"]))
+    bundle = make_version("bundle", roles, Coverage(shots=["150"]))
     signal = make_signal(roles)
     resp = test_client.get(
         f"/api/v1/datasets/id/{signal.id}?include_geometry=true",
@@ -73,7 +73,7 @@ def test_multi_role_bundle_deduped(
 def test_jsonld_qualified_relation_resolved_geometry(
     datasets, make_version, make_signal
 ):
-    coverage = ReferenceCoverage(
+    coverage = Coverage(
         date_ranges=[
             DateRange(from_date=datetime(2008, 1, 1), to_date=datetime(2009, 1, 1))
         ]

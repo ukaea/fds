@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Request, status
+from typing import Annotated
+
+from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUserDep, ShotServiceDep
@@ -7,7 +9,6 @@ from app.models.shot import (
     ShotRead,
     ShotUpdate,
 )
-from app.services.jsonld import map_shot_to_dcat
 
 router = APIRouter()
 
@@ -45,15 +46,30 @@ def read_shots(
     offset: int = 0,
     limit: int = 100,
     include_device: bool = False,
+    include_annotations: bool = False,
+    annotation: Annotated[list[str] | None, Query()] = None,
 ) -> list[ShotRead]:
     """
     Retrieve all shots for a specific device.
+
+    `annotation` filters on the shot's `scientific_metadata`; `disruption` matches
+    on presence, `confinement_mode:H-mode` on value, and repeating it requires
+    every one.
     """
     shots = shot_service.get_multi_by_device_name(
-        device_name=device_name, user=user, offset=offset, limit=limit
+        device_name=device_name,
+        user=user,
+        offset=offset,
+        limit=limit,
+        annotations=annotation,
     )
 
-    return [shot_service.to_read_model(s, include_device=include_device) for s in shots]
+    return [
+        shot_service.to_read_model(
+            shot, include_device=include_device, include_annotations=include_annotations
+        )
+        for shot in shots
+    ]
 
 
 @router.get(
@@ -68,6 +84,7 @@ def read_shot(
     shot_service: ShotServiceDep,
     shot_id: str,
     user: CurrentUserDep,
+    include_annotations: bool = False,
 ) -> ShotRead | JSONResponse:
     """
     Retrieve a shot specifically for a device context.
@@ -76,10 +93,16 @@ def read_shot(
     shot = shot_service.get_by_device_name(shot_id, device_name, user)
     if "application/ld+json" in request.headers.get("accept", ""):
         return JSONResponse(
-            content=map_shot_to_dcat(shot, str(request.base_url).rstrip("/")),
+            content=shot_service.to_dcat(
+                shot,
+                str(request.base_url).rstrip("/"),
+                include_annotations=include_annotations,
+            ),
             media_type="application/ld+json",
         )
-    return shot_service.to_read_model(shot, include_device=True)
+    return shot_service.to_read_model(
+        shot, include_device=True, include_annotations=include_annotations
+    )
 
 
 @router.put(

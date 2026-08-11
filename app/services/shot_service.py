@@ -17,7 +17,9 @@ from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.models.shot import Shot, ShotCreate, ShotRead, ShotUpdate
+from app.services.annotation_service import AnnotationService
 from app.services.base_service import BaseService
+from app.services.dataset_service import DatasetService
 from app.services.exceptions import (
     ConflictError,
     DeviceNotFoundError,
@@ -25,6 +27,8 @@ from app.services.exceptions import (
     ForbiddenError,
     ResourceNotFoundError,
 )
+from app.services.filters import annotation_clauses
+from app.services.jsonld import map_shot_to_dcat
 from app.services.reference_service import REFERENCE_KINDS, ReferenceService
 
 # Tolerance (seconds) when checking an explicit shot_duration against the
@@ -215,13 +219,18 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         user: AuthenticatedUser = ANONYMOUS_USER,
         offset: int = 0,
         limit: int = 100,
+        annotations: list[str] | None = None,
     ) -> Sequence[Shot]:
         """
         Retrieve all shots for a given device by its name.
+
+        ``annotations`` filters on feature annotations in ``scientific_metadata``;
+        several must all be present (see ``app.services.filters``).
         """
         statement = (
             select(Shot)
             .where(Shot.device_name == normalise_device_name(device_name))
+            .where(*annotation_clauses(Shot.scientific_metadata, annotations))
             .order_by(col(Shot.id))
             .offset(offset)
             .limit(limit)
@@ -315,10 +324,17 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         self.session.commit()
         return True
 
-    def to_read_model(self, shot: Shot, include_device: bool = False) -> "ShotRead":
+    def to_read_model(
+        self,
+        shot: Shot,
+        include_device: bool = False,
+        include_annotations: bool = False,
+    ) -> "ShotRead":
         """
         Converts a Shot ORM object to a ShotRead DTO, optionally including the full device object.
-        Centralizes the presentation logic for shots.
+        Centralises the presentation logic for shots. When ``include_annotations``
+        is set, resolves the shot's shot-frame and device-frame annotations,
+        frame-scoped, so no dataset-frame annotations leak in.
         """
         read_model = ShotRead.model_validate(shot)
         read_model.effective_access_level = get_effective_access_level(
@@ -326,4 +342,22 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         )
         if not include_device:
             read_model.device = None
+        if include_annotations:
+            dataset_service = DatasetService(self.session)
+            read_model.annotations = [
+                dataset_service.to_read_model(annotation)
+                for annotation in AnnotationService(self.session).for_shot(shot)
+            ] or None
         return read_model
+
+    def to_dcat(
+        self, shot: Shot, base_url: str, *, include_annotations: bool = False
+    ) -> dict[str, Any]:
+        """Build the shot's DCAT/JSON-LD document, resolving its annotations into
+        qualified relations."""
+        enriched = self.to_read_model(shot, include_annotations=include_annotations)
+        return map_shot_to_dcat(
+            shot,
+            base_url,
+            annotations=enriched.annotations if include_annotations else None,
+        )

@@ -1,8 +1,8 @@
-import { ReferenceCoverage } from './types';
+import { Coverage } from './types';
 
 // A compact one-line summary of a version's coverage — stays small even for
 // hundreds of shots (explicit-shot sets collapse to a count + span).
-export function coverageSummary(coverage?: ReferenceCoverage): string | null {
+export function coverageSummary(coverage?: Coverage): string | null {
   if (!coverage) return null;
   const parts: string[] = [];
   coverage.shot_ranges?.forEach((r) => parts.push(`${r.from_shot}→${r.to_shot ?? 'open'}`));

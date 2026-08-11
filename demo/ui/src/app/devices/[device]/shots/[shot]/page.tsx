@@ -1,21 +1,20 @@
 'use client';
 
+import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Dataset, Collection, Activity, Source } from '@/lib/types';
+import { Dataset, Collection, Activity, Source, Shot } from '@/lib/types';
 import { useDeviceLabel } from '@/lib/use-device-label';
-import { Database, FileCode, ChevronRight, Layers, MapPin, SlidersHorizontal } from 'lucide-react';
-import { ResolvedRef, dedupeById } from '@/components/resolved-ref';
-
-function formatMediaType(mediaType?: string): string {
-  if (!mediaType) return 'Zarr';
-  if (mediaType.includes('zarr')) return 'Zarr';
-  if (mediaType.includes('netcdf') || mediaType.includes('netCDF')) return 'NetCDF';
-  if (mediaType.includes('hdf')) return 'HDF5';
-  return mediaType.split('/').pop() || mediaType;
-}
+import { Database, ChevronRight, Layers, MapPin, SlidersHorizontal, Highlighter } from 'lucide-react';
+import { annotationFacets, annotationQuery, withQuery } from '@/lib/features';
+import { dedupeById } from '@/components/resolved-ref';
+import { AnnotationFilter } from '@/components/annotation-filter';
+import { DatasetCard } from '@/components/dataset-card';
+import { DatasetResults } from '@/components/dataset-results';
+import { ScientificMetadata } from '@/components/features';
+import { RelatedGroup } from '@/components/related-data';
 
 function formatSourceName(name: string): string {
   return name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -26,48 +25,12 @@ function formatDate(iso?: string): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function DatasetCard({ dataset, deviceName, shotId }: { dataset: Dataset; deviceName: string; shotId: string }) {
-  return (
-    <Link
-      href={`/devices/${deviceName}/shots/${shotId}/datasets/${dataset.id}`}
-      className="card p-6 hover:border-primary/50 transition-all group"
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="bg-muted p-2 rounded text-foreground">
-            <Database className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="font-bold text-lg group-hover:text-primary transition-colors">{dataset.name}</h3>
-            <p className="text-xs text-muted-foreground font-mono mt-1 truncate max-w-xs">{dataset.url}</p>
-          </div>
-        </div>
-        <ChevronRight className="text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all" />
-      </div>
-
-      <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
-        <div className="flex items-center gap-1">
-          <FileCode className="w-4 h-4" />
-          {formatMediaType(dataset.media_type)}
-        </div>
-        <span className="text-foreground text-xs px-2 py-0.5 bg-muted rounded-full border border-border">
-          {dataset.effective_access_level || dataset.access_level || 'public'}
-        </span>
-      </div>
-    </Link>
-  );
-}
-
 function CollectionSection({
   collection,
   sourcesById,
-  deviceName,
-  shotId,
 }: {
   collection: Collection;
   sourcesById: Map<number, string>;
-  deviceName: string;
-  shotId: string;
 }) {
   const { data: activity } = useSWR<Activity>(
     collection.activity_id ? `${API_BASE}/activities/${collection.activity_id}` : null,
@@ -105,7 +68,7 @@ function CollectionSection({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {collection.datasets?.map((dataset) => (
-          <DatasetCard key={dataset.id ?? dataset.name} dataset={dataset} deviceName={deviceName} shotId={shotId} />
+          <DatasetCard key={dataset.id ?? dataset.name} dataset={dataset} />
         ))}
       </div>
     </div>
@@ -118,11 +81,31 @@ export default function ShotDetailPage() {
   const deviceLabel = useDeviceLabel(deviceName);
   const shotId = params.shot as string;
 
-  const { data: datasets, error, isLoading } = useSWR<Dataset[]>(
+  // The shot itself carries its features (inline scientific_metadata) and, with
+  // include_annotations, the annotation datasets expressed in its own frame.
+  const { data: shot } = useSWR<Shot>(
     deviceName && shotId
-      ? `${API_BASE}/devices/${deviceName}/shots/${shotId}/datasets?include_geometry=true&include_calibration=true`
+      ? `${API_BASE}/devices/${deviceName}/shots/${shotId}?include_annotations=true`
       : null,
     fetcher
+  );
+
+  const [annotations, setAnnotations] = useState<string[]>([]);
+
+  const datasetsUrl =
+    deviceName && shotId
+      ? `${API_BASE}/devices/${deviceName}/shots/${shotId}/datasets?include_geometry=true&include_calibration=true`
+      : null;
+
+  const { data: datasets, error, isLoading } = useSWR<Dataset[]>(datasetsUrl, fetcher);
+
+  // The shot's datasets narrowed to those carrying the selected annotations.
+  const { data: matchingDatasets, isLoading: matchingLoading } = useSWR<Dataset[]>(
+    datasetsUrl && annotations.length > 0
+      ? withQuery(datasetsUrl, annotationQuery('annotation', annotations))
+      : null,
+    fetcher,
+    { keepPreviousData: true }
   );
 
   const { data: collections } = useSWR<Collection[]>(
@@ -138,7 +121,11 @@ export default function ShotDetailPage() {
   const datasetIdsInCollections = new Set<number>(
     collections?.flatMap(col => col.datasets?.map(ds => ds.id).filter((id): id is number => id != null) ?? []) ?? []
   );
-  const uncollectedDatasets = datasets?.filter(ds => ds.id != null && !datasetIdsInCollections.has(ds.id!)) ?? [];
+  // Annotation datasets are presented as the shot's annotations, not as another
+  // diagnostic, so keep them out of the plain dataset grid.
+  const uncollectedDatasets = datasets?.filter(
+    ds => ds.id != null && !datasetIdsInCollections.has(ds.id!) && !ds.annotates
+  ) ?? [];
 
   // Reference data resolved for this shot, aggregated across its datasets.
   const resolvedGeometry = dedupeById((datasets ?? []).flatMap(ds => ds.geometry ?? []));
@@ -155,8 +142,19 @@ export default function ShotDetailPage() {
           <span className="text-foreground font-medium">Shot #{shotId}</span>
         </div>
         <h1 className="text-3xl font-bold text-foreground mb-2">Shot #{shotId}</h1>
-        <p className="text-muted-foreground">Scientific data and collections for this shot.</p>
+        <p className="text-muted-foreground">{shot?.description || 'Scientific data and collections for this shot.'}</p>
+        {shot?.t0_at && (
+          <p className="text-sm text-muted-foreground mt-2">
+            <span className="uppercase text-xs font-bold tracking-wider">t=0</span>{' '}
+            <span className="font-mono">{formatDate(shot.t0_at)}</span>
+            <span className="ml-2">— the shot&apos;s relative time base zero</span>
+          </p>
+        )}
       </div>
+
+      {/* Features annotated on the shot record itself — metadata, not a dataset, so
+          it sits with the shot rather than with the data resolved for it. */}
+      <ScientificMetadata properties={shot?.scientific_metadata} className="mb-10" />
 
       {isLoading && (
         <div className="card p-6 text-center text-muted-foreground">Loading datasets…</div>
@@ -165,19 +163,52 @@ export default function ShotDetailPage() {
         <div className="card p-6 text-center text-destructive">Failed to load datasets.</div>
       )}
 
+      {/* Annotations carried by this shot's datasets, describing the data itself
+          rather than the plasma. Absent on most shots, in which case this and the
+          filtered view below never appear. */}
+      <AnnotationFilter
+        label="Filter datasets by annotation"
+        facets={annotationFacets(datasets)}
+        selected={annotations}
+        onChange={setAnnotations}
+      />
+
+      {/* Filtering answers with one flat list. The collections below group every
+          dataset they hold, so a filtered count against them would not add up. */}
+      {annotations.length > 0 && (
+        <div className="mb-10">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-muted p-2 rounded-lg text-foreground">
+              <Database className="w-5 h-5" />
+            </div>
+            <h2 className="text-xl font-semibold text-foreground">Matching Datasets</h2>
+            <span className="text-sm text-muted-foreground">
+              ({matchingDatasets?.length ?? 0} of {datasets?.length ?? 0})
+            </span>
+          </div>
+          {matchingLoading && !matchingDatasets ? (
+            <div className="card p-6 text-center text-muted-foreground">Loading datasets…</div>
+          ) : (
+            <DatasetResults
+              datasets={matchingDatasets}
+              emptyMessage="No datasets in this shot carry every selected annotation."
+            />
+          )}
+        </div>
+      )}
+
       {/* One section per collection */}
-      {collections?.map((collection) => (
-        <CollectionSection
-          key={collection.id}
-          collection={collection}
-          sourcesById={sourcesById}
-          deviceName={deviceName}
-          shotId={shotId}
-        />
-      ))}
+      {annotations.length === 0 &&
+        collections?.map((collection) => (
+          <CollectionSection
+            key={collection.id}
+            collection={collection}
+            sourcesById={sourcesById}
+          />
+        ))}
 
       {/* Datasets not in any collection */}
-      {uncollectedDatasets.length > 0 && (
+      {annotations.length === 0 && uncollectedDatasets.length > 0 && (
         <div>
           <div className="flex items-center gap-3 mb-4">
             <div className="bg-muted p-2 rounded-lg text-foreground">
@@ -188,48 +219,37 @@ export default function ShotDetailPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {uncollectedDatasets.map((dataset) => (
-              <DatasetCard key={dataset.id ?? dataset.name} dataset={dataset} deviceName={deviceName} shotId={shotId} />
+              <DatasetCard key={dataset.id ?? dataset.name} dataset={dataset} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Reference data (geometry + calibration) resolved for this shot */}
-      {(resolvedGeometry.length > 0 || resolvedCalibration.length > 0) && (
+      {/* Datasets resolved for this shot: the reference versions its data reads
+          against, and the annotations localising its features. */}
+      {(resolvedGeometry.length > 0 || resolvedCalibration.length > 0 || (shot?.annotations?.length ?? 0) > 0) && (
         <div className="mt-10">
           <div className="flex items-center gap-3 mb-4">
             <div className="bg-muted p-2 rounded-lg text-foreground">
               <Database className="w-5 h-5" />
             </div>
-            <h2 className="text-xl font-semibold text-foreground">Reference Data</h2>
+            <h2 className="text-xl font-semibold text-foreground">Related Data</h2>
             <span className="text-sm text-muted-foreground">resolved for this shot</span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {resolvedGeometry.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-2 text-muted-foreground uppercase text-xs font-bold tracking-wider">
-                  <MapPin className="w-4 h-4" /> Geometry
-                </div>
-                <div className="space-y-2">
-                  {resolvedGeometry.map((v) => (
-                    <ResolvedRef key={v.id} version={v} />
-                  ))}
-                </div>
-              </div>
-            )}
-            {resolvedCalibration.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-2 text-muted-foreground uppercase text-xs font-bold tracking-wider">
-                  <SlidersHorizontal className="w-4 h-4" /> Calibration
-                  <span className="normal-case font-normal text-muted-foreground">— applied in order</span>
-                </div>
-                <div className="space-y-2">
-                  {resolvedCalibration.map((v) => (
-                    <ResolvedRef key={v.id} version={v} />
-                  ))}
-                </div>
-              </div>
-            )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <RelatedGroup icon={MapPin} label="Geometry" datasets={resolvedGeometry} />
+            <RelatedGroup
+              icon={SlidersHorizontal}
+              label="Calibration"
+              hint="— applied in order"
+              datasets={resolvedCalibration}
+            />
+            <RelatedGroup
+              icon={Highlighter}
+              label="Annotations"
+              hint="— on this shot's axes"
+              datasets={shot?.annotations}
+            />
           </div>
         </div>
       )}

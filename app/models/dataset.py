@@ -13,9 +13,9 @@ from sqlmodel import (
     text,
 )
 
+from .coverage import Coverage
 from .mixins import DescriptiveMixin, TimestampMixin
 from .policy import AccessLevel
-from .reference import ReferenceCoverage
 from .scientific_metadata import ScientificProperty
 from .storage_options import StorageOptions, StorageOptionsType
 
@@ -144,7 +144,7 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
             "for single-stage calibration."
         ),
     )
-    applies_to: ReferenceCoverage | None = Field(
+    applies_to: Coverage | None = Field(
         default=None,
         description=(
             "For a reference-resource version (geometry, calibration, …): which "
@@ -152,6 +152,18 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
             "overlap another version of the same role within a kind."
         ),
         sa_column=Column(JSON, nullable=True),
+    )
+    annotates: str | None = Field(
+        default=None,
+        index=True,
+        description=(
+            "For a feature annotation dataset: the feature it localises (e.g. 'elm'). "
+            "Marks the dataset as an annotation and matches the inline annotation of the "
+            "same name on its subject. "
+            "The subject fixes the frame: subject_dataset_id (dataset frame) or the "
+            "annotation's own shot_id (shot frame). Coordinates live in the "
+            "annotation's data, in that frame."
+        ),
     )
 
 
@@ -189,6 +201,16 @@ class Dataset(DatasetBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
     shot_id: str | None = Field(default=None, index=True)
     activity_id: int | None = Field(default=None, foreign_key="activity.id", index=True)
+    subject_dataset_id: int | None = Field(
+        default=None,
+        foreign_key="dataset.id",
+        index=True,
+        description=(
+            "For a feature annotation linked to a specific Dataset: the source Dataset "
+            "this annotation localises a feature in. Null for a shot-frame "
+            "annotation, whose subject is the shot it belongs to."
+        ),
+    )
     origin: str | None = Field(default=None, index=True)
 
     shot: "Shot" = Relationship(
@@ -217,6 +239,7 @@ class DatasetCreate(DatasetBase):
 
     shot_id: str | None = None
     activity_id: int | None = None
+    subject_dataset_id: int | None = None
     origin: str | None = None
     # Default distribution fields — passed through to a Distribution row with
     # default_distribution=True on create.  Only created when url is supplied.
@@ -242,6 +265,7 @@ class DatasetRead(DatasetBase):
     id: int
     shot_id: str | None = None
     activity_id: int | None = None
+    subject_dataset_id: int | None = None
     origin: str | None = None
     effective_access_level: AccessLevel | None = None
     # Default distribution fields inlined for convenience (None when no distribution exists)
@@ -253,6 +277,7 @@ class DatasetRead(DatasetBase):
     distributions: list["DistributionRead"] | None = None
     geometry: list["DatasetRead"] | None = None
     calibration: list["DatasetRead"] | None = None
+    annotations: list["DatasetRead"] | None = None
 
 
 class DatasetUpdate(SQLModel):
@@ -292,4 +317,6 @@ class DatasetUpdate(SQLModel):
     calibration_references: list[str] | None = None
     calibration_roles: list[str] | None = None
     calibration_stage: int | None = None
-    applies_to: ReferenceCoverage | None = None
+    applies_to: Coverage | None = None
+    annotates: str | None = None
+    subject_dataset_id: int | None = None

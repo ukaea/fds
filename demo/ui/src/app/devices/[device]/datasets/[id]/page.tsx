@@ -4,11 +4,13 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import useSWR from 'swr';
-import { Database, ChevronRight, MapPin, SlidersHorizontal, Copy, Check } from 'lucide-react';
+import { Database, ChevronRight, MapPin, SlidersHorizontal, Copy, Check, Highlighter } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Dataset } from '@/lib/types';
 import { useDeviceLabel } from '@/lib/use-device-label';
 import { coverageSummary } from '@/lib/coverage';
+import { ScientificMetadata } from '@/components/features';
+import { RelatedGroup } from '@/components/related-data';
 
 function readSnippet(dataset?: Dataset): string {
   if (!dataset?.url) return '';
@@ -55,7 +57,7 @@ export default function DeviceDatasetPage() {
   const [copied, setCopied] = useState(false);
 
   const { data: dataset, error, isLoading } = useSWR<Dataset>(
-    id ? `${API_BASE}/datasets/id/${id}` : null,
+    id ? `${API_BASE}/datasets/id/${id}?include_annotations=true` : null,
     fetcher
   );
 
@@ -112,6 +114,12 @@ export default function DeviceDatasetPage() {
                   {dataset.calibration_stage != null && ` · stage ${dataset.calibration_stage}`}
                 </span>
               ))}
+              {dataset.annotates && (
+                <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border flex items-center gap-1">
+                  <Highlighter className="w-3.5 h-3.5" />
+                  annotates {dataset.annotates}
+                </span>
+              )}
             </div>
           </div>
 
@@ -173,6 +181,22 @@ export default function DeviceDatasetPage() {
                       <span className="text-foreground font-mono text-xs">{coverage}</span>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            <ScientificMetadata properties={dataset.scientific_metadata} />
+
+            {(dataset.annotations?.length ?? 0) > 0 && (
+              <div className="card p-6">
+                <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground">Related Data</h3>
+                <div className="text-sm">
+                  <RelatedGroup
+                    icon={Highlighter}
+                    label="Annotations"
+                    hint="— on this dataset's axes"
+                    datasets={dataset.annotations}
+                  />
                 </div>
               </div>
             )}

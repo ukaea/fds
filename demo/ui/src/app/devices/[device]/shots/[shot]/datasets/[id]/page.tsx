@@ -3,12 +3,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Database, Lock, Unlock, Download, Activity, ArrowLeft, ChevronRight, MapPin, SlidersHorizontal } from 'lucide-react';
+import { Database, Lock, Unlock, Download, Activity, ArrowLeft, ChevronRight, MapPin, SlidersHorizontal, Highlighter } from 'lucide-react';
 import { useSession, signIn } from "next-auth/react";
 import useSWR from 'swr';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Activity as ActivityType, Dataset } from '@/lib/types';
-import { ResolvedRef } from '@/components/resolved-ref';
+import { ScientificMetadata } from '@/components/features';
+import { RelatedGroup } from '@/components/related-data';
 import { useDeviceLabel } from '@/lib/use-device-label';
 
 // Heatmap Color Scale Approximation (Viridis)
@@ -145,7 +146,7 @@ export default function DatasetPage() {
 
   const { data: datasetData } = useSWR<Dataset>(
     id
-      ? `${API_BASE}/datasets/id/${id}?include_geometry=true&include_calibration=true`
+      ? `${API_BASE}/datasets/id/${id}?include_geometry=true&include_calibration=true&include_annotations=true`
       : null,
     fetcher
   );
@@ -451,6 +452,12 @@ export default function DatasetPage() {
              <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Device: {deviceLabel}</span>
              <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Shot: {shot}</span>
              {datasetData?.publisher && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border">Publisher: {datasetData.publisher}</span>}
+             {datasetData?.annotates && (
+                <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border flex items-center gap-1">
+                    <Highlighter className="w-3.5 h-3.5" />
+                    Annotates: {datasetData.annotates}
+                </span>
+             )}
          </div>
       </div>
 
@@ -616,27 +623,50 @@ export default function DatasetPage() {
                                                     }
 
                                                     const xData = chunkData.x;
-                                                    const sampleCount = Math.min(yData.length, 200);
+                                                    // Decimate across the whole series rather than drawing its first
+                                                    // 200 samples, which showed only the opening fraction of the axis.
+                                                    const step = Math.max(1, Math.ceil(yData.length / 200));
+                                                    const sampled: number[] = [];
+                                                    for (let i = 0; i < yData.length; i += step) sampled.push(i);
 
-                                                    let pathD = "M0,100 ";
-                                                    if (xData && xData.length >= sampleCount) {
-                                                        const minX = Math.min(...Array.from(xData.slice(0, sampleCount)));
-                                                        const maxX = Math.max(...Array.from(xData.slice(0, sampleCount)));
+                                                    // Normalise y to the viewBox from the data's own range —
+                                                    // signals span many orders of magnitude (ip runs to ~1e5 A),
+                                                    // so a fixed scale puts most traces off-canvas.
+                                                    let minY = Infinity;
+                                                    let maxY = -Infinity;
+                                                    for (const i of sampled) {
+                                                        const val = yData[i];
+                                                        if (Number.isNaN(val)) continue;
+                                                        if (val < minY) minY = val;
+                                                        if (val > maxY) maxY = val;
+                                                    }
+                                                    if (!Number.isFinite(minY) || minY === maxY) { minY = (minY || 0) - 1; maxY = (maxY || 0) + 1; }
+                                                    const scaleY = 160 / (maxY - minY);
+                                                    const projectY = (val: number) => 180 - (Number.isNaN(val) ? 0 : val - minY) * scaleY;
+
+                                                    let pathD: string;
+                                                    if (xData && xData.length >= yData.length) {
+                                                        const minX = Math.min(...sampled.map((i) => xData[i]));
+                                                        const maxX = Math.max(...sampled.map((i) => xData[i]));
                                                         const scaleX = 400 / (maxX - minX || 1);
 
-                                                        pathD += Array.from(yData.slice(0, sampleCount)).map((val, i) => {
-                                                            const vx = (xData[i] - minX) * scaleX;
-                                                            const vy = 100 - (Number.isNaN(val) ? 0 : val * 50);
-                                                            return `L${vx},${vy}`;
-                                                        }).join(' ');
+                                                        pathD = sampled.map((i, n) =>
+                                                            `${n === 0 ? 'M' : 'L'}${(xData[i] - minX) * scaleX},${projectY(yData[i])}`
+                                                        ).join(' ');
                                                     } else {
-                                                        pathD += Array.from(yData.slice(0, sampleCount)).map((val, i) => `L${(i / sampleCount) * 400},${100 - (Number.isNaN(val) ? 0 : val * 50)}`).join(' ');
+                                                        pathD = sampled.map((i, n) =>
+                                                            `${n === 0 ? 'M' : 'L'}${(n / sampled.length) * 400},${projectY(yData[i])}`
+                                                        ).join(' ');
                                                     }
+
+                                                    const zeroY = projectY(0);
                                                     return (
                                                         <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center p-4 bg-card/50 rounded-lg border border-border shadow-inner">
                                                             <svg viewBox="0 0 400 200" className="w-full flex-1 text-primary drop-shadow-[0_0_10px_rgba(59,130,246,0.6)]">
                                                                 <path d={pathD} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
-                                                                <line x1="0" y1="100" x2="400" y2="100" stroke="#334155" strokeWidth="1" strokeDasharray="4 4" />
+                                                                {minY <= 0 && maxY >= 0 && (
+                                                                    <line x1="0" y1={zeroY} x2="400" y2={zeroY} stroke="#334155" strokeWidth="1" strokeDasharray="4 4" />
+                                                                )}
                                                             </svg>
                                                             <p className="text-xs text-muted-foreground mt-4 bg-card px-3 py-1 rounded-full border border-border shadow flex items-center gap-2 font-mono">
                                                                 Plot: <span className="text-foreground font-bold">{chunkData.yL}</span> {chunkData.xL ? `vs ${chunkData.xL}` : ''} <span className="text-muted-foreground">({chunkData.shape[chunkData.xIdx !== undefined ? chunkData.xIdx : 0]} pts)</span>
@@ -728,36 +758,29 @@ export default function DatasetPage() {
                 </div>
             </div>
 
-            {/* Resolved reference data (geometry + calibration) */}
-            {((datasetData?.geometry?.length ?? 0) > 0 || (datasetData?.calibration?.length ?? 0) > 0) && (
+            {/* Features annotated on this dataset's own axes */}
+            <ScientificMetadata properties={datasetData?.scientific_metadata} className="bg-card/60 shadow-xl border-border" />
+
+            {/* Datasets resolved for this one. The annotations are those whose
+                subject is this dataset — the shot's are resolved on the shot,
+                on its axes, and deliberately not folded in here. */}
+            {((datasetData?.geometry?.length ?? 0) > 0 || (datasetData?.calibration?.length ?? 0) > 0 || (datasetData?.annotations?.length ?? 0) > 0) && (
                 <div className="card p-6 bg-card/60 shadow-xl border-border">
-                    <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground">Reference Data</h3>
+                    <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground">Related Data</h3>
                     <div className="space-y-4 text-sm">
-                        {(datasetData?.geometry?.length ?? 0) > 0 && (
-                            <div>
-                                <div className="flex items-center gap-2 mb-2 text-muted-foreground uppercase text-xs font-bold tracking-wider">
-                                    <MapPin className="w-4 h-4" /> Geometry
-                                </div>
-                                <div className="space-y-2">
-                                    {datasetData!.geometry!.map((v) => (
-                                        <ResolvedRef key={v.id} version={v} />
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        {(datasetData?.calibration?.length ?? 0) > 0 && (
-                            <div>
-                                <div className="flex items-center gap-2 mb-2 text-muted-foreground uppercase text-xs font-bold tracking-wider">
-                                    <SlidersHorizontal className="w-4 h-4" /> Calibration
-                                    <span className="normal-case font-normal text-muted-foreground">— applied in order</span>
-                                </div>
-                                <div className="space-y-2">
-                                    {datasetData!.calibration!.map((v) => (
-                                        <ResolvedRef key={v.id} version={v} />
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+                        <RelatedGroup icon={MapPin} label="Geometry" datasets={datasetData?.geometry} />
+                        <RelatedGroup
+                            icon={SlidersHorizontal}
+                            label="Calibration"
+                            hint="— applied in order"
+                            datasets={datasetData?.calibration}
+                        />
+                        <RelatedGroup
+                            icon={Highlighter}
+                            label="Annotations"
+                            hint="— on this dataset's axes"
+                            datasets={datasetData?.annotations}
+                        />
                     </div>
                 </div>
             )}

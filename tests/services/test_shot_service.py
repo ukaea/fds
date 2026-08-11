@@ -263,6 +263,26 @@ def test_create_shot_consistent_temporal(
     assert shot.shot_end.replace(tzinfo=timezone.utc) == _T5
 
 
+def test_create_shot_records_t0_at_distinct_from_shot_at(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    admin_user: AuthenticatedUser,
+):
+    """t0_at (the relative time base zero) is stored and may differ from shot_at."""
+    device_service.create(DeviceCreate(name="DEVT0"), user=admin_user)
+    t0 = datetime(
+        2024, 3, 15, 14, 32, 6, tzinfo=timezone.utc
+    )  # breakdown, +6s of shot_at
+    shot = shot_service.create(
+        ShotCreate(id="t-t0", device_name="DEVT0", shot_at=_T0, t0_at=t0),
+        user=admin_user,
+    )
+    assert shot.t0_at is not None
+    # Persisted datetimes round-trip as naive (SQLite drops tzinfo).
+    assert shot.t0_at.replace(tzinfo=timezone.utc) == t0
+    assert shot.t0_at != shot.shot_at
+
+
 def test_create_shot_duration_only(
     device_service: DeviceService,
     shot_service: ShotService,

@@ -1,13 +1,13 @@
-"""Reference-geometry resolution and validation (ADR-0036)."""
+"""Reference-geometry resolution and validation."""
 
 from datetime import datetime
 
 import pytest
 from sqlmodel import Session
 
+from app.models.coverage import Coverage, DateRange, ShotRange
 from app.models.dataset import DatasetCreate, DatasetUpdate
 from app.models.device import DeviceCreate
-from app.models.reference import DateRange, ReferenceCoverage, ShotRange
 from app.models.shot import ShotCreate
 from app.services.device_service import DeviceService
 from app.services.exceptions import ConflictError, FDSValidationError
@@ -17,15 +17,13 @@ pytestmark = pytest.mark.usefixtures("device")
 
 
 def test_resolve_explicit_shot(geometry, make_version, get_shot):
-    version = make_version("v", ["pos"], ReferenceCoverage(shots=["100"]))
+    version = make_version("v", ["pos"], Coverage(shots=["100"]))
     assert geometry.resolve(get_shot("100"), ["pos"])["pos"].id == version.id
     assert geometry.resolve(get_shot("150"), ["pos"])["pos"] is None
 
 
 def test_resolve_shot_range(geometry, make_version, get_shot):
-    coverage = ReferenceCoverage(
-        shot_ranges=[ShotRange(from_shot="100", to_shot="200")]
-    )
+    coverage = Coverage(shot_ranges=[ShotRange(from_shot="100", to_shot="200")])
     version = make_version("v", ["pos"], coverage)
     assert geometry.resolve(get_shot("150"), ["pos"])["pos"].id == version.id
     # The endpoint shot is inclusive.
@@ -34,7 +32,7 @@ def test_resolve_shot_range(geometry, make_version, get_shot):
 
 
 def test_resolve_date_range(geometry, make_version, get_shot):
-    coverage = ReferenceCoverage(
+    coverage = Coverage(
         date_ranges=[
             DateRange(from_date=datetime(2008, 1, 1), to_date=datetime(2009, 1, 1))
         ]
@@ -47,32 +45,30 @@ def test_resolve_date_range(geometry, make_version, get_shot):
 
 
 def test_resolve_open_ended_shot_range(geometry, make_version, get_shot):
-    coverage = ReferenceCoverage(shot_ranges=[ShotRange(from_shot="200")])
+    coverage = Coverage(shot_ranges=[ShotRange(from_shot="200")])
     version = make_version("v", ["pos"], coverage)
     assert geometry.resolve(get_shot("300"), ["pos"])["pos"].id == version.id
     assert geometry.resolve(get_shot("150"), ["pos"])["pos"] is None
 
 
 def test_resolve_open_ended_date_range(geometry, make_version, get_shot):
-    coverage = ReferenceCoverage(
-        date_ranges=[DateRange(from_date=datetime(2009, 1, 1))]
-    )
+    coverage = Coverage(date_ranges=[DateRange(from_date=datetime(2009, 1, 1))])
     version = make_version("v", ["pos"], coverage)
     assert geometry.resolve(get_shot("300"), ["pos"])["pos"].id == version.id
     assert geometry.resolve(get_shot("150"), ["pos"])["pos"] is None
 
 
 def test_resolve_uncovered_shot(geometry, make_version, get_shot):
-    make_version("v", ["pos"], ReferenceCoverage(shots=["100"]))
+    make_version("v", ["pos"], Coverage(shots=["100"]))
     assert geometry.resolve(get_shot("300"), ["pos"])["pos"] is None
 
 
 def test_resolve_undated_shot_explicit_only(geometry, make_version, get_shot):
-    explicit = make_version("explicit", ["pos"], ReferenceCoverage(shots=["undated"]))
+    explicit = make_version("explicit", ["pos"], Coverage(shots=["undated"]))
     make_version(
         "ranged",
         ["other"],
-        ReferenceCoverage(date_ranges=[DateRange(from_date=datetime(2000, 1, 1))]),
+        Coverage(date_ranges=[DateRange(from_date=datetime(2000, 1, 1))]),
     )
     undated = get_shot("undated")
     assert geometry.resolve(undated, ["pos"])["pos"].id == explicit.id
@@ -81,17 +77,15 @@ def test_resolve_undated_shot_explicit_only(geometry, make_version, get_shot):
 
 
 def test_resolve_multiple_references(geometry, make_version, get_shot):
-    thomson = make_version("thomson", ["thomson"], ReferenceCoverage(shots=["150"]))
-    bolo = make_version("bolo", ["bolometer"], ReferenceCoverage(shots=["150"]))
+    thomson = make_version("thomson", ["thomson"], Coverage(shots=["150"]))
+    bolo = make_version("bolo", ["bolometer"], Coverage(shots=["150"]))
     resolved = geometry.resolve(get_shot("150"), ["thomson", "bolometer"])
     assert resolved["thomson"].id == thomson.id
     assert resolved["bolometer"].id == bolo.id
 
 
 def test_resolve_multi_role_bundle(geometry, make_version, get_shot):
-    bundle = make_version(
-        "bundle", ["thomson", "bolometer"], ReferenceCoverage(shots=["150"])
-    )
+    bundle = make_version("bundle", ["thomson", "bolometer"], Coverage(shots=["150"]))
     resolved = geometry.resolve(get_shot("150"), ["thomson", "bolometer"])
     assert resolved["thomson"].id == bundle.id
     assert resolved["bolometer"].id == bundle.id
@@ -101,23 +95,21 @@ def test_resolve_carve_out_blip(geometry, make_version, get_shot):
     surrounding = make_version(
         "surrounding",
         ["pos"],
-        ReferenceCoverage(
+        Coverage(
             shot_ranges=[
                 ShotRange(from_shot="100", to_shot="150"),
                 ShotRange(from_shot="201", to_shot="300"),
             ]
         ),
     )
-    blip = make_version("blip", ["pos"], ReferenceCoverage(shots=["200"]))
+    blip = make_version("blip", ["pos"], Coverage(shots=["200"]))
     assert geometry.resolve(get_shot("200"), ["pos"])["pos"].id == blip.id
     assert geometry.resolve(get_shot("150"), ["pos"])["pos"].id == surrounding.id
     assert geometry.resolve(get_shot("300"), ["pos"])["pos"].id == surrounding.id
 
 
 def test_global_geometry_roles_rejected(make_global_version):
-    coverage = ReferenceCoverage(
-        date_ranges=[DateRange(from_date=datetime(2008, 1, 1))]
-    )
+    coverage = Coverage(date_ranges=[DateRange(from_date=datetime(2008, 1, 1))])
     with pytest.raises(FDSValidationError):
         make_global_version("a", ["pos"], coverage)
 
@@ -137,15 +129,13 @@ def test_global_geometry_references_rejected(datasets, admin_user):
 
 def test_shot_level_geometry_version_rejected(make_version):
     with pytest.raises(FDSValidationError):
-        make_version(
-            "shot_level_geom", ["pos"], ReferenceCoverage(shots=["150"]), shot_id="150"
-        )
+        make_version("shot_level_geom", ["pos"], Coverage(shots=["150"]), shot_id="150")
 
 
 def test_shot_level_signal_may_reference_geometry(
     geometry, make_version, make_signal, get_shot
 ):
-    version = make_version("geom", ["pos"], ReferenceCoverage(shots=["150"]))
+    version = make_version("geom", ["pos"], Coverage(shots=["150"]))
     assert make_signal(["pos"]).id is not None
     assert geometry.resolve(get_shot("150"), ["pos"])["pos"].id == version.id
 
@@ -153,7 +143,7 @@ def test_shot_level_signal_may_reference_geometry(
 def test_cross_device_same_role_window_allowed(
     session: Session, datasets, make_version, admin_user
 ):
-    window = ReferenceCoverage(shots=["150"])
+    window = Coverage(shots=["150"])
     make_version("mast_ver", ["pos"], window)
     # Same role and shot id on a second device is a separate scope, so no conflict.
     DeviceService(session).create(DeviceCreate(name="NSTX", type="Tokamak"), admin_user)
@@ -175,31 +165,31 @@ def test_cross_device_same_role_window_allowed(
 
 
 def test_overlap_explicit_ids_rejected(make_version):
-    make_version("a", ["pos"], ReferenceCoverage(shots=["100"]))
+    make_version("a", ["pos"], Coverage(shots=["100"]))
     with pytest.raises(FDSValidationError):
-        make_version("b", ["pos"], ReferenceCoverage(shots=["100"]))
+        make_version("b", ["pos"], Coverage(shots=["100"]))
 
 
 def test_duplicate_version_is_conflict_not_overlap(make_version):
     """Re-registering the identical version reads as a duplicate (409), not the
     coverage-overlap validation error (422) a *differently named* version covering
     the same shot raises — the version would otherwise trivially overlap itself."""
-    make_version("v", ["pos"], ReferenceCoverage(shots=["100"]))
+    make_version("v", ["pos"], Coverage(shots=["100"]))
     with pytest.raises(ConflictError):
-        make_version("v", ["pos"], ReferenceCoverage(shots=["100"]))
+        make_version("v", ["pos"], Coverage(shots=["100"]))
 
 
 def test_overlap_intervals_rejected(make_version):
     make_version(
         "a",
         ["pos"],
-        ReferenceCoverage(shot_ranges=[ShotRange(from_shot="100", to_shot="200")]),
+        Coverage(shot_ranges=[ShotRange(from_shot="100", to_shot="200")]),
     )
     with pytest.raises(FDSValidationError):
         make_version(
             "b",
             ["pos"],
-            ReferenceCoverage(shot_ranges=[ShotRange(from_shot="150", to_shot="300")]),
+            Coverage(shot_ranges=[ShotRange(from_shot="150", to_shot="300")]),
         )
 
 
@@ -207,23 +197,23 @@ def test_overlap_explicit_inside_interval_rejected(make_version):
     make_version(
         "a",
         ["pos"],
-        ReferenceCoverage(shot_ranges=[ShotRange(from_shot="100", to_shot="300")]),
+        Coverage(shot_ranges=[ShotRange(from_shot="100", to_shot="300")]),
     )
     with pytest.raises(FDSValidationError):
-        make_version("b", ["pos"], ReferenceCoverage(shots=["200"]))
+        make_version("b", ["pos"], Coverage(shots=["200"]))
 
 
 def test_adjacent_windows_allowed(make_version):
     make_version(
         "a",
         ["pos"],
-        ReferenceCoverage(shot_ranges=[ShotRange(from_shot="100", to_shot="200")]),
+        Coverage(shot_ranges=[ShotRange(from_shot="100", to_shot="200")]),
     )
     # Starts at shot 201, the day after shot 200 — touching but not overlapping.
     make_version(
         "b",
         ["pos"],
-        ReferenceCoverage(shot_ranges=[ShotRange(from_shot="201", to_shot="300")]),
+        Coverage(shot_ranges=[ShotRange(from_shot="201", to_shot="300")]),
     )
 
 
@@ -231,7 +221,7 @@ def test_touching_date_windows_allowed(make_version):
     make_version(
         "a",
         ["pos"],
-        ReferenceCoverage(
+        Coverage(
             date_ranges=[
                 DateRange(from_date=datetime(2008, 1, 1), to_date=datetime(2009, 1, 1))
             ]
@@ -240,7 +230,7 @@ def test_touching_date_windows_allowed(make_version):
     make_version(
         "b",
         ["pos"],
-        ReferenceCoverage(
+        Coverage(
             date_ranges=[
                 DateRange(from_date=datetime(2009, 1, 1), to_date=datetime(2010, 1, 1))
             ]
@@ -249,18 +239,18 @@ def test_touching_date_windows_allowed(make_version):
 
 
 def test_same_shot_different_role_allowed(make_version):
-    make_version("a", ["thomson"], ReferenceCoverage(shots=["100"]))
-    make_version("b", ["bolometer"], ReferenceCoverage(shots=["100"]))
+    make_version("a", ["thomson"], Coverage(shots=["100"]))
+    make_version("b", ["bolometer"], Coverage(shots=["100"]))
 
 
 def test_missing_range_endpoint_rejected(make_version):
-    coverage = ReferenceCoverage(shot_ranges=[ShotRange(from_shot="999")])
+    coverage = Coverage(shot_ranges=[ShotRange(from_shot="999")])
     with pytest.raises(FDSValidationError):
         make_version("a", ["pos"], coverage)
 
 
 def test_endpoint_without_shot_at_rejected(make_version):
-    coverage = ReferenceCoverage(shot_ranges=[ShotRange(from_shot="undated")])
+    coverage = Coverage(shot_ranges=[ShotRange(from_shot="undated")])
     with pytest.raises(FDSValidationError):
         make_version("a", ["pos"], coverage)
 
@@ -269,9 +259,9 @@ def test_shot_at_edit_into_window_rejected(make_version, update_shot):
     make_version(
         "ranged",
         ["pos"],
-        ReferenceCoverage(shot_ranges=[ShotRange(from_shot="100", to_shot="150")]),
+        Coverage(shot_ranges=[ShotRange(from_shot="100", to_shot="150")]),
     )
-    make_version("explicit", ["pos"], ReferenceCoverage(shots=["300"]))
+    make_version("explicit", ["pos"], Coverage(shots=["300"]))
     # Moving shot 300 into the ranged window would make it covered by both.
     with pytest.raises(FDSValidationError):
         update_shot("300", shot_at=datetime(2008, 3, 1))
@@ -281,15 +271,15 @@ def test_harmless_shot_at_edit_allowed(make_version, update_shot):
     make_version(
         "ranged",
         ["pos"],
-        ReferenceCoverage(shot_ranges=[ShotRange(from_shot="100", to_shot="150")]),
+        Coverage(shot_ranges=[ShotRange(from_shot="100", to_shot="150")]),
     )
-    make_version("explicit", ["pos"], ReferenceCoverage(shots=["300"]))
+    make_version("explicit", ["pos"], Coverage(shots=["300"]))
     updated = update_shot("300", shot_at=datetime(2011, 1, 1))
     assert updated.shot_at == datetime(2011, 1, 1)
 
 
 def test_delete_explicit_member_rejected(make_version, delete_shot):
-    make_version("explicit", ["pos"], ReferenceCoverage(shots=["300"]))
+    make_version("explicit", ["pos"], Coverage(shots=["300"]))
     with pytest.raises(FDSValidationError):
         delete_shot("300")
 
@@ -298,14 +288,14 @@ def test_delete_range_endpoint_rejected(make_version, delete_shot):
     make_version(
         "ranged",
         ["pos"],
-        ReferenceCoverage(shot_ranges=[ShotRange(from_shot="100", to_shot="150")]),
+        Coverage(shot_ranges=[ShotRange(from_shot="100", to_shot="150")]),
     )
     with pytest.raises(FDSValidationError):
         delete_shot("100")
 
 
 def test_delete_unreferenced_shot_allowed(make_version, delete_shot):
-    make_version("explicit", ["pos"], ReferenceCoverage(shots=["300"]))
+    make_version("explicit", ["pos"], Coverage(shots=["300"]))
     assert delete_shot("150") is True
 
 
@@ -315,15 +305,13 @@ def test_update_version_excludes_self_from_overlap(
     version = make_version(
         "v",
         ["pos"],
-        ReferenceCoverage(shot_ranges=[ShotRange(from_shot="100", to_shot="150")]),
+        Coverage(shot_ranges=[ShotRange(from_shot="100", to_shot="150")]),
     )
     # Widening the same version must not conflict with itself.
     datasets.update(
         id=version.id,
         obj_in=DatasetUpdate(
-            applies_to=ReferenceCoverage(
-                shot_ranges=[ShotRange(from_shot="100", to_shot="300")]
-            )
+            applies_to=Coverage(shot_ranges=[ShotRange(from_shot="100", to_shot="300")])
         ),
         user=admin_user,
     )

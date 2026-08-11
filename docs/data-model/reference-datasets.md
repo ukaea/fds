@@ -251,3 +251,32 @@ That is the listing to reach for when you want to see which versions of a role e
 - **`Device`-level only.** A version must have no `shot_id` and is hosted within a `Device`; resolution never crosses devices.
 - **No overlap.** At most one geometry version per role covers a shot; for calibration, at most one per `(role, stage)`.
 - **Shot integrity.** A shot named in coverage must exist and carry a `shot_at`; it can't be deleted while referenced, and a `shot_at` change that would create an overlap or orphan a range endpoint is rejected.
+
+## Feature annotations
+
+Some features are too big or too numerous for an inline [`extent`](index.md#feature-annotation): a multi-dimensional region (a UFO's outline in (x, y), a per-frame mask), or a dense 1D series (every ELM in a shot). These are bulk data, so FDS models them as a relationship, like geometry and calibration, but with a difference: an annotation is not a `Device`-level version pulled by role. It is a `Dataset` that localises a feature and names its **subject** directly, resolved on read.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `annotates` | string | No | The feature this dataset localises (e.g. `elm`). Marks the dataset as an annotation and matches the inline annotation of the same `name` on its subject |
+| `subject_dataset_id` | integer | No | For a dataset-frame annotation: the source `Dataset` it localises a feature in |
+| `applies_to` | object | No | For a device-frame annotation: which shots it covers (same selectors as geometry) |
+
+An annotation's coordinates live in its subject's frame, and FDS never re-frames them. The subject fixes the frame:
+
+| Frame | How it is declared | Example |
+| --- | --- | --- |
+| **Dataset** | `subject_dataset_id` names the source dataset | A UFO mask in a specific camera signal |
+| **Shot** | the annotation `Dataset` belongs to the shot (`shot_id`) | An ELM-time array on the shot's time base |
+| **Device** | device-level (`shot_id` null) with `applies_to` | A camera dead-region across a campaign |
+
+### Resolve on read
+
+`?include_annotations=true` resolves a subject's annotations into an `annotations` field, off by default. Resolution stays within the subject's frame:
+
+- a **Dataset** read returns the annotations whose `subject_dataset_id` is that dataset;
+- a **Shot** read returns the annotation datasets belonging to it, plus the device-level annotations whose `applies_to` covers it.
+
+A Dataset read does not fold in its parent Shot's annotations: that would present shot-frame events as if they belonged on the diagnostic's axis, a time-base consistency FDS does not assert. A consumer overlaying a shot's events across many diagnostics fetches the shot's annotation and aligns to each dataset itself.
+
+In JSON-LD, each resolved annotation is a `dcat:qualifiedRelation` carrying the `fuel:annotation` role, alongside geometry and calibration.

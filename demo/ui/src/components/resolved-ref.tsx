@@ -4,9 +4,14 @@ import Link from 'next/link';
 import { Dataset } from '@/lib/types';
 import { coverageSummary } from '@/lib/coverage';
 
-// A resolved reference version (geometry or calibration) as a compact linked row.
+// A resolved related dataset (geometry version, calibration version, or feature
+// annotation) as a compact linked row. An annotation labels the feature it
+// localises; a reference version labels the roles it provides.
 export function ResolvedRef({ version }: { version: Dataset }) {
-  const roles = version.geometry_roles ?? version.calibration_roles ?? [];
+  const roles =
+    version.geometry_roles ??
+    version.calibration_roles ??
+    (version.annotates ? [version.annotates] : []);
   const coverage = coverageSummary(version.applies_to);
   const inner = (
     <div className="bg-card border border-border rounded p-3 hover:border-primary/50 transition-colors">
@@ -20,12 +25,16 @@ export function ResolvedRef({ version }: { version: Dataset }) {
       {coverage && <p className="text-xs text-muted-foreground font-mono mt-1">{coverage}</p>}
     </div>
   );
-  return version.device_name && version.id ? (
-    <Link href={`/devices/${version.device_name}/datasets/${version.id}`} className="block">
+  if (!version.device_name || !version.id) return inner;
+  // Shot-scoped datasets (a shot-frame annotation) live under their shot; a
+  // device-level version has no shot to nest under.
+  const href = version.shot_id
+    ? `/devices/${version.device_name}/shots/${version.shot_id}/datasets/${version.id}`
+    : `/devices/${version.device_name}/datasets/${version.id}`;
+  return (
+    <Link href={href} className="block">
       {inner}
     </Link>
-  ) : (
-    inner
   );
 }
 

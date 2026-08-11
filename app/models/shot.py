@@ -9,7 +9,7 @@ from .scientific_metadata import ScientificProperty
 
 if TYPE_CHECKING:
     from .collection import Collection
-    from .dataset import Dataset
+    from .dataset import Dataset, DatasetRead
     from .device import Device, DeviceRead
 
 
@@ -22,6 +22,13 @@ class ShotBase(TimestampMixin, SQLModel):
         description=(
             "Shot duration in seconds. Optional. If shot_at and shot_end are both "
             "set, shot_duration must equal the interval between them."
+        ),
+    )
+    t0_at: datetime | None = Field(
+        default=None,
+        description=(
+            "Wall-clock instant of the shot's relative time base zero (t=0), e.g. "
+            "plasma breakdown; may differ from shot_at. "
         ),
     )
     description: str | None = Field(default=None)
@@ -88,12 +95,14 @@ class ShotRead(ShotBase):
     effective_access_level: AccessLevel | None = None
     device_name: str | None = None
     device: "DeviceRead | None" = None
+    annotations: list["DatasetRead"] | None = None
 
 
 class ShotUpdate(SQLModel):
     shot_at: datetime | None = None
     shot_end: datetime | None = None
     shot_duration: float | None = None
+    t0_at: datetime | None = None
     description: str | None = None
     publisher: str | None = None
     creator: str | None = None

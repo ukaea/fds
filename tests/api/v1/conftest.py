@@ -4,10 +4,10 @@ import pytest
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
+from app.models.coverage import Coverage
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
 from app.models.policy import AccessLevel
-from app.models.reference import ReferenceCoverage
 from app.models.shot import ShotCreate
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
@@ -41,7 +41,7 @@ def make_version_fixture(
 ):
     """Create a public device-level geometry version and commit."""
 
-    def make(name: str, roles: list[str], coverage: ReferenceCoverage):
+    def make(name: str, roles: list[str], coverage: Coverage):
         version = datasets.create(
             DatasetCreate(
                 name=name,
@@ -97,7 +97,7 @@ def make_cal_version_fixture(
 ):
     """Create a public device-level calibration version at ``stage`` and commit."""
 
-    def make(name: str, roles: list[str], coverage: ReferenceCoverage, *, stage: int):
+    def make(name: str, roles: list[str], coverage: Coverage, *, stage: int):
         version = datasets.create(
             DatasetCreate(
                 name=name,

@@ -1,7 +1,7 @@
 from app.auth.security import AuthenticatedUser
 from app.models.dataset import DatasetCreate
 from app.models.policy import AccessLevel
-from app.models.scientific_metadata import ScientificProperty
+from app.models.scientific_metadata import Extent, ScientificProperty
 from app.models.shot import Shot
 from app.services.dataset_service import DatasetService
 from app.services.jsonld import (
@@ -108,3 +108,142 @@ def test_schema_namespace_in_context():
     shot = Shot(id="1", device_name="D")
     ld = map_shot_to_dcat(shot, BASE)
     assert ld["@context"]["schema"] == "https://schema.org/"
+
+
+def test_scientific_metadata_helper_emits_time_extent_from_object():
+    """A time-axis extent emits a W3C Time interval node under time:hasTime."""
+    props = [
+        ScientificProperty(
+            name="confinement_mode",
+            value="H-mode",
+            extent=Extent(dimension="time", start=1.0, end=2.0, unit="s"),
+        )
+    ]
+    result = _map_scientific_metadata_to_jsonld(props)
+    interval = result[0]["time:hasTime"]
+    assert interval["@type"] == "time:Interval"
+
+    beginning = interval["time:hasBeginning"]
+    assert beginning["@type"] == "time:Instant"
+    begin_pos = beginning["time:inTimePosition"]
+    assert begin_pos["@type"] == "time:TimePosition"
+    assert begin_pos["time:numericPosition"] == 1.0
+    assert begin_pos["time:unitType"] == {"@id": "time:unitSecond"}
+
+    end_pos = interval["time:hasEnd"]["time:inTimePosition"]
+    assert end_pos["time:numericPosition"] == 2.0
+    assert end_pos["time:unitType"] == {"@id": "time:unitSecond"}
+
+
+def test_scientific_metadata_helper_emits_time_extent_from_dict():
+    raw = [
+        {
+            "name": "disruption",
+            "value": True,
+            "extent": {"dimension": "time", "start": 0.5, "unit": "s"},
+        }
+    ]
+    result = _map_scientific_metadata_to_jsonld(raw)
+    interval = result[0]["time:hasTime"]
+    assert interval["@type"] == "time:Interval"
+    begin_pos = interval["time:hasBeginning"]["time:inTimePosition"]
+    assert begin_pos["time:numericPosition"] == 0.5
+    assert begin_pos["time:unitType"] == {"@id": "time:unitSecond"}
+    # end is None (a point) -> no time:hasEnd
+    assert "time:hasEnd" not in interval
+
+
+def test_scientific_metadata_helper_time_no_unit_omits_unit_type():
+    """A time extent with no unit emits a numeric position but no unit type."""
+    raw = [
+        {
+            "name": "disruption",
+            "value": True,
+            "extent": {"dimension": "time", "start": 3.4},
+        }
+    ]
+    result = _map_scientific_metadata_to_jsonld(raw)
+    begin_pos = result[0]["time:hasTime"]["time:hasBeginning"]["time:inTimePosition"]
+    assert begin_pos["time:numericPosition"] == 3.4
+    assert "time:unitType" not in begin_pos
+    assert "schema:unitText" not in begin_pos
+
+
+def test_scientific_metadata_helper_non_second_unit_falls_back():
+    """A sub-second unit (no W3C Time individual) falls back to schema:unitText."""
+    raw = [
+        {
+            "name": "elm",
+            "value": True,
+            "extent": {"dimension": "time", "start": 12.0, "unit": "ms"},
+        }
+    ]
+    result = _map_scientific_metadata_to_jsonld(raw)
+    begin_pos = result[0]["time:hasTime"]["time:hasBeginning"]["time:inTimePosition"]
+    assert begin_pos["time:numericPosition"] == 12.0
+    assert "time:unitType" not in begin_pos
+    assert begin_pos["schema:unitText"] == "ms"
+
+
+def test_scientific_metadata_helper_non_second_w3c_unit_is_typed():
+    """A non-second unit that W3C Time *does* define maps to its individual."""
+    raw = [
+        {
+            "name": "flat_top",
+            "value": True,
+            "extent": {"dimension": "time", "start": 3.0, "unit": "h"},
+        }
+    ]
+    result = _map_scientific_metadata_to_jsonld(raw)
+    begin_pos = result[0]["time:hasTime"]["time:hasBeginning"]["time:inTimePosition"]
+    assert begin_pos["time:unitType"] == {"@id": "time:unitHour"}
+    assert "schema:unitText" not in begin_pos
+
+
+def test_scientific_metadata_helper_non_time_extent_is_numeric_range():
+    """A non-time extent projects to a numeric range under schema:valueReference."""
+    props = [
+        ScientificProperty(
+            name="mode",
+            value="n=1 tearing",
+            extent=Extent(dimension="frequency", start=8000, end=12000, unit="Hz"),
+        )
+    ]
+    result = _map_scientific_metadata_to_jsonld(props)
+    assert "time:hasTime" not in result[0]
+    ref = result[0]["schema:valueReference"]
+    assert ref["@type"] == "schema:PropertyValue"
+    assert ref["schema:name"] == "frequency"
+    assert ref["schema:minValue"] == 8000
+    assert ref["schema:maxValue"] == 12000
+    assert ref["schema:unitText"] == "Hz"
+
+
+def test_scientific_metadata_helper_non_time_point_uses_value():
+    """A non-time point extent (end None) uses schema:value, not min/max."""
+    raw = [
+        {
+            "name": "spot",
+            "value": True,
+            "extent": {"dimension": "x", "start": 128, "unit": "px"},
+        }
+    ]
+    result = _map_scientific_metadata_to_jsonld(raw)
+    ref = result[0]["schema:valueReference"]
+    assert ref["schema:value"] == 128
+    assert "schema:minValue" not in ref
+    assert ref["schema:unitText"] == "px"
+
+
+def test_scientific_metadata_helper_omits_extent_when_absent():
+    """Scalar properties (no extent) are unchanged; no localisation keys."""
+    props = [ScientificProperty(name="plasma_current", value=0.8, unit="MA")]
+    result = _map_scientific_metadata_to_jsonld(props)
+    assert "time:hasTime" not in result[0]
+    assert "schema:valueReference" not in result[0]
+
+
+def test_time_namespace_in_context():
+    shot = Shot(id="1", device_name="D")
+    ld = map_shot_to_dcat(shot, BASE)
+    assert ld["@context"]["time"] == "http://www.w3.org/2006/time#"

@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 # Placeholder namespace for the Fusion Energy Lexicon (FuEL), still in
 # development. FuEL supplies SKOS role concepts used as ``dcat:hadRole`` values on
-# a ``dcat:qualifiedRelation`` (ADR-0038); ``fuel:geometry`` and
+# a ``dcat:qualifiedRelation``; ``fuel:geometry`` and
 # ``fuel:calibration`` mark the two reference edges. Swap this single constant for
 # the canonical FuEL URI once it is published.
 FUEL_NAMESPACE = "https://w3id.org/fuel/ns#"
@@ -20,6 +20,7 @@ FUEL_NAMESPACE = "https://w3id.org/fuel/ns#"
 # FuEL role concepts marking a qualified relation's reference kind.
 FUEL_GEOMETRY_ROLE = "fuel:geometry"
 FUEL_CALIBRATION_ROLE = "fuel:calibration"
+FUEL_ANNOTATION_ROLE = "fuel:annotation"
 
 METADATA_CONTEXT = {
     "dcat": "http://www.w3.org/ns/dcat#",
@@ -27,6 +28,7 @@ METADATA_CONTEXT = {
     "prov": "http://www.w3.org/ns/prov#",
     "fuel": FUEL_NAMESPACE,
     "schema": "https://schema.org/",
+    "time": "http://www.w3.org/2006/time#",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
     "dqv": "http://www.w3.org/ns/dqv#",
     "oa": "http://www.w3.org/ns/oa#",
@@ -65,6 +67,7 @@ def _map_scientific_metadata_to_jsonld(metadata: list[Any]) -> list[dict[str, An
         value = prop["value"] if isinstance(prop, dict) else prop.value
         unit = prop.get("unit") if isinstance(prop, dict) else prop.unit
         desc = prop.get("description") if isinstance(prop, dict) else prop.description
+        extent = prop.get("extent") if isinstance(prop, dict) else prop.extent
         node: dict[str, Any] = {
             "@type": "schema:PropertyValue",
             "schema:name": name,
@@ -74,8 +77,104 @@ def _map_scientific_metadata_to_jsonld(metadata: list[Any]) -> list[dict[str, An
             node["schema:unitText"] = unit
         if desc is not None:
             node["schema:description"] = desc
+        if extent is not None:
+            _apply_extent_to_node(node, extent)
         result.append(node)
     return result
+
+
+# Unit strings that map to a W3C Time TemporalUnit individual. W3C Time defines
+# individuals down to the second only, so sub-second units (ms/us/ns) have none
+# and fall back to schema:unitText on the time:TimePosition.
+_W3C_TEMPORAL_UNIT = {
+    "s": "time:unitSecond",
+    "min": "time:unitMinute",
+    "h": "time:unitHour",
+    "d": "time:unitDay",
+    "wk": "time:unitWeek",
+    "mo": "time:unitMonth",
+    "yr": "time:unitYear",
+}
+
+
+def _extent_fields(extent: Any) -> tuple[str, float, float | None, str | None]:
+    """Read ``(dimension, start, end, unit)`` from an ``Extent`` dict or model."""
+    if isinstance(extent, dict):
+        return (
+            extent["dimension"],
+            extent["start"],
+            extent.get("end"),
+            extent.get("unit"),
+        )
+    return extent.dimension, extent.start, extent.end, extent.unit
+
+
+def _apply_extent_to_node(node: dict[str, Any], extent: Any) -> None:
+    """Localise a ``schema:PropertyValue`` node with a 1D ``Extent``.
+
+    A ``time`` dimension projects to a W3C Time ``time:Interval`` via
+    ``time:hasTime``; any other dimension projects to a generic numeric range
+    under ``schema:valueReference``.
+    """
+    dimension, start, end, unit = _extent_fields(extent)
+    if dimension == "time":
+        node["time:hasTime"] = _time_interval_node(start, end, unit)
+    else:
+        node["schema:valueReference"] = _numeric_range_node(dimension, start, end, unit)
+
+
+def _time_instant(position: float, unit: str | None) -> dict[str, Any]:
+    """A ``time:Instant`` at ``position`` on the time axis.
+
+    Carries a ``time:TimePosition`` with ``time:numericPosition`` and, when the
+    unit is a known W3C temporal unit, ``time:unitType`` (else ``schema:unitText``
+    for a non-standard unit; nothing when no unit is given).
+    """
+    time_position: dict[str, Any] = {
+        "@type": "time:TimePosition",
+        "time:numericPosition": position,
+    }
+    w3c_unit = _W3C_TEMPORAL_UNIT.get(unit) if unit is not None else None
+    if w3c_unit is not None:
+        time_position["time:unitType"] = {"@id": w3c_unit}
+    elif unit is not None:
+        time_position["schema:unitText"] = unit
+    return {"@type": "time:Instant", "time:inTimePosition": time_position}
+
+
+def _time_interval_node(
+    start: float, end: float | None, unit: str | None
+) -> dict[str, Any]:
+    """A W3C Time ``time:Interval``; a beginning-only instant when ``end`` is None."""
+    node: dict[str, Any] = {
+        "@type": "time:Interval",
+        "time:hasBeginning": _time_instant(start, unit),
+    }
+    if end is not None:
+        node["time:hasEnd"] = _time_instant(end, unit)
+    return node
+
+
+def _numeric_range_node(
+    dimension: str, start: float, end: float | None, unit: str | None
+) -> dict[str, Any]:
+    """A non-time ``Extent`` as a generic numeric range ``schema:PropertyValue``.
+
+    A range (``end`` given) uses ``schema:minValue``/``schema:maxValue``; a point
+    (``end`` None) uses ``schema:value``. The dimension name is ``schema:name``.
+    """
+    node: dict[str, Any] = {
+        "@type": "schema:PropertyValue",
+        "schema:name": dimension,
+    }
+    if end is not None:
+        node["schema:minValue"] = start
+        node["schema:maxValue"] = end
+    else:
+        node["schema:value"] = start
+    if unit is not None:
+        node["schema:unitText"] = unit
+    return node
 
 
 def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, Any]:
@@ -104,7 +203,11 @@ def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, 
     return {k: v for k, v in data.items() if v is not None}
 
 
-def map_shot_to_dcat(shot: Shot | ShotRead, base_url: str) -> dict[str, Any]:
+def map_shot_to_dcat(
+    shot: Shot | ShotRead,
+    base_url: str,
+    annotations: "list[DatasetRead] | None" = None,
+) -> dict[str, Any]:
     """Maps a Shot to a dcat:Dataset JSON-LD document."""
     shot_uri = f"{base_url}/api/v1/devices/{shot.device_name}/shots/{shot.id}"
     data: dict[str, Any] = {
@@ -139,6 +242,14 @@ def map_shot_to_dcat(shot: Shot | ShotRead, base_url: str) -> dict[str, Any]:
     sci_meta = getattr(shot, "scientific_metadata", None)
     if sci_meta:
         data["schema:additionalProperty"] = _map_scientific_metadata_to_jsonld(sci_meta)
+    resolved_annotations: list[Any] = (
+        annotations if annotations is not None else getattr(shot, "annotations", None)
+    ) or []
+    if resolved_annotations:
+        data["dcat:qualifiedRelation"] = [
+            _qualified_relation(version, FUEL_ANNOTATION_ROLE, base_url)
+            for version in resolved_annotations
+        ]
     return {k: v for k, v in data.items() if v is not None}
 
 
@@ -147,6 +258,7 @@ def map_dataset_to_dcat(
     base_url: str,
     geometry: "list[DatasetRead] | None" = None,
     calibration: "list[DatasetRead] | None" = None,
+    annotations: "list[DatasetRead] | None" = None,
 ) -> dict[str, Any]:
     """
     Maps a Dataset to a dcat:Dataset.
@@ -280,13 +392,25 @@ def map_dataset_to_dcat(
         if calibration is not None
         else getattr(dataset, "calibration", None)
     ) or []
-    qualified_relations = [
-        _qualified_relation(version, FUEL_GEOMETRY_ROLE, base_url)
-        for version in resolved_geometry
-    ] + [
-        _qualified_relation(version, FUEL_CALIBRATION_ROLE, base_url)
-        for version in resolved_calibration
-    ]
+    resolved_annotations: list[Any] = (
+        annotations
+        if annotations is not None
+        else getattr(dataset, "annotations", None)
+    ) or []
+    qualified_relations = (
+        [
+            _qualified_relation(version, FUEL_GEOMETRY_ROLE, base_url)
+            for version in resolved_geometry
+        ]
+        + [
+            _qualified_relation(version, FUEL_CALIBRATION_ROLE, base_url)
+            for version in resolved_calibration
+        ]
+        + [
+            _qualified_relation(version, FUEL_ANNOTATION_ROLE, base_url)
+            for version in resolved_annotations
+        ]
+    )
     if qualified_relations:
         data["dcat:qualifiedRelation"] = qualified_relations
 

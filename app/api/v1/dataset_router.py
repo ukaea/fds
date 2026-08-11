@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Request, status
+from typing import Annotated
+
+from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import (
@@ -22,7 +24,6 @@ from app.models.distribution import (
 )
 from app.models.source import SourceRead
 from app.services.exceptions import ResourceNotFoundError
-from app.services.jsonld import map_dataset_to_dcat
 
 router = APIRouter()
 
@@ -60,17 +61,36 @@ def read_datasets_global(
     include_storage_options: bool = False,
     include_geometry: bool = False,
     include_calibration: bool = False,
+    include_annotations: bool = False,
+    name: str | None = None,
+    annotation: Annotated[list[str] | None, Query()] = None,
+    shot_annotation: Annotated[list[str] | None, Query()] = None,
 ) -> list[DatasetRead]:
     """
     Retrieve global datasets.
+
+    `annotation` filters on the dataset's own `scientific_metadata`; `elm` matches
+    on presence, `elm:type-I` on value, and repeating it requires every one.
+    `shot_annotation` applies the same forms to the parent shot instead, so a
+    dataset with no shot never matches it.
+
+    To scope to a single device, use `/devices/{device_name}/datasets`.
     """
-    datasets = dataset_service.get_multi(user=user, offset=offset, limit=limit)
+    datasets = dataset_service.get_multi(
+        user=user,
+        offset=offset,
+        limit=limit,
+        name=name,
+        annotations=annotation,
+        shot_annotations=shot_annotation,
+    )
     return dataset_service.to_read_models(
         datasets,
         include_storage_options=include_storage_options,
         user=user,
         include_geometry=include_geometry,
         include_calibration=include_calibration,
+        include_annotations=include_annotations,
     )
 
 
@@ -134,12 +154,22 @@ def read_datasets_shot(
     include_storage_options: bool = False,
     include_geometry: bool = False,
     include_calibration: bool = False,
+    include_annotations: bool = False,
+    annotation: Annotated[list[str] | None, Query()] = None,
 ) -> list[DatasetRead]:
     """
     Retrieve all datasets for a specific shot.
+
+    `annotation` filters on each dataset's own `scientific_metadata`; `ufo` matches
+    on presence, `ufo:true` on value, and repeating it requires every one.
     """
     datasets = dataset_service.get_datasets_for_shot(
-        shot_id, device_name, user=user, offset=offset, limit=limit
+        shot_id,
+        device_name,
+        user=user,
+        offset=offset,
+        limit=limit,
+        annotations=annotation,
     )
     return dataset_service.to_read_models(
         datasets,
@@ -147,6 +177,7 @@ def read_datasets_shot(
         user=user,
         include_geometry=include_geometry,
         include_calibration=include_calibration,
+        include_annotations=include_annotations,
     )
 
 
@@ -165,6 +196,7 @@ def read_dataset_by_name(
     include_storage_options: bool = False,
     include_geometry: bool = False,
     include_calibration: bool = False,
+    include_annotations: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all datasets with the given name within a shot context.
@@ -179,6 +211,7 @@ def read_dataset_by_name(
         user=user,
         include_geometry=include_geometry,
         include_calibration=include_calibration,
+        include_annotations=include_annotations,
     )
 
 
@@ -196,6 +229,7 @@ def read_dataset_by_id(
     include_storage_options: bool = False,
     include_geometry: bool = False,
     include_calibration: bool = False,
+    include_annotations: bool = False,
 ) -> DatasetRead | JSONResponse:
     """
     Retrieve a single dataset by its internal integer ID.
@@ -208,16 +242,12 @@ def read_dataset_by_id(
     dataset_service.check_read_access(dataset, user)
 
     if "application/ld+json" in request.headers.get("accept", ""):
-        enriched = dataset_service.to_read_model(
-            dataset,
-            include_geometry=include_geometry,
-            include_calibration=include_calibration,
-        )
-        dcat_metadata = map_dataset_to_dcat(
+        dcat_metadata = dataset_service.to_dcat(
             dataset,
             str(request.base_url).rstrip("/"),
-            geometry=enriched.geometry if include_geometry else None,
-            calibration=enriched.calibration if include_calibration else None,
+            include_geometry=include_geometry,
+            include_calibration=include_calibration,
+            include_annotations=include_annotations,
         )
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
 
@@ -227,6 +257,7 @@ def read_dataset_by_id(
         user=user,
         include_geometry=include_geometry,
         include_calibration=include_calibration,
+        include_annotations=include_annotations,
     )
 
 
@@ -243,6 +274,7 @@ def read_dataset_global_by_name(
     include_storage_options: bool = False,
     include_geometry: bool = False,
     include_calibration: bool = False,
+    include_annotations: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all global datasets with the given name.
@@ -254,6 +286,7 @@ def read_dataset_global_by_name(
         user=user,
         include_geometry=include_geometry,
         include_calibration=include_calibration,
+        include_annotations=include_annotations,
     )
 
 
@@ -273,6 +306,10 @@ def read_datasets_device(
     include_storage_options: bool = False,
     include_geometry: bool = False,
     include_calibration: bool = False,
+    include_annotations: bool = False,
+    name: str | None = None,
+    annotation: Annotated[list[str] | None, Query()] = None,
+    shot_annotation: Annotated[list[str] | None, Query()] = None,
 ) -> list[DatasetRead]:
     """
     Retrieve datasets hosted by a device.
@@ -281,9 +318,23 @@ def read_datasets_device(
     shot-level alike. Narrow it with `scope`: `device` for the datasets
     attached to no shot (e.g., reference geometry and calibration versions), `shot`
     for those belonging to the device's shots.
+
+    `annotation` filters on each dataset's own `scientific_metadata`; `elm` matches
+    on presence, `elm:type-I` on value, and repeating it requires every one.
+    `shot_annotation` applies the same forms to the parent shot instead, which is
+    what spans both levels: `?name=equilibrium&shot_annotation=elm` finds the
+    equilibrium datasets of shots that had ELMs. Device-level datasets have
+    no shot, so `shot_annotation` matches nothing under `scope=device`.
     """
     datasets = dataset_service.get_datasets_for_device(
-        device_name, user=user, scope=scope, offset=offset, limit=limit
+        device_name,
+        user=user,
+        scope=scope,
+        offset=offset,
+        limit=limit,
+        name=name,
+        annotations=annotation,
+        shot_annotations=shot_annotation,
     )
     return dataset_service.to_read_models(
         datasets,
@@ -291,6 +342,7 @@ def read_datasets_device(
         user=user,
         include_geometry=include_geometry,
         include_calibration=include_calibration,
+        include_annotations=include_annotations,
     )
 
 
@@ -308,6 +360,7 @@ def read_dataset_device_by_name(
     include_storage_options: bool = False,
     include_geometry: bool = False,
     include_calibration: bool = False,
+    include_annotations: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all device-level datasets with the given name.
@@ -321,6 +374,7 @@ def read_dataset_device_by_name(
         user=user,
         include_geometry=include_geometry,
         include_calibration=include_calibration,
+        include_annotations=include_annotations,
     )
 
 

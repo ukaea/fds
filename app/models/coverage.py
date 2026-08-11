@@ -18,7 +18,7 @@ class DateRange(SQLModel):
     to_date: datetime | None = None
 
 
-class ReferenceCoverage(SQLModel):
+class Coverage(SQLModel):
     """The shots a version covers: the union of ``shots``, ``shot_ranges``, and
     ``date_ranges``."""
 

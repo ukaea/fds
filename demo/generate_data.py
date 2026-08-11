@@ -177,6 +177,42 @@ for stem, stage, kind in calibration_specs:
     print(f"  Written to s3://{s3_path}")
 
 # ---------------------------------------------------------
+# 1d. MAST feature annotation — ELM times for shot 30421
+# ---------------------------------------------------------
+# The shot's inline `elm` annotation says an ELM train happened and roughly when; the
+# train itself is a dense 1D series, too many events for the catalogue, so it
+# lives here and is registered as a shot-frame annotation dataset. Coordinates
+# are on the shot's own time base, the frame its subject fixes. Synthetic:
+# a ~120 Hz train through the H-mode window the shot is annotated with.
+elm_s3_path = f"{bucket_name}/shots/30421/annotations/elm_times.nc"
+if fs.exists(elm_s3_path):
+    print("ELM annotation for shot 30421 already exists. Skipping.")
+else:
+    print("Generating ELM annotation for shot 30421...")
+    elm_rng = np.random.default_rng(30421)
+    elm_times = np.arange(0.205, 0.45, 1 / 120)
+    elm_times = elm_times + elm_rng.normal(0, 8e-4, elm_times.size)
+    elms = xr.Dataset(
+        {
+            "elm_time": ("event", elm_times),
+            "d_alpha_peak": ("event", 1.0 + elm_rng.gamma(2.0, 0.4, elm_times.size)),
+        },
+        coords={"event": np.arange(elm_times.size)},
+        attrs={
+            "title": "ELM event times — MAST shot 30421",
+            "annotates": "elm",
+            "device": "mast",
+            "shot": "30421",
+            "frame": "shot",
+            "units_elm_time": "s",
+        },
+    )
+    with tempfile.NamedTemporaryFile(suffix=".nc") as tmp:
+        elms.to_netcdf(tmp.name)
+        fs.put(tmp.name, elm_s3_path)
+    print(f"  Written to s3://{elm_s3_path} ({elm_times.size} events)")
+
+# ---------------------------------------------------------
 # 2. Generate Synthetic MAST-U Data (Shot 50000)
 # ---------------------------------------------------------
 # 2a: Raw diagnostic data — 3 NetCDF files, restricted access
@@ -286,6 +322,50 @@ else:
 
     session.commit("MAST-U shot 50000 analysed experimental data — initial commit")
     print(f"  IceChunk store written to s3://{bucket_name}/{analysed_prefix}")
+
+# 2c. A second MAST-U shot, deliberately without an ELM train.
+# Shot 50000 ran up in L-mode, transitioned to H-mode and ELMed; 50001 never left
+# L-mode, so it has no ELMs to annotate. The pair is what lets a catalogue filter
+# demonstrate exclusion rather than just returning everything. Only the two IDS
+# groups the contrast needs.
+shot_id_50001 = "50001"
+time_50001 = np.linspace(0.1, 0.29, 80)
+analysed_prefix_50001 = f"shots/{shot_id_50001}/analysed"
+
+if fs.exists(f"{bucket_name}/{analysed_prefix_50001}/repo"):
+    print(f"Analysed IceChunk store for shot {shot_id_50001} already exists. Skipping.")
+else:
+    print(f"Generating analysed IceChunk store for shot {shot_id_50001}...")
+
+    storage_50001 = s3_storage(
+        bucket=bucket_name,
+        prefix=analysed_prefix_50001,
+        endpoint_url=minio_url,
+        access_key_id=access_key,
+        secret_access_key=secret_key,
+        region="us-east-1",
+        allow_http=True,
+        force_path_style=True,
+    )
+    repo_50001 = Repository.create(storage=storage_50001)
+    session_50001 = repo_50001.writable_session("main")
+    root_50001 = zarr.open_group(store=session_50001.store, mode="w")
+
+    eq_50001 = root_50001.require_group("equilibrium")
+    eq_50001.create_array("time", data=time_50001)
+    eq_50001.create_array("psi", data=rng.standard_normal((80, 50)))
+    eq_50001.create_array("r_boundary", data=rng.uniform(0.2, 1.8, (80, 64)))
+    eq_50001.create_array("z_boundary", data=rng.uniform(-1.5, 1.5, (80, 64)))
+
+    mag_50001 = root_50001.require_group("magnetics")
+    mag_50001.create_array("time", data=time_50001)
+    mag_50001.create_array("flux_loop", data=rng.uniform(-1, 1, (80, 12)))
+    mag_50001.create_array("b_field_probe", data=rng.uniform(-2, 2, (80, 20)))
+
+    session_50001.commit(
+        "MAST-U shot 50001 analysed experimental data — initial commit"
+    )
+    print(f"  IceChunk store written to s3://{bucket_name}/{analysed_prefix_50001}")
 
 
 # ---------------------------------------------------------

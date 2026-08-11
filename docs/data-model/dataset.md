@@ -19,6 +19,8 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 | `temporal_end` | datetime | No | End of the measurement window |
 | `scientific_metadata` | list | No | Diagnostic-specific parameters — see [Scientific metadata](index.md#scientific-metadata) below |
 | `activity_id` | integer | No | FK to the Activity that produced this dataset (provenance) |
+| `annotates` | string | No | For a feature annotation dataset: the feature it localises (see [Feature annotations](reference-datasets.md#feature-annotations)) |
+| `subject_dataset_id` | integer | No | For a dataset-frame annotation: the source dataset it localises a feature in |
 
 Registering a Dataset with a `url` and `media_type` creates its primary Distribution in the
 same call:
@@ -104,6 +106,17 @@ A device-level `Dataset` describes the machine rather than a single experiment. 
 Listings are paged with `offset` and `limit` (default 100) and returned in a stable order, so paging through a device covers it exactly once. A page can contain fewer than `limit` entries when some datasets are not readable by the caller; an empty page does not mean the end of the results.
 
 A `Dataset` can also link to **reference geometry** — a `Dataset` declares the geometry it needs via `geometry_references`, or a `Device`-level `Dataset` *provides* geometry via `geometry_roles` and `applies_to`. The same machinery carries **reference calibration**: a `Dataset` names the calibration it needs via `calibration_references`, and a `Device`-level `Dataset` provides it via `calibration_roles`, `calibration_stage`, and `applies_to` — and unlike geometry, calibration can resolve to an ordered chain of stages. See [Reference Datasets](reference-datasets.md).
+
+### Listing and filtering
+
+The dataset lists accept a `name` filter, an `annotation` filter on the dataset's own `scientific_metadata`, and a `shot_annotation` filter on an annotation carried by its *parent shot*:
+
+```text
+GET /api/v1/devices/mastu/datasets?name=equilibrium
+GET /api/v1/devices/mastu/datasets?name=equilibrium&shot_annotation=elm
+```
+
+The second form answers a question spanning both levels ("equilibrium datasets from shots that had an ELM train") in one request. Datasets that don't belong to a shot never match a `shot_annotation` filter. Shot- and device-scoped dataset lists accept `annotation` on the same terms. See [Finding annotated records](index.md#finding-annotated-records).
 
 ## Distribution
 

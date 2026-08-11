@@ -4,9 +4,9 @@ import pytest
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
+from app.models.coverage import Coverage
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
-from app.models.reference import ReferenceCoverage
 from app.models.shot import ShotCreate, ShotUpdate
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
@@ -52,7 +52,7 @@ def make_cal_version_fixture(datasets: DatasetService, admin_user: Authenticated
     def make(
         name: str,
         roles: list[str],
-        coverage: ReferenceCoverage,
+        coverage: Coverage,
         *,
         stage: int | None = None,
         shot_id: str | None = None,
@@ -93,7 +93,7 @@ def make_version_fixture(datasets: DatasetService, admin_user: AuthenticatedUser
     def make(
         name: str,
         roles: list[str],
-        coverage: ReferenceCoverage,
+        coverage: Coverage,
         *,
         shot_id: str | None = None,
     ):
@@ -119,7 +119,7 @@ def make_global_version_fixture(
 ):
     """Create a global (no-device) geometry version."""
 
-    def make(name: str, roles: list[str], coverage: ReferenceCoverage):
+    def make(name: str, roles: list[str], coverage: Coverage):
         return datasets.create(
             DatasetCreate(
                 name=name,

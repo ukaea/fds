@@ -6,12 +6,118 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Dataset, Shot } from '@/lib/types';
+import { Database, ChevronRight, Server } from 'lucide-react';
 import { useDeviceLabel } from '@/lib/use-device-label';
-import { Calendar, Database, ChevronRight, Server } from 'lucide-react';
-import { ClientDate } from '@/components/client-date';
+import { annotationFacets, annotationQuery, withQuery } from '@/lib/features';
+import { AnnotationFilter } from '@/components/annotation-filter';
+import { DatasetResults } from '@/components/dataset-results';
 import { DeviceDatasets } from '@/components/device-datasets';
+import { ShotList, shotsUrl } from '@/components/shot-list';
 
-type Tab = 'shots' | 'datasets';
+type Tab = 'shots' | 'shot-datasets' | 'datasets';
+
+function TabButton({
+  active,
+  count,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  count?: number;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-5 py-2.5 text-sm font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
+        active
+          ? 'text-foreground border-primary bg-muted/50'
+          : 'text-muted-foreground border-transparent hover:text-foreground hover:border-border'
+      }`}
+    >
+      {children}
+      {count != null && count > 0 && (
+        <span
+          className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
+            active ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/**
+ * The device's shot-level datasets, filterable on their own annotations and on
+ * those of the shot they belong to. The second is the cross-level question:
+ * "the equilibrium datasets from shots that had ELMs" is one request, not a shot
+ * query followed by a request per shot.
+ *
+ * Scoped to shot-level datasets deliberately. A device-level dataset has no
+ * parent shot, so it could never satisfy a shot annotation filter.
+ */
+function ShotDatasets({ deviceName, shots }: { deviceName: string; shots?: Shot[] }) {
+  const [annotations, setAnnotations] = useState<string[]>([]);
+  const [shotAnnotations, setShotAnnotations] = useState<string[]>([]);
+
+  const baseUrl = `${API_BASE}/devices/${deviceName}/datasets?scope=shot`;
+  const { data: allDatasets } = useSWR<Dataset[]>(deviceName ? baseUrl : null, fetcher);
+
+  // keepPreviousData so the list settles under the chips rather than blanking.
+  const { data: datasets, error, isLoading } = useSWR<Dataset[]>(
+    deviceName
+      ? withQuery(
+          baseUrl,
+          annotationQuery('annotation', annotations),
+          annotationQuery('shot_annotation', shotAnnotations)
+        )
+      : null,
+    fetcher,
+    { keepPreviousData: true }
+  );
+
+  const filtered = annotations.length > 0 || shotAnnotations.length > 0;
+
+  if (error) return <div className="py-8 text-destructive">Failed to load datasets.</div>;
+  if (isLoading && !datasets) {
+    return <div className="py-8 text-muted-foreground">Loading datasets...</div>;
+  }
+
+  return (
+    <div>
+      <AnnotationFilter
+        label="Filter by dataset annotation"
+        facets={annotationFacets(allDatasets)}
+        selected={annotations}
+        onChange={setAnnotations}
+      />
+      <AnnotationFilter
+        label="Filter by shot annotation"
+        facets={annotationFacets(shots)}
+        selected={shotAnnotations}
+        onChange={setShotAnnotations}
+      />
+
+      {filtered && (
+        <p className="text-sm text-muted-foreground mb-4">
+          {datasets?.length ?? 0} of {allDatasets?.length ?? 0} datasets
+        </p>
+      )}
+
+      <DatasetResults
+        datasets={datasets}
+        emptyMessage={
+          filtered
+            ? 'No shot datasets match every selected annotation.'
+            : 'No shot-level datasets for this device.'
+        }
+      />
+    </div>
+  );
+}
 
 export default function DeviceDetailPage() {
   const params = useParams();
@@ -19,10 +125,9 @@ export default function DeviceDetailPage() {
   const deviceLabel = useDeviceLabel(deviceName);
   const [activeTab, setActiveTab] = useState<Tab>('shots');
 
-  const { data: shots, error: shotsError, isLoading: shotsLoading } = useSWR<Shot[]>(
-    deviceName ? `${API_BASE}/devices/${deviceName}/shots/` : null,
-    fetcher
-  );
+  // Shared with ShotList below (same url, so SWR makes one request) and used
+  // here for the tab count and for the shot annotation chips on the datasets tab.
+  const { data: shots } = useSWR<Shot[]>(deviceName ? shotsUrl(deviceName) : null, fetcher);
 
   const { data: datasets, error: datasetsError, isLoading: datasetsLoading } = useSWR<Dataset[]>(
     deviceName ? `${API_BASE}/devices/${deviceName}/datasets?scope=device` : null,
@@ -48,83 +153,31 @@ export default function DeviceDetailPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-border">
-        <button
+        <TabButton
+          active={activeTab === 'shots'}
+          count={shots?.length}
           onClick={() => setActiveTab('shots')}
-          className={`px-5 py-2.5 text-sm font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
-            activeTab === 'shots'
-              ? 'text-foreground border-primary bg-muted/50'
-              : 'text-muted-foreground border-transparent hover:text-foreground hover:border-border'
-          }`}
         >
           Shots
-          {shots && (
-            <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
-              activeTab === 'shots' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
-            }`}>
-              {shots.length}
-            </span>
-          )}
-        </button>
-        <button
+        </TabButton>
+        <TabButton
+          active={activeTab === 'shot-datasets'}
+          onClick={() => setActiveTab('shot-datasets')}
+        >
+          Shot Datasets
+        </TabButton>
+        <TabButton
+          active={activeTab === 'datasets'}
+          count={datasets?.length}
           onClick={() => setActiveTab('datasets')}
-          className={`px-5 py-2.5 text-sm font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
-            activeTab === 'datasets'
-              ? 'text-foreground border-primary bg-muted/50'
-              : 'text-muted-foreground border-transparent hover:text-foreground hover:border-border'
-          }`}
         >
           Device Datasets
-          {datasets && datasets.length > 0 && (
-            <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
-              activeTab === 'datasets' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
-            }`}>
-              {datasets.length}
-            </span>
-          )}
-        </button>
+        </TabButton>
       </div>
 
-      {/* Shots Tab */}
-      {activeTab === 'shots' && (
-        <div className="space-y-4">
-          {shotsLoading && <div className="py-8 text-muted-foreground">Loading shots...</div>}
-          {shotsError && <div className="py-8 text-destructive">Failed to load shots.</div>}
-          {!shotsLoading && !shotsError && shots?.map((shot) => (
-            <Link
-              key={shot.id}
-              href={`/devices/${deviceName}/shots/${shot.id}`}
-              className="block card p-6 hover:bg-muted transition-colors group"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <span className="bg-muted text-foreground px-3 py-1 rounded-full text-xs font-mono font-bold">
-                      #{shot.id}
-                    </span>
-                    <span className="text-foreground font-medium">Standard Plasma Experiment</span>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      <ClientDate timestamp={shot.timestamp} />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Database className="w-4 h-4" />
-                      Metadata Available
-                    </div>
-                  </div>
-                </div>
-                <ChevronRight className="text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
-              </div>
-            </Link>
-          ))}
-          {!shotsLoading && !shotsError && (!shots || shots.length === 0) && (
-            <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-lg border border-dashed border-border">
-              No shots found for this device.
-            </div>
-          )}
-        </div>
-      )}
+      {activeTab === 'shots' && <ShotList deviceName={deviceName} />}
+
+      {activeTab === 'shot-datasets' && <ShotDatasets deviceName={deviceName} shots={shots} />}
 
       {/* Device Datasets Tab */}
       {activeTab === 'datasets' && (
@@ -132,7 +185,7 @@ export default function DeviceDetailPage() {
           {datasetsLoading && <div className="py-8 text-muted-foreground">Loading datasets...</div>}
           {datasetsError && <div className="py-8 text-destructive">Failed to load datasets.</div>}
           {!datasetsLoading && !datasetsError && datasets && datasets.length > 0 && (
-            <DeviceDatasets datasets={datasets} deviceName={deviceName} />
+            <DeviceDatasets datasets={datasets} />
           )}
           {!datasetsLoading && !datasetsError && (!datasets || datasets.length === 0) && (
             <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-lg border border-dashed border-border">

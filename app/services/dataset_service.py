@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Sequence
+from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
@@ -30,6 +31,7 @@ from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.models.shot import Shot
 from app.models.storage_options import derive_storage_options_type
+from app.services.annotation_service import AnnotationService
 from app.services.base_service import BaseService
 from app.services.exceptions import (
     ConflictError,
@@ -39,6 +41,8 @@ from app.services.exceptions import (
     ResourceNotFoundError,
 )
 from app.services.file_access_service import FileAccessService
+from app.services.filters import annotation_clauses
+from app.services.jsonld import map_dataset_to_dcat
 from app.services.reference_service import (
     CALIBRATION,
     GEOMETRY,
@@ -46,7 +50,6 @@ from app.services.reference_service import (
     ReferenceKind,
     ReferenceService,
 )
-from app.services.shot_service import ShotService
 
 logger = logging.getLogger(__name__)
 
@@ -61,15 +64,42 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         *,
         offset: int = 0,
         limit: int = 100,
+        name: str | None = None,
+        annotations: list[str] | None = None,
+        shot_annotations: list[str] | None = None,
     ) -> Sequence[Dataset]:
         """
         Global list of datasets. Filters by access level.
+
+        ``annotations`` filters on the dataset's own feature annotations;
+        ``shot_annotations`` on those of its parent shot. A dataset with no shot
+        never matches ``shot_annotations``. To scope to one device, use
+        ``get_datasets_for_device`` rather than filtering here.
         """
-        statement = (
-            select(self.model).order_by(col(Dataset.id)).offset(offset).limit(limit)
+        statement = select(self.model)
+        if name is not None:
+            statement = statement.where(self.model.name == name)
+        statement = statement.where(
+            *annotation_clauses(self.model.scientific_metadata, annotations)
         )
+        statement = self._apply_shot_annotations(statement, shot_annotations)
+        statement = statement.order_by(col(Dataset.id)).offset(offset).limit(limit)
         datasets = self.session.exec(statement).all()
         return self._filter_accessible_datasets(datasets, user)
+
+    def _apply_shot_annotations(self, statement, shot_annotations: list[str] | None):
+        """Join Dataset to its parent Shot and filter on the shot's annotations.
+
+        Shared by the global and per-device listings so the two-level query behaves
+        identically wherever it is offered.
+        """
+        if not shot_annotations:
+            return statement
+        return statement.join(
+            Shot,
+            (col(Dataset.shot_id) == col(Shot.id))
+            & (col(Dataset.device_name) == col(Shot.device_name)),
+        ).where(*annotation_clauses(Shot.scientific_metadata, shot_annotations))
 
     def check_read_access(self, dataset: Dataset, user: AuthenticatedUser) -> None:
         """Enforce read access for Dataset metadata.
@@ -154,7 +184,12 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 raise FDSValidationError(
                     "Device name is required when specifying a shot_id"
                 )
-            shot = ShotService(self.session).get((obj_in.device_name, obj_in.shot_id))
+            shot = self.session.exec(
+                select(Shot).where(
+                    Shot.device_name == obj_in.device_name,
+                    Shot.id == obj_in.shot_id,
+                )
+            ).first()
             if not shot:
                 raise ResourceNotFoundError(
                     f"Shot {obj_in.shot_id} not found for device {obj_in.device_name}"
@@ -332,6 +367,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         scope: DatasetScope = DatasetScope.ALL,
         offset: int = 0,
         limit: int = 100,
+        name: str | None = None,
+        annotations: list[str] | None = None,
+        shot_annotations: list[str] | None = None,
     ) -> Sequence[Dataset]:
         """
         Get datasets hosted by a device, filtering by access.
@@ -340,6 +378,12 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         shot-level datasets together, ``DEVICE`` only those belonging to the
         device as a whole rather than to any one shot, ``SHOT`` only those
         attached to one of the device's shots.
+
+        ``annotations`` filters on each dataset's own feature annotations;
+        ``shot_annotations`` on those of its parent shot, which answers questions
+        spanning both levels (e.g. equilibrium datasets from shots that had ELMs).
+        Since device-level datasets have no shot, combining ``shot_annotations``
+        with ``scope=DEVICE`` matches nothing.
         """
         statement = select(Dataset).where(
             Dataset.device_name == normalise_device_name(device_name)
@@ -348,6 +392,12 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             statement = statement.where(col(Dataset.shot_id).is_(None))
         elif scope is DatasetScope.SHOT:
             statement = statement.where(col(Dataset.shot_id).is_not(None))
+        if name is not None:
+            statement = statement.where(Dataset.name == name)
+        statement = statement.where(
+            *annotation_clauses(Dataset.scientific_metadata, annotations)
+        )
+        statement = self._apply_shot_annotations(statement, shot_annotations)
         statement = statement.order_by(col(Dataset.id)).offset(offset).limit(limit)
         datasets = self.session.exec(statement).all()
         return self._filter_accessible_datasets(datasets, user)
@@ -359,6 +409,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         user: AuthenticatedUser = ANONYMOUS_USER,
         offset: int = 0,
         limit: int = 100,
+        annotations: list[str] | None = None,
     ) -> Sequence[Dataset]:
         """
         Get all datasets for a specific shot (scoped by device name).
@@ -369,6 +420,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 Dataset.shot_id == shot_id,
                 Dataset.device_name == normalise_device_name(device_name),
             )
+            .where(*annotation_clauses(Dataset.scientific_metadata, annotations))
             .order_by(col(Dataset.id))
             .offset(offset)
             .limit(limit)
@@ -383,6 +435,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         user: AuthenticatedUser | None = None,
         include_geometry: bool = False,
         include_calibration: bool = False,
+        include_annotations: bool = False,
     ) -> DatasetRead:
         """
         Converts a Dataset ORM object to a DatasetRead DTO, including the effective access level.
@@ -427,7 +480,57 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 include_storage_options=include_storage_options,
                 user=user,
             )
+        if include_annotations:
+            read_model.annotations = self._resolve_annotation_read_models(
+                dataset, include_storage_options=include_storage_options, user=user
+            )
         return read_model
+
+    def to_dcat(
+        self,
+        dataset: Dataset,
+        base_url: str,
+        *,
+        include_geometry: bool = False,
+        include_calibration: bool = False,
+        include_annotations: bool = False,
+    ) -> dict[str, Any]:
+        """Build the dataset's DCAT/JSON-LD document, resolving the requested
+        related datasets (geometry, calibration, annotations) into qualified
+        relations."""
+        enriched = self.to_read_model(
+            dataset,
+            include_geometry=include_geometry,
+            include_calibration=include_calibration,
+            include_annotations=include_annotations,
+        )
+        return map_dataset_to_dcat(
+            dataset,
+            base_url,
+            geometry=enriched.geometry if include_geometry else None,
+            calibration=enriched.calibration if include_calibration else None,
+            annotations=enriched.annotations if include_annotations else None,
+        )
+
+    def _resolve_annotation_read_models(
+        self,
+        dataset: Dataset,
+        include_storage_options: bool = False,
+        user: AuthenticatedUser | None = None,
+    ) -> list[DatasetRead] | None:
+        """
+        Dataset annotations as read models, or ``None``.
+        """
+        annotations = AnnotationService(self.session).for_dataset(dataset)
+        models = [
+            self.to_read_model(
+                annotation,
+                include_storage_options=include_storage_options,
+                user=user,
+            )
+            for annotation in annotations
+        ]
+        return models or None
 
     def _resolve_reference_read_models(
         self,
@@ -521,6 +624,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         user: AuthenticatedUser | None = None,
         include_geometry: bool = False,
         include_calibration: bool = False,
+        include_annotations: bool = False,
     ) -> list[DatasetRead]:
         """
         Batch converts ORM objects to DatasetRead DTOs, efficiently applying batch enrichment
@@ -544,6 +648,11 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                     CALIBRATION,
                     include_storage_options=include_storage_options,
                     user=user,
+                )
+        if include_annotations:
+            for source, model in zip(datasets, models):
+                model.annotations = self._resolve_annotation_read_models(
+                    source, include_storage_options=include_storage_options, user=user
                 )
         return models
 

@@ -3,64 +3,35 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { Database, Server, Search, FileCode } from 'lucide-react';
+import { Database, Server, Search } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Device, Dataset } from '@/lib/types';
+import { annotationFacets, annotationQuery, withQuery } from '@/lib/features';
+import { AnnotationFilter } from '@/components/annotation-filter';
+import { DatasetCard } from '@/components/dataset-card';
+import { DatasetResults } from '@/components/dataset-results';
 import { DeviceDatasets } from '@/components/device-datasets';
-
-function DatasetCard({ dataset }: { dataset: Dataset }) {
-  const href =
-    dataset.device_name && dataset.id
-      ? `/devices/${dataset.device_name}/datasets/${dataset.id}`
-      : null;
-  const content = (
-    <>
-      <div className="flex items-center gap-3">
-        <div className="bg-muted p-2 rounded text-foreground">
-          <Database className="w-5 h-5" />
-        </div>
-        <div className="min-w-0">
-          <h3 className="font-bold text-lg text-foreground">{dataset.name}</h3>
-          {dataset.url && (
-            <p className="text-xs text-muted-foreground font-mono mt-1 break-all">{dataset.url}</p>
-          )}
-        </div>
-      </div>
-      <div className="mt-4 flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-        <div className="flex items-center gap-1">
-          <FileCode className="w-4 h-4" />
-          {dataset.media_type || 'Dataset'}
-        </div>
-        {dataset.level !== undefined && (
-          <span className="text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border">
-            Level {dataset.level}
-          </span>
-        )}
-        {dataset.geometry_roles && dataset.geometry_roles.length > 0 && (
-          <span className="text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border">
-            geometry: {dataset.geometry_roles.join(', ')}
-          </span>
-        )}
-      </div>
-    </>
-  );
-  return href ? (
-    <Link href={href} className="card p-6 block hover:border-primary/50 transition-colors">
-      {content}
-    </Link>
-  ) : (
-    <div className="card p-6">{content}</div>
-  );
-}
 
 export default function DatasetsPage() {
   const { data: devices, error: devicesError, isLoading: devicesLoading } = useSWR<Device[]>(
     `${API_BASE}/devices/`,
     fetcher
   );
-  const { data: allDatasets } = useSWR<Dataset[]>(`${API_BASE}/datasets?limit=1000`, fetcher);
+  const ALL_DATASETS = `${API_BASE}/datasets?limit=1000`;
+  const { data: allDatasets } = useSWR<Dataset[]>(ALL_DATASETS, fetcher);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'global' | 'device'>('all');
+  const [annotations, setAnnotations] = useState<string[]>([]);
+
+  // Only the dataset's own annotations here. Filtering on a parent shot's would
+  // need the shots of every device, and shots are only listed under one.
+  const { data: annotated, isLoading: annotatedLoading } = useSWR<Dataset[]>(
+    annotations.length > 0
+      ? withQuery(ALL_DATASETS, annotationQuery('annotation', annotations))
+      : null,
+    fetcher,
+    { keepPreviousData: true }
+  );
 
   const query = searchQuery.toLowerCase();
   const matches = (text?: string) => (text ?? '').toLowerCase().includes(query);
@@ -122,8 +93,40 @@ export default function DatasetsPage() {
         </div>
       </div>
 
+      <AnnotationFilter
+        label="Filter by annotation"
+        facets={annotationFacets(allDatasets)}
+        selected={annotations}
+        onChange={setAnnotations}
+      />
+
+      {/* An annotation filter is a query, not a browse, so it answers with one
+          flat list. The sections below are organised by where a dataset sits,
+          which would hide the shot-level matches entirely. */}
+      {annotations.length > 0 && (
+        <div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-muted p-2 rounded-lg text-foreground">
+              <Database className="w-5 h-5" />
+            </div>
+            <h2 className="text-xl font-semibold text-foreground">Matching Datasets</h2>
+            <span className="text-sm text-muted-foreground">
+              ({annotated?.length ?? 0} of {allDatasets?.length ?? 0})
+            </span>
+          </div>
+          {annotatedLoading && !annotated ? (
+            <div className="card p-6 text-center text-muted-foreground">Loading datasets...</div>
+          ) : (
+            <DatasetResults
+              datasets={annotated}
+              emptyMessage="No datasets carry every selected annotation."
+            />
+          )}
+        </div>
+      )}
+
       {/* Global Datasets Section */}
-      {(filterType === 'all' || filterType === 'global') && (
+      {annotations.length === 0 && (filterType === 'all' || filterType === 'global') && (
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-4">
             <div className="bg-muted p-2 rounded-lg text-foreground">
@@ -149,7 +152,7 @@ export default function DatasetsPage() {
       )}
 
       {/* Device-Linked Datasets Section */}
-      {(filterType === 'all' || filterType === 'device') && (
+      {annotations.length === 0 && (filterType === 'all' || filterType === 'device') && (
         <div>
           <div className="flex items-center gap-3 mb-4">
             <div className="bg-muted p-2 rounded-lg text-foreground">
@@ -213,7 +216,7 @@ export default function DatasetsPage() {
                         <span className="font-medium text-foreground">Device Datasets:</span>
                       </div>
                       {datasets.length > 0 ? (
-                        <DeviceDatasets datasets={datasets} deviceName={device.name} />
+                        <DeviceDatasets datasets={datasets} />
                       ) : (
                         <div className="text-center py-6 bg-card/30 rounded-lg border border-dashed border-border">
                           <p className="text-sm text-muted-foreground">

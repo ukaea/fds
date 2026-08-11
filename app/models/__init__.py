@@ -14,6 +14,7 @@ from .collection import (
     CollectionRead,
     CollectionUpdate,
 )
+from .coverage import Coverage, DateRange, ShotRange
 from .dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
 from .device import Device, DeviceCreate, DeviceRead, DeviceUpdate
 from .distribution import (
@@ -23,8 +24,7 @@ from .distribution import (
     DistributionUpdate,
 )
 from .policy import AccessLevel
-from .reference import DateRange, ReferenceCoverage, ShotRange
-from .scientific_metadata import ScientificProperty
+from .scientific_metadata import Extent, ScientificProperty
 from .shot import Shot, ShotCreate, ShotRead, ShotUpdate
 from .source import Source, SourceCreate, SourceRead, SourceUpdate
 
@@ -74,8 +74,9 @@ __all__ = [
     "CollectionMember",
     "AccessLevel",
     "ScientificProperty",
+    "Extent",
     "ActivityType",
     "ShotRange",
     "DateRange",
-    "ReferenceCoverage",
+    "Coverage",
 ]

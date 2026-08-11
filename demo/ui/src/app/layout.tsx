@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Fusion Data Service',
-  description: 'Reference UI for the Fusion Data Service API.',
+  description: 'Default UI for the Fusion Data Service',
 };
 
 export default function RootLayout({
@@ -55,7 +55,7 @@ export default function RootLayout({
 
             <footer className="border-t border-border py-8 mt-auto">
               <div className="container mx-auto text-center text-sm text-muted-foreground">
-                Fusion Data Service — reference UI.
+                Fusion Data Service
               </div>
             </footer>
           </div>

@@ -1,11 +1,11 @@
-"""API surfacing of resolved reference calibration (ADR-0037)."""
+"""API surfacing of resolved reference calibration."""
 
 from fastapi.testclient import TestClient
 
-from app.models.reference import ReferenceCoverage
+from app.models.coverage import Coverage
 from app.services.jsonld import map_dataset_to_dcat
 
-COVERS_150 = ReferenceCoverage(shots=["150"])
+COVERS_150 = Coverage(shots=["150"])
 
 
 def test_include_calibration_off_by_default(
