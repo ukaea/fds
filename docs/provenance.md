@@ -2,117 +2,76 @@
 
 FDS tracks provenance using the **PROV-O ontology**, making the origin of every dataset auditable and reproducible.
 
-## Core concepts
+## The core idea
 
-FDS maps cleanly onto three PROV-O primitives:
+A **Source** is the registry of things that produce data, but a Source is *not* a single PROV class. What a Source becomes in the graph depends on its `kind`:
+
+| `Source.kind` | Example | PROV-O projection |
+| --- | --- | --- |
+| `software` | EFIT, JINTRAC, a scheduler | `prov:SoftwareAgent` |
+| `instrument` | a Thomson scattering system | `prov:Entity`: a device an activity *used* (it has no agency) |
+| `person` | an operator, a PI | `prov:Person` |
+| `organization` | a diagnostic group | `prov:Organization` |
+
+The other two primitives are unchanged:
 
 | PROV-O term | FDS entity | Description |
 | --- | --- | --- |
-| `prov:Agent` / `prov:SoftwareAgent` | **Source** | The system or code that *can* produce data (e.g. EFIT, JINTRAC, some diagnostic system) |
-| `prov:Activity` | **Activity** | A *specific execution* of a Source — with timestamps, version, and parameters |
+| `prov:Activity` | **Activity** | A *specific execution*, with timestamps, version, and parameters |
 | `prov:Entity` | **Dataset** / **Collection** | The data produced |
 
-### Source (`prov:Agent`)
+A passive instrument is a *tool*, not an agent, so it is an Entity the run **used**, never an agent it `wasAssociatedWith`. Only software, people, and organisations bear responsibility.
 
-A Source is a global, reusable entity. It represents a diagnostic system, analysis code, or automated process — not a specific run.
+## Two planes
 
-Register one with a `POST /sources/` — see [Data Model → Source](data-model/source.md) for the fields and a worked example.
+Provenance edges fall into two planes:
 
-### Activity (`prov:Activity`)
+- **Lineage**: *where did this data come from?* `Dataset wasGeneratedBy Activity`, `Activity used Entity` (input datasets and instruments), `Dataset wasDerivedFrom Dataset` (asserted by the producer, never inferred).
+- **Responsibility**: *who is responsible?* `Activity wasAssociatedWith Agent` (each with a role), `Agent actedOnBehalfOf Agent`.
 
-An Activity records a *specific execution* of a Source. It is a first-class table — not a join row — and carries:
+Coordination, for example a scheduler that triggers analysis codes, lives in the **responsibility** plane: the scheduler is an agent associated with the run (role `orchestrator`), never part of the data lineage. The code it coordinated records that it `actedOnBehalfOf` the scheduler, a `delegation` on that run.
 
-- Which Source ran (`source_id`)
-- The version used (`source_version`)
-- Run parameters (`parameters` — arbitrary JSON)
-- Start and end timestamps
+## Declaring provenance
 
-```json
-{
-  "source_id": "...",
-  "source_version": "efit-v2.8",
-  "activity_type": "analysis",
-  "parameters": {"run_id": "30421-efit-standard"},
-  "started_at": "2024-01-15T10:00:00",
-  "ended_at": "2024-01-15T10:12:34"
-}
-```
+An Activity declares its whole provenance in a single request: the datasets it consumed, the instruments it used, the agents involved and any delegation between them. It can equally be built up afterwards, which suits a pipeline that registers a run before it can resolve its inputs. See [Data Model → Activity](data-model/activity.md) for the fields, the sub-resource endpoints and worked examples in four languages, and [Data Model → Source](data-model/source.md) for registering the agents and instruments a run refers to.
 
-`activity_type` is one of `measurement`, `simulation`, `analysis`, or `calibration`.
+Output datasets and collections join a run by setting their `activity_id`. What a dataset was *derived from* is recorded separately, on the dataset itself, since a run's inputs and any one output's dependencies are not the same thing. See [Data Model → Dataset](data-model/dataset.md#recording-a-datasets-provenance).
 
-Register one with a `POST /activities/`, referencing the Source it executed — see
-[Data Model → Activity](data-model/activity.md) for the full field list and a worked example.
+## Kinds vs roles
+
+`kind` (`instrument`, `software`, …) is a closed, typo-proof enum because it decides an entry's PROV node *type*.
+
+**Roles** say what a thing did in one particular run, and they are closed too. Two qualify a `used` edge: `input` (the run consumed this dataset) and `instrument` (the run used this apparatus). Two qualify a `wasAssociatedWith` edge: `executor` (the agent that carried the run out) and `orchestrator` (the agent that coordinated it without executing it). You supply the agent role as a bare token, for example `role=orchestrator`; in the JSON-LD each role serialises as a vocabulary concept reference rather than a plain string, so a consumer can resolve what it means.
 
 ## Relationships
 
-```
-Dataset  ──prov:wasGeneratedBy──►  Activity  ──prov:wasAssociatedWith──►  Source
-                                       │
-                                  prov:used
-                                       │
-                                       ▼
-                                   Dataset (input)
-```
-
 - Each **Dataset** records the Activity that produced it (`prov:wasGeneratedBy`).
-- Each **Activity** records the Source that ran it (`prov:wasAssociatedWith`).
-- An Activity also records the Datasets it *consumed* as inputs (`prov:used`).
+- Each **Activity** records the agents it was associated with, each in a role (`prov:wasAssociatedWith`), and the entities it used: input datasets and instruments (`prov:used`).
+- A **Dataset** records the upstream entities it was derived from, asserted rather than inferred (`prov:wasDerivedFrom`). An upstream need not be registered in FDS, so a DOI or even a description is enough to record one.
 - A **Collection** can record a producing Activity too, so the whole output of a single run can be cited as one unit.
 
-Outputs are linked by setting `activity_id` when the Dataset is registered (see
-[Data Model → Dataset](data-model/dataset.md)). Inputs are recorded separately — a bodyless
-`POST` per consumed Dataset:
+## Example: Thomson scattering
 
-=== "curl"
+```text
+Agents:      thomson-analysis (software)    intershot-scheduler (software)
+Instrument:  thomson-scattering (kind=instrument → an Entity)
+Activities:  acquisition                     analysis run
+Entities:    raw_thomson                     T_e_profile
 
-    ```bash
-    curl -X POST "$API/activities/$ACTIVITY_ID/inputs/$DATASET_ID" \
-      -H "Authorization: Bearer $TOKEN"
-    ```
-
-=== "Python (requests)"
-
-    ```python
-    requests.post(f"{API}/activities/{activity['id']}/inputs/{dataset_id}", headers=headers)
-    ```
-
-=== "Python (httpx)"
-
-    ```python
-    httpx.post(f"{API}/activities/{activity['id']}/inputs/{dataset_id}", headers=headers)
-    ```
-
-=== "JavaScript (fetch)"
-
-    ```javascript
-    await fetch(`${API}/activities/${activity.id}/inputs/${datasetId}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${TOKEN}` },
-    });
-    ```
-
-## Example: JINTRAC simulation
-
-```
-Source: jintrac  (PROV-O: prov:SoftwareAgent)
-
-Activity: 30420-jintrac-v220922
-  source:    jintrac  v220922
-  type:      simulation
-  started:   2024-03-10T14:00:00
-  ended:     2024-03-10T16:47:22
-  inputs:    equilibrium, magnetics, thomson_scattering  (prov:used)
-
-Outputs (prov:wasGeneratedBy → the Activity above):
-  Dataset: equilibrium   (s3://…/jintrac/equilibrium.nc)
-  Dataset: core_profiles (s3://…/jintrac/core_profiles.nc)
-  Dataset: core_sources  (s3://…/jintrac/core_sources.nc)
-
-Collection: jintrac-v220922
-  activity_id → same Activity
-  members:    the three datasets above
+raw_thomson  wasGeneratedBy  acquisition   (which used the thomson device, role=instrument)
+T_e_profile  wasGeneratedBy  analysis      (which used raw_thomson, role=input)
+analysis     wasAssociatedWith  thomson-analysis (role=executor)
+                              + intershot-scheduler (role=orchestrator)
+thomson-analysis  actedOnBehalfOf  intershot-scheduler   (delegation, within this run)
 ```
 
 ## Querying provenance
 
-A dataset's standard JSON already carries `activity_id`; the full PROV-O graph (`prov:wasGeneratedBy`, `prov:wasAssociatedWith`, and the inputs it used) is returned as linked data via content negotiation — see [Semantic Metadata → Provenance graph](dcat-jsonld.md#provenance-graph).
+Request `application/ld+json` to get the full PROV-O graph as linked data. See [Semantic Metadata → Provenance graph](dcat-jsonld.md#provenance-graph).
+
+```http
+GET /api/v1/datasets/id/{id}
+Accept: application/ld+json
+```
+
+A dataset's standard JSON already carries `activity_id`. The linked-data response embeds `prov:wasGeneratedBy` with the run's `prov:qualifiedUsage` (roled inputs and instruments) and `prov:qualifiedAssociation` (roled agents, each typed by its kind).

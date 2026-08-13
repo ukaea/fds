@@ -13,6 +13,9 @@ from app.api.deps import (
 from app.models.activity import ActivityRead
 from app.models.dataset import (
     DatasetCreate,
+    DatasetDerivationCreate,
+    DatasetDerivationRead,
+    DatasetLineageNode,
     DatasetRead,
     DatasetScope,
     DatasetUpdate,
@@ -69,10 +72,12 @@ def read_datasets_global(
     """
     Retrieve global datasets.
 
-    `annotation` filters on the dataset's own `scientific_metadata`; `elm` matches
-    on presence, `elm:type-I` on value, and repeating it requires every one.
-    `shot_annotation` applies the same forms to the parent shot instead, so a
-    dataset with no shot never matches it.
+    `annotation` filters on the dataset's own `scientific_metadata`. Use `elm` to
+    match any dataset that carries that annotation, or `elm:type-I` to match a
+    particular value. Repeat the parameter to require all of them.
+
+    `shot_annotation` takes the same forms but applies them to the parent shot, so
+    a dataset with no shot never matches it.
 
     To scope to a single device, use `/devices/{device_name}/datasets`.
     """
@@ -160,8 +165,9 @@ def read_datasets_shot(
     """
     Retrieve all datasets for a specific shot.
 
-    `annotation` filters on each dataset's own `scientific_metadata`; `ufo` matches
-    on presence, `ufo:true` on value, and repeating it requires every one.
+    `annotation` filters on each dataset's own `scientific_metadata`. Use `ufo` to
+    match any dataset that carries that annotation, or `ufo:true` to match a
+    particular value. Repeat the parameter to require all of them.
     """
     datasets = dataset_service.get_datasets_for_shot(
         shot_id,
@@ -319,12 +325,14 @@ def read_datasets_device(
     attached to no shot (e.g., reference geometry and calibration versions), `shot`
     for those belonging to the device's shots.
 
-    `annotation` filters on each dataset's own `scientific_metadata`; `elm` matches
-    on presence, `elm:type-I` on value, and repeating it requires every one.
-    `shot_annotation` applies the same forms to the parent shot instead, which is
-    what spans both levels: `?name=equilibrium&shot_annotation=elm` finds the
-    equilibrium datasets of shots that had ELMs. Device-level datasets have
-    no shot, so `shot_annotation` matches nothing under `scope=device`.
+    `annotation` filters on each dataset's own `scientific_metadata`. Use `elm` to
+    match any dataset that carries that annotation, or `elm:type-I` to match a
+    particular value. Repeat the parameter to require all of them.
+
+    `shot_annotation` takes the same forms but applies them to the parent shot,
+    which is what spans both levels: `?name=equilibrium&shot_annotation=elm` finds
+    the equilibrium datasets of shots that had ELMs. Device-level datasets have no
+    shot, so `shot_annotation` matches nothing under `scope=device`.
     """
     datasets = dataset_service.get_datasets_for_device(
         device_name,
@@ -411,6 +419,104 @@ def delete_dataset(
     Delete a dataset by internal ID. Requires appropriate tiered authorization.
     """
     dataset_service.delete(id, user)
+    return None
+
+
+@router.post(
+    "/datasets/{dataset_id}/derivations",
+    response_model=DatasetDerivationRead,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_derivation(
+    *,
+    dataset_id: int,
+    derivation_in: DatasetDerivationCreate,
+    dataset_service: DatasetServiceDep,
+    user: CurrentUserDep,
+) -> DatasetDerivationRead:
+    """
+    Assert an upstream entity this dataset was derived from.
+
+    The upstream need not be registered in FDS: name it by ``source_dataset_id``
+    if it is, else by ``source_identifier`` (a DOI, URL or other PID), else by
+    ``source_label`` and ``source_description`` alone.
+    """
+    return DatasetDerivationRead.model_validate(
+        dataset_service.add_derivation(
+            dataset_id=dataset_id, obj_in=derivation_in, user=user
+        )
+    )
+
+
+@router.get(
+    "/datasets/{dataset_id}/derivations",
+    response_model=list[DatasetDerivationRead],
+    response_model_exclude_none=True,
+)
+def read_derivations(
+    *,
+    dataset_id: int,
+    dataset_service: DatasetServiceDep,
+    user: CurrentUserDep,
+    offset: int = 0,
+    limit: int = 100,
+) -> list[DatasetDerivationRead]:
+    """
+    List the upstream entities asserted for a dataset.
+    """
+    return [
+        DatasetDerivationRead.model_validate(d)
+        for d in dataset_service.get_derivations(
+            dataset_id, user=user, offset=offset, limit=limit
+        )
+    ]
+
+
+@router.get(
+    "/datasets/{dataset_id}/lineage",
+    response_model=DatasetLineageNode,
+    response_model_exclude_none=True,
+)
+def read_lineage(
+    *,
+    dataset_id: int,
+    dataset_service: DatasetServiceDep,
+    user: CurrentUserDep,
+) -> DatasetLineageNode:
+    """
+    Walk this dataset's asserted upstreams, and their upstreams in turn.
+
+    `derivations` gives one hop. This follows the chain, nesting each upstream
+    under the dataset that names it. Only registered datasets have upstreams to
+    nest; an external or described-only upstream is always a leaf.
+
+    A dataset is expanded once per response. If the same one is reached again,
+    by two paths or by a cycle, it appears as a stub marked `seen`. Branches cut
+    short for other reasons are marked too: `restricted` where you may not read
+    the upstream, `missing` where the derivation points at a dataset that has
+    since been deleted.
+    """
+    return dataset_service.get_lineage(dataset_id, user=user)
+
+
+@router.delete(
+    "/datasets/{dataset_id}/derivations/{derivation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_derivation(
+    *,
+    dataset_id: int,
+    derivation_id: int,
+    dataset_service: DatasetServiceDep,
+    user: CurrentUserDep,
+) -> None:
+    """
+    Retract an asserted upstream.
+    """
+    dataset_service.remove_derivation(
+        dataset_id=dataset_id, derivation_id=derivation_id, user=user
+    )
     return None
 
 

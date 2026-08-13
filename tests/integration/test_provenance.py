@@ -1,5 +1,6 @@
 import pytest
 
+from app.services.jsonld import FUEL_EXECUTOR_ROLE, FUEL_ORCHESTRATOR_ROLE
 from tests.integration.conftest import FDS_URL
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("seeded_data")]
@@ -41,3 +42,43 @@ def test_jintrac_collection_activity_matches_outputs(http_client):
     assert len(datasets) > 0
     for ds in datasets:
         assert ds["activity_id"] == collection_activity_id
+
+
+def test_efit_dataset_jsonld_records_delegation(http_client):
+    """The EFIT run's JSON-LD shows the executor acted on behalf of the scheduler.
+
+    The scheduler orchestrates the between-shot EFIT analyses, not the JINTRAC
+    simulation, so the delegation hangs off an EFIT-produced equilibrium.
+    """
+    dataset = http_client.get(
+        f"{FDS_URL}/devices/mast/shots/30421/datasets/equilibrium"
+    ).json()[0]
+
+    resp = http_client.get(
+        f"{FDS_URL}/datasets/id/{dataset['id']}",
+        headers={"Accept": "application/ld+json"},
+    )
+    assert resp.status_code == 200
+    prov = resp.json()["prov:wasGeneratedBy"]
+
+    # The executor (EFIT) carries prov:actedOnBehalfOf to the orchestrating scheduler.
+    assert "prov:actedOnBehalfOf" in prov["prov:wasAssociatedWith"]
+    roles = {a["prov:hadRole"]["@id"] for a in prov["prov:qualifiedAssociation"]}
+    assert {FUEL_EXECUTOR_ROLE, FUEL_ORCHESTRATOR_ROLE} <= roles
+
+
+def test_jintrac_run_is_discoverable_by_its_bundle(http_client):
+    """A run is findable as a run because its Collection carries the claim.
+
+    The Activity holds no scientific metadata by design, so this query has to be
+    answered by the bundle or not at all.
+    """
+    resp = http_client.get(
+        f"{FDS_URL}/devices/mast/shots/30420/collections",
+        params={"annotation": "confinement_mode:H-mode"},
+    )
+
+    assert resp.status_code == 200
+    collections = resp.json()
+    assert [c["name"] for c in collections] == ["jintrac-v220922"]
+    assert collections[0]["activity_id"] is not None

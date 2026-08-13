@@ -10,7 +10,7 @@ from app.models.device import DeviceCreate
 from app.models.file_access import S3Credentials
 from app.models.policy import AccessLevel
 from app.models.shot import ShotCreate
-from app.models.source import SourceCreate
+from app.models.source import SourceCreate, SourceKind
 from app.services.activity_service import ActivityService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
@@ -114,7 +114,7 @@ def test_dataset_same_name_returns_list(
         ShotCreate(id="789", device_name="MAST"), user=admin_user
     )
     source = SourceService(session).create(
-        SourceCreate(name="list-src"), user=admin_user
+        SourceCreate(name="list-src", kind=SourceKind.SOFTWARE), user=admin_user
     )
     assert source.id is not None
     act1 = ActivityService(session).create(

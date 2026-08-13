@@ -15,6 +15,10 @@ from app.services.shot_service import ShotService
 MAST = "MAST"
 MAST_U = "MAST-U"
 
+# Every test here reads from the seeded catalogue, so request it once for the
+# module rather than as an unused argument on each test.
+pytestmark = pytest.mark.usefixtures("annotated_catalogue")
+
 H_MODE = ScientificProperty(
     name="confinement_mode",
     value="H-mode",
@@ -111,22 +115,18 @@ def shot_ids(
     )
 
 
-def test_use_case_mast_shots_that_disrupted(
-    session: Session, annotated_catalogue: None
-):
+def test_use_case_mast_shots_that_disrupted(session: Session):
     assert shot_ids(ShotService(session), MAST, ["disruption"]) == ["30421"]
 
 
-def test_use_case_equilibrium_datasets_from_elmy_shots(
-    session: Session, annotated_catalogue: None
-):
+def test_use_case_equilibrium_datasets_from_elmy_shots(session: Session):
     results = DatasetService(session).get_datasets_for_device(
         MAST_U, name="equilibrium", shot_annotations=["elm"]
     )
     assert [(d.name, d.shot_id) for d in results] == [("equilibrium", "50000")]
 
 
-def test_presence_filter_ignores_value(session: Session, annotated_catalogue: None):
+def test_presence_filter_ignores_value(session: Session):
     """`confinement_mode` is present on both H-mode and L-mode shots."""
     assert shot_ids(ShotService(session), MAST, ["confinement_mode"]) == [
         "30421",
@@ -144,27 +144,23 @@ def test_presence_filter_ignores_value(session: Session, annotated_catalogue: No
         ("elm:type-III", []),
     ],
 )
-def test_equality_filter(
-    session: Session, annotated_catalogue: None, annotation: str, expected: list[str]
-):
+def test_equality_filter(session: Session, annotation: str, expected: list[str]):
     assert shot_ids(ShotService(session), MAST, [annotation]) == expected
 
 
-def test_boolean_value_matches_json_true(session: Session, annotated_catalogue: None):
+def test_boolean_value_matches_json_true(session: Session):
     """A query string "true" must match a stored JSON boolean."""
     assert shot_ids(ShotService(session), MAST, ["disruption:true"]) == ["30421"]
 
 
-def test_repeated_annotations_are_anded(session: Session, annotated_catalogue: None):
+def test_repeated_annotations_are_anded(session: Session):
     shots = ShotService(session)
     assert shot_ids(shots, MAST, ["disruption", "elm"]) == ["30421"]
     # 30421 has the disruption, 30422 has L-mode; no shot has both.
     assert shot_ids(shots, MAST, ["disruption", "confinement_mode:L-mode"]) == []
 
 
-def test_two_values_of_one_name_find_shots_that_had_both(
-    session: Session, annotated_catalogue: None
-):
+def test_two_values_of_one_name_find_shots_that_had_both(session: Session):
     """Each annotation gets its own EXISTS, so ANDing two values of one property
     asks for a record carrying both entries, not for one entry holding two values.
 
@@ -175,15 +171,11 @@ def test_two_values_of_one_name_find_shots_that_had_both(
     assert shot_ids(ShotService(session), MAST, both) == ["30423"]
 
 
-def test_unknown_annotation_matches_nothing(
-    session: Session, annotated_catalogue: None
-):
+def test_unknown_annotation_matches_nothing(session: Session):
     assert shot_ids(ShotService(session), MAST, ["sawtooth"]) == []
 
 
-def test_null_scientific_metadata_does_not_error(
-    session: Session, annotated_catalogue: None
-):
+def test_null_scientific_metadata_does_not_error(session: Session):
     """Shot 30420 has NULL metadata; it must be skipped, not raise."""
     assert "30420" not in shot_ids(ShotService(session), MAST, ["disruption"])
     assert shot_ids(ShotService(session), MAST, None) == [
@@ -194,23 +186,19 @@ def test_null_scientific_metadata_does_not_error(
     ]
 
 
-def test_filter_is_scoped_to_the_device(session: Session, annotated_catalogue: None):
+def test_filter_is_scoped_to_the_device(session: Session):
     """MAST 30421 and MAST-U 50000 both carry `elm`."""
     shots = ShotService(session)
     assert shot_ids(shots, MAST, ["elm"]) == ["30421"]
     assert shot_ids(shots, MAST_U, ["elm"]) == ["50000"]
 
 
-def test_malformed_annotation_raises_validation_error(
-    session: Session, annotated_catalogue: None
-):
+def test_malformed_annotation_raises_validation_error(session: Session):
     with pytest.raises(FDSValidationError):
         ShotService(session).get_multi_by_device_name(MAST, annotations=["disruption:"])
 
 
-def test_shot_annotation_filter_excludes_datasets_with_no_shot(
-    session: Session, annotated_catalogue: None
-):
+def test_shot_annotation_filter_excludes_datasets_with_no_shot(session: Session):
     """The device-level equilibrium dataset has no shot, so no shot annotations."""
     datasets = DatasetService(session)
 
@@ -223,7 +211,7 @@ def test_shot_annotation_filter_excludes_datasets_with_no_shot(
     assert [d.shot_id for d in filtered] == ["50000"]
 
 
-def test_dataset_name_and_device_filters(session: Session, annotated_catalogue: None):
+def test_dataset_name_and_device_filters(session: Session):
     datasets = DatasetService(session)
 
     by_name = datasets.get_multi(name="magnetics")
@@ -235,7 +223,7 @@ def test_dataset_name_and_device_filters(session: Session, annotated_catalogue: 
 
 
 def test_dataset_own_annotations_are_independent_of_shot_annotations(
-    session: Session, admin_user: AuthenticatedUser, annotated_catalogue: None
+    session: Session, admin_user: AuthenticatedUser
 ):
     """`annotation` filters the dataset's own metadata, `shot_annotation` its parent shot's."""
     datasets = DatasetService(session)

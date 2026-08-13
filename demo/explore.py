@@ -432,10 +432,11 @@ def _(mo):
     a filter on the catalogue, so a question about the plasma becomes a single request and
     no bulk data is opened to answer it.
 
-    `?annotation=disruption` matches on presence and `?annotation=elm:type-I` on value;
-    repeat the parameter to require several at once. Dataset lists also take
-    `shot_annotation`, which filters on an annotation carried by the dataset's *parent
-    shot* — that is what lets one query span both levels.
+    `?annotation=disruption` matches any record carrying that annotation, and
+    `?annotation=elm:type-I` matches a particular value. Repeat the parameter to require
+    several at once. Dataset lists also take `shot_annotation`, which filters on an
+    annotation carried by the dataset's *parent shot*, and that is what lets one query
+    span both levels.
     """)
     return
 

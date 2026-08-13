@@ -2,14 +2,25 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
-from app.models.activity import ActivityCreate, ActivityType
+from app.models.activity import (
+    ActivityAgentInput,
+    ActivityCreate,
+    ActivityType,
+    AgentRole,
+)
 from app.models.dataset import DatasetCreate
 from app.models.device import Device
 from app.models.policy import AccessLevel
 from app.models.shot import Shot
-from app.models.source import SourceCreate
+from app.models.source import SourceCreate, SourceKind
 from app.services.activity_service import ActivityService
 from app.services.dataset_service import DatasetService
+from app.services.jsonld import (
+    FUEL_EXECUTOR_ROLE,
+    FUEL_INPUT_ROLE,
+    FUEL_INSTRUMENT_ROLE,
+    FUEL_ORCHESTRATOR_ROLE,
+)
 from app.services.source_service import SourceService
 
 
@@ -31,7 +42,11 @@ def test_jsonld_provenance(
     # Create Source and Activity
     source_service = SourceService(session)
     source = source_service.create(
-        SourceCreate(name="prov-source", description="Provenance Source"),
+        SourceCreate(
+            name="prov-source",
+            description="Provenance Source",
+            kind=SourceKind.SOFTWARE,
+        ),
         user=admin_user,
     )
 
@@ -142,7 +157,7 @@ def test_jsonld_provenance_with_timestamps(
     session.commit()
 
     source = SourceService(session).create(
-        SourceCreate(name="ts-source"), user=admin_user
+        SourceCreate(name="ts-source", kind=SourceKind.SOFTWARE), user=admin_user
     )
     assert source.id is not None
     activity = ActivityService(session).create(
@@ -182,10 +197,7 @@ def test_jsonld_provenance_with_inputs(
     admin_user: AuthenticatedUser,
     admin_user_token: dict[str, str],
 ):
-    """prov:used lists input datasets when ActivityInputs are registered."""
-    from app.models.activity import ActivityCreate
-    from app.services.activity_service import ActivityService
-
+    """prov:used lists the input datasets declared on the producing Activity."""
     device = Device(name="inp-prov-device", type="tokamak")
     session.add(device)
     shot = Shot(id="400", device_name=device.name)
@@ -193,14 +205,9 @@ def test_jsonld_provenance_with_inputs(
     session.commit()
 
     source = SourceService(session).create(
-        SourceCreate(name="inp-source"), user=admin_user
+        SourceCreate(name="inp-source", kind=SourceKind.SOFTWARE), user=admin_user
     )
     assert source.id is not None
-
-    activity = ActivityService(session).create(
-        ActivityCreate(source_id=source.id, activity_type=ActivityType.SIMULATION),
-        user=admin_user,
-    )
 
     raw = DatasetService(session).create(
         DatasetCreate(
@@ -213,6 +220,16 @@ def test_jsonld_provenance_with_inputs(
         ),
         user=admin_user,
     )
+    assert raw.id is not None
+
+    activity = ActivityService(session).create(
+        ActivityCreate(
+            source_id=source.id, activity_type=ActivityType.SIMULATION, inputs=[raw.id]
+        ),
+        user=admin_user,
+    )
+    assert activity.id is not None
+
     derived = DatasetService(session).create(
         DatasetCreate(
             name="derived",
@@ -224,12 +241,6 @@ def test_jsonld_provenance_with_inputs(
             activity_id=activity.id,
         ),
         user=admin_user,
-    )
-
-    assert raw.id is not None
-    assert activity.id is not None
-    ActivityService(session).add_input(
-        activity_id=activity.id, dataset_id=raw.id, user=admin_user
     )
 
     headers = admin_user_token.copy()
@@ -244,3 +255,128 @@ def test_jsonld_provenance_with_inputs(
     assert len(used) == 1
     assert used[0]["@type"] == "prov:Entity"
     assert str(raw.id) in used[0]["@id"]
+    usage = prov["prov:qualifiedUsage"]
+    assert len(usage) == 1
+    assert usage[0]["prov:hadRole"] == {"@id": FUEL_INPUT_ROLE}
+    assert str(raw.id) in usage[0]["prov:entity"]["@id"]
+
+
+def test_jsonld_provenance_with_instrument(
+    test_client: TestClient,
+    session: Session,
+    admin_user: AuthenticatedUser,
+    admin_user_token: dict[str, str],
+):
+    """An instrument (Source kind=instrument) serialises as a roled prov:used Entity."""
+    device = Device(name="instr-device", type="tokamak")
+    session.add(device)
+    shot = Shot(id="500", device_name=device.name)
+    session.add(shot)
+    session.commit()
+
+    diagnostic = SourceService(session).create(
+        SourceCreate(name="thomson-scattering", kind=SourceKind.INSTRUMENT),
+        user=admin_user,
+    )
+    assert diagnostic.id is not None
+
+    # The acquisition has no agent — the instrument is a used entity, not an agent.
+    acquisition = ActivityService(session).create(
+        ActivityCreate(
+            activity_type=ActivityType.MEASUREMENT, instruments=[diagnostic.id]
+        ),
+        user=admin_user,
+    )
+    assert acquisition.id is not None
+
+    raw = DatasetService(session).create(
+        DatasetCreate(
+            name="raw-thomson",
+            level=0,
+            device_name=device.name,
+            shot_id=shot.id,
+            url="s3://test/raw-thomson",
+            access_level=AccessLevel("public"),
+            activity_id=acquisition.id,
+        ),
+        user=admin_user,
+    )
+
+    headers = admin_user_token.copy()
+    headers["Accept"] = "application/ld+json"
+    resp = test_client.get(f"/api/v1/datasets/id/{raw.id}", headers=headers)
+    assert resp.status_code == 200
+
+    prov = resp.json()["prov:wasGeneratedBy"]
+    usage = prov["prov:qualifiedUsage"]
+    instrument_usages = [
+        u for u in usage if u["prov:hadRole"] == {"@id": FUEL_INSTRUMENT_ROLE}
+    ]
+    assert len(instrument_usages) == 1
+    assert str(diagnostic.id) in instrument_usages[0]["prov:entity"]["@id"]
+    # No agent: the acquisition is agent-less, so no executor association.
+    assert "prov:wasAssociatedWith" not in prov
+
+
+def test_jsonld_multi_agent_associations(
+    test_client: TestClient,
+    session: Session,
+    admin_user: AuthenticatedUser,
+    admin_user_token: dict[str, str],
+):
+    """Executor + orchestrator appear as roled prov:qualifiedAssociation."""
+    device = Device(name="multi-agent-device", type="tokamak")
+    session.add(device)
+    shot = Shot(id="600", device_name=device.name)
+    session.add(shot)
+    session.commit()
+
+    code = SourceService(session).create(
+        SourceCreate(name="thomson-analysis", kind=SourceKind.SOFTWARE),
+        user=admin_user,
+    )
+    scheduler = SourceService(session).create(
+        SourceCreate(name="intershot-scheduler", kind=SourceKind.SOFTWARE),
+        user=admin_user,
+    )
+    assert code.id is not None
+    assert scheduler.id is not None
+
+    analysis = ActivityService(session).create(
+        ActivityCreate(
+            source_id=code.id,
+            activity_type=ActivityType.ANALYSIS,
+            agents=[
+                ActivityAgentInput(source_id=scheduler.id, role=AgentRole.ORCHESTRATOR)
+            ],
+        ),
+        user=admin_user,
+    )
+    assert analysis.id is not None
+
+    profile = DatasetService(session).create(
+        DatasetCreate(
+            name="t_e_profile",
+            level=2,
+            device_name=device.name,
+            shot_id=shot.id,
+            url="s3://test/te",
+            access_level=AccessLevel("public"),
+            activity_id=analysis.id,
+        ),
+        user=admin_user,
+    )
+
+    headers = admin_user_token.copy()
+    headers["Accept"] = "application/ld+json"
+    resp = test_client.get(f"/api/v1/datasets/id/{profile.id}", headers=headers)
+    assert resp.status_code == 200
+
+    prov = resp.json()["prov:wasGeneratedBy"]
+    # Executor still serialises as the primary wasAssociatedWith (a SoftwareAgent).
+    assert prov["prov:wasAssociatedWith"]["@type"] == "prov:SoftwareAgent"
+    assert str(code.id) in prov["prov:wasAssociatedWith"]["@id"]
+    # Both agents appear with roles in the qualified association list.
+    assoc = prov["prov:qualifiedAssociation"]
+    roles = {a["prov:hadRole"]["@id"] for a in assoc}
+    assert roles == {FUEL_EXECUTOR_ROLE, FUEL_ORCHESTRATOR_ROLE}

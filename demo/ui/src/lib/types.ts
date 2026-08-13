@@ -89,13 +89,15 @@ export interface Collection {
   access_level?: string;
   effective_access_level?: string;
   activity_id?: number | null;
+  scientific_metadata?: ScientificProperty[];
   datasets?: Dataset[];
   child_collections?: Collection[];
 }
 
 export interface Activity {
   id: number;
-  source_id: number;
+  // Optional executor agent: a raw acquisition names no agent, just its instrument.
+  source_id?: number | null;
   activity_type?: string;
   source_version?: string;
   parameters?: Record<string, unknown>;
@@ -103,9 +105,27 @@ export interface Activity {
   ended_at?: string;
 }
 
+export type SourceKind = 'software' | 'instrument' | 'person' | 'organization';
+
 export interface Source {
   id: number;
   name: string;
   description?: string;
   device_id?: number;
+  // How the source projects into the PROV-O graph. null = unclassified.
+  kind?: SourceKind | null;
+}
+
+// An agent associated with an Activity, with its role (prov:wasAssociatedWith).
+export interface ActivityAgent {
+  activity_id: number;
+  source_id: number;
+  role: string;
+}
+
+// A delegation edge on an Activity (prov:actedOnBehalfOf).
+export interface ActivityDelegation {
+  activity_id: number;
+  subordinate_source_id: number;
+  responsible_source_id: number;
 }

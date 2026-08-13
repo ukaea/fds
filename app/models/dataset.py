@@ -2,6 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from pydantic import model_validator
 from sqlmodel import (
     JSON,
     Column,
@@ -12,9 +13,10 @@ from sqlmodel import (
     SQLModel,
     text,
 )
+from typing_extensions import Self
 
 from .coverage import Coverage
-from .mixins import DescriptiveMixin, TimestampMixin
+from .mixins import DescriptiveMixin, ScientificMetadataMixin, TimestampMixin
 from .policy import AccessLevel
 from .scientific_metadata import ScientificProperty
 from .storage_options import StorageOptions, StorageOptionsType
@@ -39,7 +41,7 @@ class DatasetScope(str, Enum):
     SHOT = "shot"
 
 
-class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
+class DatasetBase(DescriptiveMixin, ScientificMetadataMixin, TimestampMixin, SQLModel):
     """Core metadata for a dataset (maps to ``dcat:Dataset``).
 
     A Dataset is a metadata container describing *what* the data is.  The
@@ -94,9 +96,6 @@ class DatasetBase(DescriptiveMixin, TimestampMixin, SQLModel):
             "inherit from the enclosing shot or device policy."
         ),
         sa_column=Column(JSON, nullable=True),
-    )
-    scientific_metadata: list[ScientificProperty] | None = Field(
-        default=None, sa_column=Column(JSON, nullable=True)
     )
 
     geometry_references: list[str] | None = Field(
@@ -225,6 +224,102 @@ class Dataset(DatasetBase, table=True):
         back_populates="dataset",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
+    derivations: list["DatasetDerivation"] = Relationship(
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "primaryjoin": "Dataset.id==DatasetDerivation.dataset_id",
+        },
+    )
+
+
+class DatasetDerivationBase(SQLModel):
+    """An asserted upstream that a Dataset was derived from (``prov:wasDerivedFrom``).
+
+    The upstream need not be registered in FDS. It is identified in whichever of
+    three ways the producer can manage, so partial provenance can still be
+    recorded: by ``source_dataset_id`` when it is a registered Dataset, by
+    ``source_identifier`` when it has a DOI, URL or other PID, or by
+    ``source_label`` and ``source_description`` alone when it can only be named
+    or described.
+
+    ``source_dataset_id`` and ``source_identifier`` are mutually exclusive: a
+    registered dataset is referenced by its FDS URI, and its own PID belongs on
+    that dataset. At least one of the three must be present. Label and
+    description may accompany any of them.
+    """
+
+    source_dataset_id: int | None = Field(
+        default=None, foreign_key="dataset.id", index=True
+    )
+    source_identifier: str | None = Field(default=None, index=True)
+    source_label: str | None = Field(default=None)
+    source_description: str | None = Field(default=None)
+
+
+class DatasetDerivation(DatasetDerivationBase, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    dataset_id: int = Field(foreign_key="dataset.id", index=True)
+
+
+class DatasetDerivationCreate(DatasetDerivationBase):
+    """An upstream to assert, either inline on the dataset or afterwards."""
+
+    @model_validator(mode="after")
+    def identifies_its_upstream_exactly_once(self) -> Self:
+        if self.source_dataset_id is not None and self.source_identifier:
+            raise ValueError(
+                "a derivation names either source_dataset_id or source_identifier, "
+                "not both: a registered dataset is referenced by its FDS URI"
+            )
+        if not any(
+            (
+                self.source_dataset_id is not None,
+                self.source_identifier,
+                self.source_label,
+                self.source_description,
+            )
+        ):
+            raise ValueError(
+                "a derivation must identify its upstream by source_dataset_id, "
+                "source_identifier, or at least a source_label or source_description"
+            )
+        return self
+
+
+class DatasetDerivationRead(DatasetDerivationBase):
+    id: int
+    dataset_id: int
+
+
+class DatasetLineageNode(SQLModel):
+    """One entity in an upstream lineage walk, with its own upstreams nested.
+
+    A node is whichever of three things the asserted derivation identified: a
+    registered Dataset (``dataset_id`` and ``name``), an external entity with a
+    persistent identifier (``identifier``), or an entity that could only be named
+    or described (``label``, ``description``). Only a registered Dataset has
+    upstreams of its own to nest.
+
+    Three flags mark a branch that stops early, so a truncated chain is never
+    mistaken for a complete one:
+
+    - ``seen``: this dataset is expanded in full elsewhere in the same response.
+      Repeats are not re-expanded, which keeps a diamond from duplicating its
+      shared ancestor and makes a cycle terminate rather than recurse.
+    - ``restricted``: the caller may not read this dataset, so its name and its
+      own upstreams are withheld.
+    - ``missing``: the derivation points at a dataset that no longer exists.
+    """
+
+    dataset_id: int | None = None
+    name: str | None = None
+    identifier: str | None = None
+    label: str | None = None
+    description: str | None = None
+    seen: bool | None = None
+    restricted: bool | None = None
+    missing: bool | None = None
+    derived_from: list["DatasetLineageNode"] = Field(default_factory=list)
 
 
 class DatasetCreate(DatasetBase):
@@ -249,6 +344,7 @@ class DatasetCreate(DatasetBase):
     media_type: str | None = None
     format: str | None = None
     storage_options_type: StorageOptionsType | None = None
+    derived_from: list[DatasetDerivationCreate] = Field(default_factory=list)
 
 
 class DatasetRead(DatasetBase):

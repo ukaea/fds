@@ -41,4 +41,4 @@ def test_collection_jsonld_is_catalog(http_client):
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body.get("@type") == "dcat:Catalog"
+    assert body.get("@type") == ["dcat:Catalog", "prov:Collection"]

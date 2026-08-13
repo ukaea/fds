@@ -1,26 +1,47 @@
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
+from app.models.activity import AgentRole
 from app.models.collection import Collection, CollectionRead
 from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device, DeviceRead
 from app.models.distribution import Distribution
 from app.models.shot import Shot, ShotRead
+from app.models.source import Source, SourceKind
 
 if TYPE_CHECKING:
     from app.models.activity import Activity
 
 # Placeholder namespace for the Fusion Energy Lexicon (FuEL), still in
-# development. FuEL supplies SKOS role concepts used as ``dcat:hadRole`` values on
-# a ``dcat:qualifiedRelation``; ``fuel:geometry`` and
-# ``fuel:calibration`` mark the two reference edges. Swap this single constant for
-# the canonical FuEL URI once it is published.
+# development. FuEL supplies the SKOS role concepts used as ``dcat:hadRole`` on a
+# ``dcat:qualifiedRelation``, and as ``prov:hadRole`` on qualified usages and
+# associations. Swap this single constant for the canonical FuEL URI once it is
+# published.
 FUEL_NAMESPACE = "https://w3id.org/fuel/ns#"
 
 # FuEL role concepts marking a qualified relation's reference kind.
 FUEL_GEOMETRY_ROLE = "fuel:geometry"
 FUEL_CALIBRATION_ROLE = "fuel:calibration"
 FUEL_ANNOTATION_ROLE = "fuel:annotation"
+
+# FuEL role concepts qualifying a prov:Usage: how the activity used the entity.
+FUEL_INPUT_ROLE = "fuel:input"
+FUEL_INSTRUMENT_ROLE = "fuel:instrument"
+
+# FuEL role concepts qualifying a prov:Association: the agent's function in the run.
+FUEL_EXECUTOR_ROLE = "fuel:executor"
+FUEL_ORCHESTRATOR_ROLE = "fuel:orchestrator"
+
+_FUEL_ROLE_BY_AGENT_ROLE = {
+    AgentRole.EXECUTOR: FUEL_EXECUTOR_ROLE,
+    AgentRole.ORCHESTRATOR: FUEL_ORCHESTRATOR_ROLE,
+}
+
+_AGENT_TYPE_BY_KIND = {
+    SourceKind.SOFTWARE: "prov:SoftwareAgent",
+    SourceKind.PERSON: "prov:Person",
+    SourceKind.ORGANIZATION: "prov:Organization",
+}
 
 METADATA_CONTEXT = {
     "dcat": "http://www.w3.org/ns/dcat#",
@@ -58,6 +79,185 @@ def generate_context() -> dict[str, Any]:
     Returns the JSON-LD @context for FDS metadata.
     """
     return METADATA_CONTEXT
+
+
+def _build_used(activity: "Activity", base_url: str) -> tuple[list[Any], list[Any]]:
+    """Build the ``prov:used`` shortcut list and ``prov:qualifiedUsage`` detail.
+
+    Two kinds of used entity:
+    - input datasets → ``prov:hadRole = fuel:input``
+    - instruments (Sources of kind=instrument) → ``prov:hadRole = fuel:instrument``
+
+    Returns ``(used, qualified_usage)``. ``used`` is the plain shortcut list of
+    entity references; ``qualified_usage`` carries the role on each.
+    """
+    entries: list[tuple[str, str]] = []  # (entity @id, FuEL role concept)
+    for ds in getattr(activity, "input_datasets", None) or []:
+        entries.append((f"{base_url}/api/v1/datasets/{ds.id}", FUEL_INPUT_ROLE))
+    for instrument in getattr(activity, "instruments", None) or []:
+        entries.append(
+            (f"{base_url}/api/v1/sources/{instrument.id}", FUEL_INSTRUMENT_ROLE)
+        )
+
+    used = [{"@id": uri, "@type": "prov:Entity"} for uri, _ in entries]
+    qualified_usage = [
+        {
+            "@type": "prov:Usage",
+            "prov:entity": {"@id": uri, "@type": "prov:Entity"},
+            "prov:hadRole": {"@id": role},
+        }
+        for uri, role in entries
+    ]
+    return used, qualified_usage
+
+
+def _agent_node(
+    source: "Source",
+    base_url: str,
+    version: str | None = None,
+    acted_on_behalf_of: list[str] | None = None,
+) -> dict[str, Any]:
+    """Build a PROV-O agent node for a Source, typed by its kind.
+
+    ``acted_on_behalf_of`` is the list of agent URIs this agent acted on behalf of
+    within the activity, emitted as ``prov:actedOnBehalfOf`` when present.
+    """
+    agent_type = _AGENT_TYPE_BY_KIND[source.kind]
+    node: dict[str, Any] = {
+        "@id": f"{base_url}/api/v1/sources/{source.id}",
+        "@type": agent_type,
+        "dct:title": source.name,
+        "dct:description": source.description,
+    }
+    if version:
+        node["dcat:version"] = version
+    if acted_on_behalf_of:
+        node["prov:actedOnBehalfOf"] = [{"@id": uri} for uri in acted_on_behalf_of]
+    return {k: v for k, v in node.items() if v is not None}
+
+
+def _build_associations(
+    activity: "Activity", base_url: str
+) -> tuple[dict[str, Any] | None, list[Any]]:
+    """Build the executor ``prov:wasAssociatedWith`` node and the full
+    ``prov:qualifiedAssociation`` list (executor + additional roled agents),
+    threading ``prov:actedOnBehalfOf`` onto any agent that delegated.
+    """
+    # subordinate source id -> URIs of the agents it acted on behalf of
+    behalf: dict[int, list[str]] = {}
+    for link in getattr(activity, "delegation_links", None) or []:
+        behalf.setdefault(link.subordinate_source_id, []).append(
+            f"{base_url}/api/v1/sources/{link.responsible_source_id}"
+        )
+
+    primary: dict[str, Any] | None = None
+    qualified: list[Any] = []
+
+    executor: "Source | None" = getattr(activity, "source", None)
+    if executor is not None:
+        primary = _agent_node(
+            executor,
+            base_url,
+            activity.source_version,
+            acted_on_behalf_of=behalf.get(executor.id) if executor.id else None,
+        )
+        qualified.append(
+            {
+                "@type": "prov:Association",
+                "prov:agent": {"@id": primary["@id"]},
+                "prov:hadRole": {"@id": FUEL_EXECUTOR_ROLE},
+            }
+        )
+
+    for link in getattr(activity, "agent_links", None) or []:
+        agent = getattr(link, "source", None)
+        if agent is None:
+            continue
+        qualified.append(
+            {
+                "@type": "prov:Association",
+                "prov:agent": _agent_node(
+                    agent,
+                    base_url,
+                    acted_on_behalf_of=behalf.get(agent.id) if agent.id else None,
+                ),
+                "prov:hadRole": {"@id": _FUEL_ROLE_BY_AGENT_ROLE[link.role]},
+            }
+        )
+
+    return primary, qualified
+
+
+def _derivation_source_node(derivation: Any, base_url: str) -> dict[str, Any]:
+    """Build the upstream ``prov:Entity`` of an asserted derivation.
+
+    The upstream is identified as far as the producer could manage. A registered
+    dataset resolves to its FDS URI; an identifier that is already a URI, or a
+    bare DOI, becomes the ``@id``; any other identifier is carried as
+    ``dct:identifier`` on a node with no ``@id``. An upstream that is only
+    described is a blank node with just its title and description, which is
+    honest about being unresolvable.
+    """
+    node: dict[str, Any] = {"@type": "prov:Entity"}
+
+    if derivation.source_dataset_id is not None:
+        node["@id"] = f"{base_url}/api/v1/datasets/{derivation.source_dataset_id}"
+    elif derivation.source_identifier:
+        uri = _as_uri(derivation.source_identifier)
+        if uri:
+            node["@id"] = uri
+        else:
+            node["dct:identifier"] = derivation.source_identifier
+
+    if derivation.source_label:
+        node["dct:title"] = derivation.source_label
+    if derivation.source_description:
+        node["dct:description"] = derivation.source_description
+    return node
+
+
+# Compact PID forms expanded to a resolvable URI, keyed by lowercase prefix. Each
+# entry is a scheme with a single canonical resolver, so expanding it is a fact
+# rather than a guess. ARK is deliberately absent: it has no canonical resolver
+# host, only conventions, so FDS would be inventing one.
+_PID_RESOLVERS = {
+    "doi:": "https://doi.org/",
+    "hdl:": "https://hdl.handle.net/",
+    "swh:": "https://archive.softwareheritage.org/",
+}
+
+# Schemes that are already absolute IRIs and stand as an ``@id`` unchanged. An
+# ``@id`` identifies; it need not dereference.
+_BARE_URI_SCHEMES = ("urn:",)
+
+
+def _as_uri(identifier: str) -> str | None:
+    """Resolve an identifier to a URI usable as an ``@id``, or None if it is not one.
+
+    Deliberately an allowlist rather than a general ``scheme:rest`` pattern: a
+    permissive rule would promote a typo or an unregistered scheme to an ``@id``,
+    asserting a resolvability FDS cannot back. Anything unrecognised is better
+    recorded verbatim as ``dct:identifier``.
+    """
+    candidate = identifier.strip()
+    if not candidate:
+        return None
+    if "://" in candidate:
+        return candidate
+
+    lowered = candidate.lower()
+    if lowered.startswith(_BARE_URI_SCHEMES):
+        return candidate
+    for prefix, resolver in _PID_RESOLVERS.items():
+        if lowered.startswith(prefix):
+            # swh: keeps its scheme in the path; doi:/hdl: do not.
+            suffix = candidate if prefix == "swh:" else candidate[len(prefix) :]
+            return f"{resolver}{suffix}"
+    # A bare DOI: the "10." prefix range belongs to DOI alone, so this is
+    # unambiguous. Bare Handles are not, so they need the hdl: prefix.
+    if candidate.startswith("10."):
+        return f"https://doi.org/{candidate}"
+    return None
 
 
 def _map_scientific_metadata_to_jsonld(metadata: list[Any]) -> list[dict[str, Any]]:
@@ -208,11 +408,21 @@ def map_shot_to_dcat(
     base_url: str,
     annotations: "list[DatasetRead] | None" = None,
 ) -> dict[str, Any]:
-    """Maps a Shot to a dcat:Dataset JSON-LD document."""
+    """Maps a Shot to a ``dcat:Catalog`` JSON-LD document.
+
+    A shot holds no data itself. The data sits in the Datasets and Collections
+    that carry its ``shot_id``. ``dcat:Dataset`` would promise something to download.
+    ``dcat:Catalog`` is a kind of ``dcat:Dataset`` in DCAT 3, so every field set
+    below is still allowed on it.
+
+    This document does not list the shot's datasets. You find those by asking
+    for datasets with that ``shot_id``, there can be any number of them, and the
+    Device catalog does not list its contents either.
+    """
     shot_uri = f"{base_url}/api/v1/devices/{shot.device_name}/shots/{shot.id}"
     data: dict[str, Any] = {
         "@context": METADATA_CONTEXT,
-        "@type": "dcat:Dataset",
+        "@type": "dcat:Catalog",
         "@id": shot_uri,
         "title": f"Shot {shot.id}",
         "description": shot.description,
@@ -346,36 +556,23 @@ def map_dataset_to_dcat(
     # Embed the Activity as prov:wasGeneratedBy if the relationship is loaded
     activity: "Activity | None" = getattr(dataset, "activity", None)
     if activity:
-        source_uri = f"{base_url}/api/v1/sources/{activity.source_id}"
-        prov_node: dict[str, Any] = {
-            "@type": "prov:Activity",
-            "prov:type": activity.activity_type,
-            "prov:wasAssociatedWith": {
-                "@id": source_uri,
-                "@type": "prov:SoftwareAgent",
-                "dct:title": activity.source.name if activity.source else None,
-                "dct:description": activity.source.description
-                if activity.source
-                else None,
-                "dcat:version": activity.source_version,
-            },
-        }
-        if activity.started_at:
-            prov_node["prov:startedAtTime"] = activity.started_at.isoformat()
-        if activity.ended_at:
-            prov_node["prov:endedAtTime"] = activity.ended_at.isoformat()
-        if activity.parameters:
-            prov_node["prov:value"] = activity.parameters
-        input_datasets = getattr(activity, "input_datasets", None) or []
-        if input_datasets:
-            prov_node["prov:used"] = [
+        data["prov:wasGeneratedBy"] = _build_activity_node(activity, base_url)
+
+    derivations = getattr(dataset, "derivations", None) or []
+    if derivations:
+        data["prov:wasDerivedFrom"] = [
+            _derivation_source_node(d, base_url) for d in derivations
+        ]
+        if activity:
+            activity_uri = f"{base_url}/api/v1/activities/{activity.id}"
+            data["prov:qualifiedDerivation"] = [
                 {
-                    "@id": f"{base_url}/api/v1/datasets/{ds.id}",
-                    "@type": "prov:Entity",
+                    "@type": "prov:Derivation",
+                    "prov:entity": _derivation_source_node(d, base_url),
+                    "prov:hadActivity": {"@id": activity_uri},
                 }
-                for ds in input_datasets
+                for d in derivations
             ]
-        data["prov:wasGeneratedBy"] = prov_node
 
     sci_meta = getattr(dataset, "scientific_metadata", None)
     if sci_meta:
@@ -415,6 +612,30 @@ def map_dataset_to_dcat(
         data["dcat:qualifiedRelation"] = qualified_relations
 
     return {k: v for k, v in data.items() if v is not None}
+
+
+def _build_activity_node(activity: "Activity", base_url: str) -> dict[str, Any]:
+    """Build the embedded ``prov:Activity`` node."""
+    prov_node: dict[str, Any] = {
+        "@type": "prov:Activity",
+        "prov:type": activity.activity_type,
+    }
+    primary, qualified = _build_associations(activity, base_url)
+    if primary:
+        prov_node["prov:wasAssociatedWith"] = primary
+    if qualified:
+        prov_node["prov:qualifiedAssociation"] = qualified
+    if activity.started_at:
+        prov_node["prov:startedAtTime"] = activity.started_at.isoformat()
+    if activity.ended_at:
+        prov_node["prov:endedAtTime"] = activity.ended_at.isoformat()
+    if activity.parameters:
+        prov_node["prov:value"] = activity.parameters
+    used, qualified_usage = _build_used(activity, base_url)
+    if used:
+        prov_node["prov:used"] = used
+        prov_node["prov:qualifiedUsage"] = qualified_usage
+    return prov_node
 
 
 def _qualified_relation(
@@ -469,13 +690,15 @@ def _coverage_to_period(coverage: Any) -> dict[str, Any] | None:
 def map_collection_to_dcat(
     collection: Collection | CollectionRead, base_url: str
 ) -> dict[str, Any]:
-    """Maps a Collection to a ``dcat:Catalog`` JSON-LD document.
+    """Maps a Collection to a JSON-LD document typed as both ``dcat:Catalog``
+    and ``prov:Collection``.
 
-    Member Datasets are serialised as ``dcat:dataset`` references (``@id``
-    only — full Dataset documents are available at their own URIs). Nested
-    child Collections are serialised as ``dcat:catalog`` references. The
-    producing Activity, if present, is embedded as a ``prov:wasGeneratedBy``
-    node, consistent with the Dataset serialisation in ``map_dataset_to_dcat``.
+    Member Datasets are serialised as ``dcat:dataset`` references and nested
+    child Collections as ``dcat:catalog`` references (``@id`` plus title; the
+    full documents live at their own URIs). Every member is additionally linked
+    with ``prov:hadMember``, making the collection a well-formed
+    ``prov:Collection``. The producing Activity, if present, is embedded as a
+    ``prov:wasGeneratedBy`` node, consistent with ``map_dataset_to_dcat``.
     """
     collection_id = getattr(collection, "id", None)
     collection_uri = (
@@ -484,7 +707,7 @@ def map_collection_to_dcat(
 
     data: dict[str, Any] = {
         "@context": METADATA_CONTEXT,
-        "@type": "dcat:Catalog",
+        "@type": ["dcat:Catalog", "prov:Collection"],
         "@id": collection_uri,
         "title": collection.title or collection.name,
         "description": collection.description,
@@ -502,6 +725,12 @@ def map_collection_to_dcat(
     if collection.access_level:
         data["accessRights"] = collection.access_level.value
 
+    # Claims about what this collection is: a run's outputs where activity_id is
+    # set, a selection's criteria otherwise. Same projection as Shot and Dataset.
+    sci_meta = getattr(collection, "scientific_metadata", None)
+    if sci_meta:
+        data["schema:additionalProperty"] = _map_scientific_metadata_to_jsonld(sci_meta)
+
     # Collection root → dcat:distribution (DCAT 3: dcat:Catalog is a dcat:Dataset subclass)
     # root_url is the format-agnostic access root for all physical data in this collection.
     root_url: str | None = getattr(collection, "root_url", None)
@@ -511,55 +740,45 @@ def map_collection_to_dcat(
             "dcat:accessURL": root_url,
         }
 
-    # Member Datasets → dcat:dataset references
+    # Members (Datasets and nested Collections) are serialised as DCAT
+    # references and, in PROV terms, collected via prov:hadMember below.
+    member_ids: list[str] = []
+
     member_datasets: list[Any] = getattr(collection, "datasets", []) or []
-    if member_datasets:
-        data["dcat:dataset"] = [
-            {
-                "@id": f"{base_url}/api/v1/datasets/{ds.id}",
-                "@type": "dcat:Dataset",
-                "dct:title": ds.title or ds.name,
-            }
-            for ds in member_datasets
-            if getattr(ds, "id", None)
-        ] or None
+    dataset_refs = [
+        {
+            "@id": f"{base_url}/api/v1/datasets/{ds.id}",
+            "@type": "dcat:Dataset",
+            "dct:title": ds.title or ds.name,
+        }
+        for ds in member_datasets
+        if getattr(ds, "id", None)
+    ]
+    if dataset_refs:
+        data["dcat:dataset"] = dataset_refs
+        member_ids.extend(ref["@id"] for ref in dataset_refs)
 
-    # Child Collections → dcat:catalog references
     child_collections: list[Any] = getattr(collection, "child_collections", []) or []
-    if child_collections:
-        data["dcat:catalog"] = [
-            {
-                "@id": f"{base_url}/api/v1/collections/{c.id}",
-                "@type": "dcat:Catalog",
-                "dct:title": c.title or c.name,
-            }
-            for c in child_collections
-            if getattr(c, "id", None)
-        ] or None
+    catalog_refs = [
+        {
+            "@id": f"{base_url}/api/v1/collections/{c.id}",
+            "@type": "dcat:Catalog",
+            "dct:title": c.title or c.name,
+        }
+        for c in child_collections
+        if getattr(c, "id", None)
+    ]
+    if catalog_refs:
+        data["dcat:catalog"] = catalog_refs
+        member_ids.extend(ref["@id"] for ref in catalog_refs)
 
-    # PROV-O provenance — embed the producing Activity if present
+    # PROV-O: link every member entity with prov:hadMember (prov:Collection).
+    if member_ids:
+        data["prov:hadMember"] = [{"@id": uri} for uri in member_ids]
+
+    # PROV-O provenance: embed the producing Activity if present
     activity: "Activity | None" = getattr(collection, "activity", None)
     if activity:
-        source_uri = f"{base_url}/api/v1/sources/{activity.source_id}"
-        prov_node: dict[str, Any] = {
-            "@type": "prov:Activity",
-            "prov:type": activity.activity_type,
-            "prov:wasAssociatedWith": {
-                "@id": source_uri,
-                "@type": "prov:SoftwareAgent",
-                "dct:title": activity.source.name if activity.source else None,
-                "dct:description": activity.source.description
-                if activity.source
-                else None,
-                "dcat:version": activity.source_version,
-            },
-        }
-        if activity.started_at:
-            prov_node["prov:startedAtTime"] = activity.started_at.isoformat()
-        if activity.ended_at:
-            prov_node["prov:endedAtTime"] = activity.ended_at.isoformat()
-        if activity.parameters:
-            prov_node["prov:value"] = activity.parameters
-        data["prov:wasGeneratedBy"] = prov_node
+        data["prov:wasGeneratedBy"] = _build_activity_node(activity, base_url)
 
     return {k: v for k, v in data.items() if v is not None}

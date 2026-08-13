@@ -21,7 +21,7 @@ Datasets and Collections can exist at any scope level — Global, Device, or Sho
 
 ## Scientific metadata
 
-The `scientific_metadata` field on Shot and Dataset holds a structured list of experimental conditions. Each entry is a `{name, value, unit, description}` property:
+The `scientific_metadata` field on Shot, Dataset and Collection holds a structured list of experimental conditions. Each entry is a `{name, value, unit, description}` property:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -70,7 +70,7 @@ A `time` extent projects to a [W3C Time](https://www.w3.org/TR/owl-time/) `time:
 
 ### Finding annotated records
 
-Shot and Dataset list endpoints accept an `annotation` parameter that filters on `scientific_metadata`, in one of two forms:
+Shot, Dataset and Collection list endpoints accept an `annotation` parameter that filters on `scientific_metadata`, in one of two forms:
 
 | Form | Meaning | Example |
 | --- | --- | --- |

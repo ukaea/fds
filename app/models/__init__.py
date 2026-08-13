@@ -1,7 +1,10 @@
 from .activity import (
     Activity,
+    ActivityAgent,
     ActivityCreate,
+    ActivityDelegation,
     ActivityInput,
+    ActivityInstrument,
     ActivityRead,
     ActivityType,
     ActivityUpdate,
@@ -15,7 +18,16 @@ from .collection import (
     CollectionUpdate,
 )
 from .coverage import Coverage, DateRange, ShotRange
-from .dataset import Dataset, DatasetCreate, DatasetRead, DatasetUpdate
+from .dataset import (
+    Dataset,
+    DatasetCreate,
+    DatasetDerivation,
+    DatasetDerivationCreate,
+    DatasetDerivationRead,
+    DatasetLineageNode,
+    DatasetRead,
+    DatasetUpdate,
+)
 from .device import Device, DeviceCreate, DeviceRead, DeviceUpdate
 from .distribution import (
     Distribution,
@@ -26,7 +38,7 @@ from .distribution import (
 from .policy import AccessLevel
 from .scientific_metadata import Extent, ScientificProperty
 from .shot import Shot, ShotCreate, ShotRead, ShotUpdate
-from .source import Source, SourceCreate, SourceRead, SourceUpdate
+from .source import Source, SourceCreate, SourceKind, SourceRead, SourceUpdate
 
 # Resolve forward references for models with circular dependencies
 Shot.model_rebuild()
@@ -53,6 +65,10 @@ __all__ = [
     "DatasetRead",
     "DatasetCreate",
     "DatasetUpdate",
+    "DatasetDerivation",
+    "DatasetDerivationCreate",
+    "DatasetDerivationRead",
+    "DatasetLineageNode",
     "Distribution",
     "DistributionCreate",
     "DistributionRead",
@@ -61,11 +77,15 @@ __all__ = [
     "SourceRead",
     "SourceCreate",
     "SourceUpdate",
+    "SourceKind",
     "Activity",
     "ActivityCreate",
     "ActivityRead",
     "ActivityUpdate",
     "ActivityInput",
+    "ActivityInstrument",
+    "ActivityAgent",
+    "ActivityDelegation",
     "Collection",
     "CollectionCreate",
     "CollectionRead",

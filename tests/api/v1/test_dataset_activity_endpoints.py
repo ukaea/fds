@@ -7,7 +7,7 @@ from app.models.activity import ActivityCreate, ActivityType
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
 from app.models.shot import ShotCreate
-from app.models.source import SourceCreate
+from app.models.source import SourceCreate, SourceKind
 from app.services.activity_service import ActivityService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
@@ -24,7 +24,10 @@ def setup_fixture(session: Session, admin_user: AuthenticatedUser):
         ShotCreate(id="s1", device_name="act-device"), user=admin_user
     )
     source = SourceService(session).create(
-        SourceCreate(name="act-source", description="Test source"), user=admin_user
+        SourceCreate(
+            name="act-source", description="Test source", kind=SourceKind.SOFTWARE
+        ),
+        user=admin_user,
     )
     assert source.id is not None
     activity = ActivityService(session).create(

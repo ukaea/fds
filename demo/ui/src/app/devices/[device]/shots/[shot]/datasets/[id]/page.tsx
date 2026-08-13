@@ -8,6 +8,7 @@ import { useSession, signIn } from "next-auth/react";
 import useSWR from 'swr';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Activity as ActivityType, Dataset } from '@/lib/types';
+import ProvenanceGraph from '@/components/ProvenanceGraph';
 import { ScientificMetadata } from '@/components/features';
 import { RelatedGroup } from '@/components/related-data';
 import { useDeviceLabel } from '@/lib/use-device-label';
@@ -113,7 +114,7 @@ print(ds)`;
   }
 
   // NetCDF / HDF5: fs.cat + BytesIO avoids the HeadObject call that
-  // xr.open_dataset(s3_url, ...) makes — our STS session policy grants
+  // xr.open_dataset(s3_url, ...) makes, our STS session policy grants
   // s3:GetObject only.
   return `import io
 
@@ -843,6 +844,15 @@ export default function DatasetPage() {
         </div>
 
       </div>
+
+      {datasetData?.id && datasetData?.activity_id ? (
+        <div className="card p-6 mt-8 bg-card/60 shadow-xl border-border">
+          <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground flex items-center gap-2">
+            <Activity className="w-5 h-5 text-muted-foreground" /> Provenance Graph
+          </h3>
+          <ProvenanceGraph datasetId={datasetData.id} />
+        </div>
+      ) : null}
     </div>
   );
 }

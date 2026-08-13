@@ -5,7 +5,11 @@ def test_create_source_admin(test_client: TestClient, admin_user_token: dict):
     response = test_client.post(
         "/api/v1/sources/",
         headers=admin_user_token,
-        json={"name": "API Source", "description": "Created via API"},
+        json={
+            "name": "API Source",
+            "description": "Created via API",
+            "kind": "software",
+        },
     )
     assert response.status_code == 201
     data = response.json()
@@ -17,7 +21,7 @@ def test_create_source_non_admin(test_client: TestClient, non_admin_user_token: 
     response = test_client.post(
         "/api/v1/sources/",
         headers=non_admin_user_token,
-        json={"name": "Non Admin Source"},
+        json={"name": "Non Admin Source", "kind": "software"},
     )
     assert response.status_code == 403
 
@@ -25,7 +29,7 @@ def test_create_source_non_admin(test_client: TestClient, non_admin_user_token: 
 def test_create_source_unauthorized(test_client: TestClient):
     response = test_client.post(
         "/api/v1/sources/",
-        json={"name": "Unauthorized Source"},
+        json={"name": "Unauthorized Source", "kind": "software"},
     )
     assert response.status_code == 403
 
@@ -34,12 +38,12 @@ def test_read_sources(test_client: TestClient, admin_user_token: dict):
     test_client.post(
         "/api/v1/sources/",
         headers=admin_user_token,
-        json={"name": "Source A"},
+        json={"name": "Source A", "kind": "software"},
     )
     test_client.post(
         "/api/v1/sources/",
         headers=admin_user_token,
-        json={"name": "Source B"},
+        json={"name": "Source B", "kind": "software"},
     )
 
     response = test_client.get("/api/v1/sources/")
@@ -52,7 +56,7 @@ def test_read_source_by_name(test_client: TestClient, admin_user_token: dict):
     test_client.post(
         "/api/v1/sources/",
         headers=admin_user_token,
-        json={"name": "LookupName"},
+        json={"name": "LookupName", "kind": "software"},
     )
 
     response = test_client.get("/api/v1/sources/LookupName")
