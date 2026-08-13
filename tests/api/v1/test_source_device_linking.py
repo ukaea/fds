@@ -30,6 +30,7 @@ def test_create_source_with_device(
         "name": "device_specific_source",
         "description": "Source on a device",
         "device_name": device.name,
+        "kind": "software",
     }
 
     resp = test_client.post(
@@ -50,6 +51,7 @@ def test_create_source_invalid_device(
     source_data = {
         "name": "invalid_device_source",
         "device_name": "non_existent_device",
+        "kind": "software",
     }
 
     resp = test_client.post(

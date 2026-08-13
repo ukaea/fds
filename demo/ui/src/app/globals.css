@@ -5,7 +5,7 @@
 :root {
   color-scheme: light dark;
 
-  /* Monochrome palette — light */
+  /* Monochrome palette (light) */
   --background: 0 0% 100%;
   --foreground: 0 0% 9%;
 
@@ -40,7 +40,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Monochrome palette — dark */
+    /* Monochrome palette (dark) */
     --background: 0 0% 7%;
     --foreground: 0 0% 98%;
 
@@ -80,6 +80,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Provenance graph (Graphviz SVG): render its text in the site font, not
+   Graphviz's built-in Helvetica. A CSS rule overrides the SVG font-family
+   presentation attribute, so the graph matches the rest of the page. */
+.prov-graph svg text {
+  font-family: inherit;
+}
+
 /* Neutral, theme-aware sticky header */
 .glass {
   background-color: hsl(var(--background) / 0.85);
@@ -116,4 +123,17 @@ body {
 
 .animate-fade-in {
   animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* PROV-O node styling (W3C PROV visual vocabulary: entity = yellow oval,
+   activity = blue rectangle, agent = orange house). Shape encodes the type, so
+   the pastel fills carry a second, non-colour signal; dark node text reads on
+   all three fills in both light and dark canvases. */
+:root {
+  --prov-entity-fill: #fffc87;
+  --prov-entity-border: #d4c04a;
+  --prov-activity-fill: #9fb1fc;
+  --prov-activity-border: #6b82e6;
+  --prov-agent-fill: #fdb266;
+  --prov-agent-border: #e08a34;
 }

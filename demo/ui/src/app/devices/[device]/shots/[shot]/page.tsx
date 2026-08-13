@@ -13,7 +13,7 @@ import { dedupeById } from '@/components/resolved-ref';
 import { AnnotationFilter } from '@/components/annotation-filter';
 import { DatasetCard } from '@/components/dataset-card';
 import { DatasetResults } from '@/components/dataset-results';
-import { ScientificMetadata } from '@/components/features';
+import { AnnotationBadges, ScientificMetadata } from '@/components/features';
 import { RelatedGroup } from '@/components/related-data';
 
 function formatSourceName(name: string): string {
@@ -65,6 +65,15 @@ function CollectionSection({
           ({datasetCount} dataset{datasetCount !== 1 ? 's' : ''})
         </span>
       </div>
+
+      {/* The collection's own features, kept apart from the shot's above: a
+          simulation may report H-mode on a shot that never reached it. */}
+      {collection.scientific_metadata && collection.scientific_metadata.length > 0 && (
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <span className="text-xs text-muted-foreground">Features:</span>
+          <AnnotationBadges properties={collection.scientific_metadata} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {collection.datasets?.map((dataset) => (

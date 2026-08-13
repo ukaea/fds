@@ -8,6 +8,7 @@ from app.models.collection import CollectionCreate
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
 from app.models.file_access import S3Credentials
+from app.models.scientific_metadata import ScientificProperty
 from app.models.shot import ShotCreate
 from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
@@ -349,7 +350,8 @@ def test_add_child_collection_self_reference_returns_422(
 def test_collection_jsonld_response(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
-    """GET /collections/{name} with Accept: application/ld+json returns dcat:Catalog."""
+    """GET /collections/{name} with Accept: application/ld+json returns a
+    document typed as both dcat:Catalog and prov:Collection."""
     _make_collection(session, "ld-col")
 
     response = test_client.get(
@@ -359,9 +361,31 @@ def test_collection_jsonld_response(
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/ld+json")
     data = response.json()
-    assert data["@type"] == "dcat:Catalog"
+    assert data["@type"] == ["dcat:Catalog", "prov:Collection"]
     # No root_url set → no dcat:distribution node
     assert "dcat:distribution" not in data
+
+
+def test_collection_jsonld_members_as_prov_had_member(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    """Member datasets are linked as prov:hadMember on the prov:Collection."""
+    _make_device(session, "DEV")
+    _make_shot(session, "s1", "DEV")
+    ds_id = _make_dataset(session, "member-ds", "DEV", "s1")
+    col_id = _make_collection(session, "prov-col")
+    CollectionService(session).add_dataset(col_id, ds_id, user=admin_user)
+
+    response = test_client.get(
+        "/api/v1/collections/prov-col",
+        headers={**admin_user_token, "accept": "application/ld+json"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "prov:Collection" in data["@type"]
+    assert data["prov:hadMember"] == [
+        {"@id": f"http://testserver/api/v1/datasets/{ds_id}"}
+    ]
 
 
 def test_collection_jsonld_includes_root_url_distribution(
@@ -425,7 +449,7 @@ def test_collection_include_storage_options(
         return_value=mock_provider,
     )
 
-    # Without flag — datasets inlined but no credentials
+    # Without flag: datasets inlined but no credentials
     resp = test_client.get(
         "/api/v1/devices/CRED/shots/s99/collections/cred-col",
         headers=admin_user_token,
@@ -433,7 +457,7 @@ def test_collection_include_storage_options(
     assert resp.status_code == 200
     assert resp.json()["datasets"][0].get("storage_options") is None
 
-    # With flag — credentials present on every inlined dataset
+    # With flag: credentials present on every inlined dataset
     resp2 = test_client.get(
         "/api/v1/devices/CRED/shots/s99/collections/cred-col?include_storage_options=true",
         headers=admin_user_token,
@@ -442,3 +466,31 @@ def test_collection_include_storage_options(
     ds = resp2.json()["datasets"][0]
     assert ds["storage_options"]["key"] == "c_key"
     assert ds["storage_options"]["secret"] == "c_sec"
+
+
+def test_collection_jsonld_carries_scientific_metadata(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    """A run bundle's claims project the same way a Shot's or a Dataset's do."""
+    CollectionService(session).create(
+        CollectionCreate(
+            name="ld-sci-col",
+            scientific_metadata=[
+                ScientificProperty(name="confinement_mode", value="H-mode"),
+                ScientificProperty(name="plasma_current", value=0.4, unit="MA"),
+            ],
+        ),
+        user=admin_user,
+    )
+    session.commit()
+
+    response = test_client.get(
+        "/api/v1/collections/ld-sci-col",
+        headers={**admin_user_token, "accept": "application/ld+json"},
+    )
+
+    assert response.status_code == 200
+    props = response.json()["schema:additionalProperty"]
+    assert [p["schema:name"] for p in props] == ["confinement_mode", "plasma_current"]
+    assert props[0]["@type"] == "schema:PropertyValue"
+    assert props[1]["schema:unitText"] == "MA"

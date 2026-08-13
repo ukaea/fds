@@ -5,7 +5,16 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Activity, ArrowLeft, ChevronRight, Server, Globe, Link2 } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Source, Device } from '@/lib/types';
+import { Source, SourceKind, Device } from '@/lib/types';
+
+// How each Source kind projects into the PROV-O graph. Instruments
+// are entities (tools an activity uses), not agents.
+const KIND_INFO: Record<SourceKind, { label: string; prov: string; isAgent: boolean }> = {
+  software: { label: 'Software', prov: 'prov:SoftwareAgent', isAgent: true },
+  instrument: { label: 'Instrument', prov: 'prov:Entity', isAgent: false },
+  person: { label: 'Person', prov: 'prov:Person', isAgent: true },
+  organization: { label: 'Organization', prov: 'prov:Organization', isAgent: true },
+};
 
 export default function SourceDetailPage() {
   const params = useParams();
@@ -61,6 +70,7 @@ export default function SourceDetailPage() {
   }
 
   const isDeviceLinked = !!source.device_id;
+  const kindInfo = source.kind ? KIND_INFO[source.kind] : null;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -94,17 +104,22 @@ export default function SourceDetailPage() {
             </div>
             <div className="flex-1">
               <h1 className="text-3xl font-bold text-foreground mb-2">{source.name}</h1>
-              <span className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium ${
-                isDeviceLinked
-                  ? 'text-foreground bg-muted border-border'
-                  : 'text-foreground bg-muted border-border'
-              }`}>
-                {isDeviceLinked ? (
-                  <><Server className="w-3 h-3" /> Device-Linked Source</>
-                ) : (
-                  <><Globe className="w-3 h-3" /> Global Source</>
-                )}
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium ${
+                  isDeviceLinked
+                    ? 'text-foreground bg-muted border-border'
+                    : 'text-foreground bg-muted border-border'
+                }`}>
+                  {isDeviceLinked ? (
+                    <><Server className="w-3 h-3" /> Device-Linked Source</>
+                  ) : (
+                    <><Globe className="w-3 h-3" /> Global Source</>
+                  )}
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium text-foreground bg-muted border-border">
+                  {kindInfo ? `${kindInfo.label} · ${kindInfo.prov}` : 'Unclassified'}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -132,6 +147,12 @@ export default function SourceDetailPage() {
               </dd>
             </div>
             <div>
+              <dt className="text-sm text-muted-foreground mb-1">Kind</dt>
+              <dd className="text-foreground text-sm">
+                {kindInfo ? `${kindInfo.label} (${kindInfo.prov})` : 'Unclassified'}
+              </dd>
+            </div>
+            <div>
               <dt className="text-sm text-muted-foreground mb-1">Scope</dt>
               <dd className="text-foreground text-sm">
                 {isDeviceLinked ? `Device-Linked (ID: ${source.device_id})` : 'Global'}
@@ -151,16 +172,25 @@ export default function SourceDetailPage() {
             Provenance
           </h2>
           <div className="space-y-3 text-sm text-muted-foreground">
+            {kindInfo && !kindInfo.isAgent ? (
+              <p className="leading-relaxed">
+                This source is an <span className="text-foreground font-medium">instrument</span> — a tool, not an
+                agent. In PROV-O it is a <span className="text-foreground font-medium">{kindInfo.prov}</span> that an{' '}
+                <span className="text-foreground font-medium">Activity</span> <span className="font-mono text-xs">used</span>{' '}
+                (role <span className="font-mono text-xs">instrument</span>), never the agent a run was associated with.
+              </p>
+            ) : (
+              <p className="leading-relaxed">
+                This source is a <span className="text-foreground font-medium">{kindInfo ? kindInfo.prov : 'prov:Agent'}</span>{' '}
+                — it bears responsibility for the runs it performs. Each execution is recorded as an{' '}
+                <span className="text-foreground font-medium">Activity</span> (prov:Activity) it{' '}
+                <span className="font-mono text-xs">wasAssociatedWith</span>, linked to the datasets that run produced.
+              </p>
+            )}
             <p className="leading-relaxed">
-              This source acts as a <span className="text-foreground font-medium">prov:Agent</span> — an instrument
-              or code that can produce data. Each specific execution is recorded as an{' '}
-              <span className="text-foreground font-medium">Activity</span> (prov:Activity) and linked to the
-              datasets it produced.
-            </p>
-            <p className="leading-relaxed">
-              To see which datasets were produced by this source, navigate to a dataset and check its
-              Provenance panel, or query the API at{' '}
-              <span className="font-mono text-foreground text-xs">GET /api/v1/datasets/&#123;id&#125;/source</span>.
+              To trace what a run consumed and produced, open a dataset and check its Provenance panel, or
+              request a dataset as{' '}
+              <span className="font-mono text-foreground text-xs">application/ld+json</span>.
             </p>
           </div>
         </div>

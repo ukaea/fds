@@ -199,7 +199,7 @@ else:
         },
         coords={"event": np.arange(elm_times.size)},
         attrs={
-            "title": "ELM event times — MAST shot 30421",
+            "title": "ELM event times (MAST shot 30421)",
             "annotates": "elm",
             "device": "mast",
             "shot": "30421",
@@ -398,7 +398,7 @@ else:
         },
         coords={"time": time, "R": R, "Z": Z},
         attrs={
-            "title": "JINTRAC Equilibrium — Shot 30420",
+            "title": "JINTRAC Equilibrium (Shot 30420)",
             "description": (
                 "Time-dependent poloidal flux map from JINTRAC integrated modelling "
                 "run on MAST shot 30420."
@@ -421,7 +421,7 @@ else:
         },
         coords={"time": time, "rho": rho},
         attrs={
-            "title": "JINTRAC Core Profiles — Shot 30420",
+            "title": "JINTRAC Core Profiles (Shot 30420)",
             "description": (
                 "Electron temperature, electron density, and ion temperature profiles "
                 "from JINTRAC integrated modelling run on MAST shot 30420."
@@ -453,7 +453,7 @@ else:
         },
         coords={"time": time, "rho": rho},
         attrs={
-            "title": "JINTRAC Core Sources — Shot 30420",
+            "title": "JINTRAC Core Sources (Shot 30420)",
             "description": (
                 "Electron and ion volumetric heat sources from JINTRAC integrated "
                 "modelling run on MAST shot 30420."

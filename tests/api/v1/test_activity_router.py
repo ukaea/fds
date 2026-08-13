@@ -7,7 +7,7 @@ from app.models.activity import ActivityCreate, ActivityType
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
 from app.models.shot import ShotCreate
-from app.models.source import SourceCreate
+from app.models.source import SourceCreate, SourceKind
 from app.services.activity_service import ActivityService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
@@ -18,7 +18,10 @@ from app.services.source_service import SourceService
 @pytest.fixture(name="source")
 def source_fixture(session: Session, admin_user: AuthenticatedUser):
     return SourceService(session).create(
-        SourceCreate(name="test-source", description="A test source"), user=admin_user
+        SourceCreate(
+            name="test-source", description="A test source", kind=SourceKind.SOFTWARE
+        ),
+        user=admin_user,
     )
 
 
@@ -184,100 +187,158 @@ def test_delete_activity(
     assert resp.status_code == 404
 
 
-def test_add_and_list_activity_inputs(
+def test_create_activity_with_inline_inputs(
     test_client: TestClient,
-    activity,
+    source,
     dataset,
     admin_user_token: dict[str, str],
 ):
+    """An Activity declares its used inputs in the create request."""
     resp = test_client.post(
-        f"/api/v1/activities/{activity.id}/inputs/{dataset.id}",
-        headers=admin_user_token,
-    )
-    assert resp.status_code == 201
-
-    resp = test_client.get(
-        f"/api/v1/activities/{activity.id}/inputs",
-        headers=admin_user_token,
-    )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert len(data) == 1
-    assert data[0]["id"] == dataset.id
-
-
-def test_add_input_idempotent(
-    test_client: TestClient,
-    activity,
-    dataset,
-    admin_user_token: dict[str, str],
-):
-    """Adding the same input twice should not error."""
-    test_client.post(
-        f"/api/v1/activities/{activity.id}/inputs/{dataset.id}",
-        headers=admin_user_token,
-    )
-    resp = test_client.post(
-        f"/api/v1/activities/{activity.id}/inputs/{dataset.id}",
+        "/api/v1/activities/",
+        json={
+            "source_id": source.id,
+            "activity_type": "simulation",
+            "inputs": [dataset.id],
+        },
         headers=admin_user_token,
     )
     assert resp.status_code == 201
 
 
-def test_remove_activity_input(
+def test_create_activity_invalid_input_rejected(
+    test_client: TestClient,
+    source,
+    admin_user_token: dict[str, str],
+):
+    resp = test_client.post(
+        "/api/v1/activities/",
+        json={"source_id": source.id, "inputs": [9999]},
+        headers=admin_user_token,
+    )
+    assert resp.status_code == 404
+
+
+def test_activity_input_endpoints(
     test_client: TestClient,
     activity,
     dataset,
     admin_user_token: dict[str, str],
 ):
+    base = f"/api/v1/activities/{activity.id}/inputs"
+    created = test_client.post(f"{base}/{dataset.id}", headers=admin_user_token)
+    assert created.status_code == 201
+    assert created.json() == {"activity_id": activity.id, "dataset_id": dataset.id}
+    listed = test_client.get(base, headers=admin_user_token)
+    assert listed.status_code == 200
+    assert [d["id"] for d in listed.json()] == [dataset.id]
+    assert (
+        test_client.delete(f"{base}/{dataset.id}", headers=admin_user_token).status_code
+        == 204
+    )
+    assert test_client.get(base, headers=admin_user_token).json() == []
+
+
+def test_activity_instrument_endpoints(
+    test_client: TestClient,
+    activity,
+    admin_user_token: dict[str, str],
+):
+    instrument = test_client.post(
+        "/api/v1/sources/",
+        json={"name": "probe", "kind": "instrument"},
+        headers=admin_user_token,
+    ).json()
+    base = f"/api/v1/activities/{activity.id}/instruments"
+    created = test_client.post(f"{base}/{instrument['id']}", headers=admin_user_token)
+    assert created.status_code == 201
+    assert created.json() == {
+        "activity_id": activity.id,
+        "source_id": instrument["id"],
+    }
+    assert [
+        s["id"] for s in test_client.get(base, headers=admin_user_token).json()
+    ] == [instrument["id"]]
+    assert (
+        test_client.delete(
+            f"{base}/{instrument['id']}", headers=admin_user_token
+        ).status_code
+        == 204
+    )
+
+
+def test_activity_agent_endpoints(
+    test_client: TestClient,
+    activity,
+    admin_user_token: dict[str, str],
+):
+    agent = test_client.post(
+        "/api/v1/sources/",
+        json={"name": "scheduler-x", "kind": "software"},
+        headers=admin_user_token,
+    ).json()
+    base = f"/api/v1/activities/{activity.id}/agents"
+    created = test_client.post(
+        f"{base}/{agent['id']}",
+        params={"role": "orchestrator"},
+        headers=admin_user_token,
+    )
+    assert created.status_code == 201
+    assert created.json() == {
+        "activity_id": activity.id,
+        "source_id": agent["id"],
+        "role": "orchestrator",
+    }
+    assert test_client.get(base, headers=admin_user_token).json() == [
+        {"activity_id": activity.id, "source_id": agent["id"], "role": "orchestrator"}
+    ]
+    assert (
+        test_client.delete(
+            f"{base}/{agent['id']}", headers=admin_user_token
+        ).status_code
+        == 204
+    )
+
+
+def test_activity_delegation_endpoints(
+    test_client: TestClient,
+    activity,
+    source,
+    admin_user_token: dict[str, str],
+):
+    scheduler = test_client.post(
+        "/api/v1/sources/",
+        json={"name": "scheduler-y", "kind": "software"},
+        headers=admin_user_token,
+    ).json()
+    # The scheduler must be an agent of the run before it can be delegated to.
     test_client.post(
-        f"/api/v1/activities/{activity.id}/inputs/{dataset.id}",
+        f"/api/v1/activities/{activity.id}/agents/{scheduler['id']}",
+        params={"role": "orchestrator"},
         headers=admin_user_token,
     )
-    resp = test_client.delete(
-        f"/api/v1/activities/{activity.id}/inputs/{dataset.id}",
+    base = f"/api/v1/activities/{activity.id}/delegations"
+    # The executor (source) acted on behalf of the scheduler.
+    created = test_client.post(
+        f"{base}/{source.id}/{scheduler['id']}",
         headers=admin_user_token,
     )
-    assert resp.status_code == 204
-
-    resp = test_client.get(
-        f"/api/v1/activities/{activity.id}/inputs",
-        headers=admin_user_token,
+    assert created.status_code == 201
+    assert created.json() == {
+        "activity_id": activity.id,
+        "subordinate_source_id": source.id,
+        "responsible_source_id": scheduler["id"],
+    }
+    assert test_client.get(base, headers=admin_user_token).json() == [
+        {
+            "activity_id": activity.id,
+            "subordinate_source_id": source.id,
+            "responsible_source_id": scheduler["id"],
+        }
+    ]
+    assert (
+        test_client.delete(
+            f"{base}/{source.id}/{scheduler['id']}", headers=admin_user_token
+        ).status_code
+        == 204
     )
-    assert resp.json() == []
-
-
-def test_remove_input_not_found(
-    test_client: TestClient,
-    activity,
-    admin_user_token: dict[str, str],
-):
-    resp = test_client.delete(
-        f"/api/v1/activities/{activity.id}/inputs/9999",
-        headers=admin_user_token,
-    )
-    assert resp.status_code == 404
-
-
-def test_add_input_invalid_activity(
-    test_client: TestClient,
-    dataset,
-    admin_user_token: dict[str, str],
-):
-    resp = test_client.post(
-        f"/api/v1/activities/9999/inputs/{dataset.id}",
-        headers=admin_user_token,
-    )
-    assert resp.status_code == 404
-
-
-def test_add_input_invalid_dataset(
-    test_client: TestClient,
-    activity,
-    admin_user_token: dict[str, str],
-):
-    resp = test_client.post(
-        f"/api/v1/activities/{activity.id}/inputs/9999",
-        headers=admin_user_token,
-    )
-    assert resp.status_code == 404

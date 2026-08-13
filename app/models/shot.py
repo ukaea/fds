@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 from sqlmodel import JSON, Column, Field, PrimaryKeyConstraint, Relationship, SQLModel
 
-from .mixins import TimestampMixin
+from .mixins import ScientificMetadataMixin, TimestampMixin
 from .policy import AccessLevel
 from .scientific_metadata import ScientificProperty
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from .device import Device, DeviceRead
 
 
-class ShotBase(TimestampMixin, SQLModel):
+class ShotBase(ScientificMetadataMixin, TimestampMixin, SQLModel):
     id: str = Field(index=True)
     shot_at: datetime | None = Field(default=None, index=True)
     shot_end: datetime | None = Field(default=None, index=True)
@@ -50,9 +50,6 @@ class ShotBase(TimestampMixin, SQLModel):
             "inherit from the enclosing device policy."
         ),
         sa_column=Column(JSON, nullable=True),
-    )
-    scientific_metadata: list[ScientificProperty] | None = Field(
-        default=None, sa_column=Column(JSON, nullable=True)
     )
 
 

@@ -4,7 +4,7 @@ from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
 from app.models.device import DeviceCreate
-from app.models.source import SourceCreate
+from app.models.source import SourceCreate, SourceKind
 from app.services.device_service import DeviceService
 from app.services.source_service import SourceService
 
@@ -35,6 +35,7 @@ def test_create_source_nested_endpoint(
     source_data = {
         "name": "source_on_device_a",
         "description": "Nested creation test",
+        "kind": "software",
         # device_name is NOT in body, should be inferred from URL
     }
 
@@ -61,19 +62,24 @@ def test_list_sources_nested_endpoint(
 
     # Create sources on DeviceA
     source_service.create(
-        SourceCreate(name="s1_devA", device_name=dev1.name), user=admin_user
+        SourceCreate(name="s1_devA", device_name=dev1.name, kind=SourceKind.SOFTWARE),
+        user=admin_user,
     )
     source_service.create(
-        SourceCreate(name="s2_devA", device_name=dev1.name), user=admin_user
+        SourceCreate(name="s2_devA", device_name=dev1.name, kind=SourceKind.SOFTWARE),
+        user=admin_user,
     )
 
     # Create source on DeviceB
     source_service.create(
-        SourceCreate(name="s3_devB", device_name=dev2.name), user=admin_user
+        SourceCreate(name="s3_devB", device_name=dev2.name, kind=SourceKind.SOFTWARE),
+        user=admin_user,
     )
 
     # Create global source
-    source_service.create(SourceCreate(name="s4_global"), user=admin_user)
+    source_service.create(
+        SourceCreate(name="s4_global", kind=SourceKind.SOFTWARE), user=admin_user
+    )
 
     # 1. List sources for DeviceA
     resp = test_client.get(
@@ -104,7 +110,7 @@ def test_create_source_nested_invalid_device(
     test_client: TestClient,
     admin_user_token: dict[str, str],
 ):
-    source_data = {"name": "source_invalid"}
+    source_data = {"name": "source_invalid", "kind": "software"}
     resp = test_client.post(
         "/api/v1/devices/non_existent_device/sources",
         json=source_data,

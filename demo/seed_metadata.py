@@ -59,16 +59,20 @@ MINIO_ENDPOINT = "http://localhost:9000"
 
 
 def get_or_create_source(
-    client: httpx.Client, base_url: str, name: str, description: str
+    client: httpx.Client,
+    base_url: str,
+    name: str,
+    description: str,
+    kind: str,
 ) -> int:
-    resp = client.post(
-        f"{base_url}/sources/", json={"name": name, "description": description}
-    )
+    body = {"name": name, "description": description, "kind": kind}
+    resp = client.post(f"{base_url}/sources/", json=body)
     if resp.status_code == 201:
         return resp.json()["id"]
     if resp.status_code == 409:
         return client.get(f"{base_url}/sources/{name}").json()["id"]
     resp.raise_for_status()
+    raise RuntimeError(f"Unexpected {resp.status_code} creating source {name!r}")
 
 
 def register_devices_and_shots(client: httpx.Client, base_url: str) -> None:
@@ -216,7 +220,7 @@ def register_mast_datasets(client: httpx.Client, base_url: str) -> None:
                 "url": f"s3://fds-data/shots/{shot_id}/{ids_name}",
                 "endpoint_url": MINIO_ENDPOINT,
                 "access_level": "public",
-                "title": f"{ids_name.replace('_', ' ').title()} — Shot {shot_id}",
+                "title": f"{ids_name.replace('_', ' ').title()} (Shot {shot_id})",
                 "media_type": "application/x-zarr",
             }
             # thomson_scattering resolves its chord positions and calibration chain
@@ -332,7 +336,7 @@ def register_mast_annotations(client: httpx.Client, base_url: str) -> None:
         "endpoint_url": MINIO_ENDPOINT,
         "media_type": "application/x-netcdf",
         "access_level": "public",
-        "title": "ELM event times — MAST shot 30421",
+        "title": "ELM event times (MAST shot 30421)",
         "description": (
             "Times of each ELM in the shot's H-mode window, on the shot's time "
             "base. Too many events to annotate inline, so the shot annotates the "
@@ -420,11 +424,28 @@ def _attach_activity_to_dataset(
     )
 
 
-def register_efit_provenance(client: httpx.Client, base_url: str) -> int:
-    """Registers EFIT source + analysis activities for equilibrium datasets. Returns source_id."""
+def register_efit_provenance(
+    client: httpx.Client, base_url: str, scheduler_source_id: int
+) -> int:
+    """Registers EFIT source + analysis activities for equilibrium datasets.
+
+    The inter-shot scheduler orchestrates these automated between-shot analyses,
+    so each run associates the scheduler (orchestrator) and records EFIT acting
+    on its behalf. Returns the EFIT source_id.
+    """
     source_id = get_or_create_source(
-        client, base_url, "efit", "EFIT equilibrium reconstruction code"
+        client, base_url, "efit", "EFIT equilibrium reconstruction code", "software"
     )
+    # The inter-shot scheduler orchestrated these runs; EFIT acted on its behalf.
+    orchestration = {
+        "agents": [{"source_id": scheduler_source_id, "role": "orchestrator"}],
+        "delegations": [
+            {
+                "subordinate_source_id": source_id,
+                "responsible_source_id": scheduler_source_id,
+            }
+        ],
+    }
 
     _attach_activity_to_dataset(
         client,
@@ -436,6 +457,7 @@ def register_efit_provenance(client: httpx.Client, base_url: str) -> int:
             "parameters": {"run_id": "30421-efit-standard"},
             "started_at": "2024-01-15T10:00:00",
             "ended_at": "2024-01-15T10:12:34",
+            **orchestration,
         },
         "mast",
         "30421",
@@ -452,6 +474,7 @@ def register_efit_provenance(client: httpx.Client, base_url: str) -> int:
             "parameters": {"run_id": "30420-efit-standard"},
             "started_at": "2024-01-14T09:22:00",
             "ended_at": "2024-01-14T09:34:51",
+            **orchestration,
         },
         "mast",
         "30420",
@@ -459,6 +482,35 @@ def register_efit_provenance(client: httpx.Client, base_url: str) -> int:
     )
 
     return source_id
+
+
+def register_thomson_instrument_provenance(client: httpx.Client, base_url: str) -> int:
+    """Registers the Thomson scattering system as a kind=instrument Source and an
+    acquisition Activity that *used* it, naming no agent.
+
+    A diagnostic is a tool, not something that bears responsibility, so it projects
+    to a prov:Entity the acquisition used (role=instrument), never an agent the run
+    was associated with. Returns the instrument's source_id.
+    """
+    instrument_id = get_or_create_source(
+        client,
+        base_url,
+        "thomson-scattering-system",
+        "MAST Thomson scattering diagnostic",
+        kind="instrument",
+    )
+    _attach_activity_to_dataset(
+        client,
+        base_url,
+        {
+            "activity_type": "measurement",
+            "instruments": [instrument_id],
+        },
+        "mast",
+        "30421",
+        "thomson_scattering",
+    )
+    return instrument_id
 
 
 def register_mast_upgrade_datasets(
@@ -477,7 +529,7 @@ def register_mast_upgrade_datasets(
             f"{base_url}/devices/mastu/shots/50000/collections",
             json={
                 "name": "raw-diagnostics",
-                "title": "MAST-U Shot 50000 — Raw Diagnostic Data",
+                "title": "MAST-U Shot 50000: Raw Diagnostic Data",
                 "description": "Unprocessed raw outputs from MAST-U diagnostic systems.",
                 "access_level": "restricted",
             },
@@ -494,7 +546,7 @@ def register_mast_upgrade_datasets(
                 f"{base_url}/devices/mastu/shots/50000/datasets",
                 json={
                     "name": name,
-                    "title": f"MAST-U {stem.replace('_', ' ').title()} Raw — Shot 50000",
+                    "title": f"MAST-U {stem.replace('_', ' ').title()} Raw (Shot 50000)",
                     "url": f"s3://fds-data/shots/50000/raw/{stem}.nc",
                     "endpoint_url": MINIO_ENDPOINT,
                     "media_type": "application/netcdf",
@@ -516,7 +568,7 @@ def register_mast_upgrade_datasets(
             f"{base_url}/devices/mastu/shots/50000/collections",
             json={
                 "name": "analysed",
-                "title": "MAST-U Shot 50000 — Analysed Experimental Data",
+                "title": "MAST-U Shot 50000: Analysed Experimental Data",
                 "description": (
                     "Post-processed MAST-U diagnostic data in IMAS IDS format, "
                     "stored as a single IceChunk repository. Each IDS is a group "
@@ -534,7 +586,7 @@ def register_mast_upgrade_datasets(
                 f"{base_url}/devices/mastu/shots/50000/datasets",
                 json={
                     "name": ids_name,
-                    "title": f"MAST-U {ids_name.replace('_', ' ').title()} — Shot 50000",
+                    "title": f"MAST-U {ids_name.replace('_', ' ').title()} (Shot 50000)",
                     "url": f"s3://fds-data/shots/50000/analysed/{ids_name}",
                     "endpoint_url": MINIO_ENDPOINT,
                     "media_type": "application/vnd.icechunk+zarr",
@@ -569,7 +621,7 @@ def register_mast_upgrade_50001(client: httpx.Client, base_url: str) -> None:
         f"{base_url}/devices/mastu/shots/50001/collections",
         json={
             "name": "analysed",
-            "title": "MAST-U Shot 50001 — Analysed Experimental Data",
+            "title": "MAST-U Shot 50001: Analysed Experimental Data",
             "description": (
                 "Post-processed MAST-U diagnostic data in IMAS IDS format, stored as "
                 "a single IceChunk repository. This L-mode discharge was reconstructed "
@@ -587,7 +639,7 @@ def register_mast_upgrade_50001(client: httpx.Client, base_url: str) -> None:
             f"{base_url}/devices/mastu/shots/50001/datasets",
             json={
                 "name": ids_name,
-                "title": f"MAST-U {ids_name.replace('_', ' ').title()} — Shot 50001",
+                "title": f"MAST-U {ids_name.replace('_', ' ').title()} (Shot 50001)",
                 "level": 2,
                 "url": f"s3://fds-data/shots/50001/analysed/{ids_name}",
                 "endpoint_url": MINIO_ENDPOINT,
@@ -618,7 +670,7 @@ def register_jintrac_collection(
         }
 
     source_id = get_or_create_source(
-        client, base_url, "jintrac", "Integrated modelling code"
+        client, base_url, "jintrac", "Integrated modelling code", "software"
     )
 
     act = client.post(
@@ -650,7 +702,7 @@ def register_jintrac_collection(
             f"{base_url}/devices/mast/shots/30420/datasets",
             json={
                 "name": stem,
-                "title": f"JINTRAC {stem.replace('_', ' ').title()} — Shot 30420",
+                "title": f"JINTRAC {stem.replace('_', ' ').title()} (Shot 30420)",
                 "url": f"s3://fds-data/shots/30420/jintrac/{stem}.nc",
                 "endpoint_url": MINIO_ENDPOINT,
                 "media_type": "application/netcdf",
@@ -666,10 +718,21 @@ def register_jintrac_collection(
         f"{base_url}/devices/mast/shots/30420/collections",
         json={
             "name": "jintrac-v220922",
-            "title": "JINTRAC Integrated Modelling — Shot 30420",
+            "title": "JINTRAC Integrated Modelling (Shot 30420)",
             "description": "JINTRAC transport simulation outputs: equilibrium, core profiles, and heat sources.",
             "access_level": "public",
             "activity_id": activity_id,
+            # What the run simulated, as opposed to what the shot measured. This
+            # is what makes the run findable as a run: the bundle answers
+            # ?annotation=confinement_mode:H-mode, the Activity never does.
+            "scientific_metadata": [
+                {
+                    "name": "confinement_mode",
+                    "value": "H-mode",
+                    "description": "Simulated confinement regime.",
+                },
+                {"name": "transport_model", "value": "NCLASS"},
+            ],
         },
     )
     col.raise_for_status()
@@ -716,7 +779,7 @@ def get_admin_headers(
 
 
 def seed_all(base_url: str, headers: dict[str, str]) -> dict:
-    """Seed the full demo dataset. Idempotent — safe to call multiple times. Returns a summary of IDs."""
+    """Seed the full demo dataset. Idempotent, safe to call multiple times. Returns a summary of IDs."""
     with httpx.Client(headers=headers, timeout=60.0) as client:
         register_devices_and_shots(client, base_url)
         register_mast_datasets(client, base_url)
@@ -728,12 +791,14 @@ def seed_all(base_url: str, headers: dict[str, str]) -> dict:
             base_url,
             "intershot-scheduler",
             "Automated inter-shot data acquisition scheduler",
+            "software",
         )
         experiment_collections = register_experiment_data_collections(
             client, base_url, scheduler_id
         )
         register_mast_annotations(client, base_url)
-        efit_source_id = register_efit_provenance(client, base_url)
+        efit_source_id = register_efit_provenance(client, base_url, scheduler_id)
+        thomson_instrument_id = register_thomson_instrument_provenance(client, base_url)
         mast_upgrade = register_mast_upgrade_datasets(client, base_url)
         jintrac = register_jintrac_collection(client, base_url)
 
@@ -745,6 +810,7 @@ def seed_all(base_url: str, headers: dict[str, str]) -> dict:
         "mast_30420_experiment_collection_id": experiment_collections["30420"],
         "mast_30421_experiment_collection_id": experiment_collections["30421"],
         "efit_source_id": efit_source_id,
+        "thomson_instrument_source_id": thomson_instrument_id,
         "mast_upgrade_raw_collection_id": mast_upgrade["raw_collection_id"],
         "mast_upgrade_analysed_collection_id": mast_upgrade["analysed_collection_id"],
         "jintrac_collection_id": jintrac["collection_id"],

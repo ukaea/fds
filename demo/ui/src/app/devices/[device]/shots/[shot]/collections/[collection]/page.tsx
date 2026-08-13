@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Collection, Activity } from '@/lib/types';
+import ProvenanceGraph from '@/components/ProvenanceGraph';
+import { ScientificMetadata } from '@/components/features';
 import { useDeviceLabel } from '@/lib/use-device-label';
 import { Layers, Database, FileCode, ChevronRight, Activity as ActivityIcon, Clock, ExternalLink } from 'lucide-react';
 
@@ -137,6 +139,8 @@ export default function CollectionDetailPage() {
 
         {/* Provenance sidebar */}
         <div className="space-y-4">
+          <ScientificMetadata properties={collection.scientific_metadata} />
+
           <div className="card p-5">
             <div className="flex items-center gap-2 mb-4">
               <ActivityIcon className="w-4 h-4 text-foreground" />
@@ -217,6 +221,17 @@ export default function CollectionDetailPage() {
           </div>
         </div>
       </div>
+
+      {(collection.datasets?.length ?? 0) > 0 ||
+      (collection.child_collections?.length ?? 0) > 0 ||
+      collection.activity_id != null ? (
+        <div className="card p-6 mt-8 bg-card/60 shadow-xl border-border">
+          <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground flex items-center gap-2">
+            <ActivityIcon className="w-5 h-5 text-muted-foreground" /> Provenance Graph
+          </h3>
+          <ProvenanceGraph collection={collection} />
+        </div>
+      ) : null}
     </div>
   );
 }

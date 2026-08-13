@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Request, status
+from typing import Annotated
+
+from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import (
@@ -44,9 +46,19 @@ def read_collections_global(
     offset: int = 0,
     limit: int = 100,
     include_storage_options: bool = False,
+    annotation: Annotated[list[str] | None, Query()] = None,
 ) -> list[CollectionRead]:
-    """Retrieve all global Collections accessible to the current user."""
-    collections = collection_service.get_multi(user=user, offset=offset, limit=limit)
+    """Retrieve all global Collections accessible to the current user.
+
+    `annotation` filters on the Collection's own `scientific_metadata`. Use `elm`
+    to match any collection that carries that annotation, or `elm:type-I` to match
+    a particular value. Repeat it with a *different* name to require both:
+    `?annotation=disruption&annotation=elm` matches only collections carrying
+    each.
+    """
+    collections = collection_service.get_multi(
+        user=user, offset=offset, limit=limit, annotations=annotation
+    )
     return collection_service.to_read_models(collections, include_storage_options, user)
 
 
@@ -112,10 +124,18 @@ def read_collections_device(
     offset: int = 0,
     limit: int = 100,
     include_storage_options: bool = False,
+    annotation: Annotated[list[str] | None, Query()] = None,
 ) -> list[CollectionRead]:
-    """Retrieve all device-level Collections accessible to the current user."""
+    """Retrieve all device-level Collections accessible to the current user.
+
+    `annotation` filters on the Collection's own `scientific_metadata`. Use `elm`
+    to match any collection that carries that annotation, or `elm:type-I` to match
+    a particular value. Repeat it with a *different* name to require both:
+    `?annotation=disruption&annotation=elm` matches only collections carrying
+    each.
+    """
     collections = collection_service.get_collections_for_device(
-        device_name, user=user, offset=offset, limit=limit
+        device_name, user=user, offset=offset, limit=limit, annotations=annotation
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
 
@@ -186,10 +206,23 @@ def read_collections_shot(
     offset: int = 0,
     limit: int = 100,
     include_storage_options: bool = False,
+    annotation: Annotated[list[str] | None, Query()] = None,
 ) -> list[CollectionRead]:
-    """Retrieve all Collections scoped to a specific shot."""
+    """Retrieve all Collections scoped to a specific shot.
+
+    `annotation` filters on the Collection's own `scientific_metadata`. Use `elm`
+    to match any collection that carries that annotation, or `elm:type-I` to match
+    a particular value. Repeat it with a *different* name to require both:
+    `?annotation=disruption&annotation=elm` matches only collections carrying
+    each.
+    """
     collections = collection_service.get_collections_for_shot(
-        shot_id, device_name, user=user, offset=offset, limit=limit
+        shot_id,
+        device_name,
+        user=user,
+        offset=offset,
+        limit=limit,
+        annotations=annotation,
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
 

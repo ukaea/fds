@@ -2,7 +2,7 @@ import pytest
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
-from app.models.source import Source, SourceCreate, SourceUpdate
+from app.models.source import Source, SourceCreate, SourceKind, SourceUpdate
 from app.services.exceptions import ResourceNotFoundError
 from app.services.source_service import SourceService
 
@@ -10,32 +10,69 @@ from app.services.source_service import SourceService
 def test_create_source(session: Session, admin_user: AuthenticatedUser):
     service = SourceService(session)
     source_create = SourceCreate(
-        name="Thomson Scattering", description="Measures Te and ne profiles."
+        name="Thomson Scattering",
+        description="Measures Te and ne profiles.",
+        kind=SourceKind.INSTRUMENT,
     )
     source = service.create(source_create, user=admin_user)
 
     assert source.id is not None
     assert source.name == "Thomson Scattering"
     assert source.description == "Measures Te and ne profiles."
+    assert source.kind == SourceKind.INSTRUMENT
 
     db_source = session.get(Source, source.id)
     assert db_source is not None
     assert db_source.name == "Thomson Scattering"
 
 
+def test_create_source_with_kind(session: Session, admin_user: AuthenticatedUser):
+    service = SourceService(session)
+    source = service.create(
+        SourceCreate(name="thomson-scattering", kind=SourceKind.INSTRUMENT),
+        user=admin_user,
+    )
+    assert source.kind == SourceKind.INSTRUMENT
+
+    db_source = session.get(Source, source.id)
+    assert db_source is not None
+    assert db_source.kind == SourceKind.INSTRUMENT
+
+
+def test_update_source_kind(session: Session, admin_user: AuthenticatedUser):
+    service = SourceService(session)
+    source = service.create(
+        SourceCreate(name="ts", kind=SourceKind.SOFTWARE), user=admin_user
+    )
+    assert source.kind == SourceKind.SOFTWARE
+    assert source.id is not None
+
+    updated = service.update(
+        id=source.id, obj_in=SourceUpdate(kind=SourceKind.INSTRUMENT), user=admin_user
+    )
+    assert updated.kind == SourceKind.INSTRUMENT
+
+
 def test_create_duplicate_source_fails(session: Session, admin_user: AuthenticatedUser):
     service = SourceService(session)
-    service.create(SourceCreate(name="Unique Source"), user=admin_user)
+    service.create(
+        SourceCreate(name="Unique Source", kind=SourceKind.SOFTWARE), user=admin_user
+    )
 
     from app.services.exceptions import ConflictError
 
     with pytest.raises(ConflictError):
-        service.create(SourceCreate(name="Unique Source"), user=admin_user)
+        service.create(
+            SourceCreate(name="Unique Source", kind=SourceKind.SOFTWARE),
+            user=admin_user,
+        )
 
 
 def test_get_source(session: Session, admin_user: AuthenticatedUser):
     service = SourceService(session)
-    created_source = service.create(SourceCreate(name="ECE"), user=admin_user)
+    created_source = service.create(
+        SourceCreate(name="ECE", kind=SourceKind.SOFTWARE), user=admin_user
+    )
 
     retrieved_source = service.get(created_source.id)
     assert retrieved_source is not None
@@ -51,8 +88,12 @@ def test_get_source_not_found(session: Session):
 
 def test_get_sources(session: Session, admin_user: AuthenticatedUser):
     service = SourceService(session)
-    service.create(SourceCreate(name="Source 1"), user=admin_user)
-    service.create(SourceCreate(name="Source 2"), user=admin_user)
+    service.create(
+        SourceCreate(name="Source 1", kind=SourceKind.SOFTWARE), user=admin_user
+    )
+    service.create(
+        SourceCreate(name="Source 2", kind=SourceKind.SOFTWARE), user=admin_user
+    )
 
     sources = service.get_multi()
     assert len(sources) == 2
@@ -63,7 +104,9 @@ def test_get_sources_with_limit_and_offset(
 ):
     service = SourceService(session)
     for i in range(10):
-        service.create(SourceCreate(name=f"Source {i}"), user=admin_user)
+        service.create(
+            SourceCreate(name=f"Source {i}", kind=SourceKind.SOFTWARE), user=admin_user
+        )
 
     sources_limited = service.get_multi(limit=5)
     assert len(sources_limited) == 5
@@ -75,7 +118,9 @@ def test_get_sources_with_limit_and_offset(
 
 def test_update_source(session: Session, admin_user: AuthenticatedUser):
     service = SourceService(session)
-    source = service.create(SourceCreate(name="Initial Name"), user=admin_user)
+    source = service.create(
+        SourceCreate(name="Initial Name", kind=SourceKind.SOFTWARE), user=admin_user
+    )
     assert source.id is not None
 
     updated_source = service.update(
@@ -87,7 +132,9 @@ def test_update_source(session: Session, admin_user: AuthenticatedUser):
 
 def test_delete_source(session: Session, admin_user: AuthenticatedUser):
     service = SourceService(session)
-    source = service.create(SourceCreate(name="ToDelete"), user=admin_user)
+    source = service.create(
+        SourceCreate(name="ToDelete", kind=SourceKind.SOFTWARE), user=admin_user
+    )
 
     assert source.id is not None
     service.delete(source.id, user=admin_user)
@@ -104,7 +151,9 @@ def test_delete_source_not_found(session: Session, admin_user: AuthenticatedUser
 
 def test_get_source_by_name(session: Session, admin_user: AuthenticatedUser):
     service = SourceService(session)
-    service.create(SourceCreate(name="UniqueName"), user=admin_user)
+    service.create(
+        SourceCreate(name="UniqueName", kind=SourceKind.SOFTWARE), user=admin_user
+    )
 
     retrieved = service.get_by_name("UniqueName")
     assert retrieved.name == "UniqueName"
@@ -128,7 +177,8 @@ def test_create_source_device_admin(
 
     service = SourceService(session)
     source = service.create(
-        SourceCreate(name="MastSource", device_name="MAST"), user=mast_admin_user
+        SourceCreate(name="MastSource", device_name="MAST", kind=SourceKind.SOFTWARE),
+        user=mast_admin_user,
     )
     assert source.id is not None
     assert source.name == "MastSource"
@@ -148,7 +198,8 @@ def test_create_source_unauthorized(
     service = SourceService(session)
     with pytest.raises(ForbiddenError):
         service.create(
-            SourceCreate(name="JetSource", device_name="JET"), user=mast_admin_user
+            SourceCreate(name="JetSource", device_name="JET", kind=SourceKind.SOFTWARE),
+            user=mast_admin_user,
         )
 
 
@@ -164,7 +215,10 @@ def test_update_source_device_admin(
 
     service = SourceService(session)
     source = service.create(
-        SourceCreate(name="MastSourceForUpdate", device_name="MAST"), user=admin_user
+        SourceCreate(
+            name="MastSourceForUpdate", device_name="MAST", kind=SourceKind.SOFTWARE
+        ),
+        user=admin_user,
     )
     assert source.id is not None
 
@@ -188,7 +242,10 @@ def test_delete_source_device_admin(
 
     service = SourceService(session)
     source = service.create(
-        SourceCreate(name="MastSourceForDelete", device_name="MAST"), user=admin_user
+        SourceCreate(
+            name="MastSourceForDelete", device_name="MAST", kind=SourceKind.SOFTWARE
+        ),
+        user=admin_user,
     )
     assert source.id is not None
 

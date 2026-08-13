@@ -52,9 +52,9 @@ def read_shots(
     """
     Retrieve all shots for a specific device.
 
-    `annotation` filters on the shot's `scientific_metadata`; `disruption` matches
-    on presence, `confinement_mode:H-mode` on value, and repeating it requires
-    every one.
+    `annotation` filters on the shot's `scientific_metadata`. Use `disruption` to
+    match any shot that carries that annotation, or `confinement_mode:H-mode` to
+    match a particular value. Repeat the parameter to require all of them.
     """
     shots = shot_service.get_multi_by_device_name(
         device_name=device_name,

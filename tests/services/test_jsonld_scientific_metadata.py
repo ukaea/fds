@@ -95,7 +95,7 @@ def test_map_shot_to_dcat_includes_scientific_metadata():
         ],
     )
     ld = map_shot_to_dcat(shot, BASE)
-    assert ld["@type"] == "dcat:Dataset"
+    assert ld["@type"] == "dcat:Catalog"
     assert ld["@id"] == f"{BASE}/api/v1/devices/MAST/shots/30420"
     props = ld.get("schema:additionalProperty")
     assert props is not None
@@ -247,3 +247,22 @@ def test_time_namespace_in_context():
     shot = Shot(id="1", device_name="D")
     ld = map_shot_to_dcat(shot, BASE)
     assert ld["@context"]["time"] == "http://www.w3.org/2006/time#"
+
+
+def test_shot_is_a_catalog_carrying_no_distribution():
+    """A shot groups data, it does not hold any.
+
+    ``dcat:Catalog`` is a kind of ``dcat:Dataset`` in DCAT 3, so a shot keeps
+    every field it had before. What it must not have is a distribution, because
+    a shot has nothing to download.
+    """
+    shot = Shot(id="30420", device_name="MAST", creator="MAST Team")
+
+    ld = map_shot_to_dcat(shot, BASE)
+
+    assert ld["@type"] == "dcat:Catalog"
+    assert "dcat:distribution" not in ld
+    # There can be any number of datasets in a shot, so they are not listed here.
+    assert "dcat:dataset" not in ld
+    # Properties valid on a Dataset remain valid on a Catalog.
+    assert ld["creator"] == "MAST Team"

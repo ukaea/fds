@@ -16,6 +16,9 @@ from app.core.naming import normalise_device_name
 from app.models.dataset import (
     Dataset,
     DatasetCreate,
+    DatasetDerivation,
+    DatasetDerivationCreate,
+    DatasetLineageNode,
     DatasetRead,
     DatasetScope,
     DatasetUpdate,
@@ -166,12 +169,27 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         self._reject_duplicate(obj_in, origin)
         self._validate_references(obj_in)
 
+        for derivation in obj_in.derived_from:
+            self._validate_derivation(derivation)
+
         db_obj = Dataset.model_validate(
             obj_in, update={"distributions": [], "origin": origin}
         )
         if obj_in.url:
             db_obj.distributions.append(self._build_distribution(obj_in, obj_in.url))
-        return self._persist(db_obj, obj_in.name)
+        dataset = self._persist(db_obj, obj_in.name)
+
+        if obj_in.derived_from:
+            assert dataset.id is not None
+            for derivation in obj_in.derived_from:
+                self.session.add(
+                    DatasetDerivation.model_validate(
+                        derivation, update={"dataset_id": dataset.id}
+                    )
+                )
+            self.session.commit()
+            self.session.refresh(dataset)
+        return dataset
 
     def _resolve_and_authorize_context(
         self, obj_in: DatasetCreate, user: AuthenticatedUser
@@ -245,6 +263,200 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             or derive_storage_options_type(obj_in.media_type, url),
             default_distribution=True,
         )
+
+    def _validate_derivation(
+        self, derivation: DatasetDerivationCreate, dataset_id: int | None = None
+    ) -> None:
+        """Validate an asserted upstream against the database."""
+        if derivation.source_dataset_id is None:
+            return
+        if derivation.source_dataset_id == dataset_id:
+            raise FDSValidationError("A dataset cannot be derived from itself")
+        if not self.session.get(Dataset, derivation.source_dataset_id):
+            raise ResourceNotFoundError(
+                f"Dataset {derivation.source_dataset_id} not found"
+            )
+        # dataset_id is None while registering a dataset: it does not exist yet, so
+        # nothing can derive from it and no cycle is reachable.
+        if dataset_id is not None and self._derives_from(
+            derivation.source_dataset_id, dataset_id
+        ):
+            raise FDSValidationError(
+                f"Dataset {derivation.source_dataset_id} already derives from "
+                f"dataset {dataset_id}, so neither can have been built from the "
+                "other"
+            )
+
+    def _derives_from(self, dataset_id: int, ancestor_id: int) -> bool:
+        """Whether ``ancestor_id`` is upstream of ``dataset_id``, at any depth.
+
+        Walks the asserted derivations, ignoring upstreams that are not registered
+        datasets since those are leaves. The visited set keeps the walk finite over
+        data that already contains a cycle: the check stops new ones being
+        asserted, it does not repair rows written before it existed.
+        """
+        seen: set[int] = set()
+        frontier = [dataset_id]
+        while frontier:
+            current = frontier.pop()
+            if current == ancestor_id:
+                return True
+            if current in seen:
+                continue
+            seen.add(current)
+            upstreams = self.session.exec(
+                select(DatasetDerivation).where(
+                    DatasetDerivation.dataset_id == current,
+                    col(DatasetDerivation.source_dataset_id).is_not(None),
+                )
+            ).all()
+            frontier.extend(
+                link.source_dataset_id
+                for link in upstreams
+                if link.source_dataset_id is not None
+            )
+        return False
+
+    def add_derivation(
+        self,
+        *,
+        dataset_id: int,
+        obj_in: DatasetDerivationCreate,
+        user: AuthenticatedUser,
+    ) -> DatasetDerivation:
+        """Assert an upstream this dataset was derived from. Requires write access."""
+        dataset = self._require_dataset(dataset_id)
+        self._authorize_write(dataset.device_name, user)
+        self._validate_derivation(obj_in, dataset_id=dataset_id)
+
+        link = DatasetDerivation.model_validate(
+            obj_in, update={"dataset_id": dataset_id}
+        )
+        self.session.add(link)
+        self.session.commit()
+        self.session.refresh(link)
+        return link
+
+    def remove_derivation(
+        self, *, dataset_id: int, derivation_id: int, user: AuthenticatedUser
+    ) -> bool:
+        """Retract an asserted upstream. Requires write access."""
+        dataset = self._require_dataset(dataset_id)
+        self._authorize_write(dataset.device_name, user)
+
+        link = self.session.get(DatasetDerivation, derivation_id)
+        if not link or link.dataset_id != dataset_id:
+            raise ResourceNotFoundError(
+                f"Derivation {derivation_id} not found for Dataset {dataset_id}"
+            )
+        self.session.delete(link)
+        self.session.commit()
+        return True
+
+    def get_derivations(
+        self,
+        dataset_id: int,
+        user: AuthenticatedUser,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> Sequence[DatasetDerivation]:
+        """List the upstreams asserted for a dataset.
+
+        Enforces read access to the *derived* dataset here rather than in the
+        router, so a caller cannot reach a restricted dataset's provenance by
+        going straight to the sub-resource.
+        """
+        dataset = self._require_dataset(dataset_id)
+        self.check_read_access(dataset, user)
+        statement = (
+            select(DatasetDerivation)
+            .where(DatasetDerivation.dataset_id == dataset_id)
+            .order_by(col(DatasetDerivation.id))
+            .offset(offset)
+            .limit(limit)
+        )
+        return self.session.exec(statement).all()
+
+    def get_lineage(
+        self, dataset_id: int, user: AuthenticatedUser
+    ) -> DatasetLineageNode:
+        """Walk a dataset's asserted upstreams transitively.
+
+        Only asserted derivations are followed. A run's inputs are not lineage on
+        their own: PROV-DM makes a usage-and-generation chain necessary but not
+        sufficient for derivation, so composing them would claim edges nobody
+        asserted.
+
+        Each dataset is expanded once. A repeat is emitted as a ``seen`` stub, so
+        the walk terminates on a cycle and a shared ancestor is not duplicated
+        down every path that reaches it. The response is therefore bounded by the
+        number of distinct datasets reachable, with no depth limit needed.
+        """
+        dataset = self._require_dataset(dataset_id)
+        self.check_read_access(dataset, user)
+        return self._expand_lineage(dataset, user, expanded=set())
+
+    def _expand_lineage(
+        self, dataset: Dataset, user: AuthenticatedUser, expanded: set[int]
+    ) -> DatasetLineageNode:
+        """Build a node for ``dataset`` and recurse into each asserted upstream."""
+        assert dataset.id is not None
+        expanded.add(dataset.id)
+
+        derivations = self.session.exec(
+            select(DatasetDerivation)
+            .where(DatasetDerivation.dataset_id == dataset.id)
+            .order_by(col(DatasetDerivation.id))
+        ).all()
+
+        return DatasetLineageNode(
+            dataset_id=dataset.id,
+            name=dataset.name,
+            derived_from=[
+                self._lineage_upstream(derivation, user, expanded)
+                for derivation in derivations
+            ],
+        )
+
+    def _lineage_upstream(
+        self,
+        derivation: DatasetDerivation,
+        user: AuthenticatedUser,
+        expanded: set[int],
+    ) -> DatasetLineageNode:
+        """Turn one asserted derivation into a node, expanding it where possible."""
+        if derivation.source_dataset_id is None:
+            # An external or described-only upstream. FDS holds nothing further
+            # about it, so it is always a leaf.
+            return DatasetLineageNode(
+                identifier=derivation.source_identifier,
+                label=derivation.source_label,
+                description=derivation.source_description,
+            )
+
+        source_id = derivation.source_dataset_id
+        if source_id in expanded:
+            return DatasetLineageNode(dataset_id=source_id, seen=True)
+
+        upstream = self.session.get(Dataset, source_id)
+        if upstream is None:
+            return DatasetLineageNode(dataset_id=source_id, missing=True)
+
+        try:
+            self.check_read_access(upstream, user)
+        except ForbiddenError:
+            # Withhold the name and the branch below it. The id is already
+            # visible through the derivations listing, so this reveals nothing
+            # new while keeping the truncation explicit.
+            return DatasetLineageNode(dataset_id=source_id, restricted=True)
+
+        return self._expand_lineage(upstream, user, expanded)
+
+    def _require_dataset(self, dataset_id: int) -> Dataset:
+        dataset = self.session.get(Dataset, dataset_id)
+        if not dataset:
+            raise ResourceNotFoundError(f"Dataset {dataset_id} not found")
+        return dataset
 
     def _persist(self, db_obj: Dataset, name: str) -> Dataset:
         """Add, commit (mapping a uniqueness violation to 409), refresh, and return."""

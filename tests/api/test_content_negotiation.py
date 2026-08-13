@@ -92,7 +92,8 @@ def test_content_negotiation_shot(test_client: TestClient, session: Session):
     assert response.status_code == 200
     assert "application/ld+json" in response.headers["content-type"]
     data = response.json()
-    assert data["@type"] == "dcat:Dataset"
+    # A Shot is a grouping with no store of its own, so it is a catalog.
+    assert data["@type"] == "dcat:Catalog"
     assert data["identifier"] == "30420"
     assert data["creator"] == "J. Smith"
     assert data["publisher"] == "UKAEA"

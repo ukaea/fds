@@ -9,6 +9,34 @@ A named, citable group of Datasets.
 | `access_level` | enum | No | Effective access level (inherited if not set) |
 | `root_url` | string | No | Access root for all physical data in this collection (`dcat:accessURL`) |
 | `activity_id` | integer | No | FK to the Activity that produced this collection |
+| `scientific_metadata` | list | No | What this collection is about, see [Scientific metadata](index.md#scientific-metadata) |
+
+## Making a run discoverable
+
+A Collection carries `scientific_metadata` like a Shot or a Dataset, and its list endpoints take the same `annotation` filter. That is how a simulation run becomes something you can search for.
+
+A run's outputs are always reachable as the datasets carrying its `activity_id`, so a bundle is never required. It is what you create when you want the run itself to be findable and citable. Set `activity_id` to the run and record what the run was about:
+
+```json
+{
+  "name": "jintrac-30420-56",
+  "activity_id": 12,
+  "scientific_metadata": [
+    {"name": "confinement_mode", "value": "H-mode"},
+    {"name": "plasma_current", "value": 0.4, "unit": "MA"}
+  ]
+}
+```
+
+Then the run answers a catalogue question:
+
+```http
+GET /api/v1/devices/mast/shots/30420/collections?annotation=confinement_mode:H-mode
+```
+
+If you do not bundle a run, its claims belong on its output datasets instead, and the run is not searchable as a run. That is a choice, not a gap: FDS records what a producer asserts and never infers claims they did not make.
+
+The same field on a hand-curated collection describes what the selection was chosen for rather than what a run produced. The shape and the query are identical; `activity_id` tells the two apart.
 
 Collections support nesting (a Collection can contain other Collections) and a Dataset can belong to multiple Collections. The Dataset's URI is independent of its collection membership — adding or moving a dataset never changes its URL.
 
