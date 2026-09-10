@@ -20,7 +20,7 @@ class JwksClient:
     def __init__(self):
         # Cache key: issuer, value: jwks_data (dict)
         # Increased maxsize to support multiple IdPs
-        self.cache = TTLCache(maxsize=10, ttl=600)
+        self.cache = TTLCache[str, dict, float](maxsize=10, ttl=600)
         self.issuer_jwks_uris: dict[str, str] = {}
         # Reuse a single client for connection pooling
         self.client = httpx.AsyncClient()

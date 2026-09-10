@@ -36,7 +36,7 @@ dev = [
     "pytest-mock>=3.15.1",
     "httpx>=0.27.2",
     "ruff>=0.9.2",
-    "ty>=0.0.1a16",
+    "pyright>=1.1.414",
 ]
 
 [tool.pytest.ini_options]
@@ -54,4 +54,8 @@ target-version = "py312"
 [tool.ruff.lint]
 extend-select = ["I"]
 
-[tool.ty]
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+exclude = [".venv", "demo"]
+typeCheckingMode = "standard"
