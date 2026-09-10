@@ -45,6 +45,8 @@ Services started:
 
 > **First run note:** On first launch, the demo automatically pulls real MAST shot data from the STFC public S3 store, which can take several minutes. Run without `-d` to see a progress bar in the terminal. Once downloaded, the data persists in `demo/minio-data/` across restarts, so subsequent launches are fast — unless you delete that directory.
 
+Prefix any of the above with `FDS_DEMO_SEED=0` to come up with an empty catalog; populate it later with `uv run demo/generate_data.py` and `uv run demo/seed_metadata.py`.
+
 ### 2. Explore
 
 The stack **auto-populates** the catalog on startup — the `metadata-seeder` service runs `demo/seed_metadata.py` once FDS is healthy. Browse it at `http://localhost:3000`, via `GET /api/v1/devices/`, or read the docs at `http://localhost:4001`.

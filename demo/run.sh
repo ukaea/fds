@@ -2,6 +2,8 @@
 #
 # Launch the FDS demo from the CURRENT git worktree, cleanly.
 #
+# Set FDS_DEMO_SEED=0 to come up with an empty catalogue (no demo data, no seeding).
+#
 # Podman only. This is a convenience wrapper around podman-specific problems (pod
 # teardown, the podman-compose `up` hang, stale containers across worktrees). It
 # works whichever compose provider podman uses (podman-compose or docker-compose),
@@ -106,6 +108,10 @@ if [ -n "$latest" ] && [ -n "$running" ] && [ "$latest" != "$running" ]; then
   echo "!! WARNING: $fds is NOT running the freshly built image (stale)."
 fi
 
+[ "${FDS_DEMO_SEED:-1}" = 0 ] &&
+  note="FDS_DEMO_SEED=0: the catalog is empty. Fill it with: uv run demo/seed_metadata.py" ||
+  note="The catalog is auto-populated on startup by the metadata-seeder service."
+
 cat <<EOF
 ==> Demo is up:
    API    http://localhost:8000   (docs: /docs)
@@ -114,7 +120,7 @@ cat <<EOF
    Docs    http://localhost:4001
    MinIO  http://localhost:9000
 
-The catalog is auto-populated on startup by the metadata-seeder service.
+$note
 See the live read-back workflows (access enforcement, credential vending, Dask) with:
    uvx marimo edit demo/explore.py --sandbox
 EOF

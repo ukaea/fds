@@ -76,7 +76,7 @@ services:
     volumes:
       - ./generate_data.py:/app/generate_data.py
     network_mode: host
-    command: uv run /app/generate_data.py
+    command: sh -c '[ "${FDS_DEMO_SEED:-1}" = 0 ] || uv run /app/generate_data.py'
 
   metadata-seeder:
     # Runs on every `up`, once FDS is healthy, to populate the demo catalog so the
@@ -91,7 +91,7 @@ services:
     volumes:
       - ./seed_metadata.py:/app/seed_metadata.py
     network_mode: host
-    command: uv run /app/seed_metadata.py
+    command: sh -c '[ "${FDS_DEMO_SEED:-1}" = 0 ] || uv run /app/seed_metadata.py'
 
   docs:
     image: zensical/zensical
