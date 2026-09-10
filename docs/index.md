@@ -29,6 +29,9 @@ with the example data used throughout these pages. To reseed by hand at any time
 uv run demo/seed_metadata.py
 ```
 
+To start with an empty catalogue instead, set `FDS_DEMO_SEED=0` on that command. The
+examples on these pages assume the seeded catalogue.
+
 A few read-back workflows are best seen running live — storage-layer access enforcement,
 credential vending, and parallel Dask reads. Those are in a marimo notebook:
 
