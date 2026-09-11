@@ -1,16 +1,19 @@
-import logging
 from collections.abc import Sequence
 
+import structlog
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from app.auth.access_control import (
+    EffectivePolicy,
     get_effective_access_level,
     get_effective_policy,
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_is_admin
+from app.core.audit import record_restricted_read
 from app.core.config import config
+from app.core.context import ReadTier, record_returned
 from app.core.naming import normalise_device_name
 from app.models.activity import Activity
 from app.models.collection import (
@@ -38,7 +41,7 @@ from app.services.exceptions import (
 from app.services.filters import annotation_clauses
 from app.services.shot_service import ShotService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpdate]):
@@ -56,7 +59,18 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         super().__init__(model=Collection, session=session)
 
     def check_read_access(
-        self, collection: Collection, user: AuthenticatedUser
+        self,
+        collection: Collection,
+        user: AuthenticatedUser,
+        tier: ReadTier = ReadTier.READ,
+    ) -> None:
+        """Enforce read access, and record it when the resource is not public."""
+        policy = get_effective_policy(collection, self.session)
+        self._enforce_read_policy(collection, policy, user)
+        record_restricted_read(collection, policy.access_level, tier)
+
+    def _enforce_read_policy(
+        self, collection: Collection, policy: EffectivePolicy, user: AuthenticatedUser
     ) -> None:
         """Enforce read access for Collection metadata.
 
@@ -72,8 +86,6 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
 
         Raises ``ForbiddenError`` when the user does not satisfy the policy.
         """
-        policy = get_effective_policy(collection, self.session)
-
         # PUBLIC and EMBARGOED: metadata is discoverable by everyone
         if policy.access_level in (AccessLevel.PUBLIC, AccessLevel.EMBARGOED):
             return
@@ -563,10 +575,11 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         result = []
         for collection in collections:
             try:
-                self.check_read_access(collection, user)
+                self.check_read_access(collection, user, ReadTier.LISTED)
                 result.append(collection)
             except ForbiddenError:
                 continue
+        record_returned(len(result))
         return result
 
     def get_member_datasets(self, collection_id: int | None) -> list[Dataset]:

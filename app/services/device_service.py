@@ -4,11 +4,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.auth.access_control import (
+    EffectivePolicy,
     get_effective_access_level,
     get_effective_policy,
     validate_policy_fields,
 )
 from app.auth.permissions import check_is_admin
+from app.core.audit import record_restricted_read
+from app.core.context import ReadTier, record_returned
 from app.core.naming import normalise_device_name
 from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
@@ -38,7 +41,20 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
             "Use get_by_name(name, user) instead."
         )
 
-    def check_read_access(self, device: Device, user: AuthenticatedUser) -> None:
+    def check_read_access(
+        self,
+        device: Device,
+        user: AuthenticatedUser,
+        tier: ReadTier = ReadTier.READ,
+    ) -> None:
+        """Enforce read access, and record it when the resource is not public."""
+        policy = get_effective_policy(device, self.session)
+        self._enforce_read_policy(policy, user)
+        record_restricted_read(device, policy.access_level, tier)
+
+    def _enforce_read_policy(
+        self, policy: EffectivePolicy, user: AuthenticatedUser
+    ) -> None:
         """Enforce read access for Device metadata.
 
         Resolves the effective policy (``access_level``, ``required_scopes``,
@@ -53,8 +69,6 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
 
         Raises ``ForbiddenError`` when the user does not satisfy the policy.
         """
-        policy = get_effective_policy(device, self.session)
-
         if policy.access_level in (AccessLevel.PUBLIC, AccessLevel.EMBARGOED):
             return
 
@@ -88,11 +102,12 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
 
         for device in devices:
             try:
-                self.check_read_access(device, user)
+                self.check_read_access(device, user, ReadTier.LISTED)
                 accessible_devices.append(device)
             except ForbiddenError:
                 continue
 
+        record_returned(len(accessible_devices))
         return accessible_devices
 
     def get_by_name(

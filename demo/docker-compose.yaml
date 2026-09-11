@@ -1,5 +1,13 @@
 services:
   fds:
+    logging:
+      # A file driver, not podman's journald default, which accepts these
+      # options and silently ignores them. json-file is the name both podman
+      # and docker understand.
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     build:
       context: ..
       dockerfile: Dockerfile
@@ -22,13 +30,21 @@ services:
       - idp
       - minio
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/api/v1/devices/\")'"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
       interval: 5s
       timeout: 5s
       retries: 12
       start_period: 20s
 
   idp:
+    logging:
+      # A file driver, not podman's journald default, which accepts these
+      # options and silently ignores them. json-file is the name both podman
+      # and docker understand.
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     image: quay.io/keycloak/keycloak:23.0.0
     ports:
       - "8080:8080"
@@ -40,6 +56,14 @@ services:
     command: start-dev --import-realm
 
   minio:
+    logging:
+      # A file driver, not podman's journald default, which accepts these
+      # options and silently ignores them. json-file is the name both podman
+      # and docker understand.
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     image: quay.io/minio/minio:latest
     ports:
       - "9000:9000"
@@ -53,6 +77,14 @@ services:
     command: server /data --console-address ":9001"
 
   minio-setup:
+    logging:
+      # A file driver, not podman's journald default, which accepts these
+      # options and silently ignores them. json-file is the name both podman
+      # and docker understand.
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     image: quay.io/minio/mc:latest
     depends_on:
       - minio
@@ -62,6 +94,14 @@ services:
     command: /minio-setup.sh
 
   data-generator:
+    logging:
+      # A file driver, not podman's journald default, which accepts these
+      # options and silently ignores them. json-file is the name both podman
+      # and docker understand.
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     image: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     depends_on:
       minio:
@@ -79,6 +119,14 @@ services:
     command: sh -c '[ "${FDS_DEMO_SEED:-1}" = 0 ] || uv run /app/generate_data.py'
 
   metadata-seeder:
+    logging:
+      # A file driver, not podman's journald default, which accepts these
+      # options and silently ignores them. json-file is the name both podman
+      # and docker understand.
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     # Runs on every `up`, once FDS is healthy, to populate the demo catalog so the
     # documented examples work against a live instance out of the box.
     image: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
@@ -94,6 +142,14 @@ services:
     command: sh -c '[ "${FDS_DEMO_SEED:-1}" = 0 ] || uv run /app/seed_metadata.py'
 
   docs:
+    logging:
+      # A file driver, not podman's journald default, which accepts these
+      # options and silently ignores them. json-file is the name both podman
+      # and docker understand.
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     image: zensical/zensical
     volumes:
       - ../:/docs
@@ -102,6 +158,14 @@ services:
     command: serve --dev-addr 0.0.0.0:4001
 
   frontend:
+    logging:
+      # A file driver, not podman's journald default, which accepts these
+      # options and silently ignores them. json-file is the name both podman
+      # and docker understand.
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     build:
       context: ./ui
       dockerfile: Dockerfile

@@ -1,0 +1,43 @@
+# Optional overlay adding a trace collector and Grafana to the demo stack.
+#
+#   podman compose -f demo/docker-compose.yaml \
+#                  -f demo/docker-compose.observability.yaml up -d
+#
+# Grafana is then on http://localhost:3002 (anonymous admin, no login).
+#
+# This turns on two things FDS leaves off by default: trace export, and JSON
+# log rendering. Logs themselves are not pushed from the application. FDS
+# writes them to stdout and nothing else, so collecting them is the operator's
+# choice; see docs/logging.md.
+services:
+  otel-lgtm:
+    image: docker.io/grafana/otel-lgtm:latest
+    ports:
+      - "3002:3000"
+    volumes:
+      - otel-lgtm-data:/data
+    environment:
+      - GF_PATHS_DATA=/data/grafana
+      - ENABLE_LOGS_OTELCOL=true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  fds:
+    environment:
+      # The only switch the application reads. Unset, it instruments without
+      # exporting; set, spans go to the collector.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-lgtm:4318
+      - OTEL_SERVICE_NAME=fds
+      # The liveness probe runs every five seconds and would otherwise
+      # be most of the traces in the store.
+      - OTEL_PYTHON_EXCLUDED_URLS=health
+      # Machine-readable, since something is now consuming the stream.
+      - FDS_LOG_FORMAT=json
+    depends_on:
+      - otel-lgtm
+
+volumes:
+  otel-lgtm-data:

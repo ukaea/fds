@@ -12,7 +12,8 @@ dependencies = [
     "pyjwt>=2.10.1",
     "cryptography>=44.0.0",
     "sqlmodel>=0.0.27",
-    "python-json-logger>=4.0.0",
+    "structlog>=26.1.0",
+    "opentelemetry-api>=1.44.0",
 ]
 
 
@@ -27,6 +28,12 @@ gcs = [
 azure = [
     "azure-storage-blob>=12.19.0",
     "azure-identity>=1.15.0",
+]
+otel = [
+    "opentelemetry-exporter-otlp-proto-http>=1.44.0",
+    "opentelemetry-instrumentation-fastapi>=0.65b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.65b0",
+    "opentelemetry-sdk>=1.44.0",
 ]
 
 [dependency-groups]

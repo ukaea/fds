@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from app.auth.exceptions import create_unauthorized_exception
 from app.auth.jwks import JWKSClientDep
 from app.core.config import config
+from app.core.context import set_actor
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 
 # This creates the security scheme. It simply looks for an
@@ -103,6 +104,7 @@ async def get_current_user(
     Applies scope filtering and PII hashing.
     """
     if not claims:
+        set_actor(ANONYMOUS_USER)
         return ANONYMOUS_USER
 
     raw_scopes = _extract_scopes(claims)
@@ -111,4 +113,7 @@ async def get_current_user(
     final_scopes = _filter_scopes(raw_scopes, issuer)
     hashed_id = _hash_user_id(issuer, subject)
 
-    return AuthenticatedUser(id=hashed_id, scopes=final_scopes, issuer=issuer)
+    user = AuthenticatedUser(id=hashed_id, scopes=final_scopes, issuer=issuer)
+    # Publishes the actor to every log line emitted for this request.
+    set_actor(user)
+    return user

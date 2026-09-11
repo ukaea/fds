@@ -4,6 +4,8 @@ from typing import Annotated
 from fastapi import Depends
 from sqlmodel import Session, create_engine
 
+# Imported for its side effect: registers the ORM audit listeners.
+from app.core import audit  # noqa: F401
 from app.core.config import config
 
 

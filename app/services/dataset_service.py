@@ -1,17 +1,20 @@
-import logging
 from collections.abc import Sequence
 from typing import Any
 
+import structlog
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from app.auth.access_control import (
+    EffectivePolicy,
     get_effective_access_level,
     get_effective_policy,
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
+from app.core.audit import record_restricted_read
 from app.core.config import S3StorageProvider, config
+from app.core.context import ReadTier, record_returned
 from app.core.naming import normalise_device_name
 from app.models.dataset import (
     Dataset,
@@ -54,7 +57,7 @@ from app.services.reference_service import (
     ReferenceService,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
@@ -104,7 +107,20 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             & (col(Dataset.device_name) == col(Shot.device_name)),
         ).where(*annotation_clauses(Shot.scientific_metadata, shot_annotations))
 
-    def check_read_access(self, dataset: Dataset, user: AuthenticatedUser) -> None:
+    def check_read_access(
+        self,
+        dataset: Dataset,
+        user: AuthenticatedUser,
+        tier: ReadTier = ReadTier.READ,
+    ) -> None:
+        """Enforce read access, and record it when the resource is not public."""
+        policy = get_effective_policy(dataset, self.session)
+        self._enforce_read_policy(dataset, policy, user)
+        record_restricted_read(dataset, policy.access_level, tier)
+
+    def _enforce_read_policy(
+        self, dataset: Dataset, policy: EffectivePolicy, user: AuthenticatedUser
+    ) -> None:
         """Enforce read access for Dataset metadata.
 
         Resolves the full effective policy (inherited ``access_level``,
@@ -119,8 +135,6 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
 
         Raises ``ForbiddenError`` when the user does not satisfy the policy.
         """
-        policy = get_effective_policy(dataset, self.session)
-
         # PUBLIC and EMBARGOED: metadata is discoverable by everyone
         if (
             policy.access_level == AccessLevel.PUBLIC
@@ -877,10 +891,11 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         accessible_datasets = []
         for dataset in datasets:
             try:
-                self.check_read_access(dataset, user)
+                self.check_read_access(dataset, user, ReadTier.LISTED)
                 accessible_datasets.append(dataset)
             except ForbiddenError:
                 continue
+        record_returned(len(accessible_datasets))
         return accessible_datasets
 
     def enrich_with_storage_options(
@@ -920,17 +935,11 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 model.url, endpoint_url, region, target_type
             )
             if opts is None:
-                logger.warning(
-                    "No anonymous storage options for scheme",
-                    extra={"url": model.url},
-                )
+                logger.warning("storage_options.unavailable", url=model.url)
             elif isinstance(opts, dict):
                 # Azure / GCS plain-dict shapes — not yet typed as StorageOptions.
                 # Skip injection rather than violate the field's declared type.
-                logger.warning(
-                    "Anonymous options for non-S3 scheme are not typed yet",
-                    extra={"url": model.url},
-                )
+                logger.warning("storage_options.untyped_scheme", url=model.url)
             else:
                 model.storage_options = opts
 
