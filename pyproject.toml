@@ -1,7 +1,7 @@
 [project]
 name = "fds"
 version = "0.1.0"
-description = "Add your description here"
+description = "Fusion Data Service — scalable, FAIR-compliant access to fusion experiment metadata and data"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [

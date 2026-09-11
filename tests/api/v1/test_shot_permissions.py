@@ -37,7 +37,7 @@ def test_create_shot_as_operator_success(
     assert response.json()["id"] == "shot-op-1"
 
     # cleanup
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_token_claims, None)
 
 
 def test_create_shot_as_operator_wrong_device(
@@ -69,7 +69,7 @@ def test_create_shot_as_operator_wrong_device(
     assert response.status_code == 403
 
     # cleanup
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_token_claims, None)
 
 
 def test_create_shot_no_scopes(
@@ -101,7 +101,7 @@ def test_create_shot_no_scopes(
     assert response.status_code == 403
 
     # cleanup
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_token_claims, None)
 
 
 def test_create_shot_untrusted_issuer_rejected(
@@ -133,7 +133,7 @@ def test_create_shot_untrusted_issuer_rejected(
     assert response.status_code == 403
 
     # cleanup
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_token_claims, None)
 
 
 def test_create_shot_anonymous(

@@ -34,7 +34,7 @@ def client_fixture(session: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_session] = get_session_override
     client = TestClient(app)
     yield client
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_session, None)
 
 
 @pytest.fixture(name="admin_user")
@@ -60,7 +60,7 @@ def admin_user_token() -> Generator[dict[str, str], None, None]:
     }
     app.dependency_overrides[get_token_claims] = lambda: claims
     yield {"Authorization": "Bearer fake-admin-token"}
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_token_claims, None)
 
 
 @pytest.fixture
@@ -76,7 +76,7 @@ def non_admin_user_token() -> Generator[dict[str, str], None, None]:
     }
     app.dependency_overrides[get_token_claims] = lambda: claims
     yield {"Authorization": "Bearer fake-non-admin-token"}
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_token_claims, None)
 
 
 @pytest.fixture
@@ -91,7 +91,7 @@ def mast_admin_user_token() -> Generator[dict[str, str], None, None]:
     }
     app.dependency_overrides[get_token_claims] = lambda: claims
     yield {"Authorization": "Bearer fake-mast-admin-token"}
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_token_claims, None)
 
 
 @pytest.fixture
@@ -106,7 +106,7 @@ def jet_admin_user_token() -> Generator[dict[str, str], None, None]:
     }
     app.dependency_overrides[get_token_claims] = lambda: claims
     yield {"Authorization": "Bearer fake-jet-admin-token"}
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_token_claims, None)
 
 
 @pytest.fixture(autouse=True)
