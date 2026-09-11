@@ -19,7 +19,7 @@ class GCSCredentialProvider:
         self._provider_config = provider_config
 
     def generate_credentials(
-        self, allowed_prefixes: list[str], session_name: str
+        self, allowed_prefixes: list[str], _session_name: str
     ) -> dict[str, GCSCredentials]:
         # 1. Initialize Base Credentials
         try:

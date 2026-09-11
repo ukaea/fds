@@ -12,7 +12,7 @@ class CredentialProvider(Protocol):
     """
 
     def generate_credentials(
-        self, allowed_prefixes: list[str], session_name: str
+        self, allowed_prefixes: list[str], session_name: str, /
     ) -> Mapping[str, CredentialPayload]: ...
 
 
