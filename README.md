@@ -43,9 +43,19 @@ Services started:
 - **Keycloak**: `http://localhost:8080` (User/Pass: `admin`/`admin`)
 - **MinIO**: `http://localhost:9000` (User/Pass: `admin`/`password`)
 
-> **First run note:** On first launch, the demo automatically pulls real MAST shot data from the STFC public S3 store, which can take several minutes. Run without `-d` to see a progress bar in the terminal. Once downloaded, the data persists in `demo/minio-data/` across restarts, so subsequent launches are fast — unless you delete that directory.
+> **First run note:** On first launch, the demo automatically pulls real MAST shot data from the STFC public S3 store, which can take several minutes. Run without `-d` to see a progress bar in the terminal. Once downloaded, the data persists in a named volume (`demo_minio-data`) across restarts, so subsequent launches are fast. It survives `down`, but `down -v` deletes it and the next launch re-downloads everything.
 
 Prefix any of the above with `FDS_DEMO_SEED=0` to come up with an empty catalog; populate it later with `uv run demo/generate_data.py` and `uv run demo/seed_metadata.py`.
+
+To see request traces and browse them in Grafana, add the observability overlay:
+
+```bash
+docker compose -f docker-compose.yaml -f docker-compose.observability.yaml up --build
+```
+
+That adds Grafana on `http://localhost:3002` and turns on trace export and JSON log output. It is
+off by default because it pulls a 2.5 GB image and adds around 700 MB of memory, roughly doubling
+the footprint of the demo.
 
 ### 2. Explore
 

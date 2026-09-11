@@ -77,6 +77,8 @@ class Config(BaseSettings):
     debug: bool = Field(default=False, validation_alias="FDS_DEBUG")
     ENVIRONMENT: str = Field(default="dev", validation_alias="FDS_ENVIRONMENT")
     LOG_LEVEL: str = Field(default="INFO", validation_alias="FDS_LOG_LEVEL")
+    # "json", "console", or "" to follow ENVIRONMENT.
+    LOG_FORMAT: str = Field(default="", validation_alias="FDS_LOG_FORMAT")
 
     # Database Settings
     db_user: str = Field(default="", validation_alias="FDS_DB_USER")

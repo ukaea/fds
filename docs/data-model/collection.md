@@ -38,9 +38,9 @@ If you do not bundle a run, its claims belong on its output datasets instead, an
 
 The same field on a hand-curated collection describes what the selection was chosen for rather than what a run produced. The shape and the query are identical; `activity_id` tells the two apart.
 
-Collections support nesting (a Collection can contain other Collections) and a Dataset can belong to multiple Collections. The Dataset's URI is independent of its collection membership — adding or moving a dataset never changes its URL.
+Collections support nesting (a Collection can contain other Collections) and a Dataset can belong to multiple Collections. The Dataset's URI is independent of its collection membership, so adding or moving a dataset never changes its URL.
 
-Create a Collection, then add its member Datasets by id — one bodyless `POST` per dataset:
+Create a Collection, then add its member Datasets by id, one bodyless `POST` per dataset:
 
 === "curl"
 

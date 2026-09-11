@@ -1,11 +1,15 @@
-import logging
 from collections import defaultdict
 from urllib.parse import urlparse
 
+import structlog
 from sqlmodel import Session, col, select
 
-from app.auth.access_control import get_effective_policy
+from app.auth.access_control import (
+    get_effective_access_level,
+    get_effective_policy,
+)
 from app.auth.permissions import check_shot_operator
+from app.core.audit import record_data_access
 from app.core.naming import normalise_device_name
 from app.core.storage.providers import get_provider_for_endpoint
 from app.models.dataset import Dataset
@@ -19,7 +23,7 @@ from app.models.identity import AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.services.exceptions import ForbiddenError
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class FileAccessService:
@@ -38,9 +42,7 @@ class FileAccessService:
         allowed_pairs = self._resolve_allowed_urls(user, request)
 
         if not allowed_pairs:
-            logger.info(
-                "Access denied or no datasets found", extra={"user_id": user.id}
-            )
+            logger.info("credentials.none_permitted")
             return CredentialManifest(resource_map={})
 
         grouped = self._group_by_endpoint(allowed_pairs)
@@ -51,9 +53,7 @@ class FileAccessService:
             if not urls:
                 continue
             resource_map.update(
-                self._mint_for_protocol(
-                    user, protocol, endpoint_url, urls, session_name
-                )
+                self._mint_for_protocol(protocol, endpoint_url, urls, session_name)
             )
 
         return CredentialManifest(resource_map=resource_map)
@@ -61,7 +61,7 @@ class FileAccessService:
     def _group_by_endpoint(
         self, url_pairs: list[tuple[str, str | None]]
     ) -> dict[tuple[str, str | None], list[str]]:
-        logger.info(f"Grouping {len(url_pairs)} URLs by (protocol, endpoint)")
+        logger.debug("credentials.grouping_urls", url_count=len(url_pairs))
         grouped: dict[tuple[str, str | None], list[str]] = defaultdict(list)
         for url, endpoint_url in url_pairs:
             parsed = urlparse(url)
@@ -72,7 +72,6 @@ class FileAccessService:
 
     def _mint_for_protocol(
         self,
-        user: AuthenticatedUser,
         protocol: str,
         endpoint_url: str | None,
         urls: list[str],
@@ -81,9 +80,7 @@ class FileAccessService:
         result: dict[str, CredentialPayload] = {}
         provider = get_provider_for_endpoint(endpoint_url)
         if provider is None:
-            logger.warning(
-                f"No credential provider configured for endpoint: {endpoint_url!r}. Skipping."
-            )
+            logger.warning("credentials.no_provider", endpoint_url=endpoint_url)
             return {}
 
         chunks = [
@@ -93,13 +90,11 @@ class FileAccessService:
 
         for chunk_index, chunk in enumerate(chunks):
             logger.info(
-                "Vending chunked credentials",
-                extra={
-                    "user_id": user.id,
-                    "protocol": protocol,
-                    "chunk_size": len(chunk),
-                    "chunk_index": chunk_index,
-                },
+                "credentials.vending",
+                protocol=protocol,
+                endpoint_url=endpoint_url,
+                chunk_size=len(chunk),
+                chunk_index=chunk_index,
             )
 
             creds = provider.generate_credentials(
@@ -143,14 +138,24 @@ class FileAccessService:
 
         rows = self.session.exec(query).all()
 
-        logger.info(
-            f"Query returned {len(rows)} dataset/distribution rows for request: {request.model_dump_json(exclude_none=True)}"
+        logger.debug(
+            "credentials.candidates_resolved",
+            row_count=len(rows),
+            shot_id=request.shot_id,
+            device_name=request.device_name,
+            data_urls=request.data_urls,
         )
 
         seen: dict[str, str | None] = {}
         for ds, dist in rows:
             if self._check_download_permission(user, ds):
                 seen[dist.url] = dist.endpoint_url
+                record_data_access(
+                    ds.id,
+                    dist.url,
+                    dist.endpoint_url,
+                    get_effective_access_level(ds, self.session),
+                )
 
         return list(seen.items())
 

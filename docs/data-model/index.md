@@ -7,17 +7,17 @@ FDS organises fusion data into a three-level hierarchy, with **Collections** as 
 ```text
 Global
 ├── Dataset
-├── Collection — (Dataset, Dataset, …)
+├── Collection: (Dataset, Dataset, …)
 └── Device  (e.g. MAST, MAST-Upgrade, JET)
     ├── Dataset
-    ├── Collection — (Dataset, Dataset, …)
+    ├── Collection: (Dataset, Dataset, …)
     └── Shot  (a single plasma discharge)
         ├── Dataset
-        └── Collection — (Dataset, Dataset, …)
-                      └── Collection — (Dataset, Dataset, …)
+        └── Collection: (Dataset, Dataset, …)
+                      └── Collection: (Dataset, Dataset, …)
 ```
 
-Datasets and Collections can exist at any scope level — Global, Device, or Shot. A Collection can contain other Collections as well as Datasets.
+Datasets and Collections can exist at any scope level: Global, Device, or Shot. A Collection can contain other Collections as well as Datasets.
 
 ## Scientific metadata
 

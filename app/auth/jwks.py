@@ -1,14 +1,14 @@
-import logging
 from typing import Annotated
 
 import httpx
 import jwt
+import structlog
 from cachetools import TTLCache
 from fastapi import Depends, HTTPException, status
 
 from app.core.config import config
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class JwksClient:
@@ -58,32 +58,27 @@ class JwksClient:
             if not jwks_uri:
                 raise Exception("jwks_uri not found in discovery doc")
 
-            logger.info(
-                "Discovered JWKS URI",
-                extra={"jwks_uri": jwks_uri, "issuer": issuer},
-            )
+            logger.info("jwks.uri_discovered", jwks_uri=jwks_uri, issuer=issuer)
             return jwks_uri
         except httpx.HTTPStatusError as e:
             logger.error(
-                f"IdP returned error during discovery for {issuer}",
-                extra={
-                    "status_code": e.response.status_code,
-                    "response_text": e.response.text,
-                    "issuer": issuer,
-                },
+                "jwks.discovery_rejected",
+                issuer=issuer,
+                status_code=e.response.status_code,
+                response_text=e.response.text,
             )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Identity Provider returned an error during discovery.",
             )
         except httpx.RequestError as e:
-            logger.error(f"Discovery failed for {issuer}: {e}")
+            logger.error("jwks.discovery_unreachable", issuer=issuer, error=str(e))
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Failed to connect to Identity Provider during discovery.",
             )
         except Exception as e:
-            logger.error(f"Discovery failed for {issuer}: {e}")
+            logger.error("jwks.discovery_failed", issuer=issuer, error=str(e))
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to discover JWKS URI for {issuer}",
@@ -93,9 +88,9 @@ class JwksClient:
         """
         Fetches and caches the JWKS for a specific issuer.
         """
-        # Check cache first
-        if issuer in self.cache:
-            return self.cache[issuer]
+        cached = self.cache.get(issuer)
+        if cached is not None:
+            return cached
 
         # Resolve JWKS URI if not known
         if issuer not in self.issuer_jwks_uris:
@@ -111,12 +106,11 @@ class JwksClient:
             return jwks_data
         except httpx.HTTPStatusError as e:
             logger.error(
-                f"IdP returned error fetching JWKS from {jwks_uri}",
-                extra={
-                    "status_code": e.response.status_code,
-                    "response_text": e.response.text,
-                    "issuer": issuer,
-                },
+                "jwks.fetch_rejected",
+                issuer=issuer,
+                jwks_uri=jwks_uri,
+                status_code=e.response.status_code,
+                response_text=e.response.text,
             )
             # Retrieve specific details if available, but sanitize for client
             raise HTTPException(
@@ -125,16 +119,17 @@ class JwksClient:
             )
         except httpx.RequestError as e:
             logger.error(
-                f"Network error fetching JWKS from {jwks_uri}: {e}",
-                extra={"issuer": issuer},
+                "jwks.fetch_unreachable",
+                issuer=issuer,
+                jwks_uri=jwks_uri,
+                error=str(e),
             )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Failed to connect to Identity Provider.",
             )
         except Exception as e:
-            # Fallback for parsing errors or other unexpected issues
-            logger.error(f"Unexpected error fetching JWKS from {jwks_uri}: {e}")
+            logger.error("jwks.fetch_failed", jwks_uri=jwks_uri, error=str(e))
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Internal error processing JWKS.",
@@ -146,7 +141,6 @@ class JwksClient:
         """
         try:
             unverified_header = jwt.get_unverified_header(token)
-            # We also need the payload to get the issuer
             unverified_payload = jwt.decode(token, options={"verify_signature": False})
         except jwt.PyJWTError as e:
             raise HTTPException(
@@ -167,12 +161,7 @@ class JwksClient:
         key = next((key for key in jwks["keys"] if key.get("kid") == kid), None)
 
         if not key:
-            # Refresh cache (key rotation)
-            logger.warning(
-                "Key ID not found, refreshing cache",
-                extra={"kid": kid, "issuer": issuer},
-            )
-            # Remove from cache to force refresh
+            logger.warning("jwks.key_id_miss", kid=kid, issuer=issuer)
             self.cache.pop(issuer, None)
             jwks = await self.get_jwks(issuer)
             key = next((key for key in jwks["keys"] if key.get("kid") == kid), None)

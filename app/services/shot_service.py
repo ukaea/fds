@@ -6,11 +6,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from app.auth.access_control import (
+    EffectivePolicy,
     get_effective_access_level,
     get_effective_policy,
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_shot_operator
+from app.core.audit import record_restricted_read
+from app.core.context import ReadTier, record_returned
 from app.core.naming import normalise_device_name
 from app.core.timeutils import as_utc
 from app.models.device import Device
@@ -75,7 +78,20 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
     def __init__(self, session: Session):
         super().__init__(Shot, session)
 
-    def check_read_access(self, shot: Shot, user: AuthenticatedUser) -> None:
+    def check_read_access(
+        self,
+        shot: Shot,
+        user: AuthenticatedUser,
+        tier: ReadTier = ReadTier.READ,
+    ) -> None:
+        """Enforce read access, and record it when the resource is not public."""
+        policy = get_effective_policy(shot, self.session)
+        self._enforce_read_policy(policy, user)
+        record_restricted_read(shot, policy.access_level, tier)
+
+    def _enforce_read_policy(
+        self, policy: EffectivePolicy, user: AuthenticatedUser
+    ) -> None:
         """Enforce read access for Shot metadata.
 
         Resolves the full effective policy (inherited ``access_level``,
@@ -90,8 +106,6 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
 
         Raises ``ForbiddenError`` when the user does not satisfy the policy.
         """
-        policy = get_effective_policy(shot, self.session)
-
         if policy.access_level in (AccessLevel.PUBLIC, AccessLevel.EMBARGOED):
             return
 
@@ -240,11 +254,12 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         accessible_shots = []
         for s in result:
             try:
-                self.check_read_access(s, user)
+                self.check_read_access(s, user, ReadTier.LISTED)
                 accessible_shots.append(s)
             except ForbiddenError:
                 continue
 
+        record_returned(len(accessible_shots))
         return accessible_shots
 
     def update(

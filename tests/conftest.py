@@ -1,3 +1,6 @@
+import io
+import json
+import logging
 from typing import Generator
 
 import pytest
@@ -10,6 +13,7 @@ from app.auth.security import (
 )
 from app.core.config import TrustedIdP, config
 from app.core.db import _json_serializer, get_session
+from app.core.logging import setup_logging
 from app.main import app
 
 
@@ -173,3 +177,29 @@ def mock_s3_provider(mocker):
 @pytest.fixture
 def mock_check_shot_operator(mocker):
     return mocker.patch("app.services.file_access_service.check_shot_operator")
+
+
+@pytest.fixture
+def log_lines(monkeypatch):
+    """Capture the process's real log output, as parsed JSON lines."""
+    monkeypatch.setattr(config, "LOG_FORMAT", "json")
+    setup_logging()
+
+    stream = io.StringIO()
+    for name in ("", "uvicorn", "uvicorn.error"):
+        for handler in logging.getLogger(name).handlers:
+            if isinstance(handler, logging.StreamHandler):
+                handler.setStream(stream)
+
+    def read() -> list[dict]:
+        written = stream.getvalue()
+        stream.seek(0)
+        stream.truncate()
+        return [
+            json.loads(line) for line in written.splitlines() if line.startswith("{")
+        ]
+
+    yield read
+
+    monkeypatch.undo()
+    setup_logging()
