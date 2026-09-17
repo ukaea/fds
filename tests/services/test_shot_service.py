@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from sqlmodel import Session
@@ -237,8 +237,8 @@ def test_update_shot_transition_to_public_with_scopes_rejected(
         )
 
 
-_T0 = datetime(2024, 3, 15, 14, 32, tzinfo=timezone.utc)
-_T5 = datetime(2024, 3, 15, 14, 37, tzinfo=timezone.utc)  # +300s
+_T0 = datetime(2024, 3, 15, 14, 32, tzinfo=UTC)
+_T5 = datetime(2024, 3, 15, 14, 37, tzinfo=UTC)  # +300s
 
 
 def test_create_shot_consistent_temporal(
@@ -260,7 +260,7 @@ def test_create_shot_consistent_temporal(
     assert shot.shot_duration == 300.0
     # Persisted datetimes round-trip as naive (SQLite drops tzinfo).
     assert shot.shot_end is not None
-    assert shot.shot_end.replace(tzinfo=timezone.utc) == _T5
+    assert shot.shot_end.replace(tzinfo=UTC) == _T5
 
 
 def test_create_shot_records_t0_at_distinct_from_shot_at(
@@ -270,16 +270,14 @@ def test_create_shot_records_t0_at_distinct_from_shot_at(
 ):
     """t0_at (the relative time base zero) is stored and may differ from shot_at."""
     device_service.create(DeviceCreate(name="DEVT0"), user=admin_user)
-    t0 = datetime(
-        2024, 3, 15, 14, 32, 6, tzinfo=timezone.utc
-    )  # breakdown, +6s of shot_at
+    t0 = datetime(2024, 3, 15, 14, 32, 6, tzinfo=UTC)  # breakdown, +6s of shot_at
     shot = shot_service.create(
         ShotCreate(id="t-t0", device_name="DEVT0", shot_at=_T0, t0_at=t0),
         user=admin_user,
     )
     assert shot.t0_at is not None
     # Persisted datetimes round-trip as naive (SQLite drops tzinfo).
-    assert shot.t0_at.replace(tzinfo=timezone.utc) == t0
+    assert shot.t0_at.replace(tzinfo=UTC) == t0
     assert shot.t0_at != shot.shot_at
 
 
@@ -372,8 +370,6 @@ def test_update_shot_temporal_consistency_against_existing(
         shot_service.update(
             shot_id="t-upd",
             device_name="DEVT7",
-            obj_in=ShotUpdate(
-                shot_end=datetime(2024, 3, 15, 14, 0, tzinfo=timezone.utc)
-            ),
+            obj_in=ShotUpdate(shot_end=datetime(2024, 3, 15, 14, 0, tzinfo=UTC)),
             user=admin_user,
         )

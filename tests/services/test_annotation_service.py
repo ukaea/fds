@@ -1,6 +1,6 @@
 """Feature-annotation resolution, frame-scoped."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from sqlmodel import Session
@@ -16,7 +16,7 @@ from app.services.device_service import DeviceService
 from app.services.jsonld import map_dataset_to_dcat, map_shot_to_dcat
 from app.services.shot_service import ShotService
 
-_SHOT_AT = datetime(2016, 8, 3, 14, 32, tzinfo=timezone.utc)
+_SHOT_AT = datetime(2016, 8, 3, 14, 32, tzinfo=UTC)
 
 
 @pytest.fixture(name="device_service")

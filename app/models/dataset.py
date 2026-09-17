@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 from pydantic import model_validator
 from sqlmodel import (
@@ -13,7 +13,6 @@ from sqlmodel import (
     SQLModel,
     text,
 )
-from typing_extensions import Self
 
 from .coverage import Coverage
 from .mixins import DescriptiveMixin, ScientificMetadataMixin, TimestampMixin

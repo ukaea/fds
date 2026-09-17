@@ -287,7 +287,6 @@ def delete_collection(
 ) -> None:
     """Delete a Collection by internal ID. Requires appropriate tiered authorisation."""
     collection_service.delete(id, user)
-    return None
 
 
 @router.post(
@@ -307,7 +306,6 @@ def add_dataset_to_collection(
     own URI is unaffected by this operation.
     """
     collection_service.add_dataset(collection_id, dataset_id, user)
-    return None
 
 
 @router.delete(
@@ -326,7 +324,6 @@ def remove_dataset_from_collection(
     Only the membership record is removed; the Dataset itself is not deleted.
     """
     collection_service.remove_dataset(collection_id, dataset_id, user)
-    return None
 
 
 @router.post(
@@ -345,7 +342,6 @@ def add_child_collection(
     Both Collections must already exist. The child's own URI is unaffected.
     """
     collection_service.add_child_collection(parent_id, child_id, user)
-    return None
 
 
 @router.delete(
@@ -364,7 +360,6 @@ def remove_child_collection(
     Only the nesting relationship is removed; neither Collection is deleted.
     """
     collection_service.remove_child_collection(parent_id, child_id, user)
-    return None
 
 
 @router.get(

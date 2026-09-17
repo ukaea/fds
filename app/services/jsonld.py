@@ -153,7 +153,7 @@ def _build_associations(
     primary: dict[str, Any] | None = None
     qualified: list[Any] = []
 
-    executor: "Source | None" = getattr(activity, "source", None)
+    executor: Source | None = getattr(activity, "source", None)
     if executor is not None:
         primary = _agent_node(
             executor,
@@ -554,7 +554,7 @@ def map_dataset_to_dcat(
 
     # PROV-O Mapping (Provenance)
     # Embed the Activity as prov:wasGeneratedBy if the relationship is loaded
-    activity: "Activity | None" = getattr(dataset, "activity", None)
+    activity: Activity | None = getattr(dataset, "activity", None)
     if activity:
         data["prov:wasGeneratedBy"] = _build_activity_node(activity, base_url)
 
@@ -777,7 +777,7 @@ def map_collection_to_dcat(
         data["prov:hadMember"] = [{"@id": uri} for uri in member_ids]
 
     # PROV-O provenance: embed the producing Activity if present
-    activity: "Activity | None" = getattr(collection, "activity", None)
+    activity: Activity | None = getattr(collection, "activity", None)
     if activity:
         data["prov:wasGeneratedBy"] = _build_activity_node(activity, base_url)
 

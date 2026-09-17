@@ -419,7 +419,6 @@ def delete_dataset(
     Delete a dataset by internal ID. Requires appropriate tiered authorization.
     """
     dataset_service.delete(id, user)
-    return None
 
 
 @router.post(
@@ -517,7 +516,6 @@ def delete_derivation(
     dataset_service.remove_derivation(
         dataset_id=dataset_id, derivation_id=derivation_id, user=user
     )
-    return None
 
 
 @router.post(
@@ -596,7 +594,6 @@ def delete_distribution(
     Delete a distribution. The default distribution cannot be deleted.
     """
     distribution_service.delete(distribution_id, user)
-    return None
 
 
 @router.get(

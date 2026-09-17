@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 from sqlmodel import Session
@@ -75,8 +75,8 @@ def test_content_negotiation_shot(test_client: TestClient, session: Session):
         ShotCreate(
             id="30420",
             device_name="MAST",
-            shot_at=datetime(2024, 3, 15, 14, 32, tzinfo=timezone.utc),
-            shot_end=datetime(2024, 3, 15, 14, 37, tzinfo=timezone.utc),
+            shot_at=datetime(2024, 3, 15, 14, 32, tzinfo=UTC),
+            shot_end=datetime(2024, 3, 15, 14, 37, tzinfo=UTC),
             creator="J. Smith",
             publisher="UKAEA",
             access_level=AccessLevel.PUBLIC,
@@ -114,7 +114,7 @@ def test_content_negotiation_shot_open_period(
         ShotCreate(
             id="30421",
             device_name="MAST",
-            shot_at=datetime(2024, 3, 15, 14, 32, tzinfo=timezone.utc),
+            shot_at=datetime(2024, 3, 15, 14, 32, tzinfo=UTC),
             access_level=AccessLevel.PUBLIC,
         ),
         user=admin,

@@ -147,12 +147,11 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             raise ForbiddenError("Authentication required for this resource")
 
         # Enforce IdP restriction if specified
-        if policy.allowed_idps is not None:
-            if user.issuer not in policy.allowed_idps:
-                raise ForbiddenError(
-                    "Access denied: your identity provider is not permitted "
-                    "for this resource"
-                )
+        if policy.allowed_idps is not None and user.issuer not in policy.allowed_idps:
+            raise ForbiddenError(
+                "Access denied: your identity provider is not permitted "
+                "for this resource"
+            )
 
         # Enforce required scopes if explicitly set
         # None → use capability fallback; [] → auth-only gate (already passed above)

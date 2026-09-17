@@ -63,12 +63,18 @@ Create a Collection, then add its member Datasets by id, one bodyless `POST` per
     col = requests.post(
         f"{API}/devices/mast/shots/30421/collections",
         headers=headers,
-        json={"name": "experiment-data", "title": "Experiment Data", "access_level": "public"},
+        json={
+            "name": "experiment-data",
+            "title": "Experiment Data",
+            "access_level": "public",
+        },
     ).json()
 
     # 12, 15, 18 are the ids of the datasets to group
     for dataset_id in [12, 15, 18]:
-        requests.post(f"{API}/collections/{col['id']}/datasets/{dataset_id}", headers=headers)
+        requests.post(
+            f"{API}/collections/{col['id']}/datasets/{dataset_id}", headers=headers
+        )
     ```
 
 === "Python (httpx)"
@@ -77,7 +83,11 @@ Create a Collection, then add its member Datasets by id, one bodyless `POST` per
     col = httpx.post(
         f"{API}/devices/mast/shots/30421/collections",
         headers=headers,
-        json={"name": "experiment-data", "title": "Experiment Data", "access_level": "public"},
+        json={
+            "name": "experiment-data",
+            "title": "Experiment Data",
+            "access_level": "public",
+        },
     ).json()
 
     # 12, 15, 18 are the ids of the datasets to group

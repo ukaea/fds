@@ -35,7 +35,6 @@ def _(mo):
     **Prerequisite:** a populated FDS instance. The demo stack seeds itself on startup;
     to reseed manually run `uv run demo/seed_metadata.py`.
     """)
-    return
 
 
 @app.cell
@@ -59,7 +58,6 @@ def _(mo):
     mo.md(r"""
     ## 1. Environment
     """)
-    return
 
 
 @app.cell
@@ -92,7 +90,6 @@ def _(mo):
     mo.md(r"""
     ## 2. Authentication
     """)
-    return
 
 
 @app.cell
@@ -126,7 +123,6 @@ def _(mo):
     FDS is a metadata catalog — bucket access policies are enforced by the object store.
     Opening a `restricted` dataset directly without credentials fails at the storage layer.
     """)
-    return
 
 
 @app.cell
@@ -145,7 +141,6 @@ def _(MINIO_URL, xr):
         print("Unexpected success — bucket policy may not be applied.")
     except PermissionError as permission_error:
         print(f"Expected PermissionError: {permission_error}")
-    return
 
 
 @app.cell(hide_code=True)
@@ -157,7 +152,6 @@ def _(mo):
     `include_storage_options=true` and uses the embedded dict directly — no long-lived
     keys are ever handled by the client.
     """)
-    return
 
 
 @app.cell
@@ -175,7 +169,6 @@ def _(FDS_API_URL, headers, httpx, xr):
         raw_meta["url"], engine="h5netcdf", storage_options=raw_meta["storage_options"]
     )
     raw_dataset
-    return
 
 
 @app.cell(hide_code=True)
@@ -186,7 +179,6 @@ def _(mo):
     Opening real IMAS-structured Zarr data from MAST shot 30421 via FDS-vended storage options.
     Public datasets return anonymous-compatible credentials; no auth header required.
     """)
-    return
 
 
 @app.cell
@@ -202,7 +194,6 @@ def _(FDS_API_URL, httpx, xr):
         storage_options=equilibrium_meta["storage_options"],
     )
     equilibrium_dataset
-    return
 
 
 @app.cell(hide_code=True)
@@ -217,7 +208,6 @@ def _(mo):
 
     See [Reference Geometry](https://ukaea.github.io/fds/data-model/reference-datasets/#reference-geometry).
     """)
-    return
 
 
 @app.cell
@@ -244,7 +234,6 @@ def _(FDS_API_URL, headers, httpx, xr):
             f"{geometry_dataset.sizes['channel']} channels"
         )
     geometry_dataset
-    return
 
 
 @app.cell(hide_code=True)
@@ -259,7 +248,6 @@ def _(mo):
 
     See [Reference Calibration](https://ukaea.github.io/fds/data-model/reference-datasets/#reference-calibration).
     """)
-    return
 
 
 @app.cell
@@ -284,7 +272,6 @@ def _(FDS_API_URL, headers, httpx, xr):
             f"{calibration_dataset.sizes['channel']} channels"
         )
     calibration_dataset
-    return
 
 
 @app.cell(hide_code=True)
@@ -305,7 +292,6 @@ def _(mo):
     then plot a Mirnov-coil spectrogram and overlay the mode as a band on its frequency
     axis. The consumer picks the axis; FDS just states where each feature sits.
     """)
-    return
 
 
 @app.cell
@@ -361,7 +347,6 @@ def _(FDS_API_URL, httpx, plt, shot, xr):
     current_axes.set_title("MAST 30421 plasma current with features overlaid")
     current_axes.legend(loc="upper right", fontsize="small")
     current_figure
-    return
 
 
 @app.cell
@@ -420,7 +405,6 @@ def _(FDS_API_URL, LogNorm, httpx, np, plt, shot, stft, xr):
     spectrogram_axes.set_title("MAST 30421 Mirnov spectrogram with MHD mode overlaid")
     spectrogram_axes.legend(loc="upper right", fontsize="small")
     spectrogram_figure
-    return
 
 
 @app.cell(hide_code=True)
@@ -438,7 +422,6 @@ def _(mo):
     annotation carried by the dataset's *parent shot*, and that is what lets one query
     span both levels.
     """)
-    return
 
 
 @app.cell
@@ -454,7 +437,6 @@ def _(FDS_API_URL, httpx):
 
     print(f"all MAST shots:  {[row['id'] for row in all_mast_shots]}")
     print(f"?annotation=disruption: {[row['id'] for row in disrupted_shots]}")
-    return
 
 
 @app.cell
@@ -482,7 +464,6 @@ def _(FDS_API_URL, httpx):
         shot_ids(["confinement_mode:L-mode", "confinement_mode:H-mode"]),
     )
     print("L-mode AND elm          ", shot_ids(["confinement_mode:L-mode", "elm"]))
-    return
 
 
 @app.cell(hide_code=True)
@@ -498,7 +479,6 @@ def _(mo):
     check it (`elm` **during** `confinement_mode:L-mode`) needs comparison operators
     over extents, which this first slice does not have.
     """)
-    return
 
 
 @app.cell
@@ -526,7 +506,6 @@ def _(FDS_API_URL, httpx):
     print("\n...from ELMy shots only (&shot_annotation=elm):")
     for elmy_row in elmy_equilibrium:
         print(f"  shot {elmy_row['shot_id']}   {elmy_row['title']}")
-    return
 
 
 @app.cell(hide_code=True)
@@ -538,7 +517,6 @@ def _(mo):
     are fetched in one request with embedded `storage_options`. A 4-worker Dask cluster
     reads each IDS group concurrently — FDS resolves and deduplicates all tokens server-side.
     """)
-    return
 
 
 @app.cell
@@ -585,25 +563,26 @@ def _(Client, FDS_API_URL, LocalCluster, httpx, time):
 
     print(f"Reading {len(icechunk_datasets)} IDS groups from {store_root_url}")
     start_time = time.time()
-    with LocalCluster(
-        n_workers=4, threads_per_worker=1, dashboard_address=None
-    ) as cluster:
-        with Client(cluster) as dask_client:
-            futures = [
-                dask_client.submit(
-                    read_group_mean,
-                    store_root_url,
-                    dataset["name"],
-                    dataset.get("storage_options"),
-                )
-                for dataset in icechunk_datasets
-            ]
-            mean_times = dask_client.gather(futures)
+    with (
+        LocalCluster(
+            n_workers=4, threads_per_worker=1, dashboard_address=None
+        ) as cluster,
+        Client(cluster) as dask_client,
+    ):
+        futures = [
+            dask_client.submit(
+                read_group_mean,
+                store_root_url,
+                dataset["name"],
+                dataset.get("storage_options"),
+            )
+            for dataset in icechunk_datasets
+        ]
+        mean_times = dask_client.gather(futures)
 
     print(f"Completed in {time.time() - start_time:.2f}s")
     for dataset, mean_time in zip(icechunk_datasets, mean_times):
         print(f"  {dataset['name']:30s}  mean(time) = {mean_time:.4f} s")
-    return
 
 
 if __name__ == "__main__":

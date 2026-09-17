@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from importlib import import_module
 from typing import Any
 
@@ -15,10 +15,10 @@ try:
     azure_identity = import_module("azure.identity")
     azure_blob = import_module("azure.storage.blob")
 
-    DefaultAzureCredential = getattr(azure_identity, "DefaultAzureCredential")
-    BlobServiceClient = getattr(azure_blob, "BlobServiceClient")
-    ContainerSasPermissions = getattr(azure_blob, "ContainerSasPermissions")
-    generate_container_sas = getattr(azure_blob, "generate_container_sas")
+    DefaultAzureCredential = azure_identity.DefaultAzureCredential
+    BlobServiceClient = azure_blob.BlobServiceClient
+    ContainerSasPermissions = azure_blob.ContainerSasPermissions
+    generate_container_sas = azure_blob.generate_container_sas
 except ImportError:
     pass
 
@@ -65,7 +65,7 @@ class AzureCredentialProvider:
         # We need this to sign the SAS tokens on behalf of the AD identity (App Registration)
         service_client = self._get_service_client()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Key start time: safety buffer for clock skew
         key_start = now - timedelta(minutes=5)
         # Key expiry: Token duration + buffer
@@ -73,7 +73,7 @@ class AzureCredentialProvider:
 
         try:
             ud_key = service_client.get_user_delegation_key(key_start, key_expiry)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - SDK raises many types; all mean misconfiguration
             raise ConfigurationError(f"Failed to get Azure User Delegation Key: {e}")
 
         # 2. Identify Unique Containers
@@ -112,7 +112,7 @@ class AzureCredentialProvider:
                     account_name=storage_account,
                     sas_token=sas_token,
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - SDK raises many types; all mean misconfiguration
                 # Log? Warning?
                 # Failing one container shouldn't fail all?
                 # For now, raise configuration error as it implies fundamental issue

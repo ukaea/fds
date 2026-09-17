@@ -175,7 +175,7 @@ class ReferenceService:
                 if self.coverage.overlaps(
                     device_name, version_coverage, as_coverage(other.applies_to)
                 ):
-                    role = sorted(shared_roles)[0]
+                    role = min(shared_roles)
                     raise FDSValidationError(
                         f"{self.kind.name.capitalize()} coverage for "
                         f"{self._role_scope(role, self._order_key(version))} "

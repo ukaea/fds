@@ -65,7 +65,7 @@ class GCSCredentialProvider:
         # 4. Refresh to mint the token immediately
         try:
             downscoped_creds.refresh(request)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - SDK raises many types; all mean misconfiguration
             raise ConfigurationError(f"Failed to vend GCS credentials: {e}")
 
         # 5. Structure Response

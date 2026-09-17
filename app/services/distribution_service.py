@@ -104,7 +104,7 @@ class DistributionService(
         """
         statement = select(Distribution).where(
             Distribution.dataset_id == dataset_id,
-            Distribution.default_distribution == True,  # noqa: E712
+            Distribution.default_distribution == True,
         )
         for dist in self.session.exec(statement).all():
             dist.default_distribution = False

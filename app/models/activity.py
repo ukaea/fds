@@ -1,10 +1,9 @@
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 from pydantic import model_validator
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
-from typing_extensions import Self
 
 
 class ActivityType(str, Enum):
