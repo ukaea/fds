@@ -11,6 +11,45 @@ logger = structlog.get_logger("fds.audit")
 SKIP_PATHS = frozenset({"/health", "/docs", "/redoc", "/openapi.json"})
 
 
+def route_template(scope: Scope) -> str | None:
+    """The matched route's path with its parameters as ``{name}`` placeholders.
+
+    Since FastAPI 0.122 a router included with a prefix keeps its own paths, so
+    ``scope["route"].path`` is only the tail (``/{shot}/datasets/{name}``) and
+    nothing in the scope carries the prefixes above it. The tail is exact, so it
+    is used as-is; the prefix is the leading part of the concrete path with the
+    remaining parameters substituted back in, segment by segment.
+    """
+    route = scope.get("route")
+    tail = getattr(route, "path", None)
+    path = scope.get("path")
+    if not tail or not path:
+        return path
+    params: dict[str, Any] = scope.get("path_params") or {}
+
+    tail_segments = tail.strip("/").split("/")
+    path_segments = path.strip("/").split("/")
+    if len(path_segments) < len(tail_segments):
+        return path
+    head = path_segments[: len(path_segments) - len(tail_segments)]
+
+    # Parameters the tail already names are accounted for; the rest belong to
+    # the prefix. In a REST path a value follows the literal that names its
+    # collection, so walking right to left and taking the last unclaimed match
+    # keeps a value that also appears as a literal (a device called "devices")
+    # from being rewritten in the wrong place.
+    in_tail = {seg[1:-1] for seg in tail_segments if seg[:1] == "{" and seg[-1:] == "}"}
+    for name, value in reversed(list(params.items())):
+        if name in in_tail:
+            continue
+        for i in range(len(head) - 1, -1, -1):
+            if head[i] == str(value):
+                head[i] = f"{{{name}}}"
+                break
+
+    return "/" + "/".join(head + tail_segments)
+
+
 class AuditMiddleware:
     """Seeds the request context and emits one audit line per request."""
 
@@ -34,11 +73,10 @@ class AuditMiddleware:
             try:
                 await self.app(scope, receive, send_wrapper)
             finally:
-                route = scope.get("route")
                 logger.info(
                     "request",
                     method=scope.get("method"),
-                    route=getattr(route, "path", None) or scope.get("path"),
+                    route=route_template(scope),
                     path=scope.get("path"),
                     # No status means the app raised before responding.
                     status=response.get("status", 500),
