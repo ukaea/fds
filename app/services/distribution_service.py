@@ -8,6 +8,7 @@ from app.models.distribution import Distribution, DistributionCreate, Distributi
 from app.models.identity import AuthenticatedUser
 from app.models.storage_options import derive_storage_options_type
 from app.services.base_service import BaseService
+from app.services.dataset_service import DatasetService
 from app.services.exceptions import ConflictError, ResourceNotFoundError
 
 
@@ -17,7 +18,19 @@ class DistributionService(
     def __init__(self, session: Session):
         super().__init__(model=Distribution, session=session)
 
-    def get_for_dataset(self, dataset_id: int) -> Sequence[Distribution]:
+    def get_for_dataset(
+        self, dataset_id: int, user: AuthenticatedUser
+    ) -> Sequence[Distribution]:
+        """List the distributions registered for a dataset.
+
+        Enforces read access to the parent dataset here rather than in the
+        router, so a caller cannot reach a restricted dataset's storage
+        locations by going straight to the sub-resource.
+        """
+        dataset = self.session.get(Dataset, dataset_id)
+        if not dataset:
+            raise ResourceNotFoundError(f"Dataset {dataset_id} not found")
+        DatasetService(self.session).check_read_access(dataset, user)
         statement = select(Distribution).where(Distribution.dataset_id == dataset_id)
         return self.session.exec(statement).all()
 

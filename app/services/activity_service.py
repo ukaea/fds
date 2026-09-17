@@ -17,6 +17,7 @@ from app.models.dataset import Dataset
 from app.models.identity import AuthenticatedUser
 from app.models.source import Source, SourceKind
 from app.services.base_service import BaseService
+from app.services.dataset_service import DatasetService
 from app.services.exceptions import FDSValidationError, ResourceNotFoundError
 from app.services.source_service import SourceService
 
@@ -214,11 +215,17 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         self._require_activity(id)
         return self.delete_unchecked(id)
 
-    def get_for_dataset(self, dataset_id: int) -> Activity:
-        """Retrieve the Activity that produced the given Dataset."""
-        dataset = self.session.get(Dataset, dataset_id)
-        if not dataset:
-            raise ResourceNotFoundError(f"Dataset {dataset_id} not found")
+    def get_for_dataset(self, dataset_id: int, user: AuthenticatedUser) -> Activity:
+        """Retrieve the Activity that produced the given Dataset.
+
+        Enforces read access to the dataset here rather than in the router, so a
+        caller cannot reach a restricted dataset's run parameters by going
+        straight to the sub-resource. The check runs before the
+        "no associated activity" 404 so the response does not reveal whether a
+        dataset the caller cannot read has provenance recorded.
+        """
+        dataset = self._require_dataset(dataset_id)
+        DatasetService(self.session).check_read_access(dataset, user)
         if not dataset.activity_id:
             raise ResourceNotFoundError(
                 f"Dataset {dataset_id} has no associated activity"
