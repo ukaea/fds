@@ -63,18 +63,26 @@ jobs:
       - name: Start the demo stack
         run: docker compose -f demo/docker-compose.yaml up -d --build
 
-      - name: Wait for FDS to become healthy
+      # Both must answer before tests start. FDS reports healthy well before
+      # Keycloak has finished importing its realm, and the first thing the tests
+      # do is fetch a token from it. The discovery document only exists once the
+      # realm does, so it is the honest readiness signal.
+      - name: Wait for the stack to become ready
         run: |
-          for _ in $(seq 1 30); do
-            if curl -fsS http://localhost:8000/health > /dev/null; then
-              echo "FDS is up"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "FDS did not become healthy in time"
-          docker compose -f demo/docker-compose.yaml logs --no-color
-          exit 1
+          wait_for() {
+            for _ in $(seq 1 30); do
+              if curl -fsS "$2" > /dev/null; then
+                echo "$1 is up"
+                return 0
+              fi
+              sleep 5
+            done
+            echo "$1 did not become ready in time"
+            docker compose -f demo/docker-compose.yaml logs --no-color
+            return 1
+          }
+          wait_for FDS      http://localhost:8000/health
+          wait_for Keycloak http://localhost:8080/realms/fds/.well-known/openid-configuration
 
       - name: Run integration tests
         run: uv run --all-extras pytest -m integration
