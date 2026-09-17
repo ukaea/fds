@@ -550,13 +550,14 @@ def read_distributions(
     *,
     dataset_id: int,
     distribution_service: DistributionServiceDep,
+    user: CurrentUserDep,
 ) -> list[DistributionRead]:
     """
     List all distributions for a dataset.
     """
     return [
         DistributionRead.model_validate(d)
-        for d in distribution_service.get_for_dataset(dataset_id)
+        for d in distribution_service.get_for_dataset(dataset_id, user)
     ]
 
 
@@ -606,13 +607,16 @@ def read_dataset_activity(
     *,
     dataset_id: int,
     activity_service: ActivityServiceDep,
+    user: CurrentUserDep,
 ) -> ActivityRead:
     """
     Retrieve the Activity (provenance run) that produced this dataset,
     including timestamps, parameters, and source version.
     Returns 404 if the dataset has no associated activity.
     """
-    return ActivityRead.model_validate(activity_service.get_for_dataset(dataset_id))
+    return ActivityRead.model_validate(
+        activity_service.get_for_dataset(dataset_id, user)
+    )
 
 
 @router.get(
@@ -624,10 +628,11 @@ def read_dataset_source(
     dataset_id: int,
     activity_service: ActivityServiceDep,
     source_service: SourceServiceDep,
+    user: CurrentUserDep,
 ) -> SourceRead:
     """
     Retrieve the Source (diagnostic system or code) that produced this dataset.
     Shortcut for dataset → activity → source. Returns 404 if the dataset has no activity.
     """
-    activity = activity_service.get_for_dataset(dataset_id)
+    activity = activity_service.get_for_dataset(dataset_id, user)
     return source_service.to_read_model(activity.source)
