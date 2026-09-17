@@ -30,7 +30,7 @@ def _(mo):
 
     The metadata side — content negotiation, DCAT/JSON-LD, and provenance graphs — is
     documented with copy-pasteable examples in the concept pages:
-    **[http://localhost:4001](http://localhost:4001)**.
+    **[https://ukaea.github.io/fds](https://ukaea.github.io/fds)**.
 
     **Prerequisite:** a populated FDS instance. The demo stack seeds itself on startup;
     to reseed manually run `uv run demo/seed_metadata.py`.
@@ -121,7 +121,7 @@ def _(KEYCLOAK_URL, httpx, mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 3. Attempting Unauthorised Access — [docs](http://localhost:4001/access-control/#what-fds-does-not-do)
+    ## 3. Attempting Unauthorised Access — [docs](https://ukaea.github.io/fds/access-control/#what-fds-does-not-do)
 
     FDS is a metadata catalog — bucket access policies are enforced by the object store.
     Opening a `restricted` dataset directly without credentials fails at the storage layer.
@@ -151,7 +151,7 @@ def _(MINIO_URL, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 4. Credential Vending with `include_storage_options` — [docs](http://localhost:4001/access-control/#credential-vending-sts-token-pattern)
+    ## 4. Credential Vending with `include_storage_options` — [docs](https://ukaea.github.io/fds/access-control/#credential-vending-sts-token-pattern)
 
     FDS vends short-lived STS tokens at query time. The client requests a dataset with
     `include_storage_options=true` and uses the embedded dict directly — no long-lived
@@ -208,14 +208,14 @@ def _(FDS_API_URL, httpx, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 6. Resolving Reference Geometry — [docs](http://localhost:4001/data-model/reference-datasets/#reference-geometry)
+    ## 6. Resolving Reference Geometry — [docs](https://ukaea.github.io/fds/data-model/reference-datasets/#reference-geometry)
 
     `thomson_scattering` references the `thomson_positions` role. Reading it with
     `?include_geometry=true` resolves the reference to the geometry version valid for
     each shot — shot 30420 → `v1`, shot 30421 → `v2` — returned under a `geometry`
     field. Open the resolved dataset to read the (R, Z) chord positions.
 
-    See [Reference Geometry](http://localhost:4001/data-model/reference-datasets/#reference-geometry).
+    See [Reference Geometry](https://ukaea.github.io/fds/data-model/reference-datasets/#reference-geometry).
     """)
     return
 
@@ -250,14 +250,14 @@ def _(FDS_API_URL, headers, httpx, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 7. Resolving Reference Calibration — [docs](http://localhost:4001/data-model/reference-datasets/#reference-calibration)
+    ## 7. Resolving Reference Calibration — [docs](https://ukaea.github.io/fds/data-model/reference-datasets/#reference-calibration)
 
     `thomson_scattering` also references the `thomson_calibration` role. Reading it
     with `?include_calibration=true` resolves the reference to the ordered chain —
     `[thomson_gain, thomson_absolute]` — under a `calibration` field. Unlike geometry
     (one version per role), calibration is a chain of stages applied in order.
 
-    See [Reference Calibration](http://localhost:4001/data-model/reference-datasets/#reference-calibration).
+    See [Reference Calibration](https://ukaea.github.io/fds/data-model/reference-datasets/#reference-calibration).
     """)
     return
 
@@ -290,7 +290,7 @@ def _(FDS_API_URL, headers, httpx, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 8. Overlaying Features on a Signal — [docs](http://localhost:4001/data-model/#feature-annotation)
+    ## 8. Overlaying Features on a Signal — [docs](https://ukaea.github.io/fds/data-model/#feature-annotation)
 
     Shot 30421 carries *features* in its `scientific_metadata`: an H-mode window and a
     disruption on the `time` axis, and an MHD `mode` on the `frequency` axis. Each is an
@@ -426,7 +426,7 @@ def _(FDS_API_URL, LogNorm, httpx, np, plt, shot, stft, xr):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 9. Finding Data by Feature — [docs](http://localhost:4001/data-model/#finding-annotated-records)
+    ## 9. Finding Data by Feature — [docs](https://ukaea.github.io/fds/data-model/#finding-annotated-records)
 
     Section 8 showed what a feature *is*. This is what makes it useful: the same annotations are
     a filter on the catalogue, so a question about the plasma becomes a single request and
@@ -532,7 +532,7 @@ def _(FDS_API_URL, httpx):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 10. Parallel `icechunk` Reads (Dask) — [docs](http://localhost:4001/access-control/#bulk-access-the-credential-manifest)
+    ## 10. Parallel `icechunk` Reads (Dask) — [docs](https://ukaea.github.io/fds/access-control/#bulk-access-the-credential-manifest)
 
     The **Credential Manifest** pattern at scale. All datasets in the MAST-U `icechunk` store
     are fetched in one request with embedded `storage_options`. A 4-worker Dask cluster

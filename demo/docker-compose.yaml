@@ -141,22 +141,6 @@ services:
     network_mode: host
     command: sh -c '[ "${FDS_DEMO_SEED:-1}" = 0 ] || uv run /app/seed_metadata.py'
 
-  docs:
-    logging:
-      # A file driver, not podman's journald default, which accepts these
-      # options and silently ignores them. json-file is the name both podman
-      # and docker understand.
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-    image: zensical/zensical
-    volumes:
-      - ../:/docs
-    ports:
-      - "4001:4001"
-    command: serve --dev-addr 0.0.0.0:4001
-
   frontend:
     logging:
       # A file driver, not podman's journald default, which accepts these

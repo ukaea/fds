@@ -69,7 +69,6 @@ Public reads need no token; creating data or reading restricted data does.
 | Keycloak (IdP) | [http://localhost:8080](http://localhost:8080), `admin` / `admin` |
 | MinIO (object store) | [http://localhost:9001](http://localhost:9001), `admin` / `password` |
 | Frontend UI | [http://localhost:3000](http://localhost:3000) |
-| **These docs** | [http://localhost:4001](http://localhost:4001) |
 
 ## Where to start
 

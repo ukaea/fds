@@ -64,7 +64,7 @@ up_pid=$!
 
 # Long-lived services that must end up Running (minio-setup/data-generator are
 # one-shot and intentionally excluded).
-services="fds idp minio docs frontend"
+services="fds idp minio frontend"
 need="$(echo "$services" | wc -w | tr -d ' ')"
 
 echo -n "==> Bringing stack up "
@@ -117,7 +117,7 @@ cat <<EOF
    API    http://localhost:8000   (docs: /docs)
    UI     http://localhost:3000
    IdP     http://localhost:8080
-   Docs    http://localhost:4001
+   Docs   https://ukaea.github.io/fds/
    MinIO  http://localhost:9000
 
 $note

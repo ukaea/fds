@@ -109,7 +109,7 @@ export default function Home() {
           <h2 className="text-2xl font-bold mb-3">Datasets</h2>
           <p className="text-muted-foreground">Search and access scientific data directly via the global catalog.</p>
         </Link>
-        <a href="http://localhost:4001" target="_blank" rel="noopener noreferrer" className="card group p-8 flex flex-col items-center text-center hover:bg-muted transition-colors">
+        <a href="https://ukaea.github.io/fds/" target="_blank" rel="noopener noreferrer" className="card group p-8 flex flex-col items-center text-center hover:bg-muted transition-colors">
           <div className="bg-muted p-4 rounded-full mb-6 group-hover:scale-110 transition-transform">
             <BookOpen className="w-8 h-8 text-foreground" />
           </div>

@@ -1,9 +1,3 @@
-"""Full-stack reference-calibration resolution (ADR-0037).
-
-Exercises the seeded Thomson calibration chain: two device-level stages on
-`mast`, resolved as an ordered chain via `?include_calibration=true`.
-"""
-
 import pytest
 
 from tests.integration.conftest import FDS_URL

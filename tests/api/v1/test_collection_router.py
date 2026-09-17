@@ -392,7 +392,9 @@ def test_collection_jsonld_includes_root_url_distribution(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
     """When a Collection has ``root_url``, JSON-LD includes a dcat:distribution
-    node with dcat:accessURL pointing at the store root (per ADR-0029)."""
+    node with dcat:accessURL pointing at the store root. A collection backed by a
+    single store is addressable as a whole, so the store root is the collection's
+    distribution rather than a property of each member."""
     CollectionService(session).create(
         CollectionCreate(
             name="ld-col-root",

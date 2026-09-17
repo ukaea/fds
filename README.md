@@ -1,6 +1,11 @@
 # Fusion Data Service (FDS)
 
+[![CI](https://github.com/ukaea/fds/actions/workflows/ci.yml/badge.svg)](https://github.com/ukaea/fds/actions/workflows/ci.yml)
+[![Licence](https://img.shields.io/badge/licence-Apache--2.0-blue.svg)](LICENSE)
+
 The Fusion Data Service (FDS) is a platform designed to provide scalable, FAIR-compliant access to fusion experiment metadata and data. It aligns with fusion community standards (like IMAS) to ensure interoperability and supports a flexible data hierarchy suitable for multimodal fusion research data.
+
+> **Status: pre-production.** FDS has no deployments yet. The API and data model can change without a deprecation cycle until `0.1.0`, and releases before then carry no stability guarantee. Feedback and issues are welcome; treat the interface as provisional.
 
 ## Features
 
@@ -16,11 +21,17 @@ The Fusion Data Service (FDS) is a platform designed to provide scalable, FAIR-c
 
 ## Documentation
 
-Detailed architectural decisions for the Fusion Data Service are recorded as Architecture Decision Records (ADRs) in the [`docs/adrs/`](docs/adrs/) directory.
+Published at **<https://ukaea.github.io/fds/>**, covering the data model, access control, provenance, and the DCAT / JSON-LD semantic projection. Built with [Zensical](https://zensical.org/) from the `docs/` directory and deployed by GitHub Actions on every push to `main`, so it does not depend on anyone running the demo.
+
+To preview changes locally before opening a pull request:
+
+```bash
+uvx zensical serve
+```
 
 ## Quick Start Demo
 
-A self-contained demo environment is available in the `demo/` directory. It includes FDS, Keycloak, MinIO, a documentation site, and a [Marimo](https://marimo.io/) notebook for the live data-access workflows.
+A self-contained demo environment is available in the `demo/` directory. It includes FDS, Keycloak, MinIO, a reference UI, and a [Marimo](https://marimo.io/) notebook for the live data-access workflows. The documentation is not part of the stack: it is published separately, so it stays available whether or not the demo is running.
 
 ### 1. Start the Environment
 
@@ -35,7 +46,7 @@ podman compose up --build
 > **Podman + git worktrees:** the compose project name is always `demo`, so
 > launching from a second worktree reuses the first's containers and can serve
 > stale code. `demo/run.sh` forces a clean, current stack from whichever worktree
-> you run it in. It's podman-only — docker users use the command above.
+> you run it in. It's podman-only; docker users use the command above.
 
 Services started:
 
@@ -59,9 +70,9 @@ the footprint of the demo.
 
 ### 2. Explore
 
-The stack **auto-populates** the catalog on startup — the `metadata-seeder` service runs `demo/seed_metadata.py` once FDS is healthy. Browse it at `http://localhost:3000`, via `GET /api/v1/devices/`, or read the docs at `http://localhost:4001`.
+The stack **auto-populates** the catalog on startup: the `metadata-seeder` service runs `demo/seed_metadata.py` once FDS is healthy. Browse it at `http://localhost:3000`, via `GET /api/v1/devices/`, or read the docs at <https://ukaea.github.io/fds/>.
 
-The docs walk through registering and reading data with copy-pasteable `curl` / Python / JavaScript examples. A few read-back workflows are best seen running live — storage-layer access enforcement, credential vending, and parallel Dask reads — and those are in a marimo notebook:
+The docs walk through registering and reading data with copy-pasteable `curl` / Python / JavaScript examples. A few read-back workflows are best seen running live (storage-layer access enforcement, credential vending, and parallel Dask reads), and those are in a marimo notebook:
 
 ```bash
 uvx marimo edit demo/explore.py --sandbox
@@ -88,7 +99,7 @@ This project uses `uv` for dependency management.
 1. **Clone the repository:**
 
     ```bash
-    git clone <repository-url>
+    git clone https://github.com/ukaea/fds.git
     cd fds
     ```
 
@@ -132,7 +143,7 @@ podman compose -f demo/docker-compose.yaml up -d
 uv run pytest -m integration
 ```
 
-Integration tests exercise the full stack — real HTTP calls to FDS, real Keycloak auth, and real MinIO storage.
+Integration tests exercise the full stack: real HTTP calls to FDS, real Keycloak auth, and real MinIO storage.
 
 ### Running Linting & Formatting
 
@@ -150,6 +161,14 @@ Managed via `alembic`:
 uv run alembic upgrade head
 ```
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, the checks CI runs, and the conventions we follow. Please open an issue before starting anything substantial.
+
+Security problems should not be filed as issues. [SECURITY.md](SECURITY.md) explains how to report them privately.
+
 ## Licence
 
-This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE) file for details.
+Copyright 2025-2026 UK Atomic Energy Authority.
+
+Licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
