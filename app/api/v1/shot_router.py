@@ -142,4 +142,3 @@ def delete_shot(
     Delete a shot with authentication and optional context check.
     """
     shot_service.delete(shot_id, user, device_name=device_name)
-    return None

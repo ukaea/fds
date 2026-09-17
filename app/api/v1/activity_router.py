@@ -82,7 +82,6 @@ def delete_activity(
 ) -> None:
     """Delete an Activity. Requires global admin."""
     activity_service.delete(activity_id, user)
-    return None
 
 
 @router.post(
@@ -135,7 +134,6 @@ def remove_activity_input(
     activity_service.remove_input(
         activity_id=activity_id, dataset_id=dataset_id, user=user
     )
-    return None
 
 
 @router.post(
@@ -186,7 +184,6 @@ def remove_activity_instrument(
     activity_service.remove_instrument(
         activity_id=activity_id, source_id=source_id, user=user
     )
-    return None
 
 
 @router.post(
@@ -232,7 +229,6 @@ def remove_activity_agent(
     activity_service.remove_agent(
         activity_id=activity_id, source_id=source_id, user=user
     )
-    return None
 
 
 @router.post(
@@ -287,4 +283,3 @@ def remove_activity_delegation(
         responsible_source_id=responsible_source_id,
         user=user,
     )
-    return None

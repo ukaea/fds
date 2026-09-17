@@ -22,7 +22,8 @@ REDACTED = "[redacted]"
 
 def mark_logged(exc: BaseException) -> None:
     """Note that this exception's traceback is already in the log."""
-    setattr(exc, "_fds_logged", True)
+    # A marker on the instance, not part of any exception type.
+    setattr(exc, "_fds_logged", True)  # noqa: B010
 
 
 class DropAlreadyLogged(logging.Filter):

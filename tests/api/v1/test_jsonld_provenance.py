@@ -1,3 +1,5 @@
+from datetime import UTC
+
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
@@ -148,7 +150,7 @@ def test_jsonld_provenance_with_timestamps(
     admin_user_token: dict[str, str],
 ):
     """prov:startedAtTime and prov:endedAtTime appear when set on the Activity."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     device = Device(name="ts-device", type="tokamak")
     session.add(device)
@@ -163,8 +165,8 @@ def test_jsonld_provenance_with_timestamps(
     activity = ActivityService(session).create(
         ActivityCreate(
             source_id=source.id,
-            started_at=datetime(2024, 1, 1, 10, 0, 0, tzinfo=timezone.utc),
-            ended_at=datetime(2024, 1, 1, 11, 0, 0, tzinfo=timezone.utc),
+            started_at=datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC),
+            ended_at=datetime(2024, 1, 1, 11, 0, 0, tzinfo=UTC),
         ),
         user=admin_user,
     )

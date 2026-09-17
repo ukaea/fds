@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
@@ -430,7 +430,6 @@ def test_temporal_coverage_roundtrip(
     test_client: TestClient,
     session: Session,
 ):
-    from datetime import timezone
 
     dataset = DatasetService(session).create(
         DatasetCreate(
@@ -438,8 +437,8 @@ def test_temporal_coverage_roundtrip(
             level=0,
             url="s3://bucket/ts",
             access_level=AccessLevel.PUBLIC,
-            temporal_start=datetime(2024, 3, 15, 14, 0, tzinfo=timezone.utc),
-            temporal_end=datetime(2024, 3, 15, 14, 30, tzinfo=timezone.utc),
+            temporal_start=datetime(2024, 3, 15, 14, 0, tzinfo=UTC),
+            temporal_end=datetime(2024, 3, 15, 14, 30, tzinfo=UTC),
         ),
         user=admin_user,
     )

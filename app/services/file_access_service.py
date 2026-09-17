@@ -188,9 +188,8 @@ class FileAccessService:
             return False
 
         # 3. Enforce IdP restriction if specified
-        if policy.allowed_idps is not None:
-            if user.issuer not in policy.allowed_idps:
-                return False
+        if policy.allowed_idps is not None and user.issuer not in policy.allowed_idps:
+            return False
 
         # 4. Enforce required scopes if explicitly set at any hierarchy level
         #    None  → fall through to capability check

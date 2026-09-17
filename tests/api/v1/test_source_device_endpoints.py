@@ -29,7 +29,7 @@ def test_create_source_nested_endpoint(
     setup_devices,
     admin_user_token: dict[str, str],
 ):
-    dev1, dev2 = setup_devices
+    dev1, _ = setup_devices
 
     # 1. Create Source via nested endpoint
     source_data = {

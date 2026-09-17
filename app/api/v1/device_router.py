@@ -87,7 +87,6 @@ def delete_device(
     Delete a device by name.
     """
     device_service.delete(device_name, user)
-    return None
 
 
 @router.post(

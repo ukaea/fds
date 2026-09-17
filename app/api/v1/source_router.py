@@ -86,4 +86,3 @@ def delete_source(
     Delete a source. Requires global admin.
     """
     source_service.delete(id, user)
-    return None

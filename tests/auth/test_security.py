@@ -80,7 +80,7 @@ async def test_get_current_user_parsing(mocker):
     claims: TokenClaims = {"sub": "123", "scope": "A B", "iss": "test-idp"}
     user = await get_current_user(claims=claims)
 
-    expected_id = hashlib.sha256("test-idp|123".encode()).hexdigest()
+    expected_id = hashlib.sha256(b"test-idp|123").hexdigest()
     assert user.id == expected_id
     assert user.scopes == ("A", "B")
 
@@ -88,7 +88,7 @@ async def test_get_current_user_parsing(mocker):
     claims_scp: TokenClaims = {"sub": "456", "scp": ["C", "D"], "iss": "test-idp"}
     user2 = await get_current_user(claims=claims_scp)
 
-    expected_id2 = hashlib.sha256("test-idp|456".encode()).hexdigest()
+    expected_id2 = hashlib.sha256(b"test-idp|456").hexdigest()
     assert user2.id == expected_id2
     assert user2.scopes == ("C", "D")
 
@@ -96,7 +96,7 @@ async def test_get_current_user_parsing(mocker):
     claims_none: TokenClaims = {"sub": "789", "iss": "test-idp"}
     user3 = await get_current_user(claims=claims_none)
 
-    expected_id3 = hashlib.sha256("test-idp|789".encode()).hexdigest()
+    expected_id3 = hashlib.sha256(b"test-idp|789").hexdigest()
     assert user3.id == expected_id3
     assert user3.scopes == ()
 
@@ -129,7 +129,7 @@ def test_hash_user_id():
 
 
 def test_hash_user_id_empty():
-    expected = hashlib.sha256("|".encode()).hexdigest()
+    expected = hashlib.sha256(b"|").hexdigest()
     assert _hash_user_id("", "") == expected
 
 

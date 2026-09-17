@@ -1,15 +1,15 @@
 from collections.abc import Sequence
-from typing import Any, Generic, Type, TypeVar
+from typing import Any
 
 from sqlmodel import Session, SQLModel, inspect, select
 
-ModelType = TypeVar("ModelType", bound=SQLModel)
-CreateSchemaType = TypeVar("CreateSchemaType", bound=SQLModel)
-UpdateSchemaType = TypeVar("UpdateSchemaType", bound=SQLModel)
 
-
-class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
-    def __init__(self, model: Type[ModelType], session: Session):
+class BaseService[
+    ModelType: SQLModel,
+    CreateSchemaType: SQLModel,
+    UpdateSchemaType: SQLModel,
+]:
+    def __init__(self, model: type[ModelType], session: Session):
         """
         Base service for CRUD operations.
 

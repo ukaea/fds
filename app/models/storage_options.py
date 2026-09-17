@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
@@ -59,7 +59,7 @@ class IcechunkS3StorageOptions(BaseModel):
 
 
 StorageOptions = Annotated[
-    Union[FsspecS3StorageOptions, IcechunkS3StorageOptions],
+    FsspecS3StorageOptions | IcechunkS3StorageOptions,
     Field(discriminator="type"),
 ]
 

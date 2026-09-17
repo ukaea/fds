@@ -56,7 +56,7 @@ class JwksClient:
             config_data = response.json()
             jwks_uri = config_data.get("jwks_uri")
             if not jwks_uri:
-                raise Exception("jwks_uri not found in discovery doc")
+                raise ValueError("jwks_uri not found in discovery doc")
 
             logger.info("jwks.uri_discovered", jwks_uri=jwks_uri, issuer=issuer)
             return jwks_uri
@@ -77,7 +77,7 @@ class JwksClient:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Failed to connect to Identity Provider during discovery.",
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - anything else is a 500
             logger.error("jwks.discovery_failed", issuer=issuer, error=str(e))
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -128,7 +128,7 @@ class JwksClient:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Failed to connect to Identity Provider.",
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - anything else is a 500
             logger.error("jwks.fetch_failed", jwks_uri=jwks_uri, error=str(e))
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

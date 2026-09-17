@@ -53,7 +53,8 @@ def test_create_shot_conflict(
         json=shot_data,
     )
     assert response.status_code == 409
-    assert "does match" or "conflict" in response.json()["detail"].lower()
+    detail = response.json()["detail"].lower()
+    assert "does not match" in detail
 
 
 def test_update_shot_nested_device_change(

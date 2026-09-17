@@ -43,7 +43,8 @@ def _identity(obj: SQLModel) -> dict[str, object]:
     for column in class_mapper(type(obj)).primary_key:
         fields[column.name] = getattr(obj, column.name, None)
     if hasattr(obj, "name"):
-        fields["name"] = getattr(obj, "name")
+        # Not on SQLModel itself, only on some subclasses; hasattr above is the guard.
+        fields["name"] = getattr(obj, "name")  # noqa: B009
     return fields
 
 

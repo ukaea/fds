@@ -775,7 +775,7 @@ def get_admin_headers(
             resp = httpx.post(kc_token_url, data=token_data)
             resp.raise_for_status()
             break
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - any failure means keep waiting
             print(f"Waiting for Keycloak (attempt {attempt}/{retries}): {e}")
             time.sleep(delay)
     else:

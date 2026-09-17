@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Initialize database for demo environment.
 
 This script auto-generates an Alembic migration inside the container if one
@@ -33,6 +32,7 @@ def init_db():
             ["alembic", "revision", "--autogenerate", "-m", "Auto-generated for demo"],
             capture_output=True,
             text=True,
+            check=False,
         )
 
         if result.returncode != 0:
@@ -44,7 +44,7 @@ def init_db():
     # Run migrations
     print("Running migrations...")
     result = subprocess.run(
-        ["alembic", "upgrade", "head"], capture_output=True, text=True
+        ["alembic", "upgrade", "head"], capture_output=True, text=True, check=False
     )
 
     if result.returncode != 0:
