@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.middleware import route_template
 from app.auth.security import _hash_user_id
 from app.main import app
 
@@ -169,3 +170,51 @@ class TestTraceCorrelation:
 
         trace_ids = {line["trace_id"] for line in log_lines() if line.get("trace_id")}
         assert len(trace_ids) == 1
+
+
+class TestRouteTemplate:
+    """The prefix has to be rebuilt from the concrete path, so the cases that
+    matter are the ones where a naive substitution would go wrong."""
+
+    @staticmethod
+    def _scope(path: str, tail: str, params: dict[str, str]) -> dict:
+        class Route:
+            def __init__(self, p: str) -> None:
+                self.path = p
+
+        return {"path": path, "route": Route(tail), "path_params": params}
+
+    def test_nested_prefixes_with_a_repeated_value(self):
+        # "mast" is both the device (in the prefix) and the dataset name (in the
+        # tail). Anchoring on the tail keeps each substitution in its own place.
+        scope = self._scope(
+            "/api/v1/devices/mast/shots/30420/datasets/mast",
+            "/{shot}/datasets/{name}",
+            {"device": "mast", "shot": "30420", "name": "mast"},
+        )
+        assert route_template(scope) == (
+            "/api/v1/devices/{device}/shots/{shot}/datasets/{name}"
+        )
+
+    def test_value_that_matches_a_literal_prefix_segment(self):
+        # A device literally called "devices" must not turn the fixed segment
+        # into a placeholder.
+        scope = self._scope(
+            "/api/v1/devices/devices/shots/1",
+            "/{shot}",
+            {"device_name": "devices", "shot": "1"},
+        )
+        assert route_template(scope) == "/api/v1/devices/{device_name}/shots/{shot}"
+
+    def test_two_prefix_parameters_sharing_a_value(self):
+        # Right-to-left pairing keeps each placeholder at its own position even
+        # when the values are identical.
+        scope = self._scope(
+            "/a/x/b/x/tail",
+            "/tail",
+            {"first": "x", "second": "x"},
+        )
+        assert route_template(scope) == "/a/{first}/b/{second}/tail"
+
+    def test_no_route_falls_back_to_the_path(self):
+        assert route_template({"path": "/nowhere"}) == "/nowhere"
