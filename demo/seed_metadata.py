@@ -57,6 +57,13 @@ MAST_U_IDS_GROUPS = [
 
 MINIO_ENDPOINT = "http://localhost:9000"
 
+# Shots 30420 and 30421 are real MAST data, already published openly by STFC.
+# FDS registers them where they are rather than copying them in, which is what a
+# catalogue is for: the demo holds no bytes for these shots, and a client reading
+# them is sent straight to the public store with anonymous credentials.
+STFC_ENDPOINT = "https://s3.echo.stfc.ac.uk"
+STFC_BUCKET = "mast"
+
 
 def get_or_create_source(
     client: httpx.Client,
@@ -217,8 +224,8 @@ def register_mast_datasets(client: httpx.Client, base_url: str) -> None:
         for ids_name in ids_list:
             meta: dict[str, object] = {
                 "name": ids_name,
-                "url": f"s3://fds-data/shots/{shot_id}/{ids_name}",
-                "endpoint_url": MINIO_ENDPOINT,
+                "url": (f"s3://{STFC_BUCKET}/level2/shots/{shot_id}.zarr/{ids_name}"),
+                "endpoint_url": STFC_ENDPOINT,
                 "access_level": "public",
                 "title": f"{ids_name.replace('_', ' ').title()} (Shot {shot_id})",
                 "media_type": "application/x-zarr",

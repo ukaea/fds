@@ -71,6 +71,19 @@ export interface Dataset {
   // Resolved annotations, populated by ?include_annotations. Frame-scoped: a
   // dataset resolves only the annotations whose subject it is.
   annotations?: Dataset[];
+  // Populated by ?include_storage_options. For public data FDS fills this in
+  // without any credential exchange, which is how a dataset held in someone
+  // else's public store is opened.
+  storage_options?: StorageOptions;
+}
+
+// fsspec/s3fs-shaped options, splat-compatible with s3fs.S3FileSystem(**opts).
+export interface StorageOptions {
+  key?: string | null;
+  secret?: string | null;
+  token?: string | null;
+  anon?: boolean | null;
+  client_kwargs?: { endpoint_url?: string; region_name?: string } | null;
 }
 
 export interface Coverage {

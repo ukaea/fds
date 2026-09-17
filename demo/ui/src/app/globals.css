@@ -125,6 +125,17 @@ body {
   animation: fadeIn 0.5s ease-out forwards;
 }
 
+/* Indeterminate progress: a read from a remote store has no total to count
+   against, so the bar shows liveness rather than a fraction. */
+@keyframes indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
+.animate-indeterminate {
+  animation: indeterminate 1.2s ease-in-out infinite;
+}
+
 /* PROV-O node styling (W3C PROV visual vocabulary: entity = yellow oval,
    activity = blue rectangle, agent = orange house). Shape encodes the type, so
    the pastel fills carry a second, non-colour signal; dark node text reads on

@@ -4,17 +4,20 @@
 #     "xarray[io]",
 #     "numpy",
 #     "s3fs",
-#     "tqdm",
 #     "icechunk",
 # ]
 # ///
 """Generate and upload demo data for FDS.
 
-- Shot 30420 (real MAST data): Fetched from STFC public S3 if not already in MinIO
-- Shot 30421 (real MAST data): Fetched from STFC public S3 if not already in MinIO
+Only data that has to be local is generated here. Shots 30420 and 30421 are real
+MAST data, already public at the STFC object store, and are registered by
+reference rather than copied in: see ``seed_metadata.py``.
+
 - Shot 50000 (synthetic MAST-U data):
     - raw/: 3 restricted NetCDF files (thomson_scattering, charge_exchange, magnetics)
     - analysed/: 1 public IceChunk store with 9 IMAS IDS groups
+- MAST reference geometry and calibration, and the shot 30421 ELM annotation:
+  synthetic, and written here because they are the writable side of the demo.
 """
 
 import os
@@ -26,7 +29,6 @@ import s3fs
 import xarray as xr
 import zarr
 from icechunk import Repository, s3_storage
-from tqdm import tqdm
 
 warnings.filterwarnings("ignore", message=".*does not have a Zarr V3 specification.*")
 
@@ -36,70 +38,10 @@ access_key = os.environ.get("AWS_ACCESS_KEY_ID", "admin")
 secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "password")
 bucket_name = "fds-data"
 
-stfc_endpoint = "https://s3.echo.stfc.ac.uk"
-stfc_bucket = "mast"
-
 print(f"Connecting to MinIO at {minio_url}...")
 fs = s3fs.S3FileSystem(
     key=access_key, secret=secret_key, client_kwargs={"endpoint_url": minio_url}
 )
-
-
-# ---------------------------------------------------------
-# Helper: Ensure a real MAST shot is present in MinIO
-# ---------------------------------------------------------
-def ensure_shot_data(shot_id: str) -> None:
-    public_fs = s3fs.S3FileSystem(
-        anon=True,
-        client_kwargs={"endpoint_url": stfc_endpoint},
-    )
-    public_base = f"{stfc_bucket}/level2/shots/{shot_id}.zarr"
-
-    if not public_fs.exists(public_base):
-        print(f"WARNING: Shot {shot_id} not found on STFC public S3 at {public_base}")
-        return
-
-    ids_groups = sorted(
-        entry.split("/")[-1]
-        for entry in public_fs.ls(public_base, detail=False)
-        if public_fs.isdir(entry)
-    )
-
-    target = f"{bucket_name}/shots/{shot_id}"
-    missing = [g for g in ids_groups if not fs.exists(f"{target}/{g}")]
-
-    if not missing:
-        print(f"Shot {shot_id} already in MinIO. Skipping.")
-        return
-
-    print(
-        f"Fetching shot {shot_id} ({len(missing)} IDS groups) from STFC S3..."
-        " (follow progress with: podman compose logs -f data-generator)"
-    )
-
-    for ids_name in tqdm(missing, desc=f"Shot {shot_id}", unit="IDS"):
-        src_ids = f"{public_base}/{ids_name}"
-        dst_ids = f"{target}/{ids_name}"
-        files = public_fs.find(src_ids)
-        for src_file in tqdm(files, desc=ids_name, unit="file", leave=False):
-            rel = src_file[len(src_ids) + 1 :]
-            with public_fs.open(src_file, "rb") as src:
-                with fs.open(f"{dst_ids}/{rel}", "wb") as dst:
-                    dst.write(src.read())
-        store = s3fs.S3Map(root=dst_ids, s3=fs, check=False)
-        try:
-            zarr.consolidate_metadata(store)
-        except Exception as e:
-            print(f"  Warning: Could not consolidate {ids_name}: {e}")
-
-    print(f"Shot {shot_id} fetched successfully.")
-
-
-# ---------------------------------------------------------
-# 1. Real MAST Data
-# ---------------------------------------------------------
-ensure_shot_data("30420")
-ensure_shot_data("30421")
 
 # ---------------------------------------------------------
 # 1b. MAST reference geometry — Thomson chord positions

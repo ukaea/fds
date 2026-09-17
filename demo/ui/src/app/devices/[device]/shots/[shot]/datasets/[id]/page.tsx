@@ -31,6 +31,14 @@ function getViridisColor(t: number) {
 function HeatmapCanvas({ data, width, height, title }: any) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
+    // A slice outside the reconstruction window is entirely NaN. Normalising it
+    // yields NaN everywhere, which paints a uniform square that looks like data.
+    // Say the slice is empty instead.
+    let hasData = false;
+    for (let i = 0; i < data.length; i++) {
+        if (Number.isFinite(data[i])) { hasData = true; break; }
+    }
+
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -39,12 +47,12 @@ function HeatmapCanvas({ data, width, height, title }: any) {
 
         let min = Infinity, max = -Infinity;
         for (let i = 0; i < data.length; i++) {
-            if (!Number.isNaN(data[i])) {
+            if (Number.isFinite(data[i])) {
                 if (data[i] < min) min = data[i];
                 if (data[i] > max) max = data[i];
             }
         }
-        if (min === max) { min -= 1; max += 1; }
+        if (!Number.isFinite(min) || min === max) { min = (min || 0) - 1; max = (max || 0) + 1; }
 
         const imgData = ctx.createImageData(width, height);
         for (let i = 0; i < data.length; i++) {
@@ -64,13 +72,21 @@ function HeatmapCanvas({ data, width, height, title }: any) {
 
     return (
         <div className="w-full flex flex-col items-center justify-center p-2">
-             <canvas
-                ref={canvasRef}
-                width={width}
-                height={height}
-                className="w-full max-w-[300px] aspect-square object-contain pixelated border border-border bg-black/50"
-                style={{ imageRendering: 'pixelated' }}
-             />
+             {hasData ? (
+                <canvas
+                   ref={canvasRef}
+                   width={width}
+                   height={height}
+                   className="w-full max-w-[300px] aspect-square object-contain pixelated border border-border bg-black/50"
+                   style={{ imageRendering: 'pixelated' }}
+                />
+             ) : (
+                <div className="w-full max-w-[300px] aspect-square border border-border border-dashed rounded flex items-center justify-center p-4">
+                    <p className="text-xs text-muted-foreground text-center">
+                        No data at this index.<br />Move the slider into the reconstruction window.
+                    </p>
+                </div>
+             )}
              <p className="text-xs text-muted-foreground mt-4 bg-card px-3 py-1 rounded inline-flex font-mono">
                  Heatmap: {title}
              </p>
@@ -90,17 +106,223 @@ function formatMediaType(mediaType?: string | null): string {
   return mediaType.split('/').pop() || mediaType;
 }
 
+// How to open one dataset's bytes: either short-lived credentials FDS minted, or
+// anonymous access to a store that is already public. The endpoint always comes
+// from FDS rather than being assumed, because the data need not be in the demo's
+// own object store.
+interface DataAccess {
+  endpointUrl: string;
+  anon: boolean;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  sessionToken?: string;
+  region?: string;
+}
+
+// Only used if FDS somehow returns no endpoint; the demo's own store.
+const MINIO_FALLBACK = "http://localhost:9000";
+
+// Public stores serve unsigned GETs, and signing them with no credentials would
+// be rejected outright.
+async function makeFetcher(access: DataAccess): Promise<(target: string) => Promise<Response>> {
+  if (access.anon) return (target: string) => fetch(target);
+  const { AwsClient } = await import('aws4fetch');
+  const awsClient = new AwsClient({
+    accessKeyId: access.accessKeyId as string,
+    secretAccessKey: access.secretAccessKey as string,
+    sessionToken: access.sessionToken,
+    region: access.region || 'us-east-1',
+    service: 's3'
+  });
+  return (target: string) => awsClient.fetch(target);
+}
+
+// "s3://bucket/some/prefix" against a given endpoint. Path-style addressing, so
+// the bucket stays in the path and the same code serves MinIO and any public store.
+function objectUrl(endpointUrl: string, s3Path: string): { origin: string; path: string } {
+  const url = new URL(s3Path.replace("s3://", `${endpointUrl.replace(/\/$/, "")}/`));
+  return { origin: url.origin, path: url.pathname.replace(/^\//, "") };
+}
+
+// Store reads are immutable at a given URL, and every dataset on a shot resolves
+// through the same root listing, so the cache is shared across navigations rather
+// than rebuilt per page. Bounded because chunks can be large; oldest entries go
+// first, which keeps the much-reused metadata resident in practice.
+const STORE_CACHE_BUDGET = 64 * 1024 * 1024;
+const storeCache = new Map<string, Uint8Array>();
+let storeCacheBytes = 0;
+
+function cachePut(url: string, bytes: Uint8Array): void {
+  if (storeCache.has(url)) return;
+  storeCache.set(url, bytes);
+  storeCacheBytes += bytes.byteLength;
+  while (storeCacheBytes > STORE_CACHE_BUDGET) {
+    const oldest = storeCache.keys().next();
+    if (oldest.done) break;
+    const evicted = storeCache.get(oldest.value);
+    storeCache.delete(oldest.value);
+    storeCacheBytes -= evicted?.byteLength ?? 0;
+  }
+}
+
+// Integer IDS fields come back as BigInt64Array, which cannot be compared or
+// mixed with numbers: a bare Math.min over one throws rather than returning
+// something wrong. Everything downstream plots as floats, so narrow here.
+function toFloatArray(data: unknown): Float32Array | Float64Array {
+  if (data instanceof Float32Array || data instanceof Float64Array) return data;
+  if (data instanceof BigInt64Array || data instanceof BigUint64Array) {
+    const out = new Float64Array(data.length);
+    for (let i = 0; i < data.length; i++) out[i] = Number(data[i]);
+    return out;
+  }
+  return Float64Array.from(data as ArrayLike<number>);
+}
+
+function rowMajorStrides(shape: number[]): number[] {
+  const stride = new Array(shape.length);
+  stride[shape.length - 1] = 1;
+  for (let d = shape.length - 2; d >= 0; d--) stride[d] = stride[d + 1] * shape[d + 1];
+  return stride;
+}
+
+// Equilibrium reconstructions only cover part of the shot's time base, so the
+// first slice of a field like psi is routinely all NaN: on shot 30420 the first
+// 11 of 97 planes are empty. Opening on index 0 renders a blank square and reads
+// as a broken viewer, so start at the first sample that actually holds data.
+function defaultSliderIndices(
+  data: Float32Array | Float64Array,
+  shape: number[],
+  sliders: { idx: number }[],
+): number[] {
+  if (sliders.length === 0) return [];
+  let first = -1;
+  for (let i = 0; i < data.length; i++) {
+    if (Number.isFinite(data[i])) { first = i; break; }
+  }
+  if (first < 0) return sliders.map(() => 0);
+  const stride = rowMajorStrides(shape);
+  return sliders.map(s => Math.floor(first / stride[s.idx]) % shape[s.idx]);
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+interface LoadProgress {
+  label: string;
+  host: string;
+  requests: number;
+  bytes: number;
+  cached: number;
+}
+
+type NodeMeta = Record<string, any>;
+
+// Zarr node metadata for everything under one group, and where it came from.
+interface GroupMetadata {
+  // Node path relative to the group ("t_e", "time", ...) to its zarr.json content.
+  nodes: Record<string, NodeMeta>;
+  // Arrays and groups directly under the group, in listing order.
+  items: Record<string, NodeMeta>;
+}
+
+// A store that consolidates at the root publishes one listing covering every
+// group in it. Reading a single IDS group therefore means reading the shot's
+// root listing and taking the slice under that group, which is one request for
+// the whole shot instead of one per array, and is shared by every dataset on it.
+function sliceConsolidated(rootMeta: NodeMeta, groupPrefix: string): GroupMetadata | null {
+  const all = rootMeta?.consolidated_metadata?.metadata;
+  if (!all) return null;
+  const prefix = groupPrefix ? `${groupPrefix}/` : "";
+  const nodes: Record<string, NodeMeta> = {};
+  for (const [key, meta] of Object.entries(all as Record<string, NodeMeta>)) {
+    if (!prefix || key.startsWith(prefix)) {
+      nodes[prefix ? key.slice(prefix.length) : key] = meta;
+    }
+  }
+  if (Object.keys(nodes).length === 0) return null;
+  // Direct children only: the variable picker should not list nested groups' arrays.
+  const items = Object.fromEntries(
+    Object.entries(nodes).filter(([k]) => !k.includes("/"))
+  );
+  return { nodes, items };
+}
+
+// The enclosing "....zarr" store root, if the path is inside one.
+function zarrRootOf(path: string): { root: string; group: string } | null {
+  const parts = path.split("/");
+  const idx = parts.findIndex((p) => p.endsWith(".zarr"));
+  if (idx === -1 || idx === parts.length - 1) return null;
+  return { root: parts.slice(0, idx + 1).join("/"), group: parts.slice(idx + 1).join("/") };
+}
+
+// Zarrita asks the store for each node's zarr.json and then for its chunks. Over
+// a remote store those are the round trips that hurt, so this serves metadata
+// from the listing already in hand and remembers every chunk it fetches. Chunks
+// at a given path do not change, so the cache needs no invalidation.
+function makeZarrStore(opts: {
+  storeUrl: string;
+  doFetch: (target: string) => Promise<Response>;
+  nodes: Record<string, NodeMeta>;
+  cache: Map<string, Uint8Array>;
+  onHit: () => void;
+  onFetched: (bytes: number) => void;
+}) {
+  const { storeUrl, doFetch, nodes, cache, onHit, onFetched } = opts;
+  const encoder = new TextEncoder();
+  return {
+    async get(key: string): Promise<Uint8Array | undefined> {
+      const cleanKey = key.replace(/^\//, "");
+
+      if (cleanKey === "zarr.json" || cleanKey.endsWith("/zarr.json")) {
+        const node = cleanKey.slice(0, -"zarr.json".length).replace(/\/$/, "");
+        const meta = node === "" ? { zarr_format: 3, node_type: "group", attributes: {} } : nodes[node];
+        if (meta) {
+          onHit();
+          return encoder.encode(JSON.stringify(meta));
+        }
+      }
+
+      const url = `${storeUrl}/${cleanKey}`;
+      const hit = cache.get(url);
+      if (hit) {
+        onHit();
+        return hit;
+      }
+
+      const res = await doFetch(url);
+      if (res.status === 404 || res.status === 403) return undefined;
+      if (!res.ok) throw new Error(`Fetch failed: ${res.statusText}`);
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      cache.set(url, bytes);
+      onFetched(bytes.byteLength);
+      return bytes;
+    },
+  };
+}
+
 function buildSnippet(
   mediaType: string | null | undefined,
-  creds: { access_key_id: string; secret_access_key: string; session_token: string },
+  access: DataAccess,
   s3Path: string,
 ): string {
-  const storageOptions = `storage_options = {
-    "key": "${creds.access_key_id}",
-    "secret": "${creds.secret_access_key}",
-    "token": "${creds.session_token}",
+  // Public data in someone else's store needs no credentials at all, so the
+  // snippet has to show anonymous access rather than empty credential fields.
+  const storageOptions = access.anon
+    ? `storage_options = {
+    "anon": True,
     "client_kwargs": {
-        "endpoint_url": "http://localhost:9000"
+        "endpoint_url": "${access.endpointUrl}"
+    }
+}`
+    : `storage_options = {
+    "key": "${access.accessKeyId}",
+    "secret": "${access.secretAccessKey}",
+    "token": "${access.sessionToken}",
+    "client_kwargs": {
+        "endpoint_url": "${access.endpointUrl}"
     }
 }`;
 
@@ -144,10 +366,14 @@ export default function DatasetPage() {
   const [chunkData, setChunkData] = useState<{ data: Float32Array | Float64Array, shape: number[], x?: Float32Array | Float64Array, yL?: string, xL?: string, xIdx?: number, yIdx?: number, yAxisL?: string, sliders?: { name: string, data?: Float32Array | Float64Array, shapeSize: number, idx: number }[] } | null>(null);
   const [loadingData, setLoadingData] = useState(false);
   const [sliderIndices, setSliderIndices] = useState<number[]>([]);
+  const [progress, setProgress] = useState<LoadProgress | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // Node metadata for the group, resolved once when the dataset is opened.
+  const groupMeta = useRef<GroupMetadata | null>(null);
 
   const { data: datasetData } = useSWR<Dataset>(
     id
-      ? `${API_BASE}/datasets/id/${id}?include_geometry=true&include_calibration=true&include_annotations=true`
+      ? `${API_BASE}/datasets/id/${id}?include_geometry=true&include_calibration=true&include_annotations=true&include_storage_options=true`
       : null,
     fetcher
   );
@@ -163,6 +389,27 @@ export default function DatasetPage() {
           return;
       }
 
+      const s3Path = datasetData?.url;
+      if (!s3Path) {
+          setAccessValues({ granted: false, error: "Dataset has no data URL." });
+          return;
+      }
+
+      // Public data carries its own anonymous storage options, so there is
+      // nothing to vend and no round trip to make. This is the path a dataset
+      // held in another organisation's public store takes.
+      const publicOpts = datasetData?.storage_options;
+      if (datasetData?.effective_access_level === 'public' && publicOpts?.anon) {
+          const access: DataAccess = {
+              endpointUrl: publicOpts.client_kwargs?.endpoint_url ?? MINIO_FALLBACK,
+              anon: true,
+              region: publicOpts.client_kwargs?.region_name,
+          };
+          setAccessValues({ granted: true, token: access, s3Path });
+          loadZarrData(access, s3Path);
+          return;
+      }
+
       try {
           const res = await fetch(`${API_BASE}/file-access/credentials`, {
             method: 'POST',
@@ -173,14 +420,21 @@ export default function DatasetPage() {
           if (!res.ok) throw new Error("Failed to get credentials");
 
           const manifest = await res.json();
-          const s3Path = datasetData?.url;
 
           // resource_map maps URL → credential directly
-          const validCreds = manifest.resource_map[s3Path || ""] ?? null;
+          const validCreds = manifest.resource_map[s3Path] ?? null;
 
-          if (validCreds && s3Path) {
-             setAccessValues({ granted: true, token: validCreds, s3Path });
-             loadZarrData(validCreds, s3Path);
+          if (validCreds) {
+             const access: DataAccess = {
+                 endpointUrl: validCreds.endpoint_url ?? MINIO_FALLBACK,
+                 anon: false,
+                 accessKeyId: validCreds.access_key_id,
+                 secretAccessKey: validCreds.secret_access_key,
+                 sessionToken: validCreds.session_token,
+                 region: validCreds.region,
+             };
+             setAccessValues({ granted: true, token: access, s3Path });
+             loadZarrData(access, s3Path);
           } else {
              setAccessValues({ granted: false, error: "No valid token retrieved for this dataset." });
           }
@@ -203,121 +457,153 @@ export default function DatasetPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetData, status, autoLoadAttempted, accessValues.granted, accessValues.error]);
 
-  const loadZarrData = async (creds: any, s3Path: string) => {
-      // s3Path is like "s3://fds-data/shots/30421/equilibrium"
-      const url = new URL(s3Path.replace("s3://", "http://localhost:9000/"));
-      const bucket = url.pathname.split('/')[1];
-      const prefixPath = url.pathname.split('/').slice(2).join('/');
+  const loadZarrData = async (access: DataAccess, s3Path: string) => {
+      // s3Path is like "s3://mast/level2/shots/30421.zarr/equilibrium" for data in
+      // a public store, or "s3://fds-data/shots/50000/analysed" for data the demo
+      // holds itself. Which host serves it is FDS's answer, not ours to assume.
+      const { origin, path: prefixPath } = objectUrl(access.endpointUrl, s3Path);
+      const doFetch = await makeFetcher(access);
+      const host = new URL(access.endpointUrl).host;
+      setLoadError(null);
+      setProgress({ label: "Reading dataset metadata", host, requests: 0, bytes: 0, cached: 0 });
 
-      const zarrJsonUrl = `${url.origin}/${bucket}/${prefixPath}/zarr.json`;
+      const countFetched = (n: number) =>
+        setProgress(p => p ? { ...p, requests: p.requests + 1, bytes: p.bytes + n } : p);
+      const countHit = () => setProgress(p => p ? { ...p, cached: p.cached + 1 } : p);
 
-      // Extract credential specifically for this bucket if it's nested
-      const activeCreds = creds[bucket] || creds;
-
-      // aws4fetch client initialization is missing here, adding it
-      const { AwsClient } = await import('aws4fetch');
-      const awsClient = new AwsClient({
-        accessKeyId: activeCreds.access_key_id,
-        secretAccessKey: activeCreds.secret_access_key,
-        sessionToken: activeCreds.session_token,
-        region: activeCreds.region || 'us-east-1',
-        service: 's3'
-      });
+      const getJson = async (url: string) => {
+        const cached = storeCache.get(url);
+        if (cached) { countHit(); return JSON.parse(new TextDecoder().decode(cached)); }
+        const res = await doFetch(url);
+        if (!res.ok) return null;
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        cachePut(url, bytes);
+        countFetched(bytes.byteLength);
+        return JSON.parse(new TextDecoder().decode(bytes));
+      };
 
       try {
-        // 1. Fetch group metadata
-        const response = await awsClient.fetch(zarrJsonUrl);
-        if (response.ok) {
-           const metadata = await response.json();
+        // 1. Group metadata. A store that consolidates only at its root leaves
+        //    each group's own zarr.json bare, so fall back to the root listing
+        //    and take the slice for this group.
+        const metadata = await getJson(`${origin}/${prefixPath}/zarr.json`);
+        if (metadata) {
            setZarrMetadata(metadata);
 
-           // 2. Extract arrays from Zarr v3 members object or consolidated metadata
-           let items: Record<string, any> = {};
-           if (metadata.consolidated_metadata?.metadata) {
-               items = metadata.consolidated_metadata.metadata;
-           } else if (metadata.members) {
-               items = metadata.members;
+           let resolved = sliceConsolidated(metadata, "");
+           if (!resolved && metadata.members) {
+               resolved = { nodes: metadata.members, items: metadata.members };
            }
+           if (!resolved) {
+               const rootRef = zarrRootOf(prefixPath);
+               if (rootRef) {
+                   const rootMeta = await getJson(`${origin}/${rootRef.root}/zarr.json`);
+                   if (rootMeta) resolved = sliceConsolidated(rootMeta, rootRef.group);
+               }
+           }
+           groupMeta.current = resolved;
+           const items: Record<string, any> = resolved?.items ?? {};
 
            const arrayNames = Object.keys(items).filter(key =>
                items[key]?.node_type === 'array' || items[key]?.attributes?.name
            );
 
            const allDimNames = new Set<string>();
+           // CF convention: a variable names its non-dimension coordinates in a
+           // space-separated "coordinates" attribute. shot_id is one of these —
+           // it labels the data rather than being data, so it is not plottable.
+           const namedCoords = new Set<string>();
            arrayNames.forEach(k => {
                const dims = items[k].dimension_names || [];
                dims.forEach((d: string) => allDimNames.add(d));
+               const declared = items[k].attributes?.coordinates;
+               if (typeof declared === "string") {
+                   declared.split(/\s+/).filter(Boolean).forEach((c: string) => namedCoords.add(c));
+               }
            });
 
            const coords = arrayNames.filter(k =>
-               allDimNames.has(k) || (items[k].dimension_names?.length === 1 && items[k].dimension_names[0] === k)
+               allDimNames.has(k)
+               || namedCoords.has(k)
+               || (items[k].dimension_names?.length === 1 && items[k].dimension_names[0] === k)
            );
            setCoordinates(coords);
 
            const dataVars = arrayNames.filter(k => !coords.includes(k) && !k.includes("/"));
 
-           console.log("CACHE BUST: Extracted Data Vars:", dataVars);
            setVariables(dataVars);
            if (dataVars.length > 0) {
                setSelectedVar(dataVars[0]);
-               fetchVariables(activeCreds, bucket, prefixPath, dataVars[0], coords, items);
+               await fetchVariables(access, prefixPath, dataVars[0], coords, items);
+               return;
            }
         } else {
-           console.error("Failed to load Zarr metadata:", response.statusText);
+           setLoadError(`No Zarr metadata at ${origin}/${prefixPath}`);
         }
       } catch (err) {
         console.error("Zarr fetch error:", err);
+        setLoadError(
+            `Could not read dataset metadata from ${host}: ${err instanceof Error ? err.message : String(err)}`
+        );
       }
+      setProgress(null);
   };
 
-  const fetchVariables = async (activeCreds: any, bucket: string, prefixPath: string, varName: string, coordsList: string[], allItems: any) => {
+  const fetchVariables = async (access: DataAccess, prefixPath: string, varName: string, coordsList: string[], allItems: any) => {
       setLoadingData(true);
+      setLoadError(null);
+      const host = new URL(access.endpointUrl).host;
+      setProgress(p => ({
+          label: `Reading ${varName}`,
+          host,
+          requests: p?.requests ?? 0,
+          bytes: p?.bytes ?? 0,
+          cached: p?.cached ?? 0,
+      }));
       try {
-          const { AwsClient } = await import('aws4fetch');
           const zarr = await import('zarrita');
+          const doFetch = await makeFetcher(access);
 
-          const awsClient = new AwsClient({
-            accessKeyId: activeCreds.access_key_id,
-            secretAccessKey: activeCreds.secret_access_key,
-            sessionToken: activeCreds.session_token,
-            region: activeCreds.region || 'us-east-1',
-            service: 's3'
+          const origin = new URL(access.endpointUrl).origin;
+          const storeUrl = `${origin}/${prefixPath.replace(/\/$/, '')}`;
+
+          const customStore = makeZarrStore({
+              storeUrl,
+              doFetch,
+              nodes: groupMeta.current?.nodes ?? {},
+              cache: storeCache,
+              onHit: () => setProgress(p => p ? { ...p, cached: p.cached + 1 } : p),
+              onFetched: (n) => setProgress(p => p ? { ...p, requests: p.requests + 1, bytes: p.bytes + n } : p),
           });
-
-          const prefix = prefixPath ? `${prefixPath}/` : '';
-          const storeUrl = `http://localhost:9000/${bucket}/${prefix.replace(/\/$/, '')}`;
-
-          const customStore = {
-              async get(key: string) {
-                  const cleanKey = key.startsWith('/') ? key.slice(1) : key;
-                  const res = await awsClient.fetch(`${storeUrl}/${cleanKey}`);
-                  if (res.status === 404 || res.status === 403) return undefined;
-                  if (!res.ok) throw new Error(`Fetch failed: ${res.statusText}`);
-                  return new Uint8Array(await res.arrayBuffer());
-              }
-          };
 
           const root = zarr.root(customStore);
 
+          // Reading one coordinate does not depend on reading another, so they go
+          // out together rather than one round trip after the next.
+          const readArray = async (name: string) => {
+              const arr = await zarr.open(root.resolve(name), { kind: "array" });
+              return toFloatArray((await zarr.get(arr)).data);
+          };
+
           const dataArr = await zarr.open(root.resolve(varName), { kind: "array" });
           const view = await zarr.get(dataArr);
+          const viewData = toFloatArray(view.data);
 
           // Coordinate Array Matching
           const dataAxisNames = allItems[varName]?.dimension_names || [];
 
-          let xData;
-          let xL;
-          let yAxisL;
-          let xIdx;
-          let yIdx;
+          let xData: Float32Array | Float64Array | undefined;
+          let xL: string | undefined;
+          let yAxisL: string | undefined;
+          let xIdx: number | undefined;
+          let yIdx: number | undefined;
           let sliders: { name: string, data?: Float32Array | Float64Array, shapeSize: number, idx: number }[] = [];
 
           if (dataAxisNames.length === 1) {
               xL = dataAxisNames.find((d: string) => coordsList.includes(d));
               xIdx = 0;
               if (xL) {
-                  const xArr = await zarr.open(root.resolve(xL), { kind: "array" });
-                  xData = (await zarr.get(xArr)).data;
+                  xData = await readArray(xL);
               }
           } else if (dataAxisNames.length >= 2) {
               const spatialIndices: number[] = [];
@@ -338,27 +624,34 @@ export default function DatasetPage() {
               }
 
               xL = dataAxisNames[xIdx];
-              if (coordsList.includes(xL)) {
-                  const xArr = await zarr.open(root.resolve(xL), { kind: "array" });
-                  xData = (await zarr.get(xArr)).data;
-              }
 
-              // Build a scalar slider for every non-X, non-Y dimension
-              for (let i = 0; i < dataAxisNames.length; i++) {
-                  if (i !== xIdx && i !== yIdx) {
-                      const dimName = dataAxisNames[i];
-                      let dimData;
-                      if (coordsList.includes(dimName)) {
-                          const sArr = await zarr.open(root.resolve(dimName), { kind: "array" });
-                          dimData = (await zarr.get(sArr)).data as Float32Array | Float64Array;
-                      }
-                      sliders.push({ name: dimName, data: dimData, shapeSize: view.shape[i], idx: i });
-                  }
-              }
+              // One scalar slider per non-X, non-Y dimension. The X coordinate and
+              // every slider coordinate are independent reads, so issue them as a
+              // single batch: over a remote store this is the difference between
+              // one round trip and one per axis.
+              const sliderDims = dataAxisNames
+                  .map((name: string, i: number) => ({ name, i }))
+                  .filter(({ i }: { i: number }) => i !== xIdx && i !== yIdx);
+
+              const xName = xL;
+              const [xResult, ...sliderResults] = await Promise.all([
+                  xName && coordsList.includes(xName) ? readArray(xName) : Promise.resolve(undefined),
+                  ...sliderDims.map(({ name }: { name: string }) =>
+                      coordsList.includes(name) ? readArray(name) : Promise.resolve(undefined)
+                  ),
+              ]);
+
+              xData = xResult;
+              sliders = sliderDims.map(({ name, i }: { name: string; i: number }, n: number) => ({
+                  name,
+                  data: sliderResults[n],
+                  shapeSize: view.shape[i],
+                  idx: i,
+              }));
           }
 
           setChunkData({
-              data: view.data as Float32Array | Float64Array,
+              data: viewData,
               shape: view.shape,
               x: xData as Float32Array | Float64Array | undefined,
               yL: varName,
@@ -368,25 +661,35 @@ export default function DatasetPage() {
               yIdx,
               sliders
           });
-          setSliderIndices(sliders.map(() => 0));
+          setSliderIndices(defaultSliderIndices(viewData, view.shape, sliders));
       } catch (err) {
+          // A read from someone else's store fails for reasons the page cannot
+          // control: the host throttles, goes down, or drops a chunk part-way.
+          // Say so rather than leaving an empty panel that looks like no data.
           console.error("Zarrita chunk fetch error:", err);
+          setLoadError(
+              `Could not read ${varName} from ${host}: ${err instanceof Error ? err.message : String(err)}`
+          );
       } finally {
          setLoadingData(false);
+         setProgress(null);
       }
   };
 
   const onSelectVariable = async (newVar: string) => {
       setSelectedVar(newVar);
-      if (!accessValues.token || !accessValues.s3Path || !zarrMetadata) return;
+      if (!accessValues.token || !accessValues.s3Path) return;
 
-      const url = new URL(accessValues.s3Path.replace("s3://", "http://localhost:9000/"));
-      const bucket = url.pathname.split('/')[1];
-      const prefixPath = url.pathname.split('/').slice(2).join('/');
-      const activeCreds = accessValues.token[bucket] || accessValues.token;
+      const access = accessValues.token as DataAccess;
+      const { path: prefixPath } = objectUrl(access.endpointUrl, accessValues.s3Path);
 
-      let items: any = zarrMetadata.consolidated_metadata?.metadata || zarrMetadata.members || {};
-      fetchVariables(activeCreds, bucket, prefixPath, newVar, coordinates, items);
+      // Use the metadata resolved when the dataset was opened. Re-deriving it from
+      // the group's own zarr.json loses everything for a store that consolidates
+      // only at its root, which leaves the variable with no dimensions and so no
+      // axes and no sliders.
+      const items = groupMeta.current?.items;
+      if (!items) return;
+      fetchVariables(access, prefixPath, newVar, coordinates, items);
   };
 
   return (
@@ -401,16 +704,14 @@ export default function DatasetPage() {
               </div>
               <div className="p-6">
                   <p className="text-sm text-foreground mb-4">
-                      To prevent dark repositories and ensure you always analyze the latest version of the data, we recommend streaming directly into Python. Your temporary access token has been injected below.
+                      To prevent dark repositories and ensure you always analyze the latest version of the data, we recommend streaming directly into Python.
+                      {(accessValues.token as DataAccess | null)?.anon
+                        ? " This data is openly published, so it opens anonymously: no credentials, and the read goes straight to the store holding it."
+                        : " Your temporary access token has been injected below."}
                   </p>
                   <div className="bg-background p-4 rounded-lg overflow-x-auto border border-border relative group">
                       {(() => {
-                          const activeCreds = (() => {
-                              const url = new URL(accessValues.s3Path!.replace("s3://", "http://localhost:9000/"));
-                              const bucket = url.pathname.split('/')[1];
-                              return accessValues.token[bucket] || accessValues.token;
-                          })();
-                          const snippet = buildSnippet(datasetData?.media_type, activeCreds, accessValues.s3Path!);
+                          const snippet = buildSnippet(datasetData?.media_type, accessValues.token as DataAccess, accessValues.s3Path!);
                           return (
                               <>
                                   <button
@@ -519,10 +820,36 @@ export default function DatasetPage() {
                             </div>
 
                             <div className="flex-1 w-full p-6 relative flex items-center justify-center">
-                                {loadingData ? (
-                                    <div className="flex flex-col items-center bg-card/50 p-6 rounded-lg backdrop-blur">
+                                {loadError ? (
+                                    <div className="flex flex-col items-center bg-card/50 p-6 rounded-lg backdrop-blur max-w-md text-center">
+                                        <Lock className="w-8 h-8 text-destructive mb-4" />
+                                        <p className="text-sm text-foreground font-medium">Could not read the data</p>
+                                        <p className="text-xs text-muted-foreground mt-2 break-words">{loadError}</p>
+                                        <p className="text-[11px] text-muted-foreground mt-3">
+                                            The metadata above comes from FDS; the data itself is served by the store holding it, which may be unreachable or rate-limiting.
+                                        </p>
+                                    </div>
+                                ) : loadingData || progress ? (
+                                    <div className="flex flex-col items-center bg-card/50 p-6 rounded-lg backdrop-blur min-w-[18rem]">
                                         <Activity className="w-8 h-8 text-primary animate-spin mb-4" />
-                                        <p className="text-sm text-foreground">Fetching chunks via WebAssembly...</p>
+                                        <p className="text-sm text-foreground font-medium">
+                                            {progress?.label ?? "Reading data"}
+                                        </p>
+                                        {progress && (
+                                          <>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                streaming from <span className="font-mono">{progress.host}</span>
+                                            </p>
+                                            <div className="w-full h-1 bg-muted rounded overflow-hidden mt-3">
+                                                <div className="h-full w-1/3 bg-primary animate-indeterminate" />
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground mt-2 font-mono">
+                                                {progress.requests} request{progress.requests === 1 ? "" : "s"}
+                                                {" · "}{formatBytes(progress.bytes)}
+                                                {progress.cached > 0 && ` · ${progress.cached} cached`}
+                                            </p>
+                                          </>
+                                        )}
                                     </div>
                                 ) : chunkData ? (
                                     <div className="w-full h-full flex flex-col items-center animate-fade-in relative z-10">
@@ -554,6 +881,21 @@ export default function DatasetPage() {
                                             {(() => {
                                                 const shape = chunkData.shape;
                                                 const n = shape.length;
+
+                                                if (n === 0) {
+                                                    // A 0-d field such as shot_id. There is nothing to plot
+                                                    // against, so show the value rather than an empty axis.
+                                                    return (
+                                                        <div className="flex flex-col items-center justify-center">
+                                                            <p className="text-4xl font-mono text-foreground">
+                                                                {Number.isFinite(chunkData.data[0]) ? chunkData.data[0] : "—"}
+                                                            </p>
+                                                            <p className="text-xs text-muted-foreground mt-4 bg-card px-3 py-1 rounded font-mono">
+                                                                {chunkData.yL} (scalar)
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                }
 
                                                 if (chunkData.yIdx !== undefined && chunkData.xIdx !== undefined) {
                                                     // === 2D HEATMAP CANVAS RENDERER ===
