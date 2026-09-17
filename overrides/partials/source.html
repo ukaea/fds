@@ -1,0 +1,15 @@
+{#
+  Replaces the theme's repo link (icon + repo name) with an icon-only button and a
+  hover menu. Omits data-md-component="source" on purpose: that hook makes the theme
+  fetch star and fork counts from the GitHub API, and there is nowhere to show them.
+#}
+<div class="fds-source">
+  <a href="{{ config.repo_url }}" title="{{ lang.t('source') }}" class="md-header__button md-icon">
+    {% set icon = config.theme.icon.repo or "fontawesome/brands/git-alt" %}
+    {% include ".icons/" ~ icon ~ ".svg" %}
+  </a>
+  <ul class="fds-source__menu">
+    <li><a href="{{ config.repo_url }}">Repository</a></li>
+    <li><a href="{{ config.repo_url }}/issues/new">Open an issue</a></li>
+  </ul>
+</div>
