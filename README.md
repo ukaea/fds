@@ -54,7 +54,7 @@ Services started:
 - **Keycloak**: `http://localhost:8080` (User/Pass: `admin`/`admin`)
 - **MinIO**: `http://localhost:9000` (User/Pass: `admin`/`password`)
 
-> **Where the data live:** shots 30420 and 30421 are real MAST data, already publicly accessible. The demo does not copy them in. It registers them where they are, so a client reading them is sent straight to the the url of the s3 bucket with anonymous credentials and FDS never touches the bytes.
+> **Where the data live:** shots 30420 and 30421 are real MAST data, already publicly accessible. The demo does not copy them in. It registers them where they are, so a client reading them is sent straight to the url of the s3 bucket with anonymous credentials and FDS never touches the bytes.
 >
 > MinIO holds some locally written demonstration datasets: the synthetic MAST-U shot 50000, plus the reference geometry, calibration and ELM annotation files. Shot 50000's `raw/` prefix is deliberately **not** anonymously readable, which demonstrates the access-enforcement and credential-vending features of FDS.
 
