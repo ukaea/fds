@@ -43,7 +43,9 @@ Services started:
 - **Keycloak**: `http://localhost:8080` (User/Pass: `admin`/`admin`)
 - **MinIO**: `http://localhost:9000` (User/Pass: `admin`/`password`)
 
-> **First run note:** On first launch, the demo automatically pulls real MAST shot data from the STFC public S3 store, which can take several minutes. Run without `-d` to see a progress bar in the terminal. Once downloaded, the data persists in a named volume (`demo_minio-data`) across restarts, so subsequent launches are fast. It survives `down`, but `down -v` deletes it and the next launch re-downloads everything.
+> **Where the data live:** shots 30420 and 30421 are real MAST data, already publicly accessible. The demo does not copy them in. It registers them where they are, so a client reading them is sent straight to the the url of the s3 bucket with anonymous credentials and FDS never touches the bytes.
+>
+> MinIO holds some locally written demonstration datasets: the synthetic MAST-U shot 50000, plus the reference geometry, calibration and ELM annotation files. Shot 50000's `raw/` prefix is deliberately **not** anonymously readable, which demonstrates the access-enforcement and credential-vending features of FDS.
 
 Prefix any of the above with `FDS_DEMO_SEED=0` to come up with an empty catalog; populate it later with `uv run demo/generate_data.py` and `uv run demo/seed_metadata.py`.
 

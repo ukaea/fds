@@ -50,9 +50,9 @@ cat <<EOF > /tmp/bucket-policy.json
             "Principal": {"AWS": ["*"]},
             "Action": ["s3:GetObject"],
             "Resource": [
-                "arn:aws:s3:::fds-data/shots/30420/*",
-                "arn:aws:s3:::fds-data/shots/30421/*",
                 "arn:aws:s3:::fds-data/shots/*/analysed/*",
+                "arn:aws:s3:::fds-data/shots/*/annotations/*",
+                "arn:aws:s3:::fds-data/shots/*/jintrac/*",
                 "arn:aws:s3:::fds-data/mast/geometry/*",
                 "arn:aws:s3:::fds-data/mast/calibration/*"
             ]
