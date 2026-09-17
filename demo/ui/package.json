@@ -13,7 +13,7 @@
     "@hpcc-js/wasm-graphviz": "^1.29.1",
     "aws4fetch": "^1.0.20",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.563.0",
+    "lucide-react": "^1.46.0",
     "next": "16.3.5",
     "next-auth": "^5.0.0-beta.32",
     "react": "19.3.0",
