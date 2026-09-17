@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, type-check and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      # Reads .python-version, so the pinned interpreter is the one CI uses.
+      - name: Install dependencies
+        run: uv sync --all-extras --frozen
+
+      - name: Lint
+        run: uv run ruff check --output-format=github .
+
+      - name: Check formatting
+        run: uv run ruff format --check .
+
+      - name: Type-check
+        run: uv run pyright
+
+      - name: Test
+        run: uv run --all-extras pytest
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    # Full stack: real HTTP to FDS, real Keycloak auth, real MinIO storage. The
+    # demo generates only the small synthetic datasets it needs, and registers the
+    # real MAST shots by reference.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        run: uv sync --all-extras --frozen
+
+      - name: Start the demo stack
+        run: docker compose -f demo/docker-compose.yaml up -d --build
+
+      - name: Wait for FDS to become healthy
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/health > /dev/null; then
+              echo "FDS is up"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "FDS did not become healthy in time"
+          docker compose -f demo/docker-compose.yaml logs --no-color
+          exit 1
+
+      - name: Run integration tests
+        run: uv run --all-extras pytest -m integration
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose -f demo/docker-compose.yaml logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f demo/docker-compose.yaml down -v

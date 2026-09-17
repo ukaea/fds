@@ -1,0 +1,58 @@
+name: Bug report
+description: Something behaves differently from how it is documented or intended.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If the bug has a security impact, such as returning metadata to a caller
+        whose access level does not permit it, please do not file it here.
+        Follow [SECURITY.md](../../blob/main/SECURITY.md) instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: >
+        A curl transcript or a failing test is ideal. Include the request, the
+        response status, and the response body where it is relevant.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release tag, or the commit SHA if you are running from a branch.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: how-run
+    attributes:
+      label: How are you running FDS?
+      options:
+        - The demo stack (docker compose / podman compose)
+        - Local uvicorn against my own database
+        - Container image
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: >
+        FDS logs structured JSON. The `trace_id` of the failing request is
+        especially useful.
+      render: shell

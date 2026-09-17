@@ -1,0 +1,40 @@
+name: Feature request
+description: Propose a capability FDS does not have yet.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: >
+        Describe the problem rather than the solution. Knowing the underlying
+        need often changes what the right answer is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like FDS to do?
+      validations:
+        required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What have you tried or considered?
+      description: >
+        Including workarounds that nearly work. They tell us where the current
+        design falls short.
+
+  - type: checkboxes
+    id: areas
+    attributes:
+      label: Which areas does this touch?
+      options:
+        - label: Data model (Device, Shot, Dataset, Collection, Source, Activity)
+        - label: Access control or credential vending
+        - label: Semantic metadata (DCAT, PROV-O, JSON-LD)
+        - label: Storage providers (S3, GCS, Azure)
+        - label: Demo environment or reference UI
+        - label: Documentation

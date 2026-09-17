@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+title: "Fusion Data Service (FDS)"
+message: "If you use this software, please cite it using these metadata."
+type: software
+abstract: >-
+  A metadata catalogue and data-access broker for fusion experiment data,
+  providing scalable, FAIR-compliant discovery and authenticated access aligned
+  with fusion community standards (IMAS) and W3C vocabularies (DCAT, PROV-O).
+authors:
+  - name: "UK Atomic Energy Authority"
+    city: Abingdon
+    country: GB
+    website: "https://ukaea.uk"
+repository-code: "https://github.com/ukaea/fds"
+url: "https://ukaea.github.io/fds/"
+license: Apache-2.0
+version: 0.0.1
+keywords:
+  - fusion
+  - FAIR data
+  - research data management
+  - DCAT
+  - PROV-O
+  - IMAS
+  - metadata catalogue

@@ -1,9 +1,22 @@
 [project]
 name = "fds"
-version = "0.1.0"
+version = "0.0.1"
 description = "Fusion Data Service — scalable, FAIR-compliant access to fusion experiment metadata and data"
 readme = "README.md"
 requires-python = ">=3.14"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "UK Atomic Energy Authority" }]
+maintainers = [{ name = "Nathan Cummings", email = "nathan.cummings@ukaea.uk" }]
+keywords = ["fusion", "FAIR", "DCAT", "PROV-O", "IMAS", "metadata", "catalogue"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Typing :: Typed",
+]
 dependencies = [
     "alembic>=1.17.2",
     "cachetools>=6.2.4",
@@ -15,6 +28,11 @@ dependencies = [
     "structlog>=26.1.0",
     "opentelemetry-api>=1.44.0",
 ]
+
+[project.urls]
+Homepage = "https://ukaea.github.io/fds/"
+Repository = "https://github.com/ukaea/fds"
+Issues = "https://github.com/ukaea/fds/issues"
 
 
 [project.optional-dependencies]

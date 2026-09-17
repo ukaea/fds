@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app import __version__
 from app.api.exception_handlers import add_exception_handlers
 from app.api.middleware import AuditMiddleware
 from app.api.v1 import (
@@ -19,7 +20,7 @@ from app.core.telemetry import setup_telemetry
 
 setup_logging()
 
-app = FastAPI(title=config.app_name)
+app = FastAPI(title=config.app_name, version=__version__)
 
 app.add_middleware(AuditMiddleware)
 setup_telemetry(app, engine)
@@ -29,7 +30,7 @@ add_exception_handlers(app)
 
 @app.get("/health", tags=["health"], summary="Liveness probe")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "version": __version__}
 
 
 app.include_router(device_router.router, prefix="/api/v1/devices", tags=["devices"])

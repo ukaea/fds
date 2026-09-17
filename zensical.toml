@@ -1,6 +1,7 @@
 [project]
 site_name = "Fusion Data Service"
 site_description = "Scalable, FAIR-compliant access to fusion experiment metadata and data"
+site_url = "https://ukaea.github.io/fds/"
 docs_dir = "docs"
 extra_css = ["stylesheets/extra.css"]
 
