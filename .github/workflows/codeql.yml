@@ -17,7 +17,11 @@ jobs:
   analyze:
     name: Analyze ${{ matrix.language }}
     runs-on: ubuntu-latest
+    # A job-level permissions block replaces the workflow-level one rather than
+    # adding to it, so contents:read must be restated or checkout cannot read
+    # the repository.
     permissions:
+      contents: read
       security-events: write
       actions: read
     strategy:
