@@ -10,3 +10,60 @@
 .md-content table td {
     word-break: keep-all;
 }
+
+/* Header: search goes last so the colour-scheme toggle and repo button sit together
+   on its left. The right margin keeps search where the theme's empty repo-name slot
+   (11.5rem plus its 1.4rem margin) used to put it. */
+.md-header__button[for="__search"],
+.md-search {
+    order: 1;
+}
+.md-search {
+    margin-left: 0.6rem;
+    margin-right: 12.9rem;
+}
+/* [dir] matches the specificity of the theme's own margin rule */
+[dir="ltr"] .md-header__source {
+    width: auto;
+    max-width: none;
+    margin-left: 0;
+}
+
+/* Icon-only repo button with a hover menu (overrides/partials/source.html). The menu
+   starts flush under the button so the pointer never leaves a hovered element. */
+.fds-source {
+    position: relative;
+    display: flex; /* no whitespace gap before the inline-block button */
+}
+.fds-source > .md-header__button {
+    margin-left: 0;
+    padding-left: 0;
+}
+.fds-source__menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 1;
+    margin: 0;
+    padding: 0.2rem 0;
+    list-style: none;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    color: var(--md-default-fg-color);
+    background-color: var(--md-default-bg-color);
+    border-radius: 0.2rem;
+    box-shadow: var(--md-shadow-z2);
+}
+.fds-source:hover .fds-source__menu,
+.fds-source:focus-within .fds-source__menu {
+    display: block;
+}
+.fds-source__menu a {
+    display: block;
+    padding: 0.4rem 0.8rem;
+    color: inherit;
+}
+.fds-source__menu a:hover {
+    background-color: var(--md-default-fg-color--lightest);
+}
