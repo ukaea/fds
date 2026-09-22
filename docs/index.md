@@ -13,40 +13,47 @@ The **Fusion Data Service (FDS)** is a metadata catalog and access broker for fu
 | **Semantic metadata** | Full DCAT + PROV-O via `Accept: application/ld+json` content negotiation |
 | **Federation** | Datasets from other catalogues and FDS instances can be included, improving findability |
 
-## Running the demo
+## Running FDS locally
 
-The demo stack runs FDS, Keycloak, MinIO, these docs, and the UI, and **auto-populates
-the catalogue** on startup via the `metadata-seeder` service:
+The examples on these pages assume a local FDS holding a small example catalogue. From a checkout
+of the repository:
 
 ```bash
-docker compose -f demo/docker-compose.yaml up -d --build   # or: podman compose -f demo/docker-compose.yaml up -d --build
+uv run scripts/mint-token.py init --out-dir dev   # once: a key pair the stack trusts
+docker compose up -d --build                      # or: podman compose up -d --build
 ```
+
+FDS is then on `http://localhost:8000`. Reading public metadata needs no token; anything else
+does, and you sign your own:
+
+```bash
+export TOKEN=$(uv run scripts/mint-token.py mint)
+```
+
+Then register the example catalogue these pages refer to. It registers two real MAST shots where
+they already live at STFC, and metadata-only fixtures for a synthetic MAST-U shot, reference
+geometry and calibration, and an annotated shot:
+
+```bash
+FDS_TOKEN=$TOKEN uv run scripts/seed-example-catalogue.py
+```
+
+No identity provider runs by default: see [Access Control](access-control.md#issuing-tokens-without-an-identity-provider)
+for what signing your own tokens does and does not give you. To log in through the reference UI
+instead, start the stack with `docker compose --profile ui up -d --build`, which adds Keycloak on
+`http://localhost:8080` and the UI on `http://localhost:3000`.
+
+No object store runs either, so credential vending has no real store to vend against; that is a
+deployment concern.
 
 To also collect request traces and browse them in Grafana, add the observability overlay:
 
 ```bash
-docker compose -f demo/docker-compose.yaml -f demo/docker-compose.observability.yaml up -d --build
+docker compose -f compose.yaml -f compose.observability.yaml up -d --build
 ```
 
 That puts Grafana on `http://localhost:3002`. It is off by default because it roughly doubles the
-demo's memory use and adds a 2.5 GB image to the first download.
-
-Give Keycloak a few seconds to finish importing its realm. The catalogue is then filled
-with the example data used throughout these pages. To reseed by hand at any time:
-
-```bash
-uv run demo/seed_metadata.py
-```
-
-To start with an empty catalogue instead, set `FDS_DEMO_SEED=0` on that command. The
-examples on these pages assume the seeded catalogue.
-
-A few read-back workflows are best seen running live: storage-layer access enforcement,
-credential vending, and parallel Dask reads. Those are in a marimo notebook:
-
-```bash
-uvx marimo edit demo/explore.py --sandbox
-```
+stack's memory use and adds a 2.5 GB image to the first download.
 
 ### Conventions for the examples
 
@@ -60,15 +67,14 @@ Authentication](access-control.md#authentication):
 
 Public reads need no token; creating data or reading restricted data does.
 
-## Services in the demo environment
+## Services in the local stack
 
 | Service | URL |
 | --- | --- |
-| FDS API (Swagger UI) | [http://localhost:8000/docs](http://localhost:8000/docs) |
+| FDS API (OpenAPI explorer) | [http://localhost:8000/docs](http://localhost:8000/docs) |
 | FDS API (ReDoc) | [http://localhost:8000/redoc](http://localhost:8000/redoc) |
-| Keycloak (IdP) | [http://localhost:8080](http://localhost:8080), `admin` / `admin` |
-| MinIO (object store) | [http://localhost:9001](http://localhost:9001), `admin` / `password` |
-| Frontend UI | [http://localhost:3000](http://localhost:3000) |
+| Keycloak, with `--profile idp` or `--profile ui` | [http://localhost:8080](http://localhost:8080), `admin` / `admin` |
+| Reference UI, with `--profile ui` | [http://localhost:3000](http://localhost:3000) |
 
 ## Where to start
 

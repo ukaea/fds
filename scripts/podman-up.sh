@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 #
-# Launch the FDS demo from the CURRENT git worktree, cleanly.
-#
-# Set FDS_DEMO_SEED=0 to come up with an empty catalogue (no demo data, no seeding).
+# Bring the development stack (compose.yaml) up cleanly under podman, from the
+# current git worktree. Pass --ui to include Keycloak and the reference UI.
 #
 # Podman only. This is a convenience wrapper around podman-specific problems (pod
 # teardown, the podman-compose `up` hang, stale containers across worktrees). It
@@ -10,18 +9,17 @@
 # since container lookups key off compose labels rather than names. Docker-engine
 # users don't hit these problems -- use `docker compose up --build` (see README).
 #
-# Why this exists: podman-compose derives its project name from the compose
-# file's parent dir ("demo"), which is identical in every worktree. So launching
-# the demo from worktree B reuses worktree A's container/image/network names, and
-# `up --build` rebuilds the image but does NOT recreate the running container onto
-# it -> stale code keeps serving (e.g. missing routes). This script forces a clean
-# slate: it removes whatever "demo" stack is running (whichever worktree owns it)
-# and rebuilds everything from here. Only one demo runs at a time, on fixed ports.
+# Why this exists: podman-compose 1.6 `up` creates every container but hangs
+# before starting the last ones and never returns, and `up --build` rebuilds the
+# image without recreating the running container onto it, so stale code keeps
+# serving. Docker users do not need this: `docker compose up -d --build` works.
 set -euo pipefail
 
-PROJECT="demo"
+PROJECT="fds-dev"   # matches `name:` in compose.yaml
 ROOT="$(git rev-parse --show-toplevel)"
-COMPOSE="$ROOT/demo/docker-compose.yaml"
+COMPOSE="$ROOT/compose.yaml"
+PROFILE=""
+[ "${1:-}" = "--ui" ] && PROFILE="--profile ui"
 
 # Resolve the real container name for a compose service via its labels. Both
 # podman-compose and docker-compose stamp com.docker.compose.{project,service},
@@ -35,7 +33,7 @@ cname() {
     --format '{{.Names}}' 2>/dev/null | head -1
 }
 
-echo "==> Tearing down any existing '$PROJECT' stack (may belong to another worktree)"
+echo "==> Tearing down any existing '$PROJECT' stack"
 # podman-compose path: it wraps the stack in a pod ("pod_${PROJECT}"), and pod
 # members can't be removed individually with `podman rm` -- you must remove the
 # pod. docker-compose creates no pod, so this is a harmless no-op there (kept, not
@@ -52,19 +50,19 @@ fi
 
 # Build first: `compose build` returns cleanly (~7s), but `up -d --build` hangs.
 echo "==> Building images from $ROOT"
-podman compose -p "$PROJECT" -f "$COMPOSE" build
+podman compose -p "$PROJECT" -f "$COMPOSE" $PROFILE build
 
 # podman-compose 1.6.0 `up` creates every container but then HANGS before starting
-# the last ones (frontend/data-generator are left "Created"), and never returns. So
+# the last ones (they are left "Created"), and never returns. So
 # run it detached and drive the stack up ourselves: poll the containers it created
 # and `podman start` any left Created/Exited, rather than waiting on the wrapper.
 echo "==> Starting stack"
-podman compose -p "$PROJECT" -f "$COMPOSE" up -d >/tmp/fds-demo-up.log 2>&1 &
+podman compose -p "$PROJECT" -f "$COMPOSE" $PROFILE up -d >/tmp/fds-dev-up.log 2>&1 &
 up_pid=$!
 
-# Long-lived services that must end up Running (minio-setup/data-generator are
-# one-shot and intentionally excluded).
-services="fds idp minio frontend"
+# Long-lived services that must end up Running.
+services="fds"
+[ -n "$PROFILE" ] && services="fds idp ui"
 need="$(echo "$services" | wc -w | tr -d ' ')"
 
 echo -n "==> Bringing stack up "
@@ -89,7 +87,7 @@ done
 echo
 kill "$up_pid" >/dev/null 2>&1 || true  # the wrapper has hung; we've driven the stack up ourselves
 if [ "$ready" != 1 ]; then
-  echo "!! Stack did not fully come up. Up log:"; tail -20 /tmp/fds-demo-up.log
+  echo "!! Stack did not fully come up. Up log:"; tail -20 /tmp/fds-dev-up.log
   echo "   Container states:"; podman ps -a --filter "label=com.docker.compose.project=${PROJECT}" --format "   {{.Names}}\t{{.Status}}"
   exit 1
 fi
@@ -108,19 +106,12 @@ if [ -n "$latest" ] && [ -n "$running" ] && [ "$latest" != "$running" ]; then
   echo "!! WARNING: $fds is NOT running the freshly built image (stale)."
 fi
 
-[ "${FDS_DEMO_SEED:-1}" = 0 ] &&
-  note="FDS_DEMO_SEED=0: the catalog is empty. Fill it with: uv run demo/seed_metadata.py" ||
-  note="The catalog is auto-populated on startup by the metadata-seeder service."
-
-cat <<EOF
-==> Demo is up:
-   API    http://localhost:8000   (docs: /docs)
-   UI     http://localhost:3000
-   IdP     http://localhost:8080
-   Docs   https://ukaea.github.io/fds/
-   MinIO  http://localhost:9000
-
-$note
-See the live read-back workflows (access enforcement, credential vending, Dask) with:
-   uvx marimo edit demo/explore.py --sandbox
-EOF
+echo "==> Development stack is up:"
+echo "   API    http://localhost:8000   (OpenAPI explorer: /docs)"
+if [ -n "$PROFILE" ]; then
+  echo "   IdP    http://localhost:8080"
+  echo "   UI     http://localhost:3000"
+fi
+echo
+echo "The catalogue is empty. To fill it with the documented examples:"
+echo "   FDS_TOKEN=\$(uv run scripts/mint-token.py mint) uv run scripts/seed-example-catalogue.py"

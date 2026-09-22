@@ -42,12 +42,11 @@ jobs:
       - name: Test
         run: uv run --all-extras pytest
 
-  integration:
-    name: Integration tests
+  end-to-end:
+    name: End-to-end tests
     runs-on: ubuntu-latest
-    # Full stack: real HTTP to FDS, real Keycloak auth, real MinIO storage. The
-    # demo generates only the small synthetic datasets it needs, and registers the
-    # real MAST shots by reference.
+    # Black box: the suite is pointed at a running FDS and asserts only over
+    # HTTP, so the same tests serve as a deployment's smoke test.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -60,37 +59,34 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --frozen
 
-      - name: Start the demo stack
-        run: docker compose -f demo/docker-compose.yaml up -d --build
+      # The stack trusts this key, and the suite signs its tokens with it, so no
+      # identity provider has to run.
+      - name: Generate the signing key the stack trusts
+        run: uv run scripts/mint-token.py init --out-dir dev
 
-      # Both must answer before tests start. FDS reports healthy well before
-      # Keycloak has finished importing its realm, and the first thing the tests
-      # do is fetch a token from it. The discovery document only exists once the
-      # realm does, so it is the honest readiness signal.
-      - name: Wait for the stack to become ready
+      - name: Start the stack
+        run: docker compose up -d --build
+
+      - name: Wait for FDS to become ready
         run: |
-          wait_for() {
-            for _ in $(seq 1 30); do
-              if curl -fsS "$2" > /dev/null; then
-                echo "$1 is up"
-                return 0
-              fi
-              sleep 5
-            done
-            echo "$1 did not become ready in time"
-            docker compose -f demo/docker-compose.yaml logs --no-color
-            return 1
-          }
-          wait_for FDS      http://localhost:8000/health
-          wait_for Keycloak http://localhost:8080/realms/fds/.well-known/openid-configuration
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/health > /dev/null; then
+              echo "FDS is up"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "FDS did not become ready in time"
+          docker compose logs --no-color
+          exit 1
 
-      - name: Run integration tests
-        run: uv run --all-extras pytest -m integration
+      - name: Run end-to-end tests
+        run: uv run --all-extras pytest -m end_to_end
 
       - name: Dump logs on failure
         if: failure()
-        run: docker compose -f demo/docker-compose.yaml logs --no-color
+        run: docker compose logs --no-color
 
       - name: Tear down
         if: always()
-        run: docker compose -f demo/docker-compose.yaml down -v
+        run: docker compose down -v
