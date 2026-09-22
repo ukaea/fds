@@ -133,6 +133,7 @@ class Collection(CollectionBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
     shot_id: str | None = Field(default=None, index=True)
     activity_id: int | None = Field(default=None, foreign_key="activity.id", index=True)
+    # The catalogue a federated record came from; NULL means it was minted in this FDS instance.
     origin: str | None = Field(default=None, index=True)
 
     shot: "Shot" = Relationship(
