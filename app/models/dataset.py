@@ -171,17 +171,28 @@ class Dataset(DatasetBase, table=True):
             ["device_name", "shot_id"],
             ["shot.device_name", "shot.id"],
         ),
-        # Unattributed datasets: one per (name, context, origin).
-        # Allows federated catalogs to each contribute a same-named dataset.
+        # Unattributed datasets: one per (name, context) minted here, and one per
+        # (name, context, origin) from each federated catalogue. Two indexes
+        # because SQL treats NULLs as distinct, so a single index over origin
+        # would not catch a duplicate local dataset.
         Index(
-            "idx_dataset_unique_no_activity",
+            "idx_dataset_unique_local",
+            "name",
+            "device_name",
+            "shot_id",
+            unique=True,
+            sqlite_where=text("activity_id IS NULL AND origin IS NULL"),
+            postgresql_where=text("activity_id IS NULL AND origin IS NULL"),
+        ),
+        Index(
+            "idx_dataset_unique_federated",
             "name",
             "device_name",
             "shot_id",
             "origin",
             unique=True,
-            sqlite_where=text("activity_id IS NULL"),
-            postgresql_where=text("activity_id IS NULL"),
+            sqlite_where=text("activity_id IS NULL AND origin IS NOT NULL"),
+            postgresql_where=text("activity_id IS NULL AND origin IS NOT NULL"),
         ),
         # Attributed datasets: one per (name, context, activity).
         # Allows multiple runs (different activity_ids) to each produce same-named datasets.
@@ -209,6 +220,7 @@ class Dataset(DatasetBase, table=True):
             "annotation, whose subject is the shot it belongs to."
         ),
     )
+    # The catalogue a federated record came from. NULL means it was minted in this FDS instance.
     origin: str | None = Field(default=None, index=True)
 
     shot: "Shot" = Relationship(

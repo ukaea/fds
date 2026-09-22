@@ -12,7 +12,6 @@ from app.auth.access_control import (
 )
 from app.auth.permissions import check_device_admin, check_is_admin
 from app.core.audit import record_restricted_read
-from app.core.config import config
 from app.core.context import ReadTier, record_returned
 from app.core.naming import normalise_device_name
 from app.models.activity import Activity
@@ -167,7 +166,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             )
 
         # 3. Persist
-        origin = obj_in.origin or config.catalog_uri
+        origin = obj_in.origin
         db_obj = Collection.model_validate(obj_in, update={"origin": origin})
         self.session.add(db_obj)
         try:

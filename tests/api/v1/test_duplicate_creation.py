@@ -1,8 +1,11 @@
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
 from app.models.activity import ActivityCreate, ActivityType
+from app.models.dataset import Dataset
 from app.models.device import Device
 from app.models.shot import Shot
 from app.models.source import SourceCreate, SourceKind
@@ -150,6 +153,9 @@ def test_duplicate_dataset_name_rejected_without_activity(
         json=dataset_data,
     )
     assert response1.status_code == 201
+    # Minted here: no origin is recorded, so nothing about this instance's own
+    # address is in the row and a change of hostname cannot split it in two.
+    assert response1.json().get("origin") is None
 
     response2 = test_client.post(
         "/api/v1/devices/dup-ds-device-2/shots/2001/datasets",
@@ -157,3 +163,61 @@ def test_duplicate_dataset_name_rejected_without_activity(
         json=dataset_data,
     )
     assert response2.status_code == 409
+
+
+def test_federated_dataset_may_share_a_local_name(
+    test_client: TestClient, admin_user_token: dict[str, str], session: Session
+):
+    """
+    A dataset carrying another catalogue's origin does not conflict with the
+    local dataset of the same name, but does conflict with a second copy from
+    that same catalogue.
+    """
+    device = Device(name="dup-ds-device-3", description="Test", type="tokamak")
+    session.add(device)
+    session.commit()
+
+    shot = Shot(id="2002", device_name=device.name)
+    session.add(shot)
+    session.commit()
+
+    url = "/api/v1/devices/dup-ds-device-3/shots/2002/datasets"
+    local = {"name": "raw", "url": "s3://local/raw", "level": 0}
+    federated = {
+        "name": "raw",
+        "url": "s3://elsewhere/raw",
+        "level": 0,
+        "origin": "https://catalogue.example.org",
+    }
+
+    assert (
+        test_client.post(url, headers=admin_user_token, json=local).status_code == 201
+    )
+    response = test_client.post(url, headers=admin_user_token, json=federated)
+    assert response.status_code == 201
+    assert response.json()["origin"] == "https://catalogue.example.org"
+    assert (
+        test_client.post(url, headers=admin_user_token, json=federated).status_code
+        == 409
+    )
+
+
+def test_local_dataset_uniqueness_is_enforced_by_the_database(session: Session):
+    """
+    The unique index, not only the service check, rejects a second local dataset
+    with the same name and context. SQL treats NULLs as distinct, so this needs
+    its own index over rows with no origin.
+    """
+    device = Device(name="dup-ds-device-4", description="Test", type="tokamak")
+    session.add(device)
+    session.commit()
+    shot = Shot(id="2003", device_name=device.name)
+    session.add(shot)
+    session.commit()
+
+    session.add(Dataset(name="raw", device_name=device.name, shot_id=shot.id, level=0))
+    session.commit()
+    session.add(Dataset(name="raw", device_name=device.name, shot_id=shot.id, level=0))
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()

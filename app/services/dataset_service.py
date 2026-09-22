@@ -178,7 +178,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         obj_in.device_name = normalise_device_name(obj_in.device_name)
         self._resolve_and_authorize_context(obj_in, user)
 
-        origin = obj_in.origin or config.catalog_uri
+        origin = obj_in.origin
         self._reject_duplicate(obj_in, origin)
         self._validate_references(obj_in)
 
@@ -231,7 +231,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 raise DeviceNotFoundError(f"Device '{obj_in.device_name}' not found")
         self._authorize_write(obj_in.device_name, user)
 
-    def _reject_duplicate(self, obj_in: DatasetCreate, origin: str) -> None:
+    def _reject_duplicate(self, obj_in: DatasetCreate, origin: str | None) -> None:
         """Reject an exact duplicate up front so a re-POST of an identical dataset
         reads as 409 (already exists) rather than the reference-overlap 422 that
         validation would raise first — a version trivially overlaps itself, which
