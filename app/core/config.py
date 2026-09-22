@@ -1,12 +1,32 @@
+from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class TrustedIdP(BaseModel):
+    """An issuer whose tokens FDS accepts, and where to find the keys that signed them.
+
+    By default FDS discovers the keys: it fetches ``{issuer}/.well-known/
+    openid-configuration`` and then the ``jwks_uri`` it advertises. The two
+    optional fields override that:
+
+    ``jwks_uri`` names the key endpoint directly, for when FDS reaches the
+    issuer at a different address from the one in the token (a container
+    network, say, where the token says ``https://auth.example.org`` but FDS
+    should call ``http://keycloak:8080``).
+
+    ``jwks_file`` reads the keys from a local file, so no identity provider has
+    to be running at all. Tokens are then minted offline by whoever holds the
+    matching private key. See the Operations documentation: this is a
+    bootstrap, automation and break-glass path, not a way for people to log in.
+    """
+
     issuer: str
     allowed_scopes: list[str] = ["*"]
+    jwks_uri: str | None = None
+    jwks_file: Path | None = None
 
     @field_validator("issuer")
     @classmethod
@@ -15,6 +35,15 @@ class TrustedIdP(BaseModel):
         if not normalized:
             raise ValueError("issuer must be non-empty and not whitespace-only")
         return normalized
+
+    @model_validator(mode="after")
+    def one_key_source(self) -> "TrustedIdP":
+        if self.jwks_uri and self.jwks_file:
+            raise ValueError(
+                f"'{self.issuer}' sets both jwks_uri and jwks_file; "
+                "keys come from one place"
+            )
+        return self
 
 
 class S3StorageProvider(BaseModel):

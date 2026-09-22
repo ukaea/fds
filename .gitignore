@@ -12,6 +12,10 @@ wheels/
 # Environment variables
 .env
 
+# Locally generated signing keys (see scripts/mint-token.py)
+*.key
+local-issuer.jwks.json
+
 # IDE
 .vscode
 
