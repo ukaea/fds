@@ -32,6 +32,16 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 2
+    groups:
+      # Every codeql-action step in a workflow has to be the same version: the
+      # action refuses to run otherwise ("Loaded a configuration file for
+      # version X, but running version Y"). Bumping init and analyze in separate
+      # pull requests leaves each of them mismatched, so they move together.
+      # Listed first because a dependency joins the first group it matches.
+      codeql-action:
+        patterns: ["github/codeql-action*"]
+      actions-minor-and-patch:
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "docker"
     directories:
