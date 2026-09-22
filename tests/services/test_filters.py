@@ -34,15 +34,17 @@ def test_parse_annotation_rejects_empty_value():
     ("value", "expected"),
     [
         ("H-mode", ["H-mode"]),
-        ("true", ["true", True]),
-        ("FALSE", ["FALSE", False]),
-        ("42", ["42", 42]),
-        ("0.5", ["0.5", 0.5]),
+        ("true", ["true"]),
+        ("FALSE", ["FALSE", "false"]),
+        ("42", ["42"]),
+        ("0.5", ["0.5"]),
+        # A stored 1.50 reads back as "1.5", so both spellings have to match.
+        ("1.50", ["1.50", "1.5"]),
         ("n=1 tearing", ["n=1 tearing"]),
     ],
 )
-def test_value_candidates(value: str, expected: list[object]):
-    """A query string is always text, so match the raw form or its coerced type."""
+def test_value_candidates(value: str, expected: list[str]):
+    """Comparison happens on the JSON value as text, so candidates are text too."""
     assert _value_candidates(value) == expected
 
 

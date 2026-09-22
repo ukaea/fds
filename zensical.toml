@@ -10,6 +10,7 @@ nav = [
   { Home = "index.md" },
   { "Access Control" = "access-control.md" },
   { "Logging & Auditing" = "logging.md" },
+  { Operations = "operations.md" },
   { "Data Model" = [
     "data-model/index.md",
     { "Device" = "data-model/device.md" },

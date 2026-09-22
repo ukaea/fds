@@ -458,9 +458,6 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         try:
             self.check_read_access(upstream, user)
         except ForbiddenError:
-            # Withhold the name and the branch below it. The id is already
-            # visible through the derivations listing, so this reveals nothing
-            # new while keeping the truncation explicit.
             return DatasetLineageNode(dataset_id=source_id, restricted=True)
 
         return self._expand_lineage(upstream, user, expanded)
@@ -564,7 +561,21 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         db_obj = self._get_or_raise(id)
         self._authorize_write(db_obj.device_name, user)
+        self._reject_if_upstream(id)
         return self.delete_unchecked(id)
+
+    def _reject_if_upstream(self, id: int) -> None:
+        dependants = self.session.exec(
+            select(DatasetDerivation.dataset_id).where(
+                DatasetDerivation.source_dataset_id == id
+            )
+        ).all()
+        if dependants:
+            listed = ", ".join(str(d) for d in sorted(set(dependants)))
+            raise ConflictError(
+                f"Dataset {id} is an asserted source for dataset(s) {listed}. "
+                "Delete those derivations first."
+            )
 
     def get_by_name_in_context(
         self,

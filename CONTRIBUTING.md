@@ -36,8 +36,30 @@ uv run --all-extras pytest
 
 ### Tests
 
-`uv run --all-extras pytest` runs the unit and API tests. End-to-end tests are
-excluded by default because they need a running FDS:
+`uv run --all-extras pytest` runs the unit and API tests. They need a
+PostgreSQL, because FDS has no other backend: set `FDS_TEST_DB_URL` to one you
+are running, or let the tests start a container for the run. Each test runs in
+a transaction that is rolled back, and the schema is built once per run by the
+committed migrations.
+
+```bash
+# the compose stack's database, which is the quickest
+FDS_TEST_DB_URL=postgresql+psycopg://fds:fds@localhost:5432/fds uv run --all-extras pytest
+```
+
+Letting the tests start their own container uses testcontainers, which talks to
+a Docker-compatible socket. Under podman that means pointing it at podman's:
+
+```bash
+export DOCKER_HOST="unix://$(podman machine inspect --format '{{.ConnectionInfo.PodmanSocket.Path}}')"
+export TESTCONTAINERS_RYUK_DISABLED=true
+```
+
+A change to a `table=True` model needs a migration in the same change
+(`uv run alembic revision --autogenerate -m "..."`, reviewed, with a working
+`downgrade()`). CI fails on drift.
+
+End-to-end tests are excluded by default because they need a running FDS:
 
 ```bash
 uv run scripts/mint-token.py init --out-dir dev   # once

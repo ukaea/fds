@@ -1,12 +1,16 @@
 import io
 import json
 import logging
+import os
 from collections.abc import Generator
+from pathlib import Path
 
 import pytest
+from alembic.config import Config as AlembicConfig
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, StaticPool, create_engine
+from sqlmodel import Session, create_engine
 
+from alembic import command
 from app.auth.security import (
     AuthenticatedUser,
     get_token_claims,
@@ -17,17 +21,65 @@ from app.core.logging import setup_logging
 from app.main import app
 
 
+@pytest.fixture(scope="session")
+def database_url() -> Generator[str, None, None]:
+    """A PostgreSQL database for the test run.
+
+    FDS_TEST_DB_URL points at one you are already running, which is what CI and
+    anyone with the compose stack up will use. Otherwise a container is started
+    for the session and thrown away afterwards.
+    """
+    supplied = os.environ.get("FDS_TEST_DB_URL")
+    if supplied:
+        yield supplied
+        return
+
+    try:
+        from testcontainers.postgres import PostgresContainer
+    except ImportError:  # pragma: no cover - depends on the environment
+        pytest.skip(
+            "no test database: set FDS_TEST_DB_URL, or install the dev "
+            "dependencies so a container can be started"
+        )
+
+    with PostgresContainer("postgres:17", driver="psycopg") as postgres:
+        yield postgres.get_connection_url()
+
+
+@pytest.fixture(scope="session")
+def engine(database_url: str):
+    """One engine per run, with the schema built by the committed migrations.
+
+    Building it with Alembic rather than `create_all` means every run also
+    proves the migrations produce the schema the models expect.
+    """
+    alembic_config = AlembicConfig(str(Path(__file__).parent.parent / "alembic.ini"))
+    alembic_config.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(alembic_config, "head")
+
+    engine = create_engine(database_url, json_serializer=_json_serializer)
+    yield engine
+    engine.dispose()
+
+
 @pytest.fixture(name="session")
-def session_fixture() -> Generator[Session, None, None]:
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-        json_serializer=_json_serializer,
-    )
-    SQLModel.metadata.create_all(engine)
-    with Session(engine) as session:
-        yield session
+def session_fixture(engine) -> Generator[Session, None, None]:
+    """A session whose writes are discarded when the test ends.
+
+    Each test runs inside a transaction that is rolled back, so the database is
+    built once for the run rather than once per test. `create_savepoint` means
+    the service layer's own commits release a savepoint instead of committing,
+    so nothing escapes into the next test.
+    """
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection, join_transaction_mode="create_savepoint")
+
+    yield session
+
+    session.close()
+    transaction.rollback()
+    connection.close()
 
 
 @pytest.fixture(name="test_client")

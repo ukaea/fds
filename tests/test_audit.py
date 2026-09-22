@@ -33,13 +33,15 @@ def seeded(session: Session, admin_user: AuthenticatedUser):
 
 class TestMutationsAreRecorded:
     def test_create_names_the_resource(self, session, admin_user, log_lines):
-        DeviceService(session).create(DeviceCreate(name="mast"), admin_user)
+        device = DeviceService(session).create(DeviceCreate(name="mast"), admin_user)
 
         (line,) = audit_lines(log_lines(), "device.insert")
         assert line["resource_type"] == "device"
         assert line["operation"] == "insert"
         assert line["name"] == "mast"
-        assert line["id"] == 1
+        # The row's own id, not a literal: the tests share one database and
+        # sequences are not rewound between them.
+        assert line["id"] == device.id
 
     def test_delete_is_recorded(self, session, admin_user, log_lines):
         service = DeviceService(session)

@@ -19,6 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "alembic>=1.20.0",
+    "psycopg[binary]>=3.2",
     "cachetools>=7.2.0",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.141.1",
     "pydantic-settings>=2.15.0",
@@ -62,6 +63,8 @@ dev = [
     "httpx>=0.27.2",
     "ruff>=0.16.7",
     "pyright>=1.1.414",
+    "testcontainers[postgres]>=4.15.0",
+    "moto[s3,sts]>=5.2.3",
 ]
 
 [tool.pytest.ini_options]
@@ -93,5 +96,5 @@ ignore = ["B008"]
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-exclude = [".venv"]
+exclude = ["**/node_modules", "**/__pycache__", "**/.*", "alembic/versions"]
 typeCheckingMode = "standard"

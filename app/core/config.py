@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Annotated, Literal
+from urllib.parse import quote
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -106,10 +107,14 @@ class Config(BaseSettings):
     # "json", "console", or "" to follow ENVIRONMENT.
     LOG_FORMAT: str = Field(default="", validation_alias="FDS_LOG_FORMAT")
 
-    # Database Settings
-    db_user: str = Field(default="", validation_alias="FDS_DB_USER")
+    # Database Settings. FDS runs on PostgreSQL; there is no other backend.
+    db_host: str = Field(default="localhost", validation_alias="FDS_DB_HOST")
+    db_port: int = Field(default=5432, validation_alias="FDS_DB_PORT")
+    db_user: str = Field(default="fds", validation_alias="FDS_DB_USER")
     db_password: str = Field(default="", validation_alias="FDS_DB_PASSWORD")
-    db_name: str = Field(default="fds.db", validation_alias="FDS_DB_NAME")
+    db_name: str = Field(default="fds", validation_alias="FDS_DB_NAME")
+    # A complete URL, which wins over the parts above when set.
+    db_url_override: str = Field(default="", validation_alias="FDS_DB_URL")
 
     # OIDC/JWT Settings
     OIDC_AUDIENCE: str = Field(default="", validation_alias="FDS_OIDC_AUDIENCE")
@@ -141,7 +146,20 @@ class Config(BaseSettings):
 
     @property
     def db_url(self) -> str:
-        return f"sqlite:///./{self.db_name}"
+        """The PostgreSQL URL, with credentials escaped.
+
+        Overridden wholesale by FDS_DB_URL when set, which is how the tests
+        point at a throwaway database.
+        """
+        if self.db_url_override:
+            return self.db_url_override
+        credentials = quote(self.db_user, safe="")
+        if self.db_password:
+            credentials += ":" + quote(self.db_password, safe="")
+        return (
+            f"postgresql+psycopg://{credentials}"
+            f"@{self.db_host}:{self.db_port}/{self.db_name}"
+        )
 
 
 config = Config()

@@ -17,6 +17,24 @@ jobs:
   check:
     name: Lint, type-check and test
     runs-on: ubuntu-latest
+    # The tests run against a real PostgreSQL: FDS has no other backend, and a
+    # substitute would only prove the substitute works.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fds
+          POSTGRES_PASSWORD: fds
+          POSTGRES_DB: fds_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fds"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FDS_TEST_DB_URL: postgresql+psycopg://fds:fds@localhost:5432/fds_test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -41,6 +59,21 @@ jobs:
 
       - name: Test
         run: uv run --all-extras pytest
+
+      # Fails when the models have changed without a matching migration. The
+      # schema itself is built by the migrations in the test run above, so this
+      # only has to compare.
+      - name: Check the models match the migrations
+        run: uv run alembic check
+        env:
+          FDS_DB_URL: postgresql+psycopg://fds:fds@localhost:5432/fds_test
+
+      # Every migration must be reversible: rolling back a release that migrated
+      # means downgrading before deploying the older image.
+      - name: Downgrade and re-apply the migrations
+        run: uv run alembic downgrade base && uv run alembic upgrade head
+        env:
+          FDS_DB_URL: postgresql+psycopg://fds:fds@localhost:5432/fds_test
 
   end-to-end:
     name: End-to-end tests

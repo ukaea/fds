@@ -14,6 +14,7 @@ from app.models.source import SourceCreate, SourceKind
 from app.services.activity_service import ActivityService
 from app.services.dataset_service import DatasetService
 from app.services.exceptions import (
+    ConflictError,
     FDSValidationError,
     ForbiddenError,
     ResourceNotFoundError,
@@ -342,7 +343,13 @@ def test_lineage_terminates_on_a_cycle(session: Session):
     assert back_reference.seen is True
 
 
-def test_lineage_marks_a_deleted_upstream_missing(session: Session):
+def test_deleting_an_asserted_upstream_is_refused(session: Session):
+    """Provenance outranks tidiness: an upstream with dependants stays.
+
+    Nothing else protects the claim. The foreign key would reject the delete
+    with a database error; the service refuses it with an explanation naming
+    what depends on it.
+    """
     upstream = _dataset(session, "raw")
     upstream_id = _id(upstream)
     derived = _dataset(
@@ -350,13 +357,11 @@ def test_lineage_marks_a_deleted_upstream_missing(session: Session):
         "processed",
         derived_from=[DatasetDerivationCreate(source_dataset_id=upstream_id)],
     )
-    session.delete(upstream)
-    session.commit()
 
-    lineage = DatasetService(session).get_lineage(_id(derived), admin)
+    with pytest.raises(ConflictError, match=str(_id(derived))):
+        DatasetService(session).delete(upstream_id, admin)
 
-    assert lineage.derived_from[0].missing is True
-    assert lineage.derived_from[0].name is None
+    assert session.get(Dataset, upstream_id) is not None
 
 
 def test_lineage_withholds_an_upstream_the_caller_cannot_read(session: Session):
