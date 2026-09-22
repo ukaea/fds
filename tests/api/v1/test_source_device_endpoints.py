@@ -40,7 +40,7 @@ def test_create_source_nested_endpoint(
     }
 
     resp = test_client.post(
-        f"/api/v1/devices/{dev1.name}/sources",
+        f"/v1/devices/{dev1.name}/sources",
         json=source_data,
         headers=admin_user_token,
     )
@@ -83,7 +83,7 @@ def test_list_sources_nested_endpoint(
 
     # 1. List sources for DeviceA
     resp = test_client.get(
-        f"/api/v1/devices/{dev1.name}/sources",
+        f"/v1/devices/{dev1.name}/sources",
         headers=admin_user_token,
     )
     assert resp.status_code == 200
@@ -97,7 +97,7 @@ def test_list_sources_nested_endpoint(
 
     # 2. List sources for DeviceB
     resp = test_client.get(
-        f"/api/v1/devices/{dev2.name}/sources",
+        f"/v1/devices/{dev2.name}/sources",
         headers=admin_user_token,
     )
     assert resp.status_code == 200
@@ -112,7 +112,7 @@ def test_create_source_nested_invalid_device(
 ):
     source_data = {"name": "source_invalid", "kind": "software"}
     resp = test_client.post(
-        "/api/v1/devices/non_existent_device/sources",
+        "/v1/devices/non_existent_device/sources",
         json=source_data,
         headers=admin_user_token,
     )

@@ -57,7 +57,7 @@ class TestForeignLoggers:
 
     def test_access_log_is_dropped(self, log_lines):
         """The per-request audit line replaces it, and duplicates are noise."""
-        logging.getLogger("uvicorn.access").info("GET /api/v1/datasets 200 OK")
+        logging.getLogger("uvicorn.access").info("GET /v1/datasets 200 OK")
 
         assert log_lines() == []
 

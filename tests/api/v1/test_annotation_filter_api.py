@@ -79,7 +79,7 @@ def annotated_api_catalogue_fixture(
 def test_shots_filtered_by_annotation(test_client: TestClient):
     """Use case: MAST shots that disrupted."""
     resp = test_client.get(
-        f"/api/v1/devices/{MAST}/shots", params={"annotation": "disruption"}
+        f"/v1/devices/{MAST}/shots", params={"annotation": "disruption"}
     )
 
     assert resp.status_code == 200
@@ -87,7 +87,7 @@ def test_shots_filtered_by_annotation(test_client: TestClient):
 
 
 def test_shots_unfiltered_returns_everything(test_client: TestClient):
-    resp = test_client.get(f"/api/v1/devices/{MAST}/shots")
+    resp = test_client.get(f"/v1/devices/{MAST}/shots")
 
     assert resp.status_code == 200
     assert sorted(s["id"] for s in resp.json()) == ["30420", "30421"]
@@ -96,13 +96,13 @@ def test_shots_unfiltered_returns_everything(test_client: TestClient):
 def test_repeated_annotation_param_parses_as_a_list(test_client: TestClient):
     """`?annotation=a&annotation=b` must arrive as two annotations, ANDed."""
     resp = test_client.get(
-        f"/api/v1/devices/{MAST}/shots", params={"annotation": ["disruption", "elm"]}
+        f"/v1/devices/{MAST}/shots", params={"annotation": ["disruption", "elm"]}
     )
     assert resp.status_code == 200
     assert [s["id"] for s in resp.json()] == ["30421"]
 
     resp = test_client.get(
-        f"/api/v1/devices/{MAST}/shots",
+        f"/v1/devices/{MAST}/shots",
         params={"annotation": ["disruption", "sawtooth"]},
     )
     assert resp.status_code == 200
@@ -111,7 +111,7 @@ def test_repeated_annotation_param_parses_as_a_list(test_client: TestClient):
 
 def test_equality_annotation_filter(test_client: TestClient):
     resp = test_client.get(
-        f"/api/v1/devices/{MAST}/shots",
+        f"/v1/devices/{MAST}/shots",
         params={"annotation": "confinement_mode:H-mode"},
     )
     assert resp.status_code == 200
@@ -120,7 +120,7 @@ def test_equality_annotation_filter(test_client: TestClient):
 
 def test_malformed_annotation_returns_422(test_client: TestClient):
     resp = test_client.get(
-        f"/api/v1/devices/{MAST}/shots", params={"annotation": "disruption:"}
+        f"/v1/devices/{MAST}/shots", params={"annotation": "disruption:"}
     )
     assert resp.status_code == 422
 
@@ -128,7 +128,7 @@ def test_malformed_annotation_returns_422(test_client: TestClient):
 def test_datasets_filtered_by_shot_annotation(test_client: TestClient):
     """Use case: equilibrium datasets from ELMy MAST-U shots, in one request."""
     resp = test_client.get(
-        f"/api/v1/devices/{MAST_U}/datasets",
+        f"/v1/devices/{MAST_U}/datasets",
         params={"name": "equilibrium", "shot_annotation": "elm"},
     )
 
@@ -141,7 +141,7 @@ def test_datasets_filtered_by_shot_annotation(test_client: TestClient):
 def test_datasets_name_filter_without_annotations(test_client: TestClient):
     """Without shot_annotation, both shots' equilibrium datasets come back."""
     resp = test_client.get(
-        f"/api/v1/devices/{MAST_U}/datasets", params={"name": "equilibrium"}
+        f"/v1/devices/{MAST_U}/datasets", params={"name": "equilibrium"}
     )
 
     assert resp.status_code == 200
@@ -182,7 +182,7 @@ def annotated_collections_fixture(
 def test_collections_filtered_by_annotation(test_client: TestClient):
     """A run is discoverable because its bundle carries the claim, not the run."""
     resp = test_client.get(
-        f"/api/v1/devices/{MAST_U}/shots/50000/collections",
+        f"/v1/devices/{MAST_U}/shots/50000/collections",
         params={"annotation": "confinement_mode:H-mode"},
     )
 
@@ -193,7 +193,7 @@ def test_collections_filtered_by_annotation(test_client: TestClient):
 @pytest.mark.usefixtures("annotated_collections")
 def test_collections_filtered_by_annotation_presence(test_client: TestClient):
     resp = test_client.get(
-        f"/api/v1/devices/{MAST_U}/shots/50000/collections",
+        f"/v1/devices/{MAST_U}/shots/50000/collections",
         params={"annotation": "confinement_mode"},
     )
 
@@ -205,7 +205,7 @@ def test_collections_filtered_by_annotation_presence(test_client: TestClient):
 @pytest.mark.usefixtures("annotated_collections")
 def test_unannotated_collection_is_returned_when_unfiltered(test_client: TestClient):
     """A run nobody annotated is still listed; it is only absent from filtered results."""
-    resp = test_client.get(f"/api/v1/devices/{MAST_U}/shots/50000/collections")
+    resp = test_client.get(f"/v1/devices/{MAST_U}/shots/50000/collections")
 
     assert resp.status_code == 200
     assert "unannotated-run" in {c["name"] for c in resp.json()}
@@ -214,7 +214,7 @@ def test_unannotated_collection_is_returned_when_unfiltered(test_client: TestCli
 @pytest.mark.usefixtures("annotated_collections")
 def test_collection_scientific_metadata_round_trips(test_client: TestClient):
     resp = test_client.get(
-        f"/api/v1/devices/{MAST_U}/shots/50000/collections/jintrac-run-1"
+        f"/v1/devices/{MAST_U}/shots/50000/collections/jintrac-run-1"
     )
 
     assert resp.status_code == 200

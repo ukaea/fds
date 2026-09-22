@@ -33,15 +33,13 @@ def health() -> dict[str, str]:
     return {"status": "ok", "version": __version__}
 
 
-app.include_router(device_router.router, prefix="/api/v1/devices", tags=["devices"])
-app.include_router(shot_router.router, prefix="/api/v1", tags=["shots"])
-app.include_router(source_router.router, prefix="/api/v1/sources", tags=["sources"])
+app.include_router(device_router.router, prefix="/v1/devices", tags=["devices"])
+app.include_router(shot_router.router, prefix="/v1", tags=["shots"])
+app.include_router(source_router.router, prefix="/v1/sources", tags=["sources"])
+app.include_router(activity_router.router, prefix="/v1/activities", tags=["activities"])
+app.include_router(dataset_router.router, prefix="/v1", tags=["datasets"])
+app.include_router(collection_router.router, prefix="/v1", tags=["collections"])
+app.include_router(catalog_router.router, prefix="/v1", tags=["catalog"])
 app.include_router(
-    activity_router.router, prefix="/api/v1/activities", tags=["activities"]
-)
-app.include_router(dataset_router.router, prefix="/api/v1", tags=["datasets"])
-app.include_router(collection_router.router, prefix="/api/v1", tags=["collections"])
-app.include_router(catalog_router.router, prefix="/api/v1", tags=["catalog"])
-app.include_router(
-    file_access_router.router, prefix="/api/v1/file-access", tags=["file-access"]
+    file_access_router.router, prefix="/v1/file-access", tags=["file-access"]
 )

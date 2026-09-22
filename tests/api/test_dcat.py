@@ -30,7 +30,7 @@ def test_metadata_persistence(session: Session):
 
 def test_get_catalog(test_client: TestClient, session: Session):
     """
-    Test the /api/v1/catalog endpoint returns valid JSON-LD structure.
+    Test the /v1/catalog endpoint returns valid JSON-LD structure.
     """
     public_device = Device(
         name="mast",
@@ -50,7 +50,7 @@ def test_get_catalog(test_client: TestClient, session: Session):
     session.add(restricted_device)
     session.commit()
 
-    response = test_client.get("/api/v1/catalog")
+    response = test_client.get("/v1/catalog")
     assert response.status_code == 200
     data = response.json()
 

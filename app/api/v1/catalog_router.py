@@ -24,7 +24,7 @@ def get_catalog(
     catalog: dict[str, Any] = {
         "@context": generate_context(),
         "@type": "dcat:Catalog",
-        "@id": f"{base_url}/api/v1/catalog",
+        "@id": f"{base_url}/v1/catalog",
         "title": "Fusion Data Service Catalog",
         "description": "A centralized catalog for fusion energy data.",
         "publisher": "Fusion Data Service",

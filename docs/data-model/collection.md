@@ -31,7 +31,7 @@ A run's outputs are always reachable as the datasets carrying its `activity_id`,
 Then the run answers a catalogue question:
 
 ```http
-GET /api/v1/devices/mast/shots/30420/collections?annotation=confinement_mode:H-mode
+GET /v1/devices/mast/shots/30420/collections?annotation=confinement_mode:H-mode
 ```
 
 If you do not bundle a run, its claims belong on its output datasets instead, and the run is not searchable as a run. That is a choice, not a gap: FDS records what a producer asserts and never infers claims they did not make.

@@ -4,7 +4,7 @@ These tests drive a running FDS over HTTP and assert nothing about its
 internals, so the same suite runs against a container in CI and against a real
 deployment as its smoke test:
 
-    FDS_URL=https://api.example.org/api/v1 uv run pytest -m end_to_end
+    FDS_URL=https://api.example.org/v1 uv run pytest -m end_to_end
 
 They prove the pieces are wired together: the app starts, the database is
 migrated, tokens are verified, responses are serialised, content negotiation
@@ -37,7 +37,7 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 
-FDS_URL = os.environ.get("FDS_URL", "http://localhost:8000/api/v1")
+FDS_URL = os.environ.get("FDS_URL", "http://localhost:8000/v1")
 SIGNING_KEY = Path(os.environ.get("FDS_SIGNING_KEY", "dev/local-issuer.key"))
 ISSUER = os.environ.get("FDS_TOKEN_ISSUER", "urn:fds:local")
 AUDIENCE = os.environ.get("FDS_TOKEN_AUDIENCE", "fds-client")

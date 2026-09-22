@@ -15,7 +15,7 @@ def test_include_geometry_off_by_default(
 ):
     make_version("thomson_geometry", ["thomson_positions"], THOMSON)
     signal = make_signal(["thomson_positions"])
-    resp = test_client.get(f"/api/v1/datasets/id/{signal.id}", headers=admin_user_token)
+    resp = test_client.get(f"/v1/datasets/id/{signal.id}", headers=admin_user_token)
     assert resp.status_code == 200
     assert "geometry" not in resp.json()
 
@@ -26,7 +26,7 @@ def test_include_geometry_surfaces_versions(
     version = make_version("thomson_geometry", ["thomson_positions"], THOMSON)
     signal = make_signal(["thomson_positions"])
     resp = test_client.get(
-        f"/api/v1/datasets/id/{signal.id}?include_geometry=true",
+        f"/v1/datasets/id/{signal.id}?include_geometry=true",
         headers=admin_user_token,
     )
     assert resp.status_code == 200
@@ -43,7 +43,7 @@ def test_include_geometry_with_storage_options(
     make_version("thomson_geometry", ["thomson_positions"], THOMSON)
     signal = make_signal(["thomson_positions"])
     resp = test_client.get(
-        f"/api/v1/datasets/id/{signal.id}"
+        f"/v1/datasets/id/{signal.id}"
         "?include_geometry=true&include_storage_options=true",
         headers=admin_user_token,
     )
@@ -60,7 +60,7 @@ def test_multi_role_bundle_deduped(
     bundle = make_version("bundle", roles, Coverage(shots=["150"]))
     signal = make_signal(roles)
     resp = test_client.get(
-        f"/api/v1/datasets/id/{signal.id}?include_geometry=true",
+        f"/v1/datasets/id/{signal.id}?include_geometry=true",
         headers=admin_user_token,
     )
     assert resp.status_code == 200

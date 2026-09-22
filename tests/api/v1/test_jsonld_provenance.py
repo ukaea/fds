@@ -83,7 +83,7 @@ def test_jsonld_provenance(
     headers = admin_user_token.copy()
     headers["Accept"] = "application/ld+json"
 
-    url = f"/api/v1/datasets/id/{dataset.id}"
+    url = f"/v1/datasets/id/{dataset.id}"
     resp = test_client.get(url, headers=headers)
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/ld+json"
@@ -137,7 +137,7 @@ def test_jsonld_no_provenance(
 
     headers = admin_user_token.copy()
     headers["Accept"] = "application/ld+json"
-    url = f"/api/v1/datasets/id/{dataset.id}"
+    url = f"/v1/datasets/id/{dataset.id}"
     resp = test_client.get(url, headers=headers)
     assert resp.status_code == 200
     assert "prov:wasGeneratedBy" not in resp.json()
@@ -185,7 +185,7 @@ def test_jsonld_provenance_with_timestamps(
 
     headers = admin_user_token.copy()
     headers["Accept"] = "application/ld+json"
-    url = f"/api/v1/datasets/id/{dataset.id}"
+    url = f"/v1/datasets/id/{dataset.id}"
     resp = test_client.get(url, headers=headers)
     assert resp.status_code == 200
     prov = resp.json()["prov:wasGeneratedBy"]
@@ -247,7 +247,7 @@ def test_jsonld_provenance_with_inputs(
 
     headers = admin_user_token.copy()
     headers["Accept"] = "application/ld+json"
-    url = f"/api/v1/datasets/id/{derived.id}"
+    url = f"/v1/datasets/id/{derived.id}"
     resp = test_client.get(url, headers=headers)
     assert resp.status_code == 200
 
@@ -306,7 +306,7 @@ def test_jsonld_provenance_with_instrument(
 
     headers = admin_user_token.copy()
     headers["Accept"] = "application/ld+json"
-    resp = test_client.get(f"/api/v1/datasets/id/{raw.id}", headers=headers)
+    resp = test_client.get(f"/v1/datasets/id/{raw.id}", headers=headers)
     assert resp.status_code == 200
 
     prov = resp.json()["prov:wasGeneratedBy"]
@@ -371,7 +371,7 @@ def test_jsonld_multi_agent_associations(
 
     headers = admin_user_token.copy()
     headers["Accept"] = "application/ld+json"
-    resp = test_client.get(f"/api/v1/datasets/id/{profile.id}", headers=headers)
+    resp = test_client.get(f"/v1/datasets/id/{profile.id}", headers=headers)
     assert resp.status_code == 200
 
     prov = resp.json()["prov:wasGeneratedBy"]

@@ -116,7 +116,7 @@ Something changed:
 A request finished, naming anything restricted it touched:
 
 ```json
-{"method": "GET", "route": "/api/v1/datasets", "status": 200, "returned": 12,
+{"method": "GET", "route": "/v1/datasets", "status": 200, "returned": 12,
  "restricted_listed": {"dataset": [31]}, "actor_id": "f7052ccf...2d4bc",
  "event": "request", "level": "info", "logger": "fds.audit",
  "trace_id": "9360d49cd07c6578aa9e7d3bc5d53a2a", "timestamp": "..."}

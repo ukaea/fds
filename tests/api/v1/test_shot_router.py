@@ -24,7 +24,7 @@ def test_create_shot_nested_endpoint(
     shot_data = {"id": "shot-54321", "access_level": "public"}
 
     response = test_client.post(
-        f"/api/v1/devices/{mast.name}/shots/",
+        f"/v1/devices/{mast.name}/shots/",
         headers=admin_user_token,
         json=shot_data,
     )
@@ -48,7 +48,7 @@ def test_create_shot_conflict(
     shot_data = {"id": "shot-conflict", "device_name": "JET"}
 
     response = test_client.post(
-        f"/api/v1/devices/{mast.name}/shots/",
+        f"/v1/devices/{mast.name}/shots/",
         headers=admin_user_token,
         json=shot_data,
     )
@@ -83,7 +83,7 @@ def test_update_shot_nested_device_change(
     # Try to move from MAST to JET via nested endpoint - should fail
     update_data = {"device_name": "JET"}
     response = test_client.put(
-        f"/api/v1/devices/{mast.name}/shots/{shot.id}",
+        f"/v1/devices/{mast.name}/shots/{shot.id}",
         headers=admin_user_token,
         json=update_data,
     )
@@ -115,7 +115,7 @@ def test_update_shot_nested_mismatch_404(
 
     # Try to update via JET endpoint although it belongs to MAST
     response = test_client.put(
-        f"/api/v1/devices/{jet.name}/shots/{shot.id}",
+        f"/v1/devices/{jet.name}/shots/{shot.id}",
         headers=admin_user_token,
         json={"access_level": "restricted"},
     )
@@ -140,7 +140,7 @@ def test_delete_shot(
     session.commit()
 
     response = test_client.delete(
-        f"/api/v1/devices/{mast.name}/shots/{shot.id}",
+        f"/v1/devices/{mast.name}/shots/{shot.id}",
         headers=admin_user_token,
     )
     assert response.status_code == 204
@@ -168,7 +168,7 @@ def test_delete_shot_unauthorized(
     session.commit()
 
     response = test_client.delete(
-        f"/api/v1/devices/{mast.name}/shots/{shot.id}",
+        f"/v1/devices/{mast.name}/shots/{shot.id}",
         headers=jet_admin_user_token,
     )
     assert response.status_code == 403
@@ -192,7 +192,7 @@ def test_scientific_metadata_roundtrip(
         {"name": "disrupted", "value": False},
     ]
     response = test_client.post(
-        "/api/v1/devices/MAST/shots/",
+        "/v1/devices/MAST/shots/",
         headers=admin_user_token,
         json={
             "id": "sci-30420",
@@ -228,7 +228,7 @@ def test_shot_metadata_fields_roundtrip(
     }
 
     response = test_client.post(
-        "/api/v1/devices/MAST/shots/",
+        "/v1/devices/MAST/shots/",
         headers=admin_user_token,
         json=shot_data,
     )
@@ -238,9 +238,7 @@ def test_shot_metadata_fields_roundtrip(
     assert data["publisher"] == "UKAEA"
     assert data["creator"] == "J. Smith"
 
-    response = test_client.get(
-        "/api/v1/devices/MAST/shots/30420", headers=admin_user_token
-    )
+    response = test_client.get("/v1/devices/MAST/shots/30420", headers=admin_user_token)
     assert response.status_code == 200
     data = response.json()
     assert data["shot_at"].startswith("2024-03-15T14:32:00")
@@ -263,7 +261,7 @@ def test_read_shots_include_device(
 
     # Default: device should be excluded
     response = test_client.get(
-        f"/api/v1/devices/{mast.name}/shots/", headers=admin_user_token
+        f"/v1/devices/{mast.name}/shots/", headers=admin_user_token
     )
     assert response.status_code == 200
     data = response.json()
@@ -273,7 +271,7 @@ def test_read_shots_include_device(
 
     # With include_device=True: device should be present
     response = test_client.get(
-        f"/api/v1/devices/{mast.name}/shots/?include_device=true",
+        f"/v1/devices/{mast.name}/shots/?include_device=true",
         headers=admin_user_token,
     )
     assert response.status_code == 200

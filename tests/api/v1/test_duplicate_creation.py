@@ -27,7 +27,7 @@ def test_duplicate_device_creation(
 
     # First creation - should succeed
     response = test_client.post(
-        "/api/v1/devices/",
+        "/v1/devices/",
         headers=admin_user_token,
         json=device_data,
     )
@@ -35,7 +35,7 @@ def test_duplicate_device_creation(
 
     # Second creation - should fail with 409
     response = test_client.post(
-        "/api/v1/devices/",
+        "/v1/devices/",
         headers=admin_user_token,
         json=device_data,
     )
@@ -57,7 +57,7 @@ def test_duplicate_shot_creation(
 
     # First creation
     response = test_client.post(
-        "/api/v1/devices/duplicate-shot-device/shots/",
+        "/v1/devices/duplicate-shot-device/shots/",
         headers=admin_user_token,
         json=shot_data,
     )
@@ -65,7 +65,7 @@ def test_duplicate_shot_creation(
 
     # Second creation
     response = test_client.post(
-        "/api/v1/devices/duplicate-shot-device/shots/",
+        "/v1/devices/duplicate-shot-device/shots/",
         headers=admin_user_token,
         json=shot_data,
     )
@@ -106,7 +106,7 @@ def test_duplicate_dataset_name_allowed_with_different_activities(
     )
 
     response1 = test_client.post(
-        "/api/v1/devices/dup-ds-device/shots/2000/datasets",
+        "/v1/devices/dup-ds-device/shots/2000/datasets",
         headers=admin_user_token,
         json={
             "name": "equilibrium",
@@ -118,7 +118,7 @@ def test_duplicate_dataset_name_allowed_with_different_activities(
     assert response1.status_code == 201
 
     response2 = test_client.post(
-        "/api/v1/devices/dup-ds-device/shots/2000/datasets",
+        "/v1/devices/dup-ds-device/shots/2000/datasets",
         headers=admin_user_token,
         json={
             "name": "equilibrium",
@@ -148,7 +148,7 @@ def test_duplicate_dataset_name_rejected_without_activity(
     dataset_data = {"name": "raw", "url": "s3://test/raw", "level": 0}
 
     response1 = test_client.post(
-        "/api/v1/devices/dup-ds-device-2/shots/2001/datasets",
+        "/v1/devices/dup-ds-device-2/shots/2001/datasets",
         headers=admin_user_token,
         json=dataset_data,
     )
@@ -158,7 +158,7 @@ def test_duplicate_dataset_name_rejected_without_activity(
     assert response1.json().get("origin") is None
 
     response2 = test_client.post(
-        "/api/v1/devices/dup-ds-device-2/shots/2001/datasets",
+        "/v1/devices/dup-ds-device-2/shots/2001/datasets",
         headers=admin_user_token,
         json=dataset_data,
     )
@@ -181,7 +181,7 @@ def test_federated_dataset_may_share_a_local_name(
     session.add(shot)
     session.commit()
 
-    url = "/api/v1/devices/dup-ds-device-3/shots/2002/datasets"
+    url = "/v1/devices/dup-ds-device-3/shots/2002/datasets"
     local = {"name": "raw", "url": "s3://local/raw", "level": 0}
     federated = {
         "name": "raw",

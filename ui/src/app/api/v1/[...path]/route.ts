@@ -25,9 +25,9 @@ export async function PATCH(request: NextRequest) {
 }
 
 async function proxyRequest(request: NextRequest) {
-  const backendUrl = process.env.BACKEND_URL || 'http://127.0.0.1:8000/api';
+  const backendUrl = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
 
-  // Extract the path after /api/v1/
+  // This route's own path is /api/v1/*; FDS serves /v1/*.
   const path = request.nextUrl.pathname.replace('/api/v1', '/v1');
   const search = request.nextUrl.search;
 

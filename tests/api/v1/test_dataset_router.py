@@ -24,7 +24,7 @@ mast_admin = AuthenticatedUser(id="mast", scopes=("mast_admin",))
 
 def test_create_global_dataset(test_client: TestClient, admin_user_token: dict):
     response = test_client.post(
-        "/api/v1/datasets/",
+        "/v1/datasets/",
         headers=admin_user_token,
         json={"name": "global_const", "level": 1, "url": "s3://global"},
     )
@@ -44,7 +44,7 @@ def test_create_device_dataset(
     session.commit()
 
     response = test_client.post(
-        "/api/v1/devices/NSTX/datasets/",
+        "/v1/devices/NSTX/datasets/",
         headers=admin_user_token,
         json={"name": "machine_params", "level": 1, "url": "s3://nstx"},
     )
@@ -66,7 +66,7 @@ def test_create_shot_dataset(
     session.commit()
 
     response = test_client.post(
-        "/api/v1/devices/MAST/shots/123/datasets/",
+        "/v1/devices/MAST/shots/123/datasets/",
         headers=admin_user_token,
         json={"name": "efit", "level": 2, "url": "s3://mast/123/efit"},
     )
@@ -90,12 +90,12 @@ def test_read_dataset_by_name(
 
     # Create via API
     test_client.post(
-        "/api/v1/devices/MAST/shots/456/datasets/",
+        "/v1/devices/MAST/shots/456/datasets/",
         headers=admin_user_token,
         json={"name": "plasma_current", "level": 1, "url": "s3://url"},
     )
 
-    response = test_client.get("/api/v1/devices/MAST/shots/456/datasets/plasma_current")
+    response = test_client.get("/v1/devices/MAST/shots/456/datasets/plasma_current")
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
@@ -126,7 +126,7 @@ def test_dataset_same_name_returns_list(
     session.commit()
 
     r1 = test_client.post(
-        "/api/v1/devices/MAST/shots/789/datasets/",
+        "/v1/devices/MAST/shots/789/datasets/",
         headers=admin_user_token,
         json={
             "name": "duplicate",
@@ -136,7 +136,7 @@ def test_dataset_same_name_returns_list(
         },
     )
     r2 = test_client.post(
-        "/api/v1/devices/MAST/shots/789/datasets/",
+        "/v1/devices/MAST/shots/789/datasets/",
         headers=admin_user_token,
         json={
             "name": "duplicate",
@@ -150,7 +150,7 @@ def test_dataset_same_name_returns_list(
     assert r1.json()["id"] != r2.json()["id"]
 
     response = test_client.get(
-        "/api/v1/devices/MAST/shots/789/datasets/duplicate",
+        "/v1/devices/MAST/shots/789/datasets/duplicate",
         headers=admin_user_token,
     )
     assert response.status_code == 200
@@ -167,7 +167,7 @@ def test_unauthorized_device_dataset(
 
     # JET admin trying to create on MAST
     response = test_client.post(
-        "/api/v1/devices/MAST/datasets/",
+        "/v1/devices/MAST/datasets/",
         headers=jet_admin_user_token,
         json={"name": "illegal", "level": 1, "url": "url"},
     )
@@ -183,17 +183,17 @@ def test_list_device_datasets(
     session.commit()
 
     test_client.post(
-        "/api/v1/devices/DIII-D/datasets/",
+        "/v1/devices/DIII-D/datasets/",
         headers=admin_user_token,
         json={"name": "data_a", "level": 1, "url": "url_a"},
     )
     test_client.post(
-        "/api/v1/devices/DIII-D/datasets/",
+        "/v1/devices/DIII-D/datasets/",
         headers=admin_user_token,
         json={"name": "data_b", "level": 1, "url": "url_b"},
     )
 
-    response = test_client.get("/api/v1/devices/DIII-D/datasets/")
+    response = test_client.get("/v1/devices/DIII-D/datasets/")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
@@ -211,43 +211,43 @@ def test_list_device_datasets_includes_shot_datasets(
     session.commit()
 
     test_client.post(
-        "/api/v1/devices/W7-X/datasets/",
+        "/v1/devices/W7-X/datasets/",
         headers=admin_user_token,
         json={"name": "coil_geometry", "level": 0, "url": "url_geom"},
     )
     test_client.post(
-        "/api/v1/devices/W7-X/shots/200/datasets/",
+        "/v1/devices/W7-X/shots/200/datasets/",
         headers=admin_user_token,
         json={"name": "electron_density", "level": 1, "url": "url_ne"},
     )
 
-    response = test_client.get("/api/v1/devices/W7-X/datasets/")
+    response = test_client.get("/v1/devices/W7-X/datasets/")
     assert response.status_code == 200
     assert {ds["name"] for ds in response.json()} == {
         "coil_geometry",
         "electron_density",
     }
 
-    response = test_client.get("/api/v1/devices/W7-X/datasets/?scope=device")
+    response = test_client.get("/v1/devices/W7-X/datasets/?scope=device")
     assert response.status_code == 200
     assert [ds["name"] for ds in response.json()] == ["coil_geometry"]
 
-    response = test_client.get("/api/v1/devices/W7-X/datasets/?scope=shot")
+    response = test_client.get("/v1/devices/W7-X/datasets/?scope=shot")
     assert response.status_code == 200
     assert [ds["name"] for ds in response.json()] == ["electron_density"]
 
-    response = test_client.get("/api/v1/devices/W7-X/datasets/?scope=nonsense")
+    response = test_client.get("/v1/devices/W7-X/datasets/?scope=nonsense")
     assert response.status_code == 422
 
 
 def test_read_global_dataset_by_name(test_client: TestClient, admin_user_token: dict):
     test_client.post(
-        "/api/v1/datasets/",
+        "/v1/datasets/",
         headers=admin_user_token,
         json={"name": "global_ref", "level": 1, "url": "url"},
     )
 
-    response = test_client.get("/api/v1/datasets/global_ref")
+    response = test_client.get("/v1/datasets/global_ref")
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
@@ -260,7 +260,7 @@ def test_update_dataset(
 ):
     # Create global via API
     test_client.post(
-        "/api/v1/datasets/",
+        "/v1/datasets/",
         headers=admin_user_token,
         json={"name": "to_update", "level": 1, "url": "url"},
     )
@@ -269,7 +269,7 @@ def test_update_dataset(
     dataset_id = dataset.id
 
     response = test_client.patch(
-        f"/api/v1/datasets/{dataset_id}",
+        f"/v1/datasets/{dataset_id}",
         headers=admin_user_token,
         json={"level": 5},
     )
@@ -281,19 +281,19 @@ def test_delete_dataset(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
     test_client.post(
-        "/api/v1/datasets/",
+        "/v1/datasets/",
         headers=admin_user_token,
         json={"name": "to_delete", "level": 1, "url": "url"},
     )
     dataset = session.exec(select(Dataset).where(Dataset.name == "to_delete")).one()
 
     response = test_client.delete(
-        f"/api/v1/datasets/{dataset.id}",
+        f"/v1/datasets/{dataset.id}",
         headers=admin_user_token,
     )
     assert response.status_code == 204
 
-    response = test_client.get("/api/v1/datasets/to_delete")
+    response = test_client.get("/v1/datasets/to_delete")
     assert response.status_code == 200
     assert response.json() == []
 
@@ -320,7 +320,7 @@ def test_delete_dataset_unauthorized(
     ).one()
 
     response = test_client.delete(
-        f"/api/v1/datasets/{dataset.id}",
+        f"/v1/datasets/{dataset.id}",
         headers=jet_admin_user_token,
     )
     assert response.status_code == 403
@@ -338,7 +338,7 @@ def test_get_datasets_with_storage_options(
     session.commit()
 
     test_client.post(
-        "/api/v1/devices/OPTS/shots/1/datasets/",
+        "/v1/devices/OPTS/shots/1/datasets/",
         headers=admin_user_token,
         json={"name": "data1", "level": 1, "url": "s3://opts/1"},
     )
@@ -359,13 +359,13 @@ def test_get_datasets_with_storage_options(
     )
 
     # Without query param -> no storage_options (protects list latency)
-    resp = test_client.get("/api/v1/devices/OPTS/shots/1/datasets/data1")
+    resp = test_client.get("/v1/devices/OPTS/shots/1/datasets/data1")
     assert resp.status_code == 200
     assert resp.json()[0].get("storage_options") is None
 
     # With query param -> enriched
     resp2 = test_client.get(
-        "/api/v1/devices/OPTS/shots/1/datasets/data1?include_storage_options=true"
+        "/v1/devices/OPTS/shots/1/datasets/data1?include_storage_options=true"
     )
     assert resp2.status_code == 200
     data = resp2.json()[0]
@@ -384,7 +384,7 @@ def test_scientific_metadata_roundtrip(
         {"name": "disrupted", "value": False},
     ]
     response = test_client.post(
-        "/api/v1/datasets/",
+        "/v1/datasets/",
         headers=admin_user_token,
         json={
             "name": "sci-dataset",
@@ -404,7 +404,7 @@ def test_scientific_metadata_roundtrip(
 def test_create_dataset_without_url(test_client: TestClient, admin_user_token: dict):
     """A Dataset can be registered without a URL; url is null and no distribution is created."""
     response = test_client.post(
-        "/api/v1/datasets/",
+        "/v1/datasets/",
         headers=admin_user_token,
         json={"name": "metadata_only", "level": 1},
     )
@@ -418,7 +418,7 @@ def test_create_dataset_without_url(test_client: TestClient, admin_user_token: d
 def test_create_dataset_without_level(test_client: TestClient, admin_user_token: dict):
     """Processing level is optional; when unset it is omitted from the response."""
     response = test_client.post(
-        "/api/v1/datasets/",
+        "/v1/datasets/",
         headers=admin_user_token,
         json={"name": "no_level", "url": "s3://bucket/no_level"},
     )
@@ -444,14 +444,14 @@ def test_temporal_coverage_roundtrip(
     )
     session.commit()
 
-    response = test_client.get(f"/api/v1/datasets/id/{dataset.id}")
+    response = test_client.get(f"/v1/datasets/id/{dataset.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["temporal_start"].startswith("2024-03-15T14:00:00")
     assert data["temporal_end"].startswith("2024-03-15T14:30:00")
 
     response = test_client.get(
-        f"/api/v1/datasets/id/{dataset.id}", headers={"Accept": "application/ld+json"}
+        f"/v1/datasets/id/{dataset.id}", headers={"Accept": "application/ld+json"}
     )
     assert response.status_code == 200
     ld = response.json()

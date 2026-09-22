@@ -14,30 +14,30 @@ def audit_lines(lines: list[dict]) -> list[dict]:
 
 class TestRequestLine:
     def test_one_line_per_request(self, test_client, log_lines):
-        test_client.get("/api/v1/devices/")
+        test_client.get("/v1/devices/")
 
         assert len(audit_lines(log_lines())) == 1
 
     def test_line_describes_the_request(self, test_client, log_lines):
-        response = test_client.get("/api/v1/devices/")
+        response = test_client.get("/v1/devices/")
         assert response.status_code == 200
 
         (line,) = audit_lines(log_lines())
         assert line["event"] == "request"
         assert line["method"] == "GET"
         assert line["status"] == 200
-        assert line["path"] == "/api/v1/devices/"
+        assert line["path"] == "/v1/devices/"
 
     def test_route_is_the_template_not_the_path(self, test_client, log_lines):
         """Templates are what make lines groupable across ids."""
-        test_client.get("/api/v1/devices/mast")
+        test_client.get("/v1/devices/mast")
 
         (line,) = audit_lines(log_lines())
-        assert line["route"] == "/api/v1/devices/{device_name}"
-        assert line["path"] == "/api/v1/devices/mast"
+        assert line["route"] == "/v1/devices/{device_name}"
+        assert line["path"] == "/v1/devices/mast"
 
     def test_failed_request_still_logged(self, test_client, log_lines):
-        response = test_client.get("/api/v1/devices/nonexistent")
+        response = test_client.get("/v1/devices/nonexistent")
         assert response.status_code == 404
 
         (line,) = audit_lines(log_lines())
@@ -54,7 +54,7 @@ class TestActor:
     def test_authenticated_request_names_the_actor(
         self, test_client, admin_user_token, log_lines
     ):
-        test_client.get("/api/v1/devices/", headers=admin_user_token)
+        test_client.get("/v1/devices/", headers=admin_user_token)
 
         (line,) = audit_lines(log_lines())
         assert line["actor_id"] == _hash_user_id(TEST_ISSUER, "test-admin-user")
@@ -62,14 +62,14 @@ class TestActor:
 
     def test_actor_is_pseudonymous(self, test_client, admin_user_token, log_lines):
         """The subject claim itself must never reach the log."""
-        test_client.get("/api/v1/devices/", headers=admin_user_token)
+        test_client.get("/v1/devices/", headers=admin_user_token)
 
         (line,) = audit_lines(log_lines())
         assert "test-admin-user" not in str(line)
         assert len(line["actor_id"]) == 64
 
     def test_anonymous_request_is_marked(self, test_client, log_lines):
-        test_client.get("/api/v1/devices/")
+        test_client.get("/v1/devices/")
 
         (line,) = audit_lines(log_lines())
         assert line["actor_id"] == "anonymous"
@@ -80,7 +80,7 @@ class TestDenials:
         self, test_client, non_admin_user_token, log_lines
     ):
         response = test_client.post(
-            "/api/v1/devices/",
+            "/v1/devices/",
             json={"name": "mast"},
             headers=non_admin_user_token,
         )
@@ -90,7 +90,7 @@ class TestDenials:
         (denial,) = [line for line in lines if line["event"] == "access.denied"]
         assert denial["level"] == "warning"
         assert denial["method"] == "POST"
-        assert denial["path"] == "/api/v1/devices/"
+        assert denial["path"] == "/v1/devices/"
         assert denial["actor_id"] == _hash_user_id(TEST_ISSUER, "test-non-admin-user")
         assert denial["detail"]
 
@@ -99,7 +99,7 @@ class TestDenials:
     ):
         """Every line in a request is attributable, not just the audit one."""
         test_client.post(
-            "/api/v1/devices/", json={"name": "mast"}, headers=non_admin_user_token
+            "/v1/devices/", json={"name": "mast"}, headers=non_admin_user_token
         )
 
         lines = log_lines()
@@ -151,7 +151,7 @@ class TestTraceCorrelation:
     def test_lines_carry_a_trace_id(self, test_client, log_lines):
         pytest.importorskip("opentelemetry.sdk")
 
-        test_client.get("/api/v1/devices/")
+        test_client.get("/v1/devices/")
 
         (line,) = audit_lines(log_lines())
         assert line.get("trace_id"), (
@@ -165,7 +165,7 @@ class TestTraceCorrelation:
         pytest.importorskip("opentelemetry.sdk")
 
         test_client.post(
-            "/api/v1/devices/", json={"name": "mast"}, headers=non_admin_user_token
+            "/v1/devices/", json={"name": "mast"}, headers=non_admin_user_token
         )
 
         trace_ids = {line["trace_id"] for line in log_lines() if line.get("trace_id")}
@@ -188,23 +188,23 @@ class TestRouteTemplate:
         # "mast" is both the device (in the prefix) and the dataset name (in the
         # tail). Anchoring on the tail keeps each substitution in its own place.
         scope = self._scope(
-            "/api/v1/devices/mast/shots/30420/datasets/mast",
+            "/v1/devices/mast/shots/30420/datasets/mast",
             "/{shot}/datasets/{name}",
             {"device": "mast", "shot": "30420", "name": "mast"},
         )
         assert route_template(scope) == (
-            "/api/v1/devices/{device}/shots/{shot}/datasets/{name}"
+            "/v1/devices/{device}/shots/{shot}/datasets/{name}"
         )
 
     def test_value_that_matches_a_literal_prefix_segment(self):
         # A device literally called "devices" must not turn the fixed segment
         # into a placeholder.
         scope = self._scope(
-            "/api/v1/devices/devices/shots/1",
+            "/v1/devices/devices/shots/1",
             "/{shot}",
             {"device_name": "devices", "shot": "1"},
         )
-        assert route_template(scope) == "/api/v1/devices/{device_name}/shots/{shot}"
+        assert route_template(scope) == "/v1/devices/{device_name}/shots/{shot}"
 
     def test_two_prefix_parameters_sharing_a_value(self):
         # Right-to-left pairing keeps each placeholder at its own position even

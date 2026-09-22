@@ -11,7 +11,7 @@ from app.services.device_service import DeviceService
 
 def _create_dataset(client: TestClient, token: dict, name: str, **body) -> int:
     resp = client.post(
-        "/api/v1/datasets/",
+        "/v1/datasets/",
         headers=token,
         json={"name": name, "level": 1, **body},
     )
@@ -30,7 +30,7 @@ def test_declare_derivation_inline_on_create(
         derived_from=[{"source_dataset_id": upstream}],
     )
 
-    resp = test_client.get(f"/api/v1/datasets/{derived}/derivations")
+    resp = test_client.get(f"/v1/datasets/{derived}/derivations")
     assert resp.status_code == 200
     assert [d["source_dataset_id"] for d in resp.json()] == [upstream]
 
@@ -41,7 +41,7 @@ def test_derivation_lifecycle_via_endpoints(
     derived = _create_dataset(test_client, admin_user_token, "processed")
 
     resp = test_client.post(
-        f"/api/v1/datasets/{derived}/derivations",
+        f"/v1/datasets/{derived}/derivations",
         headers=admin_user_token,
         json={
             "source_identifier": "10.5281/zenodo.123",
@@ -52,20 +52,20 @@ def test_derivation_lifecycle_via_endpoints(
     derivation_id = resp.json()["id"]
     assert resp.json()["source_identifier"] == "10.5281/zenodo.123"
 
-    assert len(test_client.get(f"/api/v1/datasets/{derived}/derivations").json()) == 1
+    assert len(test_client.get(f"/v1/datasets/{derived}/derivations").json()) == 1
 
     resp = test_client.delete(
-        f"/api/v1/datasets/{derived}/derivations/{derivation_id}",
+        f"/v1/datasets/{derived}/derivations/{derivation_id}",
         headers=admin_user_token,
     )
     assert resp.status_code == 204
-    assert test_client.get(f"/api/v1/datasets/{derived}/derivations").json() == []
+    assert test_client.get(f"/v1/datasets/{derived}/derivations").json() == []
 
 
 def test_empty_derivation_is_rejected(test_client: TestClient, admin_user_token: dict):
     derived = _create_dataset(test_client, admin_user_token, "processed")
     resp = test_client.post(
-        f"/api/v1/datasets/{derived}/derivations",
+        f"/v1/datasets/{derived}/derivations",
         headers=admin_user_token,
         json={},
     )
@@ -84,7 +84,7 @@ def test_derivation_requires_authorisation(
     assert dataset.id is not None
 
     resp = test_client.post(
-        f"/api/v1/datasets/{dataset.id}/derivations",
+        f"/v1/datasets/{dataset.id}/derivations",
         json={"source_label": "anonymous claim"},
     )
     assert resp.status_code in (401, 403), resp.text
@@ -116,8 +116,8 @@ def test_restricted_dataset_derivations_are_not_public(
     )
     session.commit()
 
-    assert test_client.get(f"/api/v1/datasets/id/{secret.id}").status_code == 403
-    resp = test_client.get(f"/api/v1/datasets/{secret.id}/derivations")
+    assert test_client.get(f"/v1/datasets/id/{secret.id}").status_code == 403
+    resp = test_client.get(f"/v1/datasets/{secret.id}/derivations")
     assert resp.status_code == 403, resp.text
 
 
@@ -131,7 +131,7 @@ def test_jsonld_exposes_derivation(test_client: TestClient, admin_user_token: di
     )
 
     resp = test_client.get(
-        f"/api/v1/datasets/id/{derived}",
+        f"/v1/datasets/id/{derived}",
         headers={**admin_user_token, "Accept": "application/ld+json"},
     )
     assert resp.status_code == 200
@@ -159,7 +159,7 @@ def test_lineage_endpoint_nests_the_chain(
         ],
     )
 
-    resp = test_client.get(f"/api/v1/datasets/{profile}/lineage")
+    resp = test_client.get(f"/v1/datasets/{profile}/lineage")
     assert resp.status_code == 200
     body = resp.json()
 
@@ -177,7 +177,7 @@ def test_lineage_endpoint_nests_the_chain(
 
 
 def test_lineage_endpoint_404s_for_an_unknown_dataset(test_client: TestClient):
-    assert test_client.get("/api/v1/datasets/9999/lineage").status_code == 404
+    assert test_client.get("/v1/datasets/9999/lineage").status_code == 404
 
 
 def test_deleting_an_asserted_upstream_returns_409(
@@ -192,8 +192,8 @@ def test_deleting_an_asserted_upstream_returns_409(
         derived_from=[{"source_dataset_id": raw}],
     )
 
-    resp = test_client.delete(f"/api/v1/datasets/{raw}", headers=admin_user_token)
+    resp = test_client.delete(f"/v1/datasets/{raw}", headers=admin_user_token)
 
     assert resp.status_code == 409
     assert str(derived) in resp.json()["detail"]
-    assert test_client.get(f"/api/v1/datasets/{raw}").status_code == 200
+    assert test_client.get(f"/v1/datasets/{raw}").status_code == 200

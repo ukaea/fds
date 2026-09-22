@@ -32,7 +32,7 @@ def test_hybrid_storage_fields(
     # We use the API to create it to ensure the Pydantic model accepts the fields
     # Note: We must use the admin_user_token to be authorized
     response = test_client.post(
-        f"/api/v1/devices/{device.name}/shots/{shot.id}/datasets/",
+        f"/v1/devices/{device.name}/shots/{shot.id}/datasets/",
         json=dataset_data,
         headers=admin_user_token,
     )
@@ -44,7 +44,7 @@ def test_hybrid_storage_fields(
 
     # 3. Retrieve content negotiation (JSON-LD) — by ID
     response = test_client.get(
-        f"/api/v1/datasets/id/{dataset_id}",
+        f"/v1/datasets/id/{dataset_id}",
         headers={"Accept": "application/ld+json"},
     )
     assert response.status_code == 200
@@ -57,7 +57,7 @@ def test_hybrid_storage_fields(
     assert dist["dcat:mediaType"] == "application/vnd.icechunk+zarr"
     assert dist["dct:format"] == "icechunk"
     # S3 URIs: accessURL = FDS credential-vending endpoint, downloadURL = raw storage URI
-    assert dist["dcat:accessURL"] == f"http://testserver/api/v1/datasets/{dataset_id}"
+    assert dist["dcat:accessURL"] == f"http://testserver/v1/datasets/{dataset_id}"
     assert dist["dcat:downloadURL"] == "s3://bucket/hybrid"
     # Top-level dcat:downloadURL shorthand is HTTP/S only — not emitted for S3
     assert "dcat:downloadURL" not in ld_data

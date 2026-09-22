@@ -14,10 +14,10 @@ The same endpoint serves two representations depending on the `Accept` header:
 JSON-LD is supported on **Device**, **Shot**, **Dataset**, and **Collection** endpoints:
 
 ```http
-GET /api/v1/devices/{device}
-GET /api/v1/devices/{device}/shots/{shot_id}
-GET /api/v1/datasets/id/{id}
-GET /api/v1/devices/{device}/shots/{shot_id}/collections/{name}
+GET /v1/devices/{device}
+GET /v1/devices/{device}/shots/{shot_id}
+GET /v1/datasets/id/{id}
+GET /v1/devices/{device}/shots/{shot_id}/collections/{name}
 Accept: application/ld+json
 ```
 
@@ -36,12 +36,12 @@ When you request `application/ld+json`, FDS re-separates these back into the cor
 {
   "@context": {"dcat": "http://www.w3.org/ns/dcat#", "...": "..."},
   "@type": "dcat:Dataset",
-  "@id": "http://localhost:8000/api/v1/datasets/id/42",
+  "@id": "http://localhost:8000/v1/datasets/id/42",
   "dct:title": "Equilibrium (Shot 30421)",
   "dcat:distribution": [
     {
       "@type": "dcat:Distribution",
-      "dcat:accessURL": "http://localhost:8000/api/v1/datasets/id/42",
+      "dcat:accessURL": "http://localhost:8000/v1/datasets/id/42",
       "dcat:downloadURL": "s3://fds-data/shots/30421/equilibrium",
       "dcat:mediaType": "application/x-zarr"
     }
@@ -111,7 +111,7 @@ The response:
     "...": "..."
   },
   "@type": "dcat:Catalog",
-  "@id": "http://localhost:8000/api/v1/devices/mast/shots/30421",
+  "@id": "http://localhost:8000/v1/devices/mast/shots/30421",
   "title": "Shot 30421",
   "identifier": "30421",
   "dct:temporal": {
@@ -235,7 +235,7 @@ can resolve what a role means instead of pattern-matching a label:
 ```json
 "prov:qualifiedAssociation": [{
   "@type": "prov:Association",
-  "prov:agent": {"@id": "https://fds.example/api/v1/sources/12"},
+  "prov:agent": {"@id": "https://fds.example/v1/sources/12"},
   "prov:hadRole": {"@id": "fuel:executor"}
 }]
 ```

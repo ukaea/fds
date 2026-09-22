@@ -7,7 +7,7 @@ def test_get_credentials(test_client: TestClient, admin_user_token: dict):
     Should return a CredentialManifest with 'tokens' and 'resource_map'.
     """
     response = test_client.post(
-        "/api/v1/file-access/credentials",
+        "/v1/file-access/credentials",
         headers=admin_user_token,
         json={"shot_id": None},  # Empty filter
     )
@@ -28,7 +28,7 @@ def test_get_credentials_unauthorized(test_client: TestClient):
     Let's check the router definition. It uses 'user: CurrentUserDep'.
     CurrentUserDep allows anonymous.
     """
-    response = test_client.post("/api/v1/file-access/credentials", json={})
+    response = test_client.post("/v1/file-access/credentials", json={})
     assert response.status_code == 200
     data = response.json()
     assert "resource_map" in data

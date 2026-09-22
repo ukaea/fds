@@ -34,7 +34,7 @@ def test_create_source_with_device(
     }
 
     resp = test_client.post(
-        "/api/v1/sources/",
+        "/v1/sources/",
         json=source_data,
         headers=admin_user_token,
     )
@@ -55,7 +55,7 @@ def test_create_source_invalid_device(
     }
 
     resp = test_client.post(
-        "/api/v1/sources/",
+        "/v1/sources/",
         json=source_data,
         headers=admin_user_token,
     )

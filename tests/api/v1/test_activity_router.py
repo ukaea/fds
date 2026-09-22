@@ -60,7 +60,7 @@ def test_create_activity(
     admin_user_token: dict[str, str],
 ):
     resp = test_client.post(
-        "/api/v1/activities/",
+        "/v1/activities/",
         json={"source_id": source.id, "activity_type": "simulation"},
         headers=admin_user_token,
     )
@@ -77,7 +77,7 @@ def test_create_activity_with_full_metadata(
     admin_user_token: dict[str, str],
 ):
     resp = test_client.post(
-        "/api/v1/activities/",
+        "/v1/activities/",
         json={
             "source_id": source.id,
             "activity_type": "measurement",
@@ -101,7 +101,7 @@ def test_create_activity_invalid_source(
     admin_user_token: dict[str, str],
 ):
     resp = test_client.post(
-        "/api/v1/activities/",
+        "/v1/activities/",
         json={"source_id": 9999},
         headers=admin_user_token,
     )
@@ -114,7 +114,7 @@ def test_create_activity_non_admin_forbidden(
     non_admin_user_token: dict[str, str],
 ):
     resp = test_client.post(
-        "/api/v1/activities/",
+        "/v1/activities/",
         json={"source_id": source.id},
         headers=non_admin_user_token,
     )
@@ -127,19 +127,19 @@ def test_get_activity(
     admin_user_token: dict[str, str],
 ):
     create_resp = test_client.post(
-        "/api/v1/activities/",
+        "/v1/activities/",
         json={"source_id": source.id, "activity_type": "simulation"},
         headers=admin_user_token,
     )
     activity_id = create_resp.json()["id"]
 
-    resp = test_client.get(f"/api/v1/activities/{activity_id}")
+    resp = test_client.get(f"/v1/activities/{activity_id}")
     assert resp.status_code == 200
     assert resp.json()["id"] == activity_id
 
 
 def test_get_activity_not_found(test_client: TestClient):
-    resp = test_client.get("/api/v1/activities/9999")
+    resp = test_client.get("/v1/activities/9999")
     assert resp.status_code == 404
 
 
@@ -149,14 +149,14 @@ def test_update_activity(
     admin_user_token: dict[str, str],
 ):
     create_resp = test_client.post(
-        "/api/v1/activities/",
+        "/v1/activities/",
         json={"source_id": source.id, "activity_type": "measurement"},
         headers=admin_user_token,
     )
     activity_id = create_resp.json()["id"]
 
     resp = test_client.put(
-        f"/api/v1/activities/{activity_id}",
+        f"/v1/activities/{activity_id}",
         json={"activity_type": "simulation", "source_version": "v3.0"},
         headers=admin_user_token,
     )
@@ -172,18 +172,16 @@ def test_delete_activity(
     admin_user_token: dict[str, str],
 ):
     create_resp = test_client.post(
-        "/api/v1/activities/",
+        "/v1/activities/",
         json={"source_id": source.id},
         headers=admin_user_token,
     )
     activity_id = create_resp.json()["id"]
 
-    resp = test_client.delete(
-        f"/api/v1/activities/{activity_id}", headers=admin_user_token
-    )
+    resp = test_client.delete(f"/v1/activities/{activity_id}", headers=admin_user_token)
     assert resp.status_code == 204
 
-    resp = test_client.get(f"/api/v1/activities/{activity_id}")
+    resp = test_client.get(f"/v1/activities/{activity_id}")
     assert resp.status_code == 404
 
 
@@ -195,7 +193,7 @@ def test_create_activity_with_inline_inputs(
 ):
     """An Activity declares its used inputs in the create request."""
     resp = test_client.post(
-        "/api/v1/activities/",
+        "/v1/activities/",
         json={
             "source_id": source.id,
             "activity_type": "simulation",
@@ -212,7 +210,7 @@ def test_create_activity_invalid_input_rejected(
     admin_user_token: dict[str, str],
 ):
     resp = test_client.post(
-        "/api/v1/activities/",
+        "/v1/activities/",
         json={"source_id": source.id, "inputs": [9999]},
         headers=admin_user_token,
     )
@@ -225,7 +223,7 @@ def test_activity_input_endpoints(
     dataset,
     admin_user_token: dict[str, str],
 ):
-    base = f"/api/v1/activities/{activity.id}/inputs"
+    base = f"/v1/activities/{activity.id}/inputs"
     created = test_client.post(f"{base}/{dataset.id}", headers=admin_user_token)
     assert created.status_code == 201
     assert created.json() == {"activity_id": activity.id, "dataset_id": dataset.id}
@@ -245,11 +243,11 @@ def test_activity_instrument_endpoints(
     admin_user_token: dict[str, str],
 ):
     instrument = test_client.post(
-        "/api/v1/sources/",
+        "/v1/sources/",
         json={"name": "probe", "kind": "instrument"},
         headers=admin_user_token,
     ).json()
-    base = f"/api/v1/activities/{activity.id}/instruments"
+    base = f"/v1/activities/{activity.id}/instruments"
     created = test_client.post(f"{base}/{instrument['id']}", headers=admin_user_token)
     assert created.status_code == 201
     assert created.json() == {
@@ -273,11 +271,11 @@ def test_activity_agent_endpoints(
     admin_user_token: dict[str, str],
 ):
     agent = test_client.post(
-        "/api/v1/sources/",
+        "/v1/sources/",
         json={"name": "scheduler-x", "kind": "software"},
         headers=admin_user_token,
     ).json()
-    base = f"/api/v1/activities/{activity.id}/agents"
+    base = f"/v1/activities/{activity.id}/agents"
     created = test_client.post(
         f"{base}/{agent['id']}",
         params={"role": "orchestrator"},
@@ -307,17 +305,17 @@ def test_activity_delegation_endpoints(
     admin_user_token: dict[str, str],
 ):
     scheduler = test_client.post(
-        "/api/v1/sources/",
+        "/v1/sources/",
         json={"name": "scheduler-y", "kind": "software"},
         headers=admin_user_token,
     ).json()
     # The scheduler must be an agent of the run before it can be delegated to.
     test_client.post(
-        f"/api/v1/activities/{activity.id}/agents/{scheduler['id']}",
+        f"/v1/activities/{activity.id}/agents/{scheduler['id']}",
         params={"role": "orchestrator"},
         headers=admin_user_token,
     )
-    base = f"/api/v1/activities/{activity.id}/delegations"
+    base = f"/v1/activities/{activity.id}/delegations"
     # The executor (source) acted on behalf of the scheduler.
     created = test_client.post(
         f"{base}/{source.id}/{scheduler['id']}",

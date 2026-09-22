@@ -11,7 +11,7 @@ and FDS provides only the first.
 
 | Part | Provided by | Notes |
 | --- | --- | --- |
-| The API | the FDS image | Serves `/api/v1/...`, `/health`, and its OpenAPI explorer at `/docs`. Runs as an unprivileged user inside the container. |
+| The API | the FDS image | Serves `/v1/...`, `/health`, and its OpenAPI explorer at `/docs`. Runs as an unprivileged user inside the container. |
 | PostgreSQL | you | The only supported database. FDS applies its migrations on start. |
 | An identity provider | you | FDS verifies tokens from the issuers listed in `FDS_TRUSTED_IDPS`. It never issues tokens and holds no client secret. |
 
