@@ -1,11 +1,10 @@
-import importlib
-from pathlib import Path
-
+from sqlalchemy import create_engine
 from sqlmodel import SQLModel
 
+# Imported for its side effect: registers every table with SQLModel.metadata.
+import app.models  # noqa: F401
 from alembic import context
 from app.core.config import config as app_config
-from app.core.db import engine
 from app.core.logging import setup_logging
 
 # this is the Alembic Config object, which provides
@@ -15,14 +14,11 @@ config = context.config
 # Use our logging configuration
 setup_logging()
 
-# Set the database URL from the application config
-config.set_main_option("sqlalchemy.url", app_config.db_url)
+# The application's database, unless a caller has already named one: the tests
+# point migrations at a throwaway database this way.
+if not config.get_main_option("sqlalchemy.url", ""):
+    config.set_main_option("sqlalchemy.url", app_config.db_url)
 
-# Dynamically import all models to ensure they are registered with SQLModel.metadata
-models_dir = Path.cwd() / "app" / "models"
-for f in models_dir.glob("*.py"):
-    module_name = f.stem
-    importlib.import_module(f"app.models.{module_name}")
 target_metadata = SQLModel.metadata
 
 # other values from the config, defined by the needs of env.py,
@@ -39,6 +35,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_type=True,
     )
 
     with context.begin_transaction():
@@ -46,11 +43,20 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
-    connectable = engine
+    """Run migrations in 'online' mode.
+
+    The engine is built from the URL in the Alembic config rather than the
+    application's, so a caller can point a migration run at another database by
+    setting ``sqlalchemy.url`` (which is what the tests do).
+    """
+    connectable = create_engine(config.get_main_option("sqlalchemy.url", ""))
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+        )
 
         with context.begin_transaction():
             context.run_migrations()

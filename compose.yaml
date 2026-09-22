@@ -1,7 +1,7 @@
 # FDS and the services it depends on, for local development and the end-to-end
 # tests.
 #
-#   docker compose up -d --build          FDS on :8000
+#   docker compose up -d --build          FDS on :8000, PostgreSQL on :5432
 #   docker compose --profile idp up -d    and Keycloak on :8080, for the UI
 #   docker compose --profile ui up -d     and the reference UI on :3000
 #
@@ -37,17 +37,44 @@ services:
       # container network, while the issuer stays the browser-facing URL.
       - FDS_TRUSTED_IDPS=[{"issuer":"urn:fds:local","jwks_file":"/fds/dev/local-issuer.jwks.json"},{"issuer":"http://localhost:8080/realms/fds","jwks_uri":"http://idp:8080/realms/fds/protocol/openid-connect/certs","allowed_scopes":["*"]}]
       - FDS_OIDC_AUDIENCE=fds-client
+      - FDS_DB_HOST=postgres
+      - FDS_DB_USER=fds
+      - FDS_DB_PASSWORD=fds
+      - FDS_DB_NAME=fds
     volumes:
-      - ./dev/init_db.py:/fds/dev/init_db.py
       - ./dev/local-issuer.jwks.json:/fds/dev/local-issuer.jwks.json:ro
-    # No migrations are committed yet, so build the schema from the models.
-    command: sh -c "python dev/init_db.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
       interval: 5s
       timeout: 5s
       retries: 12
       start_period: 20s
+
+  postgres:
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=fds
+      - POSTGRES_PASSWORD=fds
+      - POSTGRES_DB=fds
+    # Published so the tests and psql can reach it from the host. The database
+    # holds nothing but what you put there; it is thrown away with the stack.
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fds -d fds"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   idp:
     # Also started by the ui profile: logging in goes through it.
@@ -101,3 +128,6 @@ services:
     depends_on:
       - fds
       - idp
+
+volumes:
+  pgdata:

@@ -178,3 +178,22 @@ def test_lineage_endpoint_nests_the_chain(
 
 def test_lineage_endpoint_404s_for_an_unknown_dataset(test_client: TestClient):
     assert test_client.get("/api/v1/datasets/9999/lineage").status_code == 404
+
+
+def test_deleting_an_asserted_upstream_returns_409(
+    test_client: TestClient, admin_user_token: dict
+):
+    """The refusal reaches the caller as a conflict, naming what depends on it."""
+    raw = _create_dataset(test_client, admin_user_token, "raw")
+    derived = _create_dataset(
+        test_client,
+        admin_user_token,
+        "calibrated",
+        derived_from=[{"source_dataset_id": raw}],
+    )
+
+    resp = test_client.delete(f"/api/v1/datasets/{raw}", headers=admin_user_token)
+
+    assert resp.status_code == 409
+    assert str(derived) in resp.json()["detail"]
+    assert test_client.get(f"/api/v1/datasets/{raw}").status_code == 200

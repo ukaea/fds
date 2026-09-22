@@ -181,7 +181,6 @@ class Dataset(DatasetBase, table=True):
             "device_name",
             "shot_id",
             unique=True,
-            sqlite_where=text("activity_id IS NULL AND origin IS NULL"),
             postgresql_where=text("activity_id IS NULL AND origin IS NULL"),
         ),
         Index(
@@ -191,7 +190,6 @@ class Dataset(DatasetBase, table=True):
             "shot_id",
             "origin",
             unique=True,
-            sqlite_where=text("activity_id IS NULL AND origin IS NOT NULL"),
             postgresql_where=text("activity_id IS NULL AND origin IS NOT NULL"),
         ),
         # Attributed datasets: one per (name, context, activity).
@@ -203,7 +201,6 @@ class Dataset(DatasetBase, table=True):
             "shot_id",
             "activity_id",
             unique=True,
-            sqlite_where=text("activity_id IS NOT NULL"),
             postgresql_where=text("activity_id IS NOT NULL"),
         ),
     )

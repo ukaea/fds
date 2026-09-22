@@ -17,8 +17,8 @@ def _json_serializer(obj: object) -> str:
 
 engine = create_engine(
     config.db_url,
-    connect_args={"check_same_thread": False},
     json_serializer=_json_serializer,
+    pool_pre_ping=True,
 )
 
 
