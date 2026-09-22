@@ -64,9 +64,9 @@ def test_delegate_agent_serialises_acted_on_behalf_of(session):
 
     prov = map_dataset_to_dcat(dataset, BASE)["prov:wasGeneratedBy"]
     executor = prov["prov:wasAssociatedWith"]
-    assert executor["@id"] == f"{BASE}/v1/sources/{code_id}"
+    assert executor["@id"] == f"{BASE}/v1/sources/id/{code_id}"
     assert executor["prov:actedOnBehalfOf"] == [
-        {"@id": f"{BASE}/v1/sources/{scheduler_id}"}
+        {"@id": f"{BASE}/v1/sources/id/{scheduler_id}"}
     ]
 
 

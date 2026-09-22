@@ -136,7 +136,7 @@ def test_jsonld_exposes_derivation(test_client: TestClient, admin_user_token: di
     )
     assert resp.status_code == 200
     sources = resp.json()["prov:wasDerivedFrom"]
-    assert sources[0]["@id"].endswith(f"/datasets/{upstream}")
+    assert sources[0]["@id"].endswith(f"/datasets/id/{upstream}")
 
 
 def test_lineage_endpoint_nests_the_chain(
@@ -196,4 +196,4 @@ def test_deleting_an_asserted_upstream_returns_409(
 
     assert resp.status_code == 409
     assert str(derived) in resp.json()["detail"]
-    assert test_client.get(f"/v1/datasets/{raw}").status_code == 200
+    assert test_client.get(f"/v1/datasets/id/{raw}").status_code == 200

@@ -93,9 +93,11 @@ def _build_used(activity: "Activity", base_url: str) -> tuple[list[Any], list[An
     """
     entries: list[tuple[str, str]] = []  # (entity @id, FuEL role concept)
     for ds in getattr(activity, "input_datasets", None) or []:
-        entries.append((f"{base_url}/v1/datasets/{ds.id}", FUEL_INPUT_ROLE))
+        entries.append((f"{base_url}/v1/datasets/id/{ds.id}", FUEL_INPUT_ROLE))
     for instrument in getattr(activity, "instruments", None) or []:
-        entries.append((f"{base_url}/v1/sources/{instrument.id}", FUEL_INSTRUMENT_ROLE))
+        entries.append(
+            (f"{base_url}/v1/sources/id/{instrument.id}", FUEL_INSTRUMENT_ROLE)
+        )
 
     used = [{"@id": uri, "@type": "prov:Entity"} for uri, _ in entries]
     qualified_usage = [
@@ -122,7 +124,7 @@ def _agent_node(
     """
     agent_type = _AGENT_TYPE_BY_KIND[source.kind]
     node: dict[str, Any] = {
-        "@id": f"{base_url}/v1/sources/{source.id}",
+        "@id": f"{base_url}/v1/sources/id/{source.id}",
         "@type": agent_type,
         "dct:title": source.name,
         "dct:description": source.description,
@@ -145,7 +147,7 @@ def _build_associations(
     behalf: dict[int, list[str]] = {}
     for link in getattr(activity, "delegation_links", None) or []:
         behalf.setdefault(link.subordinate_source_id, []).append(
-            f"{base_url}/v1/sources/{link.responsible_source_id}"
+            f"{base_url}/v1/sources/id/{link.responsible_source_id}"
         )
 
     primary: dict[str, Any] | None = None
@@ -199,7 +201,7 @@ def _derivation_source_node(derivation: Any, base_url: str) -> dict[str, Any]:
     node: dict[str, Any] = {"@type": "prov:Entity"}
 
     if derivation.source_dataset_id is not None:
-        node["@id"] = f"{base_url}/v1/datasets/{derivation.source_dataset_id}"
+        node["@id"] = f"{base_url}/v1/datasets/id/{derivation.source_dataset_id}"
     elif derivation.source_identifier:
         uri = _as_uri(derivation.source_identifier)
         if uri:
@@ -479,7 +481,7 @@ def map_dataset_to_dcat(
     # Construct URI
     # Note: Using the API path as the URI
     dataset_uri = (
-        f"{base_url}/v1/datasets/{dataset.id}"
+        f"{base_url}/v1/datasets/id/{dataset.id}"
         if hasattr(dataset, "id") and dataset.id
         else None
     )
@@ -650,7 +652,7 @@ def _qualified_relation(
 def _map_reference_version(version: "DatasetRead", base_url: str) -> dict[str, Any]:
     """A resolved reference version (geometry or calibration) as a linked node."""
     node: dict[str, Any] = {
-        "@id": f"{base_url}/v1/datasets/{version.id}",
+        "@id": f"{base_url}/v1/datasets/id/{version.id}",
         "@type": "dcat:Dataset",
         "dct:title": version.title or version.name,
     }
@@ -700,7 +702,7 @@ def map_collection_to_dcat(
     """
     collection_id = getattr(collection, "id", None)
     collection_uri = (
-        f"{base_url}/v1/collections/{collection_id}" if collection_id else None
+        f"{base_url}/v1/collections/id/{collection_id}" if collection_id else None
     )
 
     data: dict[str, Any] = {
@@ -745,7 +747,7 @@ def map_collection_to_dcat(
     member_datasets: list[Any] = getattr(collection, "datasets", []) or []
     dataset_refs = [
         {
-            "@id": f"{base_url}/v1/datasets/{ds.id}",
+            "@id": f"{base_url}/v1/datasets/id/{ds.id}",
             "@type": "dcat:Dataset",
             "dct:title": ds.title or ds.name,
         }
@@ -759,7 +761,7 @@ def map_collection_to_dcat(
     child_collections: list[Any] = getattr(collection, "child_collections", []) or []
     catalog_refs = [
         {
-            "@id": f"{base_url}/v1/collections/{c.id}",
+            "@id": f"{base_url}/v1/collections/id/{c.id}",
             "@type": "dcat:Catalog",
             "dct:title": c.title or c.name,
         }

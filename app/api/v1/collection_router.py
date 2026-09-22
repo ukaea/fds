@@ -63,6 +63,40 @@ def read_collections_global(
 
 
 @router.get(
+    "/collections/id/{id}",
+    response_model=CollectionRead,
+    response_model_exclude_none=True,
+)
+def read_collection_by_id(
+    *,
+    request: Request,
+    id: int,
+    collection_service: CollectionServiceDep,
+    user: CurrentUserDep,
+    include_storage_options: bool = False,
+) -> CollectionRead | JSONResponse:
+    """Retrieve a single Collection by its internal integer ID.
+
+    This is the URI the semantic projection names a Collection by, so it has to
+    resolve: a dangling identifier is worse than none.
+
+    Supports content negotiation:
+    - ``Accept: application/ld+json`` → returns a ``dcat:Catalog`` JSON-LD document.
+    """
+    collection = collection_service.get(id)
+    if not collection:
+        raise ResourceNotFoundError(f"Collection {id} not found")
+    collection_service.check_read_access(collection, user)
+
+    if "application/ld+json" in request.headers.get("accept", ""):
+        dcat_metadata = map_collection_to_dcat(
+            collection, str(request.base_url).rstrip("/")
+        )
+        return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
+    return collection_service.to_read_model(collection, include_storage_options, user)
+
+
+@router.get(
     "/collections/{name}",
     response_model=CollectionRead,
     response_model_exclude_none=True,
