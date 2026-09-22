@@ -1,3 +1,4 @@
+#!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.14"
 # dependencies = [
@@ -6,17 +7,16 @@
 # ///
 
 """
-FDS demo metadata seeder.
+Register the example catalogue the documentation refers to.
 
-Registers all devices, shots, datasets, collections, and provenance records
-needed for the demo environment. All functions are idempotent.
+Two real MAST shots are registered where they already live at STFC, and the
+rest are metadata-only fixtures: a synthetic MAST-U shot, reference geometry
+and calibration, and an annotated shot. Nothing reads their bytes, so their
+object URLs point at a reserved example domain. Every function is idempotent.
 
-Run standalone:
-    uv run demo/seed_metadata.py
+Run it against a local stack (see the README for the token):
 
-Import from tests or notebooks:
-    from demo.seed_metadata import seed_all
-    result = seed_all(base_url, headers)
+    FDS_TOKEN=$(uv run scripts/mint-token.py mint) uv run scripts/seed-example-catalogue.py
 """
 
 import os
@@ -55,11 +55,14 @@ MAST_U_IDS_GROUPS = [
     "thomson_scattering",
 ]
 
-MINIO_ENDPOINT = "http://localhost:9000"
+# Metadata-only fixtures: the tests and the documentation assert on their
+# metadata and nothing reads their bytes, so the URLs name a reserved example
+# domain rather than a store somebody might expect to reach.
+FIXTURE_ENDPOINT = "https://s3.example.org"
 
 # Shots 30420 and 30421 are real MAST data, already published openly by STFC.
 # FDS registers them where they are rather than copying them in, which is what a
-# catalogue is for: the demo holds no bytes for these shots, and a client reading
+# catalogue is for: this catalogue holds no bytes for these shots, and a client reading
 # them is sent straight to the public store with anonymous credentials.
 STFC_ENDPOINT = "https://s3.echo.stfc.ac.uk"
 STFC_BUCKET = "mast"
@@ -105,8 +108,7 @@ def register_devices_and_shots(client: httpx.Client, base_url: str) -> None:
 
     # shot_at is required for reference-geometry/calibration resolution: shot-range
     # coverage (e.g. "from shot 30421 onward") is evaluated against shot timestamps.
-    # Shot 30421 also carries features on its own axes, for the feature-overlay demo in
-    # explore.py: two on the time base (an H-mode window and a disruption, in seconds
+    # Shot 30421 also carries features on its own axes: two on the time base (an H-mode window and a disruption, in seconds
     # relative to t=0) and one on the frequency axis (an MHD mode). Time is not
     # privileged, so the mode does not fall on the IP-vs-time trace.
     # `elm` is the fourth: its presence and rough window are annotated inline, while the
@@ -258,7 +260,7 @@ def register_mast_geometry(client: httpx.Client, base_url: str) -> None:
             "geometry_roles": ["thomson_positions"],
             "applies_to": {"shots": ["30420"]},
             "url": "s3://fds-data/mast/geometry/thomson_positions_v1.nc",
-            "endpoint_url": MINIO_ENDPOINT,
+            "endpoint_url": FIXTURE_ENDPOINT,
             "media_type": "application/x-netcdf",
             "access_level": "public",
             "title": "MAST Thomson chord positions (v1, shot 30420)",
@@ -269,7 +271,7 @@ def register_mast_geometry(client: httpx.Client, base_url: str) -> None:
             "geometry_roles": ["thomson_positions"],
             "applies_to": {"shot_ranges": [{"from_shot": "30421"}]},
             "url": "s3://fds-data/mast/geometry/thomson_positions_v2.nc",
-            "endpoint_url": MINIO_ENDPOINT,
+            "endpoint_url": FIXTURE_ENDPOINT,
             "media_type": "application/x-netcdf",
             "access_level": "public",
             "title": "MAST Thomson chord positions (v2, from shot 30421)",
@@ -297,7 +299,7 @@ def register_mast_calibration(client: httpx.Client, base_url: str) -> None:
             "calibration_stage": 1,
             "applies_to": {"shots": ["30420", "30421"]},
             "url": "s3://fds-data/mast/calibration/thomson_gain.nc",
-            "endpoint_url": MINIO_ENDPOINT,
+            "endpoint_url": FIXTURE_ENDPOINT,
             "media_type": "application/x-netcdf",
             "access_level": "public",
             "title": "MAST Thomson gain calibration (stage 1)",
@@ -309,7 +311,7 @@ def register_mast_calibration(client: httpx.Client, base_url: str) -> None:
             "calibration_stage": 2,
             "applies_to": {"shots": ["30420", "30421"]},
             "url": "s3://fds-data/mast/calibration/thomson_absolute.nc",
-            "endpoint_url": MINIO_ENDPOINT,
+            "endpoint_url": FIXTURE_ENDPOINT,
             "media_type": "application/x-netcdf",
             "access_level": "public",
             "title": "MAST Thomson absolute calibration (stage 2)",
@@ -340,7 +342,7 @@ def register_mast_annotations(client: httpx.Client, base_url: str) -> None:
         "annotates": "elm",
         "level": 2,
         "url": "s3://fds-data/shots/30421/annotations/elm_times.nc",
-        "endpoint_url": MINIO_ENDPOINT,
+        "endpoint_url": FIXTURE_ENDPOINT,
         "media_type": "application/x-netcdf",
         "access_level": "public",
         "title": "ELM event times (MAST shot 30421)",
@@ -555,7 +557,7 @@ def register_mast_upgrade_datasets(
                     "name": name,
                     "title": f"MAST-U {stem.replace('_', ' ').title()} Raw (Shot 50000)",
                     "url": f"s3://fds-data/shots/50000/raw/{stem}.nc",
-                    "endpoint_url": MINIO_ENDPOINT,
+                    "endpoint_url": FIXTURE_ENDPOINT,
                     "media_type": "application/netcdf",
                     "format": "NetCDF4",
                     "access_level": "restricted",
@@ -595,7 +597,7 @@ def register_mast_upgrade_datasets(
                     "name": ids_name,
                     "title": f"MAST-U {ids_name.replace('_', ' ').title()} (Shot 50000)",
                     "url": f"s3://fds-data/shots/50000/analysed/{ids_name}",
-                    "endpoint_url": MINIO_ENDPOINT,
+                    "endpoint_url": FIXTURE_ENDPOINT,
                     "media_type": "application/vnd.icechunk+zarr",
                     "format": "icechunk",
                     "access_level": "public",
@@ -649,7 +651,7 @@ def register_mast_upgrade_50001(client: httpx.Client, base_url: str) -> None:
                 "title": f"MAST-U {ids_name.replace('_', ' ').title()} (Shot 50001)",
                 "level": 2,
                 "url": f"s3://fds-data/shots/50001/analysed/{ids_name}",
-                "endpoint_url": MINIO_ENDPOINT,
+                "endpoint_url": FIXTURE_ENDPOINT,
                 "media_type": "application/vnd.icechunk+zarr",
                 "format": "icechunk",
                 "access_level": "public",
@@ -711,7 +713,7 @@ def register_jintrac_collection(
                 "name": stem,
                 "title": f"JINTRAC {stem.replace('_', ' ').title()} (Shot 30420)",
                 "url": f"s3://fds-data/shots/30420/jintrac/{stem}.nc",
-                "endpoint_url": MINIO_ENDPOINT,
+                "endpoint_url": FIXTURE_ENDPOINT,
                 "media_type": "application/netcdf",
                 "format": "NetCDF4",
                 "access_level": "public",
@@ -760,7 +762,7 @@ def get_admin_headers(
 ) -> dict[str, str]:
     """Fetch admin auth headers from Keycloak, retrying until it is ready.
 
-    Shared by the standalone seeder (``__main__``) and the ingest notebook.
+    Only used when a token is not supplied directly; see ``admin_headers``.
     """
     token_data = {
         "client_id": "fds-client",
@@ -786,7 +788,7 @@ def get_admin_headers(
 
 
 def seed_all(base_url: str, headers: dict[str, str]) -> dict:
-    """Seed the full demo dataset. Idempotent, safe to call multiple times. Returns a summary of IDs."""
+    """Seed the whole catalogue. Idempotent, safe to call repeatedly. Returns a summary of IDs."""
     with httpx.Client(headers=headers, timeout=60.0) as client:
         register_devices_and_shots(client, base_url)
         register_mast_datasets(client, base_url)
@@ -826,12 +828,34 @@ def seed_all(base_url: str, headers: dict[str, str]) -> dict:
     }
 
 
+def admin_headers() -> dict[str, str]:
+    """A token from the environment, or from Keycloak when one is running.
+
+    FDS_TOKEN is the ordinary route: sign one with scripts/mint-token.py, or
+    paste one issued by whatever provider the target trusts. The Keycloak path
+    remains for a stack started with the idp profile.
+    """
+    token = os.environ.get("FDS_TOKEN")
+    if token:
+        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+    kc_url = os.environ.get("KEYCLOAK_URL")
+    if kc_url:
+        return get_admin_headers(kc_url)
+
+    raise SystemExit(
+        "No token. Either:\n"
+        "  FDS_TOKEN=$(uv run scripts/mint-token.py mint) uv run "
+        "scripts/seed-example-catalogue.py\n"
+        "or, with the idp profile running, set KEYCLOAK_URL to its token endpoint."
+    )
+
+
 if __name__ == "__main__":
     fds_url = os.environ.get("FDS_API_URL", FDS_API_URL_DEFAULT)
-    kc_url = os.environ.get("KEYCLOAK_URL", KC_TOKEN_URL_DEFAULT)
 
     print(f"Seeding FDS at {fds_url}...")
-    headers = get_admin_headers(kc_url)
+    headers = admin_headers()
     result = seed_all(fds_url, headers)
     print("Done. Summary:")
     for k, v in result.items():

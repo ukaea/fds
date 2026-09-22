@@ -27,14 +27,15 @@ This means you can open an entire Device to the public with a single flag while 
 
 ## Authentication
 
-FDS delegates identity to an external OIDC Identity Provider (Keycloak in the demo). Clients obtain a JWT via the standard OIDC flow and include it as a `Bearer` token:
+FDS delegates identity to an external OIDC Identity Provider. Clients obtain a JWT via the standard OIDC flow and include it as a `Bearer` token:
 
 ```http
 Authorization: Bearer <jwt>
 ```
 
-In the demo, Keycloak issues tokens via the OIDC password grant. This obtains one and
-stashes it as `TOKEN` / `headers` for the examples on the other pages:
+With the `idp` profile running, Keycloak issues tokens via the OIDC password grant. This
+obtains one and stashes it as `TOKEN` / `headers` for the examples on the other pages (without it,
+sign your own as described below):
 
 === "curl"
 
@@ -227,8 +228,9 @@ ds = xr.open_dataset(
 )
 ```
 
-See this run end-to-end, including the storage-layer denial when credentials are withheld,
-in the `demo/explore.py` notebook (`uvx marimo edit demo/explore.py --sandbox`).
+Vending needs a configured provider (`FDS_STORAGE_PROVIDERS`) whose `endpoint_url` matches the
+dataset's distribution. The local stack configures none, so these requests show the shape of the
+exchange without returning credentials for a real store.
 
 ## Bulk access: the Credential Manifest
 
@@ -250,8 +252,6 @@ Map:     {ds_uri_1 → 0, ds_uri_2 → 0, ds_uri_3 → 1}
 
 So `ds_uri_1` and `ds_uri_2` both resolve to `token_A`, and `ds_uri_3` to `token_B`.
 
-The `demo/explore.py` notebook exercises this with a 4-worker Dask cluster reading every
-group of a MAST-U `icechunk` store in parallel from a single vended manifest.
 
 ## What FDS does NOT do
 

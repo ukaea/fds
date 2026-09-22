@@ -199,11 +199,11 @@ and is worth making deliberately rather than by default.
 Every line from a single request carries the same `trace_id`, so a report about one request can
 be traced through everything the service did to serve it.
 
-The demo stack ships an optional overlay that runs a trace collector and Grafana, as a worked
-example. It turns on trace export and JSON output. Logs are not part of it: FDS writes them to
+The repository's compose stack has an optional overlay that runs a trace collector and Grafana,
+as a worked example. It turns on trace export and JSON output. Logs are not part of it: FDS writes them to
 standard output and pushing them anywhere is the operator's choice, so collecting them is left
 to whatever already gathers container output in your deployment.
 
 ```bash
-docker compose -f demo/docker-compose.yaml -f demo/docker-compose.observability.yaml up -d
+docker compose -f compose.yaml -f compose.observability.yaml up -d
 ```

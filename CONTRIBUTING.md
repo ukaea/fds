@@ -36,17 +36,19 @@ uv run --all-extras pytest
 
 ### Tests
 
-`uv run --all-extras pytest` runs the unit and API tests. Integration tests are
-excluded by default because they need the demo stack running:
+`uv run --all-extras pytest` runs the unit and API tests. End-to-end tests are
+excluded by default because they need a running FDS:
 
 ```bash
-podman compose -f demo/docker-compose.yaml up -d --build   # or docker compose
-uv run --all-extras pytest -m integration
+uv run scripts/mint-token.py init --out-dir dev   # once
+docker compose up -d --build                      # or podman compose
+uv run --all-extras pytest -m end_to_end
 ```
 
-Integration tests make real HTTP calls to FDS, authenticate against a real
-Keycloak, and read from a real MinIO, so they catch things the unit tests
-cannot.
+They drive FDS over HTTP and assert nothing about its internals, so they catch
+wiring problems the in-process tests cannot, and the same suite runs against a
+deployment as its smoke test. Behaviour belongs in the in-process tests, which
+are faster and can look more closely.
 
 ## Code conventions
 

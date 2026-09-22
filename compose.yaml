@@ -1,0 +1,103 @@
+# FDS and the services it depends on, for local development and the end-to-end
+# tests.
+#
+#   docker compose up -d --build          FDS on :8000
+#   docker compose --profile idp up -d    and Keycloak on :8080, for the UI
+#   docker compose --profile ui up -d     and the reference UI on :3000
+#
+# No identity provider runs by default. The tests and any automation sign their
+# own tokens against dev/local-issuer.jwks.json (see the README), so Keycloak is
+# only needed to log in through the UI, or to check that a realm's mappers
+# produce tokens FDS accepts. No object store runs either: credential vending
+# needs a real S3-compatible endpoint with STS, which is a deployment concern.
+#
+# A fixed project name so every worktree talks to the same stack; only one runs
+# at a time on these ports.
+name: fds-dev
+
+services:
+  fds:
+    logging:
+      # A file driver, not podman's journald default, which accepts these
+      # options and silently ignores them. json-file is the name both podman
+      # and docker understand.
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Two issuers are trusted: the key pair you generate locally, which is how
+      # the tests and any script sign tokens, and the development Keycloak realm
+      # for when the UI is running. Keycloak's keys are fetched from inside the
+      # container network, while the issuer stays the browser-facing URL.
+      - FDS_TRUSTED_IDPS=[{"issuer":"urn:fds:local","jwks_file":"/fds/dev/local-issuer.jwks.json"},{"issuer":"http://localhost:8080/realms/fds","jwks_uri":"http://idp:8080/realms/fds/protocol/openid-connect/certs","allowed_scopes":["*"]}]
+      - FDS_OIDC_AUDIENCE=fds-client
+    volumes:
+      - ./dev/init_db.py:/fds/dev/init_db.py
+      - ./dev/local-issuer.jwks.json:/fds/dev/local-issuer.jwks.json:ro
+    # No migrations are committed yet, so build the schema from the models.
+    command: sh -c "python dev/init_db.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  idp:
+    # Also started by the ui profile: logging in goes through it.
+    profiles: [idp, ui]
+    logging:
+      # A file driver, not podman's journald default, which accepts these
+      # options and silently ignores them. json-file is the name both podman
+      # and docker understand.
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    image: quay.io/keycloak/keycloak:23.0.0
+    ports:
+      - "8080:8080"
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    volumes:
+      - ./dev/keycloak/realm.json:/opt/keycloak/data/import/realm.json
+    command: start-dev --import-realm
+
+  ui:
+    logging:
+      # A file driver, not podman's journald default, which accepts these
+      # options and silently ignores them. json-file is the name both podman
+      # and docker understand.
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    profiles: [ui]
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - BACKEND_URL=http://fds:8000/api
+      - AUTH_TRUST_HOST=true
+      - AUTH_URL=http://localhost:3000
+      - AUTH_SECRET=demo-secret-change-me
+      - AUTH_KEYCLOAK_ID=fds-client
+      - AUTH_KEYCLOAK_SECRET=fds-client-secret
+      # Issuer MUST match what Keycloak puts in its tokens (the external/browser URL)
+      - AUTH_KEYCLOAK_ISSUER=http://localhost:8080/realms/fds
+      # Internal URLs for server-to-server communication within Docker network
+      - AUTH_KEYCLOAK_INTERNAL_URL=http://idp:8080/realms/fds
+      - AUTH_KEYCLOAK_METADATA_URL=http://idp:8080/realms/fds/.well-known/openid-configuration
+      - AUTH_KEYCLOAK_PUBLIC_URL=http://localhost:8080/realms/fds/protocol/openid-connect/auth
+    depends_on:
+      - fds
+      - idp

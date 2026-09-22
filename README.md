@@ -21,7 +21,7 @@ The Fusion Data Service (FDS) is a platform designed to provide scalable, FAIR-c
 
 ## Documentation
 
-Published at **<https://ukaea.github.io/fds/>**, covering the data model, access control, provenance, and the DCAT / JSON-LD semantic projection. Built with [Zensical](https://zensical.org/) from the `docs/` directory and deployed by GitHub Actions on every push to `main`, so it does not depend on anyone running the demo.
+Published at **<https://ukaea.github.io/fds/>**, covering the data model, access control, provenance, and the DCAT / JSON-LD semantic projection. Built with [Zensical](https://zensical.org/) from the `docs/` directory and deployed by GitHub Actions on every push to `main`, so it does not depend on anyone running a local stack.
 
 To preview changes locally before opening a pull request:
 
@@ -29,62 +29,64 @@ To preview changes locally before opening a pull request:
 uvx zensical serve
 ```
 
-## Quick Start Demo
+## Running locally
 
-A self-contained demo environment is available in the `demo/` directory. It includes FDS, Keycloak, MinIO, a reference UI, and a [Marimo](https://marimo.io/) notebook for the live data-access workflows. The documentation is not part of the stack: it is published separately, so it stays available whether or not the demo is running.
-
-### 1. Start the Environment
+`compose.yaml` starts FDS. The published documentation at <https://ukaea.github.io/fds/> is not
+part of the stack.
 
 ```bash
-cd demo
-# Using Docker
-docker compose up --build
-# OR using Podman
-podman compose up --build
+# once: a key pair this stack trusts, so you can sign your own tokens
+uv run scripts/mint-token.py init --out-dir dev
+
+docker compose up -d --build        # or: podman compose up -d --build
 ```
 
-> **Podman + git worktrees:** the compose project name is always `demo`, so
-> launching from a second worktree reuses the first's containers and can serve
-> stale code. `demo/run.sh` forces a clean, current stack from whichever worktree
-> you run it in. It's podman-only; docker users use the command above.
+FDS is then on `http://localhost:8000`, with its OpenAPI explorer at `/docs`. Reads of public
+metadata need no token; to write, sign one:
 
-Services started:
+```bash
+export FDS_TOKEN=$(uv run scripts/mint-token.py mint)
+curl -H "Authorization: Bearer $FDS_TOKEN" ...
+```
 
-- **FDS API**: `http://localhost:8000`
-- **Keycloak**: `http://localhost:8080` (User/Pass: `admin`/`admin`)
-- **MinIO**: `http://localhost:9000` (User/Pass: `admin`/`password`)
+The catalogue starts empty. To register the example catalogue the documentation refers to:
 
-> **Where the data live:** shots 30420 and 30421 are real MAST data, already publicly accessible. The demo does not copy them in. It registers them where they are, so a client reading them is sent straight to the url of the s3 bucket with anonymous credentials and FDS never touches the bytes.
->
-> MinIO holds some locally written demonstration datasets: the synthetic MAST-U shot 50000, plus the reference geometry, calibration and ELM annotation files. Shot 50000's `raw/` prefix is deliberately **not** anonymously readable, which demonstrates the access-enforcement and credential-vending features of FDS.
+```bash
+FDS_TOKEN=$(uv run scripts/mint-token.py mint) uv run scripts/seed-example-catalogue.py
+```
 
-Prefix any of the above with `FDS_DEMO_SEED=0` to come up with an empty catalog; populate it later with `uv run demo/generate_data.py` and `uv run demo/seed_metadata.py`.
+No identity provider runs by default, because nothing needs one: tokens are signed locally.
+Keycloak, carrying a development realm, is there when you want to log in through the reference
+UI or to check that a realm's mappers produce tokens FDS accepts:
+
+```bash
+docker compose --profile ui up -d --build   # FDS + Keycloak + the reference UI
+```
+
+That serves the UI on `http://localhost:3000` and Keycloak on `http://localhost:8080`
+(`admin`/`admin`; realm users `admin`, `user`, `mast_admin`, all with password `password`).
+`--profile idp` starts Keycloak without the UI.
+
+No object store runs either: credential vending needs a real S3-compatible endpoint with STS,
+which is a deployment concern. Set `FDS_STORAGE_PROVIDERS` to point at one.
+
+To work on FDS itself, run it from your checkout with reload instead:
+
+```bash
+uv run uvicorn app.main:app --reload
+```
+
+> **Podman on macOS:** if `podman compose up` hangs, `scripts/podman-up.sh` works around it
+> (add `--ui` for Keycloak and the UI). Docker users do not need it.
 
 To see request traces and browse them in Grafana, add the observability overlay:
 
 ```bash
-docker compose -f docker-compose.yaml -f docker-compose.observability.yaml up --build
+docker compose -f compose.yaml -f compose.observability.yaml up -d --build
 ```
 
 That adds Grafana on `http://localhost:3002` and turns on trace export and JSON log output. It is
-off by default because it pulls a 2.5 GB image and adds around 700 MB of memory, roughly doubling
-the footprint of the demo.
-
-### 2. Explore
-
-The stack **auto-populates** the catalog on startup: the `metadata-seeder` service runs `demo/seed_metadata.py` once FDS is healthy. Browse it at `http://localhost:3000`, via `GET /api/v1/devices/`, or read the docs at <https://ukaea.github.io/fds/>.
-
-The docs walk through registering and reading data with copy-pasteable `curl` / Python / JavaScript examples. A few read-back workflows are best seen running live (storage-layer access enforcement, credential vending, and parallel Dask reads), and those are in a marimo notebook:
-
-```bash
-uvx marimo edit demo/explore.py --sandbox
-```
-
-To reseed the catalog by hand at any time:
-
-```bash
-uv run demo/seed_metadata.py
-```
+off by default because it pulls a 2.5 GB image and adds around 700 MB of memory.
 
 ## Local Development Setup
 
@@ -135,17 +137,21 @@ Key configuration areas:
 uv run pytest
 ```
 
-This runs the unit and service tests only. Integration tests require the demo docker-compose stack to be running and are excluded by default:
+This runs the unit and service tests. The end-to-end tests drive a running FDS over HTTP and are
+excluded by default:
 
 ```bash
-# Start the demo stack first
-podman compose -f demo/docker-compose.yaml up -d
-
-# Then run integration tests
-uv run pytest -m integration
+docker compose up -d --build
+uv run pytest -m end_to_end
 ```
 
-Integration tests exercise the full stack: real HTTP calls to FDS, real Keycloak auth, and real MinIO storage.
+They assert only over HTTP, so the same suite runs against a deployment as its smoke test:
+
+```bash
+FDS_URL=https://api.example.org/api/v1 FDS_TOKEN=<jwt> uv run pytest -m end_to_end
+```
+
+Everything they create, they delete. Without a token the tests that write are skipped.
 
 ### Running Linting & Formatting
 
