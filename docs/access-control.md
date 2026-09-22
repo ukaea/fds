@@ -111,6 +111,58 @@ stashes it as `TOKEN` / `headers` for the examples on the other pages:
 
 FDS validates the token against the IdP's JWKS endpoint and extracts the user's identity and granted scopes.
 
+### Where FDS finds an issuer's keys
+
+A token is trusted when it is signed by a key belonging to an issuer in `FDS_TRUSTED_IDPS`, so
+FDS has to have that issuer's public keys. It gets them in one of three ways, per issuer:
+
+| Configuration | Where the keys come from |
+| --- | --- |
+| `{"issuer": "https://idp.example.org"}` | Discovery: FDS fetches `{issuer}/.well-known/openid-configuration`, then the `jwks_uri` it advertises. The usual case. |
+| `{"issuer": "...", "jwks_uri": "http://idp-internal:8080/realms/fds/protocol/openid-connect/certs"}` | The given URL. For when FDS reaches the provider at a different address from the one written in the token, as on a container network. The `iss` claim must still match `issuer` exactly. |
+| `{"issuer": "...", "jwks_file": "/etc/fds/local-issuer.jwks.json"}` | A file on disk. No identity provider is contacted. |
+
+Keys are cached for ten minutes however they are obtained, so replacing a file takes effect
+within that window.
+
+### Issuing tokens without an identity provider
+
+`jwks_file` exists so that a deployment can be administered before, or without, a working
+identity provider: seeding a new catalogue, running an ingestion job, or getting in when the
+provider is down. You hold an RSA private key, FDS holds the matching public key, and you sign
+short-lived tokens yourself. The repository ships a script for both halves:
+
+```bash
+# once: writes the private key and the public key set
+uv run scripts/mint-token.py init --out-dir dev
+
+# then, whenever a token is needed
+uv run scripts/mint-token.py mint --key dev/local-issuer.key --scope fds-admin --minutes 15
+```
+
+Point FDS at the public half and trust the issuer:
+
+```bash
+FDS_TRUSTED_IDPS='[{"issuer":"urn:fds:local","jwks_file":"dev/local-issuer.jwks.json"}]'
+FDS_OIDC_AUDIENCE=fds-client
+```
+
+Such tokens go through exactly the same checks as any other: signature, audience, expiry, and
+scope filtering. Actions taken with one are recorded in the audit trail with
+`actor_issuer: urn:fds:local`, so they are distinguishable from actions taken by people who
+signed in.
+
+!!! warning "This is a bootstrap and break-glass path, not a way for people to log in"
+
+    Anyone holding the private key can mint a token for any subject with any scope, bypassing
+    whatever sign-in controls your organisation applies: no multi-factor authentication, no
+    account suspension when somebody leaves. A minted token cannot be withdrawn before it
+    expires; revocation means removing the issuer from `FDS_TRUSTED_IDPS` and restarting, which
+    invalidates every token from that key at once.
+
+    Keep the private key off the server and out of version control, keep lifetimes short
+    (minutes), and give people accounts with your identity provider instead.
+
 ## Credential vending
 
 FDS does **not** hold long-lived cloud credentials on behalf of users. Instead, it vends **short-lived tokens** at query time.

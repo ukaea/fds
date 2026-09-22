@@ -48,6 +48,10 @@ scheme = "slate"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to system preference"
 
+# Callout blocks (!!! warning "…"), used where a page has to flag a consequence
+# the reader must not skim past.
+[project.markdown_extensions.admonition]
+
 # Content tabs (=== "Label") for the per-language API examples. superfences lets a
 # tab hold a fenced code block; tabbed renders the tab strip.
 [project.markdown_extensions.pymdownx.superfences]

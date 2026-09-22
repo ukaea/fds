@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 from typing import Annotated
 
 import httpx
@@ -6,7 +8,7 @@ import structlog
 from cachetools import TTLCache
 from fastapi import Depends, HTTPException, status
 
-from app.core.config import config
+from app.core.config import TrustedIdP, config
 
 logger = structlog.get_logger(__name__)
 
@@ -28,15 +30,54 @@ class JwksClient:
     async def close(self):
         await self.client.aclose()
 
+    def _trusted_idp(self, issuer: str) -> TrustedIdP | None:
+        """
+        Returns the TRUSTED_IDPS entry for an issuer, or None if untrusted.
+        """
+        for trusted in config.TRUSTED_IDPS:
+            if trusted.issuer == issuer:
+                return trusted
+
+        return None
+
     def _is_trusted_issuer(self, issuer: str) -> bool:
         """
         Checks if the issuer is in TRUSTED_IDPS.
         """
-        for trusted in config.TRUSTED_IDPS:
-            if trusted.issuer == issuer:
-                return True
+        return self._trusted_idp(issuer) is not None
 
-        return False
+    def _read_jwks_file(self, path: Path, issuer: str) -> dict:
+        """
+        Reads a configured JWKS file. A missing or malformed file is a
+        deployment error, not something the caller did, so it is a 500.
+        """
+        try:
+            jwks_data = json.loads(path.read_text())
+        except OSError as e:
+            logger.error(
+                "jwks.file_unreadable", issuer=issuer, path=str(path), error=str(e)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Configured JWKS file could not be read.",
+            )
+        except ValueError as e:
+            logger.error(
+                "jwks.file_malformed", issuer=issuer, path=str(path), error=str(e)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Configured JWKS file is not valid JSON.",
+            )
+
+        if not isinstance(jwks_data.get("keys"), list):
+            logger.error("jwks.file_has_no_keys", issuer=issuer, path=str(path))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Configured JWKS file contains no 'keys'.",
+            )
+
+        return jwks_data
 
     async def _discover_jwks_uri(self, issuer: str) -> str:
         """
@@ -88,13 +129,31 @@ class JwksClient:
         """
         Fetches and caches the JWKS for a specific issuer.
         """
+        trusted = self._trusted_idp(issuer)
+        if trusted is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Untrusted Issuer: {issuer}",
+            )
+
         cached = self.cache.get(issuer)
         if cached is not None:
             return cached
 
-        # Resolve JWKS URI if not known
+        # Keys held locally: no identity provider is contacted. Cached like any
+        # other source, so replacing the file takes effect within the TTL.
+        if trusted.jwks_file is not None:
+            jwks_data = self._read_jwks_file(trusted.jwks_file, issuer)
+            self.cache[issuer] = jwks_data
+            return jwks_data
+
+        # Resolve JWKS URI if not known: configured, else discovered.
         if issuer not in self.issuer_jwks_uris:
-            self.issuer_jwks_uris[issuer] = await self._discover_jwks_uri(issuer)
+            self.issuer_jwks_uris[issuer] = (
+                trusted.jwks_uri
+                if trusted.jwks_uri is not None
+                else await self._discover_jwks_uri(issuer)
+            )
 
         jwks_uri = self.issuer_jwks_uris[issuer]
 
