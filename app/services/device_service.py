@@ -1,5 +1,6 @@
 from typing import cast
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -16,6 +17,8 @@ from app.core.naming import normalise_device_name
 from app.models.device import Device, DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
+from app.models.shot import Shot
+from app.models.source import Source
 from app.services.base_service import BaseService
 from app.services.exceptions import ConflictError, DeviceNotFoundError, ForbiddenError
 
@@ -185,9 +188,33 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         """
         check_is_admin(user)
         device = self._get_by_name(device_name)
+        self._reject_if_occupied(device)
         self.session.delete(device)
         self.session.commit()
         return True
+
+    def _reject_if_occupied(self, device: Device) -> None:
+        shots = self.session.exec(
+            select(func.count())
+            .select_from(Shot)
+            .where(Shot.device_name == device.name)
+        ).one()
+        sources = self.session.exec(
+            select(func.count())
+            .select_from(Source)
+            .where(Source.device_id == device.id)
+        ).one()
+
+        held = [
+            f"{count} {noun if count == 1 else noun + 's'}"
+            for count, noun in ((shots, "shot"), (sources, "source"))
+            if count
+        ]
+        if held:
+            raise ConflictError(
+                f"Device '{device.name}' still holds {' and '.join(held)}. "
+                "Delete them first."
+            )
 
     def to_read_model(self, device: Device) -> DeviceRead:
         """

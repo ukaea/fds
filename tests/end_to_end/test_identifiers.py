@@ -10,6 +10,7 @@ service's own base URL, so a new one cannot be added without a route to serve
 it.
 """
 
+from collections.abc import Iterator
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -49,8 +50,12 @@ def identifiers(node: Any, root: str, found: set[str] | None = None) -> set[str]
 @pytest.fixture
 def dataset_with_provenance(
     http_client: httpx.Client, admin_headers: dict[str, str], device
-) -> dict:
-    """A dataset carrying the relations that pull other entities into its JSON-LD."""
+) -> Iterator[dict]:
+    """A dataset carrying the relations that pull other entities into its JSON-LD.
+
+    The source and activity are not device-scoped, so removing the device does
+    not take them with it and this has to clean them up itself.
+    """
     created = device(access_level="public")
     name = created["name"]
 
@@ -94,7 +99,16 @@ def dataset_with_provenance(
         },
     )
     assert derived.status_code == 201, derived.text
-    return derived.json()
+
+    yield derived.json()
+
+    # After the device fixture has removed the datasets that referenced them.
+    for endpoint in (
+        f"activities/{activity.json()['id']}",
+        f"sources/{source.json()['id']}",
+    ):
+        removed = http_client.delete(f"{FDS_URL}/{endpoint}", headers=admin_headers)
+        assert removed.status_code in (204, 404), removed.text
 
 
 def test_every_published_identifier_resolves(
