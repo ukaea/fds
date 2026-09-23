@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Bring the development stack (compose.yaml) up cleanly under podman, from the
-# current git worktree. Pass --ui to include Keycloak and the reference UI.
+# current git worktree. Pass --idp to add Keycloak, for logging in through the UI.
 #
 # Podman only. This is a convenience wrapper around podman-specific problems (pod
 # teardown, the podman-compose `up` hang, stale containers across worktrees). It
@@ -19,7 +19,7 @@ PROJECT="fds-dev"   # matches `name:` in compose.yaml
 ROOT="$(git rev-parse --show-toplevel)"
 COMPOSE="$ROOT/compose.yaml"
 PROFILE=""
-[ "${1:-}" = "--ui" ] && PROFILE="--profile ui"
+[ "${1:-}" = "--idp" ] && PROFILE="--profile idp"
 
 # Resolve the real container name for a compose service via its labels. Both
 # podman-compose and docker-compose stamp com.docker.compose.{project,service},
@@ -61,8 +61,8 @@ podman compose -p "$PROJECT" -f "$COMPOSE" $PROFILE up -d >/tmp/fds-dev-up.log 2
 up_pid=$!
 
 # Long-lived services that must end up Running.
-services="fds"
-[ -n "$PROFILE" ] && services="fds idp ui"
+services="fds ui"
+[ -n "$PROFILE" ] && services="fds ui idp"
 need="$(echo "$services" | wc -w | tr -d ' ')"
 
 echo -n "==> Bringing stack up "
@@ -107,10 +107,10 @@ if [ -n "$latest" ] && [ -n "$running" ] && [ "$latest" != "$running" ]; then
 fi
 
 echo "==> Development stack is up:"
+echo "   UI     http://localhost:3000"
 echo "   API    http://localhost:8000   (OpenAPI explorer: /docs)"
 if [ -n "$PROFILE" ]; then
   echo "   IdP    http://localhost:8080"
-  echo "   UI     http://localhost:3000"
 fi
 echo
 echo "The catalogue is empty. To fill it with the documented examples:"

@@ -38,10 +38,11 @@ geometry and calibration, and an annotated shot:
 FDS_TOKEN=$TOKEN uv run scripts/seed-example-catalogue.py
 ```
 
-No identity provider runs by default: see [Access Control](access-control.md#issuing-tokens-without-an-identity-provider)
-for what signing your own tokens does and does not give you. To log in through the reference UI
-instead, start the stack with `docker compose --profile ui up -d --build`, which adds Keycloak on
-`http://localhost:8080` and the UI on `http://localhost:3000`.
+The reference UI comes up with the stack, on `http://localhost:3000`, and public records are
+browsable without logging in. No identity provider runs by default: see
+[Access Control](access-control.md#issuing-tokens-without-an-identity-provider) for what signing
+your own tokens does and does not give you. To log in through the UI, add Keycloak with
+`docker compose --profile idp up -d --build`.
 
 No object store runs either, so credential vending has no real store to vend against; that is a
 deployment concern.
@@ -73,8 +74,8 @@ Public reads need no token; creating data or reading restricted data does.
 | --- | --- |
 | FDS API (OpenAPI explorer) | [http://localhost:8000/docs](http://localhost:8000/docs) |
 | FDS API (ReDoc) | [http://localhost:8000/redoc](http://localhost:8000/redoc) |
-| Keycloak, with `--profile idp` or `--profile ui` | [http://localhost:8080](http://localhost:8080), `admin` / `admin` |
-| Reference UI, with `--profile ui` | [http://localhost:3000](http://localhost:3000) |
+| Reference UI | [http://localhost:3000](http://localhost:3000) |
+| Keycloak, with `--profile idp` | [http://localhost:8080](http://localhost:8080), `admin` / `admin` |
 
 ## Where to start
 

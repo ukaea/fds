@@ -63,17 +63,20 @@ The catalogue starts empty. To register the example datasets the documentation r
 FDS_TOKEN=$(uv run scripts/mint-token.py mint) uv run scripts/seed-example-catalogue.py
 ```
 
+The reference UI comes up with the stack, on `http://localhost:3000`. FDS serves JSON and never
+HTML, so the identifiers it publishes are answered as landing pages by whatever serves the service
+address, which here is the UI. Browsing public records needs no login.
+
 No identity provider runs by default, because nothing needs one: tokens are signed locally.
 Keycloak, carrying a development realm, is there when you want to log in through the reference
 UI or to check that a realm's mappers produce tokens FDS accepts:
 
 ```bash
-docker compose --profile ui up -d --build   # FDS + Keycloak + the reference UI
+docker compose --profile idp up -d --build   # adds Keycloak on :8080
 ```
 
-That serves the UI on `http://localhost:3000` and Keycloak on `http://localhost:8080`
-(`admin`/`admin`; realm users `admin`, `user`, `mast_admin`, all with password `password`).
-`--profile idp` starts Keycloak without the UI.
+Keycloak is `admin`/`admin`; its realm users are `admin`, `user` and `mast_admin`, all with
+password `password`.
 
 To work on FDS itself, start the database alone and run FDS from your checkout with reload:
 
