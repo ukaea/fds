@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Database, Lock, Unlock, Download, Activity, ArrowLeft, ChevronRight, MapPin, SlidersHorizontal, Highlighter } from 'lucide-react';
+import { Database, Lock, Unlock, Download, Activity, ChevronRight, MapPin, SlidersHorizontal, Highlighter } from 'lucide-react';
 import { useSession, signIn } from "next-auth/react";
 import useSWR from 'swr';
 import { fetcher, API_BASE } from '@/lib/api';
@@ -27,7 +27,14 @@ function getViridisColor(t: number) {
     ];
 }
 
-function HeatmapCanvas({ data, width, height, title }: any) {
+interface HeatmapProps {
+    data: Float32Array | Float64Array;
+    width: number;
+    height: number;
+    title: string;
+}
+
+function HeatmapCanvas({ data, width, height, title }: HeatmapProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     // A slice outside the reconstruction window is entirely NaN. Normalising it
@@ -95,14 +102,6 @@ function HeatmapCanvas({ data, width, height, title }: any) {
 
 function isZarr(mediaType?: string | null): boolean {
   return Boolean(mediaType?.toLowerCase().includes('zarr'));
-}
-
-function formatMediaType(mediaType?: string | null): string {
-  if (!mediaType) return 'Unknown';
-  if (mediaType.includes('zarr')) return 'Zarr';
-  if (mediaType.includes('netcdf') || mediaType.includes('netCDF')) return 'NetCDF';
-  if (mediaType.includes('hdf')) return 'HDF5';
-  return mediaType.split('/').pop() || mediaType;
 }
 
 // How to open one dataset's bytes: either short-lived credentials FDS minted, or
@@ -217,7 +216,15 @@ interface LoadProgress {
   cached: number;
 }
 
-type NodeMeta = Record<string, any>;
+interface NodeMeta {
+  node_type?: string;
+  attributes?: Record<string, unknown> & { name?: string; dimension_names?: string[] };
+  shape?: number[];
+  dimension_names?: string[];
+  consolidated_metadata?: { metadata?: Record<string, NodeMeta> };
+  members?: Record<string, NodeMeta>;
+  [key: string]: unknown;
+}
 
 // Zarr node metadata for everything under one group, and where it came from.
 interface GroupMetadata {
@@ -352,9 +359,9 @@ print(ds)`;
 
 export default function DatasetDetail({ id }: { id: string }) {
 
-  const { data: session, status } = useSession();
-  const [accessValues, setAccessValues] = useState<{granted: boolean, token?: any, s3Path?: string, error?: string}>({ granted: false });
-  const [zarrMetadata, setZarrMetadata] = useState<any>(null);
+  const { status } = useSession();
+  const [accessValues, setAccessValues] = useState<{granted: boolean, token?: DataAccess, s3Path?: string, error?: string}>({ granted: false });
+  const [zarrMetadata, setZarrMetadata] = useState<NodeMeta | null>(null);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [variables, setVariables] = useState<string[]>([]);
   const [coordinates, setCoordinates] = useState<string[]>([]);
@@ -439,9 +446,9 @@ export default function DatasetDetail({ id }: { id: string }) {
              setAccessValues({ granted: false, error: "No valid token retrieved for this dataset." });
           }
 
-      } catch (e: any) {
+      } catch (e) {
           console.error(e);
-          setAccessValues({ granted: false, error: e.message });
+          setAccessValues({ granted: false, error: e instanceof Error ? e.message : String(e) });
       }
   };
 
@@ -502,7 +509,7 @@ export default function DatasetDetail({ id }: { id: string }) {
                }
            }
            groupMeta.current = resolved;
-           const items: Record<string, any> = resolved?.items ?? {};
+           const items: Record<string, NodeMeta> = resolved?.items ?? {};
 
            const arrayNames = Object.keys(items).filter(key =>
                items[key]?.node_type === 'array' || items[key]?.attributes?.name
@@ -549,7 +556,7 @@ export default function DatasetDetail({ id }: { id: string }) {
       setProgress(null);
   };
 
-  const fetchVariables = async (access: DataAccess, prefixPath: string, varName: string, coordsList: string[], allItems: any) => {
+  const fetchVariables = async (access: DataAccess, prefixPath: string, varName: string, coordsList: string[], allItems: Record<string, NodeMeta>) => {
       setLoadingData(true);
       setLoadError(null);
       const host = new URL(access.endpointUrl).host;
@@ -816,7 +823,7 @@ export default function DatasetDetail({ id }: { id: string }) {
                                     <select
                                         className="bg-background border border-border text-foreground text-sm rounded focus:ring-primary focus:border-primary block p-2 shadow-inner min-w-[200px]"
                                         value={selectedVar || ''}
-                                        onChange={(e: any) => {
+                                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                                            onSelectVariable(e.target.value);
                                         }}
                                     >
@@ -877,7 +884,7 @@ export default function DatasetDetail({ id }: { id: string }) {
                                                     min="0"
                                                     max={slider.shapeSize - 1}
                                                     value={sliderIndices[i] || 0}
-                                                    onChange={(e: any) => {
+                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                                         const newIndices = [...sliderIndices];
                                                         newIndices[i] = Number(e.target.value);
                                                         setSliderIndices(newIndices);

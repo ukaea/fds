@@ -58,7 +58,7 @@ export default function Home() {
               <div>
                 <h3 className="text-xl font-semibold text-foreground mb-2">No Devices Available</h3>
                 <p className="text-muted-foreground">
-                  There are no experimental devices registered in the system yet, or you don't have permission to view them.
+                  There are no experimental devices registered in the system yet, or you don&apos;t have permission to view them.
                 </p>
               </div>
             </div>

@@ -5,21 +5,12 @@ import useSWR from 'swr';
 import Link from 'next/link';
 import { Activity, Search, Server, Globe, ChevronRight } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Device, Source } from '@/lib/types';
+import { Source } from '@/lib/types';
 
 export default function SourcesPage() {
   const { data: sources, error: sourcesError, isLoading: sourcesLoading } = useSWR<Source[]>(`${API_BASE}/sources/`, fetcher);
-  const { data: devices } = useSWR<Device[]>(`${API_BASE}/devices/`, fetcher);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'global' | 'device'>('all');
-
-  // Build device lookup map: id -> name
-  const deviceMap = new Map<number, string>();
-  devices?.forEach(d => {
-    // We need the device id, but Device type only has name.
-    // Since sources have device_id, we fetch devices and match by iterating.
-    // For now we'll use the devices list to enrich source display.
-  });
 
   // Filter sources based on search and scope filter
   const filteredSources = sources?.filter(source => {

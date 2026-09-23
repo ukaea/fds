@@ -25,27 +25,29 @@ export function UserMenu() {
   }, []);
 
   const handleSwitchAccount = async () => {
-    // To get a "completely clear form", we must first logout from Keycloak to kill the session.
-    // Flow: App -> Keycloak Logout -> App(?switch_account=true) -> Keycloak Login (Clean)
+    // A clean login form means ending the session at the provider too, not just
+    // here: App -> provider logout -> App(?switch_account=true) -> login.
+    const config = await fetch('/api/auth-config')
+      .then((response) => response.json() as Promise<{ logoutEndpoint: string | null }>)
+      .catch(() => ({ logoutEndpoint: null }));
 
-    const keycloakUrl = process.env.NEXT_PUBLIC_KEYCLOAK_URL || "http://localhost:8080";
-    const realm = "fds";
-    // Redirect back to the app with a flag to trigger immediate login
-    const switchRedirectUri = encodeURIComponent(`${window.location.origin}/?switch_account=true`);
-
-    // Construct Logout URL (Keycloak 18+ style)
-    let logoutUrl = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/logout?post_logout_redirect_uri=${switchRedirectUri}`;
-
-    // Add id_token_hint if available (prevents "Confirm Logout" screen)
-    if (session?.idToken) {
-      logoutUrl += `&id_token_hint=${session.idToken}`;
+    if (!config.logoutEndpoint) {
+      await signOut();
+      return;
     }
 
-    // Sign out locally first to clear NextAuth state
-    await signOut({ redirect: false });
+    const logoutUrl = new URL(config.logoutEndpoint);
+    logoutUrl.searchParams.set(
+      "post_logout_redirect_uri",
+      `${window.location.origin}/?switch_account=true`,
+    );
+    // Without the hint the provider asks the user to confirm the logout.
+    if (session?.idToken) {
+      logoutUrl.searchParams.set("id_token_hint", session.idToken);
+    }
 
-    // Redirect to Keycloak to finish the job
-    window.location.href = logoutUrl;
+    await signOut({ redirect: false });
+    window.location.assign(logoutUrl.toString());
   };
 
   if (status === "loading") {
