@@ -5,6 +5,7 @@ from fastapi import APIRouter, status
 from app.api.deps import CollectionServiceDep, CurrentUserDep, SourceServiceDep
 from app.models.collection import CollectionRead
 from app.models.source import SourceCreate, SourceRead, SourceUpdate
+from app.services.exceptions import ResourceNotFoundError
 
 router = APIRouter()
 
@@ -49,6 +50,19 @@ def read_collections_for_source(
         source_name=name, user=user, offset=offset, limit=limit
     )
     return [collection_service.to_read_model(c) for c in collections]
+
+
+@router.get("/id/{id}", response_model=SourceRead)
+def read_source_by_id(id: int, source_service: SourceServiceDep) -> SourceRead:
+    """Retrieve a single source by its internal integer ID.
+
+    This is the URI the semantic projection names a Source by, so it has to
+    resolve: a dangling identifier is worse than none.
+    """
+    source = source_service.get(id)
+    if not source:
+        raise ResourceNotFoundError(f"Source {id} not found")
+    return source_service.to_read_model(source)
 
 
 @router.get("/{name}", response_model=SourceRead)

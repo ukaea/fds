@@ -61,7 +61,7 @@ def _make_collection(
 def test_create_global_collection(test_client: TestClient, admin_user_token: dict):
     """POST /collections creates a global Collection and returns 201."""
     response = test_client.post(
-        "/api/v1/collections",
+        "/v1/collections",
         headers=admin_user_token,
         json={"name": "jintrac-42", "title": "JINTRAC Run 42"},
     )
@@ -78,7 +78,7 @@ def test_create_global_collection_unauthorized(
 ):
     """Non-admin users cannot create global Collections."""
     response = test_client.post(
-        "/api/v1/collections",
+        "/v1/collections",
         headers=non_admin_user_token,
         json={"name": "forbidden"},
     )
@@ -92,7 +92,7 @@ def test_read_global_collections(
     _make_collection(session, "run-a")
     _make_collection(session, "run-b")
 
-    response = test_client.get("/api/v1/collections", headers=admin_user_token)
+    response = test_client.get("/v1/collections", headers=admin_user_token)
     assert response.status_code == 200
     names = [c["name"] for c in response.json()]
     assert "run-a" in names
@@ -105,9 +105,7 @@ def test_read_global_collection_by_name(
     """GET /collections/{name} retrieves a specific global Collection."""
     _make_collection(session, "named-run")
 
-    response = test_client.get(
-        "/api/v1/collections/named-run", headers=admin_user_token
-    )
+    response = test_client.get("/v1/collections/named-run", headers=admin_user_token)
     assert response.status_code == 200
     assert response.json()["name"] == "named-run"
 
@@ -116,7 +114,7 @@ def test_read_global_collection_by_name_not_found(
     test_client: TestClient, admin_user_token: dict
 ):
     """GET /collections/{name} returns 404 for an absent Collection."""
-    response = test_client.get("/api/v1/collections/ghost", headers=admin_user_token)
+    response = test_client.get("/v1/collections/ghost", headers=admin_user_token)
     assert response.status_code == 404
 
 
@@ -127,7 +125,7 @@ def test_create_device_collection(
     _make_device(session)
 
     response = test_client.post(
-        "/api/v1/devices/DEV/collections",
+        "/v1/devices/DEV/collections",
         headers=admin_user_token,
         json={"name": "machine-diags"},
     )
@@ -146,9 +144,7 @@ def test_read_device_collections(
     _make_collection(session, "d-col-1", device="DEV")
     _make_collection(session, "global-col")
 
-    response = test_client.get(
-        "/api/v1/devices/DEV/collections", headers=admin_user_token
-    )
+    response = test_client.get("/v1/devices/DEV/collections", headers=admin_user_token)
     assert response.status_code == 200
     names = [c["name"] for c in response.json()]
     assert "d-col-1" in names
@@ -163,7 +159,7 @@ def test_read_device_collection_by_name(
     _make_collection(session, "cfg", device="DEV")
 
     response = test_client.get(
-        "/api/v1/devices/DEV/collections/cfg", headers=admin_user_token
+        "/v1/devices/DEV/collections/cfg", headers=admin_user_token
     )
     assert response.status_code == 200
     assert response.json()["name"] == "cfg"
@@ -177,7 +173,7 @@ def test_create_shot_collection(
     _make_shot(session)
 
     response = test_client.post(
-        "/api/v1/devices/DEV/shots/s1/collections",
+        "/v1/devices/DEV/shots/s1/collections",
         headers=admin_user_token,
         json={"name": "jintrac-outputs", "title": "JINTRAC outputs"},
     )
@@ -199,7 +195,7 @@ def test_read_shot_collections(
     _make_collection(session, "col-s2", device="DEV", shot_id="s2")
 
     response = test_client.get(
-        "/api/v1/devices/DEV/shots/s1/collections", headers=admin_user_token
+        "/v1/devices/DEV/shots/s1/collections", headers=admin_user_token
     )
     assert response.status_code == 200
     names = [c["name"] for c in response.json()]
@@ -216,7 +212,7 @@ def test_read_shot_collection_by_name(
     _make_collection(session, "run-out", device="DEV", shot_id="s1")
 
     response = test_client.get(
-        "/api/v1/devices/DEV/shots/s1/collections/run-out", headers=admin_user_token
+        "/v1/devices/DEV/shots/s1/collections/run-out", headers=admin_user_token
     )
     assert response.status_code == 200
     assert response.json()["name"] == "run-out"
@@ -229,7 +225,7 @@ def test_update_collection(
     col_id = _make_collection(session, "before")
 
     response = test_client.patch(
-        f"/api/v1/collections/{col_id}",
+        f"/v1/collections/{col_id}",
         headers=admin_user_token,
         json={"title": "After"},
     )
@@ -243,14 +239,12 @@ def test_delete_collection(
     """DELETE /collections/{id} removes the Collection and returns 204."""
     col_id = _make_collection(session, "to-delete")
 
-    response = test_client.delete(
-        f"/api/v1/collections/{col_id}", headers=admin_user_token
-    )
+    response = test_client.delete(f"/v1/collections/{col_id}", headers=admin_user_token)
     assert response.status_code == 204
 
     # Confirm it is gone
     get_response = test_client.get(
-        "/api/v1/collections/to-delete", headers=admin_user_token
+        "/v1/collections/to-delete", headers=admin_user_token
     )
     assert get_response.status_code == 404
 
@@ -266,25 +260,25 @@ def test_add_and_remove_dataset_membership(
 
     # Add
     add_resp = test_client.post(
-        f"/api/v1/collections/{col_id}/datasets/{ds_id}",
+        f"/v1/collections/{col_id}/datasets/{ds_id}",
         headers=admin_user_token,
     )
     assert add_resp.status_code == 204
 
     # Verify inlined in GET response
-    get_resp = test_client.get("/api/v1/collections/run", headers=admin_user_token)
+    get_resp = test_client.get("/v1/collections/run", headers=admin_user_token)
     dataset_ids = [d["id"] for d in get_resp.json().get("datasets", [])]
     assert ds_id in dataset_ids
 
     # Remove
     del_resp = test_client.delete(
-        f"/api/v1/collections/{col_id}/datasets/{ds_id}",
+        f"/v1/collections/{col_id}/datasets/{ds_id}",
         headers=admin_user_token,
     )
     assert del_resp.status_code == 204
 
     # Confirm removed
-    get_after = test_client.get("/api/v1/collections/run", headers=admin_user_token)
+    get_after = test_client.get("/v1/collections/run", headers=admin_user_token)
     assert get_after.json().get("datasets") is None
 
 
@@ -297,10 +291,10 @@ def test_add_dataset_duplicate_returns_409(
     col_id = _make_collection(session, "run")
 
     test_client.post(
-        f"/api/v1/collections/{col_id}/datasets/{ds_id}", headers=admin_user_token
+        f"/v1/collections/{col_id}/datasets/{ds_id}", headers=admin_user_token
     )
     response = test_client.post(
-        f"/api/v1/collections/{col_id}/datasets/{ds_id}", headers=admin_user_token
+        f"/v1/collections/{col_id}/datasets/{ds_id}", headers=admin_user_token
     )
     assert response.status_code == 409
 
@@ -313,24 +307,24 @@ def test_add_and_remove_child_collection(
     child_id = _make_collection(session, "child")
 
     add_resp = test_client.post(
-        f"/api/v1/collections/{parent_id}/collections/{child_id}",
+        f"/v1/collections/{parent_id}/collections/{child_id}",
         headers=admin_user_token,
     )
     assert add_resp.status_code == 204
 
     # Verify child appears in parent's read model
-    get_resp = test_client.get("/api/v1/collections/parent", headers=admin_user_token)
+    get_resp = test_client.get("/v1/collections/parent", headers=admin_user_token)
     child_ids = [c["id"] for c in get_resp.json().get("child_collections", [])]
     assert child_id in child_ids
 
     # Remove
     del_resp = test_client.delete(
-        f"/api/v1/collections/{parent_id}/collections/{child_id}",
+        f"/v1/collections/{parent_id}/collections/{child_id}",
         headers=admin_user_token,
     )
     assert del_resp.status_code == 204
 
-    get_after = test_client.get("/api/v1/collections/parent", headers=admin_user_token)
+    get_after = test_client.get("/v1/collections/parent", headers=admin_user_token)
     assert get_after.json().get("child_collections") is None
 
 
@@ -341,7 +335,7 @@ def test_add_child_collection_self_reference_returns_422(
     col_id = _make_collection(session, "self")
 
     response = test_client.post(
-        f"/api/v1/collections/{col_id}/collections/{col_id}",
+        f"/v1/collections/{col_id}/collections/{col_id}",
         headers=admin_user_token,
     )
     assert response.status_code == 422
@@ -355,7 +349,7 @@ def test_collection_jsonld_response(
     _make_collection(session, "ld-col")
 
     response = test_client.get(
-        "/api/v1/collections/ld-col",
+        "/v1/collections/ld-col",
         headers={**admin_user_token, "accept": "application/ld+json"},
     )
     assert response.status_code == 200
@@ -377,15 +371,13 @@ def test_collection_jsonld_members_as_prov_had_member(
     CollectionService(session).add_dataset(col_id, ds_id, user=admin_user)
 
     response = test_client.get(
-        "/api/v1/collections/prov-col",
+        "/v1/collections/prov-col",
         headers={**admin_user_token, "accept": "application/ld+json"},
     )
     assert response.status_code == 200
     data = response.json()
     assert "prov:Collection" in data["@type"]
-    assert data["prov:hadMember"] == [
-        {"@id": f"http://testserver/api/v1/datasets/{ds_id}"}
-    ]
+    assert data["prov:hadMember"] == [{"@id": f"http://testserver/datasets/{ds_id}"}]
 
 
 def test_collection_jsonld_includes_root_url_distribution(
@@ -404,7 +396,7 @@ def test_collection_jsonld_includes_root_url_distribution(
     )
 
     response = test_client.get(
-        "/api/v1/collections/ld-col-root",
+        "/v1/collections/ld-col-root",
         headers={**admin_user_token, "accept": "application/ld+json"},
     )
     assert response.status_code == 200
@@ -422,7 +414,7 @@ def test_collection_activity_not_found_when_no_activity(
     col_id = _make_collection(session, "no-prov")
 
     response = test_client.get(
-        f"/api/v1/collections/{col_id}/activity", headers=admin_user_token
+        f"/v1/collections/{col_id}/activity", headers=admin_user_token
     )
     assert response.status_code == 404
 
@@ -453,7 +445,7 @@ def test_collection_include_storage_options(
 
     # Without flag: datasets inlined but no credentials
     resp = test_client.get(
-        "/api/v1/devices/CRED/shots/s99/collections/cred-col",
+        "/v1/devices/CRED/shots/s99/collections/cred-col",
         headers=admin_user_token,
     )
     assert resp.status_code == 200
@@ -461,7 +453,7 @@ def test_collection_include_storage_options(
 
     # With flag: credentials present on every inlined dataset
     resp2 = test_client.get(
-        "/api/v1/devices/CRED/shots/s99/collections/cred-col?include_storage_options=true",
+        "/v1/devices/CRED/shots/s99/collections/cred-col?include_storage_options=true",
         headers=admin_user_token,
     )
     assert resp2.status_code == 200
@@ -487,7 +479,7 @@ def test_collection_jsonld_carries_scientific_metadata(
     session.commit()
 
     response = test_client.get(
-        "/api/v1/collections/ld-sci-col",
+        "/v1/collections/ld-sci-col",
         headers={**admin_user_token, "accept": "application/ld+json"},
     )
 

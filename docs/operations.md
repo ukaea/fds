@@ -11,7 +11,7 @@ and FDS provides only the first.
 
 | Part | Provided by | Notes |
 | --- | --- | --- |
-| The API | the FDS image | Serves `/api/v1/...`, `/health`, and its OpenAPI explorer at `/docs`. Runs as an unprivileged user inside the container. |
+| The API | the FDS image | Serves `/v1/...`, `/health`, and its OpenAPI explorer at `/docs`. Runs as an unprivileged user inside the container. |
 | PostgreSQL | you | The only supported database. FDS applies its migrations on start. |
 | An identity provider | you | FDS verifies tokens from the issuers listed in `FDS_TRUSTED_IDPS`. It never issues tokens and holds no client secret. |
 
@@ -22,7 +22,8 @@ things about its behaviour bear on that:
   hostname clients use becomes part of the catalogue's public identity. Choose one you intend to
   keep.
 - When something in front of FDS rewrites requests, it believes `X-Forwarded-*` headers only from
-  senders listed in `FORWARDED_ALLOW_IPS`; otherwise identifiers would name the internal hop.
+  senders listed in `FORWARDED_ALLOW_IPS`. Setting `FDS_BASE_URL` is the more robust
+  answer, because it stops FDS deriving its own address from requests at all.
 
 Any web front end is a separate deployable that calls the API.
 
@@ -83,6 +84,7 @@ defaults.
 | Setting | Effect |
 | --- | --- |
 | `FDS_APP_NAME` | Service name in the OpenAPI document and in traces. Default `fds`. |
+| `FDS_BASE_URL` | The address this service is reached at, which every published identifier is a path under. **Set this in any deployment.** Empty (the default) derives it from each request, which is correct only when FDS is reached directly, as in development. See [Identifiers](dcat-jsonld.md#where-identifiers-point). |
 | `FDS_ENVIRONMENT` | `dev` or `prod`. Selects the default log format. |
 | `FDS_DEBUG` | Enables debug behaviour. Off in production. |
 | `FDS_LOG_FORMAT`, `FDS_LOG_LEVEL` | See [Logging](logging.md). |

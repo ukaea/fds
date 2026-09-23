@@ -15,7 +15,7 @@ admin_user = AuthenticatedUser(id="test-admin", scopes=("fds-admin",))
 def test_create_device(test_client: TestClient, admin_user_token: dict[str, str]):
     """Test that creating a device succeeds for a user with admin scope."""
     response = test_client.post(
-        "/api/v1/devices/",
+        "/v1/devices/",
         headers=admin_user_token,
         json={"name": "MAST-U", "type": "Tokamak", "status": "Operational"},
     )
@@ -32,7 +32,7 @@ def test_update_device(
         user=admin_user,
     )
     response = test_client.put(
-        f"/api/v1/devices/{device.name}",
+        f"/v1/devices/{device.name}",
         headers=admin_user_token,
         json={"name": "Updated Name"},
     )
@@ -49,24 +49,20 @@ def test_delete_device(
         user=admin_user,
     )
     response = test_client.delete(
-        f"/api/v1/devices/{device.name}", headers=admin_user_token
+        f"/v1/devices/{device.name}", headers=admin_user_token
     )
     assert response.status_code == 204
     assert response.content == b""
 
     # Verify the device is actually deleted
-    response = test_client.get(
-        f"/api/v1/devices/{device.name}", headers=admin_user_token
-    )
+    response = test_client.get(f"/v1/devices/{device.name}", headers=admin_user_token)
     assert response.status_code == 404
 
 
 def test_delete_device_not_found(
     test_client: TestClient, admin_user_token: dict[str, str]
 ):
-    response = test_client.delete(
-        "/api/v1/devices/NonExistent", headers=admin_user_token
-    )
+    response = test_client.delete("/v1/devices/NonExistent", headers=admin_user_token)
     assert response.status_code == 404
 
 
@@ -81,7 +77,7 @@ def test_read_devices(test_client: TestClient, session: Session):
         user=admin_user,
     )
 
-    response = test_client.get("/api/v1/devices/")
+    response = test_client.get("/v1/devices/")
     assert response.status_code == 200
 
     data = response.json()
@@ -96,7 +92,7 @@ def test_read_device(test_client: TestClient, session: Session):
         user=admin_user,
     )
 
-    response = test_client.get(f"/api/v1/devices/{device.name}")
+    response = test_client.get(f"/v1/devices/{device.name}")
     assert response.status_code == 200
     assert device.id is not None
 
@@ -116,21 +112,21 @@ def test_device_lookup_is_case_insensitive(test_client: TestClient, session: Ses
         admin_user,
     )
 
-    upper = test_client.get("/api/v1/devices/MAST")
-    lower = test_client.get("/api/v1/devices/mast")
+    upper = test_client.get("/v1/devices/MAST")
+    lower = test_client.get("/v1/devices/mast")
     assert upper.status_code == 200
     assert upper.json() == lower.json()
     assert upper.json()["name"] == "mast"
 
     # Nested resources resolve through either casing of the device segment.
     for name in ("MAST", "mast"):
-        response = test_client.get(f"/api/v1/devices/{name}/shots/30420")
+        response = test_client.get(f"/v1/devices/{name}/shots/30420")
         assert response.status_code == 200
         assert response.json()["device_name"] == "mast"
 
 
 def test_read_device_not_found(test_client: TestClient):
-    response = test_client.get("/api/v1/devices/NonExistent")
+    response = test_client.get("/v1/devices/NonExistent")
     assert response.status_code == 404
 
 
@@ -146,7 +142,7 @@ def test_read_restricted_device_requires_auth(
         user=admin_user,
     )
 
-    response = test_client.get("/api/v1/devices/Restricted Device")
+    response = test_client.get("/v1/devices/Restricted Device")
     assert response.status_code == 403
 
 
@@ -166,7 +162,7 @@ def test_read_devices_filters_restricted_for_anonymous(
         user=admin_user,
     )
 
-    response = test_client.get("/api/v1/devices/")
+    response = test_client.get("/v1/devices/")
     assert response.status_code == 200
 
     names = [device["name"] for device in response.json()]

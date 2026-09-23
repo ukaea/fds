@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import (
     ActivityServiceDep,
+    BaseURLDep,
     CollectionServiceDep,
     CurrentUserDep,
 )
@@ -63,6 +64,39 @@ def read_collections_global(
 
 
 @router.get(
+    "/collections/id/{id}",
+    response_model=CollectionRead,
+    response_model_exclude_none=True,
+)
+def read_collection_by_id(
+    *,
+    request: Request,
+    id: int,
+    collection_service: CollectionServiceDep,
+    user: CurrentUserDep,
+    include_storage_options: bool = False,
+    base: BaseURLDep,
+) -> CollectionRead | JSONResponse:
+    """Retrieve a single Collection by its internal integer ID.
+
+    This is the URI the semantic projection names a Collection by, so it has to
+    resolve: a dangling identifier is worse than none.
+
+    Supports content negotiation:
+    - ``Accept: application/ld+json`` → returns a ``dcat:Catalog`` JSON-LD document.
+    """
+    collection = collection_service.get(id)
+    if not collection:
+        raise ResourceNotFoundError(f"Collection {id} not found")
+    collection_service.check_read_access(collection, user)
+
+    if "application/ld+json" in request.headers.get("accept", ""):
+        dcat_metadata = map_collection_to_dcat(collection, base)
+        return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
+    return collection_service.to_read_model(collection, include_storage_options, user)
+
+
+@router.get(
     "/collections/{name}",
     response_model=CollectionRead,
     response_model_exclude_none=True,
@@ -74,6 +108,7 @@ def read_collection_global_by_name(
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
+    base: BaseURLDep,
 ) -> CollectionRead | JSONResponse:
     """Retrieve a specific global Collection by name.
 
@@ -84,9 +119,7 @@ def read_collection_global_by_name(
         name=name, user=user
     )
     if "application/ld+json" in request.headers.get("accept", ""):
-        dcat_metadata = map_collection_to_dcat(
-            collection, str(request.base_url).rstrip("/")
-        )
+        dcat_metadata = map_collection_to_dcat(collection, base)
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
     return collection_service.to_read_model(collection, include_storage_options, user)
 
@@ -153,6 +186,7 @@ def read_collection_device_by_name(
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
+    base: BaseURLDep,
 ) -> CollectionRead | JSONResponse:
     """Retrieve a specific device-level Collection by name.
 
@@ -163,9 +197,7 @@ def read_collection_device_by_name(
         name=name, user=user, device_name=device_name
     )
     if "application/ld+json" in request.headers.get("accept", ""):
-        dcat_metadata = map_collection_to_dcat(
-            collection, str(request.base_url).rstrip("/")
-        )
+        dcat_metadata = map_collection_to_dcat(collection, base)
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
     return collection_service.to_read_model(collection, include_storage_options, user)
 
@@ -241,6 +273,7 @@ def read_collection_shot_by_name(
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
+    base: BaseURLDep,
 ) -> CollectionRead | JSONResponse:
     """Retrieve a specific shot-scoped Collection by name.
 
@@ -251,9 +284,7 @@ def read_collection_shot_by_name(
         name=name, user=user, device_name=device_name, shot_id=shot_id
     )
     if "application/ld+json" in request.headers.get("accept", ""):
-        dcat_metadata = map_collection_to_dcat(
-            collection, str(request.base_url).rstrip("/")
-        )
+        dcat_metadata = map_collection_to_dcat(collection, base)
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
     return collection_service.to_read_model(collection, include_storage_options, user)
 

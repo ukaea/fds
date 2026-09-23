@@ -14,12 +14,65 @@ The same endpoint serves two representations depending on the `Accept` header:
 JSON-LD is supported on **Device**, **Shot**, **Dataset**, and **Collection** endpoints:
 
 ```http
-GET /api/v1/devices/{device}
-GET /api/v1/devices/{device}/shots/{shot_id}
-GET /api/v1/datasets/id/{id}
-GET /api/v1/devices/{device}/shots/{shot_id}/collections/{name}
+GET /v1/devices/{device}
+GET /v1/devices/{device}/shots/{shot_id}
+GET /v1/datasets/id/{id}
+GET /v1/devices/{device}/shots/{shot_id}/collections/{name}
 Accept: application/ld+json
 ```
+
+## Identifiers
+
+The `@id` of every entity is the name FDS publishes for it: what another catalogue stores when it
+harvests from here, what provenance links point at, and what a DOI resolves to. Those names are
+served, and they carry no API version:
+
+```http
+GET /datasets/{id}
+GET /collections/{id}
+GET /sources/{id}
+GET /activities/{id}
+GET /devices/{device}
+GET /devices/{device}/shots/{shot_id}
+```
+
+A version belongs to the contract between the service and a client, not to a dataset, so putting
+one in the name would give the same dataset a second identifier every time the API moved on. The
+versioned endpoints above are addresses for clients to read and write through; they are never
+published as identifiers.
+
+### Where identifiers point
+
+An identifier names the **service**, not its API. A deployment typically answers on two addresses:
+
+| Address | What is there |
+| --- | --- |
+| `https://example.org` | the service, navigable in a browser |
+| `https://api.example.org` | the REST API, which the browser interface itself uses |
+
+A dataset is therefore named `https://example.org/datasets/13`, and `FDS_BASE_URL` is how
+the API is told the service's address.
+
+!!! warning "Set this in production"
+
+    Left empty, identifiers are built from the address each caller used to reach FDS, which the
+    request carries in its `Host` header: what they dialled, not where they dialled from. That is
+    correct when FDS is reached directly, which is how it runs in development, and unreliable
+    behind anything that terminates TLS: the request then genuinely arrives as plain HTTP from inside the
+    network, and the proxy's assertion that it began as HTTPS is honoured only if that proxy is
+    trusted (`FORWARDED_ALLOW_IPS`). Get that wrong and every identifier is published with the
+    wrong scheme. Nothing fails, the responses are well-formed, and the wrong names are what other
+    catalogues copy.
+
+    FDS logs a warning when it sees a request carrying forwarded headers it did not trust while no
+    address is configured. Setting `FDS_BASE_URL` removes the guess entirely, and is the
+    reason to prefer it over tuning the proxy's trust.
+
+What answers at `https://example.org/datasets/13` is the deployment's business. A browser
+interface serves a page there and passes `application/ld+json` requests through to the API; where
+there is no interface, the API answers those paths itself with the JSON-LD above. This matters for
+DOIs, which must land a reader on something readable: registering one means having an interface
+that answers the identifier.
 
 ## Dataset vs Distribution
 
@@ -36,12 +89,12 @@ When you request `application/ld+json`, FDS re-separates these back into the cor
 {
   "@context": {"dcat": "http://www.w3.org/ns/dcat#", "...": "..."},
   "@type": "dcat:Dataset",
-  "@id": "http://localhost:8000/api/v1/datasets/id/42",
+  "@id": "http://localhost:8000/datasets/42",
   "dct:title": "Equilibrium (Shot 30421)",
   "dcat:distribution": [
     {
       "@type": "dcat:Distribution",
-      "dcat:accessURL": "http://localhost:8000/api/v1/datasets/id/42",
+      "dcat:accessURL": "http://localhost:8000/v1/datasets/id/42",
       "dcat:downloadURL": "s3://fds-data/shots/30421/equilibrium",
       "dcat:mediaType": "application/x-zarr"
     }
@@ -111,7 +164,7 @@ The response:
     "...": "..."
   },
   "@type": "dcat:Catalog",
-  "@id": "http://localhost:8000/api/v1/devices/mast/shots/30421",
+  "@id": "http://localhost:8000/devices/mast/shots/30421",
   "title": "Shot 30421",
   "identifier": "30421",
   "dct:temporal": {
@@ -235,7 +288,7 @@ can resolve what a role means instead of pattern-matching a label:
 ```json
 "prov:qualifiedAssociation": [{
   "@type": "prov:Association",
-  "prov:agent": {"@id": "https://fds.example/api/v1/sources/12"},
+  "prov:agent": {"@id": "https://fds.example/sources/12"},
   "prov:hadRole": {"@id": "fuel:executor"}
 }]
 ```

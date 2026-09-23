@@ -29,7 +29,7 @@ def test_content_negotiation_device(test_client: TestClient, session: Session):
     session.commit()
 
     # 1. Default (JSON)
-    response = test_client.get(f"/api/v1/devices/{device.name}")
+    response = test_client.get(f"/v1/devices/{device.name}")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
     data = response.json()
@@ -38,7 +38,7 @@ def test_content_negotiation_device(test_client: TestClient, session: Session):
 
     # 2. JSON-LD
     response = test_client.get(
-        f"/api/v1/devices/{device.name}", headers={"Accept": "application/ld+json"}
+        f"/v1/devices/{device.name}", headers={"Accept": "application/ld+json"}
     )
     assert response.status_code == 200
     assert "application/ld+json" in response.headers["content-type"]
@@ -60,7 +60,7 @@ def test_creator_in_device_jsonld(test_client: TestClient, session: Session):
     session.commit()
 
     response = test_client.get(
-        f"/api/v1/devices/{device.name}", headers={"Accept": "application/ld+json"}
+        f"/v1/devices/{device.name}", headers={"Accept": "application/ld+json"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -86,7 +86,7 @@ def test_content_negotiation_shot(test_client: TestClient, session: Session):
     session.commit()
 
     response = test_client.get(
-        f"/api/v1/devices/MAST/shots/{shot.id}",
+        f"/v1/devices/MAST/shots/{shot.id}",
         headers={"Accept": "application/ld+json"},
     )
     assert response.status_code == 200
@@ -122,7 +122,7 @@ def test_content_negotiation_shot_open_period(
     session.commit()
 
     response = test_client.get(
-        "/api/v1/devices/MAST/shots/30421",
+        "/v1/devices/MAST/shots/30421",
         headers={"Accept": "application/ld+json"},
     )
     assert response.status_code == 200
@@ -152,7 +152,7 @@ def test_content_negotiation_dataset(test_client: TestClient, session: Session):
     )
 
     # 1. Default (JSON) — by ID
-    response = test_client.get(f"/api/v1/datasets/id/{dataset.id}")
+    response = test_client.get(f"/v1/datasets/id/{dataset.id}")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
     data = response.json()
@@ -161,7 +161,7 @@ def test_content_negotiation_dataset(test_client: TestClient, session: Session):
 
     # 2. JSON-LD — by ID
     response = test_client.get(
-        f"/api/v1/datasets/id/{dataset.id}", headers={"Accept": "application/ld+json"}
+        f"/v1/datasets/id/{dataset.id}", headers={"Accept": "application/ld+json"}
     )
     assert response.status_code == 200
     assert "application/ld+json" in response.headers["content-type"]

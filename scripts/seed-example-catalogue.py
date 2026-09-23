@@ -24,7 +24,7 @@ import time
 
 import httpx
 
-FDS_API_URL_DEFAULT = "http://localhost:8000/api/v1"
+FDS_API_URL_DEFAULT = "http://localhost:8000/v1"
 KC_TOKEN_URL_DEFAULT = "http://localhost:8080/realms/fds/protocol/openid-connect/token"
 
 SHOT_30420_IDS = [

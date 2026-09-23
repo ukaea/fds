@@ -66,7 +66,7 @@ def test_derive_from_registered_dataset(session: Session):
     assert [link.source_dataset_id for link in links] == [upstream_id]
 
     node = map_dataset_to_dcat(derived, BASE)["prov:wasDerivedFrom"][0]
-    assert node["@id"] == f"{BASE}/api/v1/datasets/{upstream_id}"
+    assert node["@id"] == f"{BASE}/datasets/{upstream_id}"
     assert node["@type"] == "prov:Entity"
 
 

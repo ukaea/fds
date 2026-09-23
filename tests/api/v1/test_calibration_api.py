@@ -13,7 +13,7 @@ def test_include_calibration_off_by_default(
 ):
     make_cal_version("gain", ["gain"], COVERS_150, stage=1)
     signal = make_cal_signal(["gain"])
-    resp = test_client.get(f"/api/v1/datasets/id/{signal.id}", headers=admin_user_token)
+    resp = test_client.get(f"/v1/datasets/id/{signal.id}", headers=admin_user_token)
     assert resp.status_code == 200
     assert "calibration" not in resp.json()
 
@@ -26,7 +26,7 @@ def test_include_calibration_surfaces_chain_in_stage_order(
     wavelength = make_cal_version("wavelength", ["signal"], COVERS_150, stage=2)
     signal = make_cal_signal(["signal"])
     resp = test_client.get(
-        f"/api/v1/datasets/id/{signal.id}?include_calibration=true",
+        f"/v1/datasets/id/{signal.id}?include_calibration=true",
         headers=admin_user_token,
     )
     assert resp.status_code == 200
@@ -42,7 +42,7 @@ def test_include_calibration_with_storage_options(
     make_cal_version("gain", ["signal"], COVERS_150, stage=1)
     signal = make_cal_signal(["signal"])
     resp = test_client.get(
-        f"/api/v1/datasets/id/{signal.id}"
+        f"/v1/datasets/id/{signal.id}"
         "?include_calibration=true&include_storage_options=true",
         headers=admin_user_token,
     )

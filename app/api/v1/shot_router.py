@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
-from app.api.deps import CurrentUserDep, ShotServiceDep
+from app.api.deps import BaseURLDep, CurrentUserDep, ShotServiceDep
 from app.models.shot import (
     ShotCreate,
     ShotRead,
@@ -85,6 +85,7 @@ def read_shot(
     shot_id: str,
     user: CurrentUserDep,
     include_annotations: bool = False,
+    base: BaseURLDep,
 ) -> ShotRead | JSONResponse:
     """
     Retrieve a shot specifically for a device context.
@@ -95,7 +96,7 @@ def read_shot(
         return JSONResponse(
             content=shot_service.to_dcat(
                 shot,
-                str(request.base_url).rstrip("/"),
+                base,
                 include_annotations=include_annotations,
             ),
             media_type="application/ld+json",

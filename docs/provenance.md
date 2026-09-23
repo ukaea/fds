@@ -70,7 +70,7 @@ thomson-analysis  actedOnBehalfOf  intershot-scheduler   (delegation, within thi
 Request `application/ld+json` to get the full PROV-O graph as linked data. See [Semantic Metadata → Provenance graph](dcat-jsonld.md#provenance-graph).
 
 ```http
-GET /api/v1/datasets/id/{id}
+GET /v1/datasets/id/{id}
 Accept: application/ld+json
 ```
 

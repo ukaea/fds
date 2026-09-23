@@ -67,9 +67,7 @@ class TestListedTier:
     ):
         _, restricted, _ = catalogue
 
-        response = test_client.get(
-            "/api/v1/datasets?limit=100", headers=admin_user_token
-        )
+        response = test_client.get("/v1/datasets?limit=100", headers=admin_user_token)
         assert response.status_code == 200
 
         line = request_line(log_lines())
@@ -82,7 +80,7 @@ class TestListedTier:
         no permission. Only RESTRICTED hides metadata."""
         public, _, embargoed = catalogue
 
-        test_client.get("/api/v1/datasets?limit=100", headers=admin_user_token)
+        test_client.get("/v1/datasets?limit=100", headers=admin_user_token)
 
         recorded = request_line(log_lines())["restricted_listed"]["dataset"]
         assert public.id not in recorded
@@ -92,7 +90,7 @@ class TestListedTier:
         self, test_client, admin_user_token, catalogue, log_lines
     ):
         """The only signal that would show an unbounded `limit` being abused."""
-        test_client.get("/api/v1/datasets?limit=100", headers=admin_user_token)
+        test_client.get("/v1/datasets?limit=100", headers=admin_user_token)
 
         assert request_line(log_lines())["returned"] == 3
 
@@ -104,7 +102,7 @@ class TestReadTier:
         _, restricted, _ = catalogue
 
         response = test_client.get(
-            f"/api/v1/datasets/id/{restricted.id}", headers=admin_user_token
+            f"/v1/datasets/id/{restricted.id}", headers=admin_user_token
         )
         assert response.status_code == 200
 
@@ -119,7 +117,7 @@ class TestNothingToRecord:
     ):
         public, _, _ = catalogue
 
-        test_client.get(f"/api/v1/datasets/id/{public.id}")
+        test_client.get(f"/v1/datasets/id/{public.id}")
 
         line = request_line(log_lines())
         assert "restricted_read" not in line

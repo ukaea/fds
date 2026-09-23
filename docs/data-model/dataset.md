@@ -51,9 +51,9 @@ A DOI is understood bare (`10.5281/zenodo.123`), prefixed (`doi:10.5281/...`), o
 Derivations can also be maintained afterwards:
 
 ```http
-POST   /api/v1/datasets/{id}/derivations
-GET    /api/v1/datasets/{id}/derivations
-DELETE /api/v1/datasets/{id}/derivations/{derivation_id}
+POST   /v1/datasets/{id}/derivations
+GET    /v1/datasets/{id}/derivations
+DELETE /v1/datasets/{id}/derivations/{derivation_id}
 ```
 
 ### Following the chain
@@ -61,7 +61,7 @@ DELETE /api/v1/datasets/{id}/derivations/{derivation_id}
 `derivations` answers one hop. To get the whole ancestry in one request, ask for the lineage:
 
 ```http
-GET /api/v1/datasets/{id}/lineage
+GET /v1/datasets/{id}/lineage
 ```
 
 Each upstream is nested under the dataset that asserted it. Only registered datasets have upstreams to nest, so an external or described-only upstream is always a leaf.
@@ -174,8 +174,8 @@ A `Dataset` can also link to **reference geometry**. A `Dataset` declares the ge
 The dataset lists accept a `name` filter, an `annotation` filter on the dataset's own `scientific_metadata`, and a `shot_annotation` filter on an annotation carried by its *parent shot*:
 
 ```text
-GET /api/v1/devices/mastu/datasets?name=equilibrium
-GET /api/v1/devices/mastu/datasets?name=equilibrium&shot_annotation=elm
+GET /v1/devices/mastu/datasets?name=equilibrium
+GET /v1/devices/mastu/datasets?name=equilibrium&shot_annotation=elm
 ```
 
 The second form answers a question spanning both levels ("equilibrium datasets from shots that had an ELM train") in one request. Datasets that don't belong to a shot never match a `shot_annotation` filter. Shot- and device-scoped dataset lists accept `annotation` on the same terms. See [Finding annotated records](index.md#finding-annotated-records).

@@ -27,7 +27,7 @@ def test_create_shot_as_operator_success(
 
     # Act: Try to create shot for MAST
     response = test_client.post(
-        "/api/v1/devices/MAST/shots/",
+        "/v1/devices/MAST/shots/",
         headers={"Authorization": "Bearer fake"},
         json={"id": "shot-op-1", "access_level": "public"},
     )
@@ -60,7 +60,7 @@ def test_create_shot_as_operator_wrong_device(
 
     # Act: Try to create shot for MAST
     response = test_client.post(
-        "/api/v1/devices/MAST/shots/",
+        "/v1/devices/MAST/shots/",
         headers={"Authorization": "Bearer fake"},
         json={"id": "shot-op-fail", "access_level": "public"},
     )
@@ -92,7 +92,7 @@ def test_create_shot_no_scopes(
 
     # Act: Try to create shot for MAST
     response = test_client.post(
-        "/api/v1/devices/MAST/shots/",
+        "/v1/devices/MAST/shots/",
         headers={"Authorization": "Bearer fake"},
         json={"id": "shot-fail", "access_level": "public"},
     )
@@ -124,7 +124,7 @@ def test_create_shot_untrusted_issuer_rejected(
     }
 
     response = test_client.post(
-        "/api/v1/devices/MAST/shots/",
+        "/v1/devices/MAST/shots/",
         headers={"Authorization": "Bearer fake"},
         json={"id": "shot-untrusted", "access_level": "public"},
     )
@@ -150,7 +150,7 @@ def test_create_shot_anonymous(
     # Act: Try to create shot WITHOUT token
     # Note: No headers passed
     response = test_client.post(
-        "/api/v1/devices/MAST/shots/",
+        "/v1/devices/MAST/shots/",
         json={"id": "shot-anon-fail", "access_level": "public"},
     )
 

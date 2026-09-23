@@ -66,12 +66,11 @@ def test_restricted_dataset_sub_resources_are_not_public(
 ):
     """Each sub-resource answers 403, matching the dataset's own endpoint."""
     assert (
-        test_client.get(f"/api/v1/datasets/id/{restricted_dataset_id}").status_code
-        == 403
+        test_client.get(f"/v1/datasets/id/{restricted_dataset_id}").status_code == 403
     )
 
     resp = test_client.get(
-        f"/api/v1/datasets/{restricted_dataset_id}/{sub_resource}",
+        f"/v1/datasets/{restricted_dataset_id}/{sub_resource}",
     )
     assert resp.status_code == 403, resp.text
 
@@ -81,7 +80,7 @@ def test_restricted_distribution_url_does_not_leak(
 ):
     """The object-store location is the most damaging of the three leaks, so
     assert on the body as well as the status."""
-    resp = test_client.get(f"/api/v1/datasets/{restricted_dataset_id}/distributions")
+    resp = test_client.get(f"/v1/datasets/{restricted_dataset_id}/distributions")
     assert "s3://bucket/secret.nc" not in resp.text
 
 
@@ -90,7 +89,7 @@ def test_restricted_activity_parameters_do_not_leak(
 ):
     """Run parameters are free-form JSON and may carry anything the producer put
     there, so they must not appear in a refused response."""
-    resp = test_client.get(f"/api/v1/datasets/{restricted_dataset_id}/activity")
+    resp = test_client.get(f"/v1/datasets/{restricted_dataset_id}/activity")
     assert "confidential" not in resp.text
 
 
@@ -103,7 +102,7 @@ def test_admin_can_still_read_sub_resources(
 ):
     """The fix must not close the endpoints to callers who are entitled to them."""
     resp = test_client.get(
-        f"/api/v1/datasets/{restricted_dataset_id}/{sub_resource}",
+        f"/v1/datasets/{restricted_dataset_id}/{sub_resource}",
         headers=admin_user_token,
     )
     assert resp.status_code == 200, resp.text
@@ -125,7 +124,7 @@ def test_public_dataset_sub_resources_stay_anonymous(
     )
     session.commit()
 
-    resp = test_client.get(f"/api/v1/datasets/{dataset.id}/distributions")
+    resp = test_client.get(f"/v1/datasets/{dataset.id}/distributions")
     assert resp.status_code == 200, resp.text
     assert [d["url"] for d in resp.json()] == ["s3://bucket/open.nc"]
 
@@ -134,6 +133,6 @@ def test_missing_dataset_still_404s(test_client: TestClient, admin_user_token: d
     """Enforcement is added ahead of the existence check for activity, so confirm
     a genuinely absent dataset is still reported as missing, not forbidden."""
     resp = test_client.get(
-        "/api/v1/datasets/999999/distributions", headers=admin_user_token
+        "/v1/datasets/999999/distributions", headers=admin_user_token
     )
     assert resp.status_code == 404, resp.text

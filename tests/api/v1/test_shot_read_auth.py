@@ -28,7 +28,7 @@ def test_read_public_shot_anonymous(
     session.commit()
 
     # Act: Read without token
-    response = test_client.get(f"/api/v1/devices/MAST/shots/{shot.id}")
+    response = test_client.get(f"/v1/devices/MAST/shots/{shot.id}")
 
     # Assert: Success
     assert response.status_code == 200
@@ -56,7 +56,7 @@ def test_read_restricted_shot_anonymous(
     session.commit()
 
     # Act: Read without token
-    response = test_client.get(f"/api/v1/devices/JET/shots/{shot.id}")
+    response = test_client.get(f"/v1/devices/JET/shots/{shot.id}")
 
     # Assert: Forbidden (403)
     # Since Service raises ForbiddenError, and global exception handler maps it to 403
@@ -85,7 +85,7 @@ def test_read_restricted_shot_authenticated(
     # Act: Read WITH token (any valid user)
     # non_admin_user_token is a fixture providing a valid bearer
     response = test_client.get(
-        f"/api/v1/devices/ITER/shots/{shot.id}", headers=non_admin_user_token
+        f"/v1/devices/ITER/shots/{shot.id}", headers=non_admin_user_token
     )
 
     # Assert: Success
@@ -114,7 +114,7 @@ def test_list_shots_filtering(
     session.commit()
 
     # Act: List anonymously
-    response = test_client.get("/api/v1/devices/W7X/shots/")
+    response = test_client.get("/v1/devices/W7X/shots/")
 
     # Assert
     assert response.status_code == 200

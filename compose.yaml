@@ -113,7 +113,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - BACKEND_URL=http://fds:8000/api
+      - BACKEND_URL=http://fds:8000
       - AUTH_TRUST_HOST=true
       - AUTH_URL=http://localhost:3000
       - AUTH_SECRET=demo-secret-change-me

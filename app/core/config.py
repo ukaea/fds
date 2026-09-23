@@ -102,6 +102,13 @@ class Config(BaseSettings):
     # Application Settings
     app_name: str = Field(default="fds", validation_alias="FDS_APP_NAME")
     debug: bool = Field(default=False, validation_alias="FDS_DEBUG")
+    # The address this service is reached at, and the base of every identifier it
+    # publishes. Empty means the address each caller used to reach us, which is
+    # right when FDS is reached directly. Set it when the API answers on a
+    # different address from the service, as it does when the service is at
+    # https://example.org and its API at https://api.example.org: a dataset is
+    # then named https://example.org/datasets/13, not after the API.
+    base_url: str = Field(default="", validation_alias="FDS_BASE_URL")
     ENVIRONMENT: str = Field(default="dev", validation_alias="FDS_ENVIRONMENT")
     LOG_LEVEL: str = Field(default="INFO", validation_alias="FDS_LOG_LEVEL")
     # "json", "console", or "" to follow ENVIRONMENT.

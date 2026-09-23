@@ -78,14 +78,14 @@ Shot, Dataset and Collection list endpoints accept an `annotation` parameter tha
 | `name:value` | The property is present with this value | `?annotation=confinement_mode:H-mode` |
 
 ```text
-GET /api/v1/devices/mast/shots?annotation=disruption
-GET /api/v1/devices/mast/shots?annotation=confinement_mode:H-mode
+GET /v1/devices/mast/shots?annotation=disruption
+GET /v1/devices/mast/shots?annotation=confinement_mode:H-mode
 ```
 
 Repeat the parameter to require several annotations at once. They combine with AND, so this returns only shots carrying both:
 
 ```text
-GET /api/v1/devices/mast/shots?annotation=disruption&annotation=elm
+GET /v1/devices/mast/shots?annotation=disruption&annotation=elm
 ```
 
 Only the first `:` separates name from value, so a value may itself contain one (`?annotation=mode:n=1:tearing` looks for the value `n=1:tearing`). A trailing separator with no value is rejected: omit it to filter on presence alone.
@@ -95,7 +95,7 @@ Values are compared against the text you supply or its natural type, so `?annota
 Dataset lists additionally accept `name`, plus `shot_annotation`, which filters on an annotation carried by the dataset's *parent shot* rather than the dataset itself. That answers questions spanning both levels in one request:
 
 ```text
-GET /api/v1/devices/mastu/datasets?name=equilibrium&shot_annotation=elm
+GET /v1/devices/mastu/datasets?name=equilibrium&shot_annotation=elm
 ```
 
 Datasets that belong to no shot never match a `shot_annotation` filter. Annotation names are not validated, so a name that nothing uses returns an empty list rather than an error.
@@ -103,11 +103,11 @@ Datasets that belong to no shot never match a `shot_annotation` filter. Annotati
 ## URL structure
 
 ```text
-GET /api/v1/devices/{device}/shots/{shot_id}/datasets/{name}
-GET /api/v1/devices/{device}/shots/{shot_id}/collections/{name}
-GET /api/v1/devices/{device}/shots/{shot_id}/datasets          # list, one shot
-GET /api/v1/devices/{device}/datasets                          # list, whole device
-GET /api/v1/datasets/id/{id}                                   # stable ID-based lookup
+GET /v1/devices/{device}/shots/{shot_id}/datasets/{name}
+GET /v1/devices/{device}/shots/{shot_id}/collections/{name}
+GET /v1/devices/{device}/shots/{shot_id}/datasets          # list, one shot
+GET /v1/devices/{device}/datasets                          # list, whole device
+GET /v1/datasets/id/{id}                                   # stable ID-based lookup
 ```
 
 Datasets and Collections are siblings at each scope level. A Collection does not appear in a Dataset's path.

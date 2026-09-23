@@ -36,7 +36,7 @@ def test_public_dataset_anonymous_access(
     session.commit()
 
     # Act: Read anonymously
-    response = test_client.get("/api/v1/devices/MAST/shots/100/datasets/mag_field")
+    response = test_client.get("/v1/devices/MAST/shots/100/datasets/mag_field")
 
     # Assert: Success
     assert response.status_code == 200
@@ -70,7 +70,7 @@ def test_restricted_dataset_anonymous_access_forbidden(
     session.commit()
 
     # Act
-    response = test_client.get("/api/v1/devices/JET/shots/200/datasets/core_temp")
+    response = test_client.get("/v1/devices/JET/shots/200/datasets/core_temp")
 
     # Assert: 200 with empty list (restricted resources are hidden, not rejected)
     assert response.status_code == 200
@@ -107,7 +107,7 @@ def test_dataset_inheritance_override(
     session.commit()
 
     # Act: Read anonymously
-    response = test_client.get("/api/v1/devices/ITER/shots/300/datasets/summary_data")
+    response = test_client.get("/v1/devices/ITER/shots/300/datasets/summary_data")
 
     # Assert: Success (200) because Dataset Level (Public) wins
     assert response.status_code == 200
@@ -144,7 +144,7 @@ def test_dataset_inheritance_fallback(
     session.commit()
 
     # Act: Read anonymously
-    response = test_client.get("/api/v1/devices/D3D/shots/400/datasets/raw_data")
+    response = test_client.get("/v1/devices/D3D/shots/400/datasets/raw_data")
 
     # Assert: 200 with empty list (restricted resources are hidden, not rejected)
     assert response.status_code == 200
@@ -192,7 +192,7 @@ def test_list_filtering(
     session.commit()
 
     # Act
-    response = test_client.get("/api/v1/devices/W7X/shots/500/datasets/")
+    response = test_client.get("/v1/devices/W7X/shots/500/datasets/")
 
     # Assert
     assert response.status_code == 200

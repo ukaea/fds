@@ -61,9 +61,9 @@ The code examples throughout these pages use a base-URL variable and, where a ca
 authentication, a bearer token from [Access Control →
 Authentication](access-control.md#authentication):
 
-- **Shell:** `API=http://localhost:8000/api/v1`, `TOKEN=<jwt>`
-- **Python:** `API = "http://localhost:8000/api/v1"`, `headers = {"Authorization": f"Bearer {TOKEN}"}`
-- **JavaScript:** `const API = "http://localhost:8000/api/v1"`, `const TOKEN = "<jwt>"`
+- **Shell:** `API=http://localhost:8000/v1`, `TOKEN=<jwt>`
+- **Python:** `API = "http://localhost:8000/v1"`, `headers = {"Authorization": f"Bearer {TOKEN}"}`
+- **JavaScript:** `const API = "http://localhost:8000/v1"`, `const TOKEN = "<jwt>"`
 
 Public reads need no token; creating data or reading restricted data does.
 

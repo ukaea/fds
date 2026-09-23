@@ -121,11 +121,11 @@ A single request can declare the whole run: what it consumed, what it used, who 
 Each part can also be maintained afterwards, which suits a pipeline that registers a run first and resolves its inputs later:
 
 ```http
-POST   /api/v1/activities/{id}/inputs/{dataset_id}
-POST   /api/v1/activities/{id}/instruments/{source_id}
-POST   /api/v1/activities/{id}/agents/{source_id}?role=orchestrator
-POST   /api/v1/activities/{id}/delegations/{subordinate_source_id}/{responsible_source_id}
-DELETE /api/v1/activities/{id}/inputs/{dataset_id}
+POST   /v1/activities/{id}/inputs/{dataset_id}
+POST   /v1/activities/{id}/instruments/{source_id}
+POST   /v1/activities/{id}/agents/{source_id}?role=orchestrator
+POST   /v1/activities/{id}/delegations/{subordinate_source_id}/{responsible_source_id}
+DELETE /v1/activities/{id}/inputs/{dataset_id}
 ```
 
 `DELETE` works the same way for instruments, agents and delegations. An agent cannot be removed while a delegation still names it; remove the delegation first.

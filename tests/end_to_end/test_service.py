@@ -7,7 +7,7 @@ from tests.end_to_end.conftest import FDS_URL
 
 pytestmark = pytest.mark.end_to_end
 
-ROOT = FDS_URL.removesuffix("/api/v1")
+ROOT = FDS_URL.removesuffix("/v1")
 
 
 def test_health_is_served(http_client: httpx.Client):
@@ -19,7 +19,7 @@ def test_health_is_served(http_client: httpx.Client):
 def test_openapi_describes_the_api(http_client: httpx.Client):
     response = http_client.get(f"{ROOT}/openapi.json")
     assert response.status_code == 200
-    assert "/api/v1/devices/" in response.json()["paths"]
+    assert "/v1/devices/" in response.json()["paths"]
 
 
 def test_public_metadata_is_readable_without_a_token(http_client: httpx.Client, device):
@@ -62,4 +62,4 @@ def test_json_ld_is_served_when_negotiated(
     assert "@context" in body
     # Identifiers are built from the host the request arrived on, so they name
     # whatever address this deployment is reached at.
-    assert body["@id"].endswith(f"/api/v1/devices/{created['name']}")
+    assert body["@id"].endswith(f"/devices/{created['name']}")

@@ -70,7 +70,7 @@ def test_get_dataset_activity(
 ):
     dataset, _, activity, _ = setup
     resp = test_client.get(
-        f"/api/v1/datasets/{dataset.id}/activity",
+        f"/v1/datasets/{dataset.id}/activity",
         headers=admin_user_token,
     )
     assert resp.status_code == 200
@@ -88,7 +88,7 @@ def test_get_dataset_activity_no_activity(
 ):
     _, dataset_no_activity, _, _ = setup
     resp = test_client.get(
-        f"/api/v1/datasets/{dataset_no_activity.id}/activity",
+        f"/v1/datasets/{dataset_no_activity.id}/activity",
         headers=admin_user_token,
     )
     assert resp.status_code == 404
@@ -98,7 +98,7 @@ def test_get_dataset_activity_dataset_not_found(
     test_client: TestClient,
     admin_user_token: dict[str, str],
 ):
-    resp = test_client.get("/api/v1/datasets/9999/activity", headers=admin_user_token)
+    resp = test_client.get("/v1/datasets/9999/activity", headers=admin_user_token)
     assert resp.status_code == 404
 
 
@@ -109,7 +109,7 @@ def test_get_dataset_source(
 ):
     dataset, _, _, source = setup
     resp = test_client.get(
-        f"/api/v1/datasets/{dataset.id}/source",
+        f"/v1/datasets/{dataset.id}/source",
         headers=admin_user_token,
     )
     assert resp.status_code == 200
@@ -126,7 +126,7 @@ def test_get_dataset_source_no_activity(
 ):
     _, dataset_no_activity, _, _ = setup
     resp = test_client.get(
-        f"/api/v1/datasets/{dataset_no_activity.id}/source",
+        f"/v1/datasets/{dataset_no_activity.id}/source",
         headers=admin_user_token,
     )
     assert resp.status_code == 404
@@ -136,5 +136,5 @@ def test_get_dataset_source_dataset_not_found(
     test_client: TestClient,
     admin_user_token: dict[str, str],
 ):
-    resp = test_client.get("/api/v1/datasets/9999/source", headers=admin_user_token)
+    resp = test_client.get("/v1/datasets/9999/source", headers=admin_user_token)
     assert resp.status_code == 404

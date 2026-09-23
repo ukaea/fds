@@ -160,7 +160,7 @@ uv run pytest -m end_to_end
 They assert only over HTTP, so the same suite runs against a deployment as its smoke test:
 
 ```bash
-FDS_URL=https://api.example.org/api/v1 FDS_TOKEN=<jwt> uv run pytest -m end_to_end
+FDS_URL=https://api.example.org/v1 FDS_TOKEN=<jwt> uv run pytest -m end_to_end
 ```
 
 Everything they create, they delete. Without a token the tests that write are skipped.

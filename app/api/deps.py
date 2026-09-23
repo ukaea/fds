@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from app.api.base_url import get_base_url
 from app.auth.security import get_current_user
 from app.core.db import SessionDep
 from app.models.identity import AuthenticatedUser
@@ -60,3 +61,4 @@ DistributionServiceDep = Annotated[
 ]
 
 CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]
+BaseURLDep = Annotated[str, Depends(get_base_url)]
