@@ -15,13 +15,7 @@ function formatScope(col: Collection, deviceLabel: (name: string) => string): st
 }
 
 function collectionHref(col: Collection): string {
-  if (col.device_name && col.shot_id) {
-    return `/devices/${col.device_name}/shots/${col.shot_id}/collections/${col.name}`;
-  }
-  if (col.device_name) {
-    return `/devices/${col.device_name}/collections/${col.name}`;
-  }
-  return `/collections/${col.name}`;
+  return `/collections/${col.id}`;
 }
 
 // Fetches and renders collections for a single source

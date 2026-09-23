@@ -177,7 +177,7 @@ export default function SourcesPage() {
 function SourceCard({ source }: { source: Source }) {
   return (
     <Link
-      href={`/sources/${source.name}`}
+      href={`/sources/${source.id}`}
       className="card p-6 group hover:bg-muted transition-colors block"
     >
       <div className="flex items-start gap-3 mb-3">

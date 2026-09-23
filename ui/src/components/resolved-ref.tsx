@@ -25,12 +25,8 @@ export function ResolvedRef({ version }: { version: Dataset }) {
       {coverage && <p className="text-xs text-muted-foreground font-mono mt-1">{coverage}</p>}
     </div>
   );
-  if (!version.device_name || !version.id) return inner;
-  // Shot-scoped datasets (a shot-frame annotation) live under their shot; a
-  // device-level version has no shot to nest under.
-  const href = version.shot_id
-    ? `/devices/${version.device_name}/shots/${version.shot_id}/datasets/${version.id}`
-    : `/devices/${version.device_name}/datasets/${version.id}`;
+  if (!version.id) return inner;
+  const href = `/datasets/${version.id}`;
   return (
     <Link href={href} className="block">
       {inner}

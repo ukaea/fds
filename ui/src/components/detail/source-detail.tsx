@@ -2,10 +2,9 @@
 
 import useSWR from 'swr';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
 import { Activity, ArrowLeft, ChevronRight, Server, Globe, Link2 } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Source, SourceKind, Device } from '@/lib/types';
+import { Source, SourceKind } from '@/lib/types';
 
 // How each Source kind projects into the PROV-O graph. Instruments
 // are entities (tools an activity uses), not agents.
@@ -16,24 +15,13 @@ const KIND_INFO: Record<SourceKind, { label: string; prov: string; isAgent: bool
   organization: { label: 'Organization', prov: 'prov:Organization', isAgent: true },
 };
 
-export default function SourceDetailPage() {
-  const params = useParams();
-  const sourceName = params.name as string;
-
+export default function SourceDetail({ id }: { id: string }) {
   const { data: source, error, isLoading } = useSWR<Source>(
-    sourceName ? `${API_BASE}/sources/${sourceName}` : null,
+    id ? `${API_BASE}/sources/id/${id}` : null,
     fetcher
   );
 
-  // Fetch all devices to resolve device_id -> device name
-  const { data: devices } = useSWR<Device[]>(`${API_BASE}/devices/`, fetcher);
-
-  // Find the device name for this source (if device-linked)
-  // We need to match device by ID - since Device type doesn't have ID in the frontend type,
-  // we'll fetch device sources for each device to find the match.
-  // Actually, the simplest approach: fetch all devices and check which one has this source.
-  // But the SourceRead model only returns device_id, not device_name.
-  // For now, we show the device_id info and can enhance later.
+  const sourceName = source?.name ?? id;
 
   if (error) {
     return (

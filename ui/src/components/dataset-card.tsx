@@ -23,10 +23,8 @@ export function formatMediaType(mediaType?: string): string {
  * its shot, a device-level one under its device, and a global one has no page.
  */
 export function datasetHref(dataset: Dataset): string | null {
-  if (dataset.id == null || !dataset.device_name) return null;
-  return dataset.shot_id
-    ? `/devices/${dataset.device_name}/shots/${dataset.shot_id}/datasets/${dataset.id}`
-    : `/devices/${dataset.device_name}/datasets/${dataset.id}`;
+  if (dataset.id == null) return null;
+  return `/datasets/${dataset.id}`;
 }
 
 /**
