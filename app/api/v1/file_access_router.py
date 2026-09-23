@@ -14,7 +14,11 @@ def get_data_access_credentials(
 ) -> CredentialManifest:
     """
     Vends temporary storage credentials for accessing datasets directly.
-    Returns a dictionary keyed by provider (e.g. "s3", "azure").
+
+    Returns a manifest whose ``resource_map`` is keyed by dataset URL, each value
+    holding the credential for that URL. Narrow what is vended for with
+    ``device_name``, ``shot_id`` or ``data_urls``; an omitted body vends for every
+    dataset the caller is allowed to read.
     """
     if request is None:
         request = CredentialRequest()
