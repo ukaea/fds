@@ -571,10 +571,14 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             )
         ).all()
         if dependants:
-            listed = ", ".join(str(d) for d in sorted(set(dependants)))
+            unique = sorted(set(dependants))
+            listed = ", ".join(str(d) for d in unique)
+            one = len(unique) == 1
+            noun = "dataset" if one else "datasets"
+            derivation = "That derivation" if one else "Those derivations"
             raise ConflictError(
-                f"Dataset {id} is an asserted source for dataset(s) {listed}. "
-                "Delete those derivations first."
+                f"Dataset {id} is an asserted source for {noun} {listed}. "
+                f"{derivation} would be deleted with it."
             )
 
     def get_by_name_in_context(
