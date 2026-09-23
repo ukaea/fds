@@ -234,24 +234,77 @@ exchange without returning credentials for a real store.
 
 ## Bulk access: the Credential Manifest
 
-For high-throughput workflows (thousands of datasets), requesting one token per dataset would create an API bottleneck and hit IAM policy size limits. FDS resolves this with a **Credential Manifest**:
+Requesting credentials one dataset at a time costs a round trip per dataset, and one set of
+credentials cannot cover an unlimited number of objects — an IAM session policy has a size limit, so
+there is a ceiling on how many prefixes a single token can name. For workflows that open many
+datasets at once, `POST /v1/file-access/credentials` vends for a whole set in one request.
 
-The response contains two parts:
+The request body selects what to vend for. Every field is optional, and omitting the body entirely
+vends for everything the caller is allowed to read.
 
-1. **Tokens list**: a deduplicated set of time-limited tokens, chunked to stay within IAM limits.
-2. **Resource map**: a lookup table mapping each dataset URI to the index of the token required to access it.
+=== "curl"
 
-Worker nodes (Dask, Ray, Spark, etc.) receive the lightweight manifest and independently select the right token for each dataset they process. No further API calls are needed.
+    ```bash
+    curl -s -X POST -H "Authorization: Bearer $TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"device_name": "mast", "shot_id": "30421"}' \
+      "$API/file-access/credentials"
+    ```
 
-Each value in the map is a **0-based position in the `Tokens` list**:
+=== "Python (requests)"
 
+    ```python
+    manifest = requests.post(
+        f"{API}/file-access/credentials",
+        headers=headers,
+        json={"device_name": "mast", "shot_id": "30421"},
+    ).json()
+    ```
+
+Besides `device_name` and `shot_id`, the body accepts `data_urls` to name specific dataset URLs.
+
+The response is a single `resource_map`, keyed by dataset URL, whose value is the credential for
+that URL:
+
+```json
+{
+  "resource_map": {
+    "s3://mast/level2/shots/30421.zarr/thomson_scattering": {
+      "access_key_id": "ASIA...",
+      "secret_access_key": "...",
+      "session_token": "...",
+      "expiration": "2026-09-23T16:04:05Z",
+      "endpoint_url": "https://s3.echo.stfc.ac.uk",
+      "region": null
+    },
+    "s3://mast/level2/shots/30421.zarr/equilibrium": { "...": "..." }
+  }
+}
 ```
-Tokens:  [token_A, token_B]      # index 0 → token_A, index 1 → token_B
-Map:     {ds_uri_1 → 0, ds_uri_2 → 0, ds_uri_3 → 1}
-```
 
-So `ds_uri_1` and `ds_uri_2` both resolve to `token_A`, and `ds_uri_3` to `token_B`.
+Worker nodes (Dask, Ray, Spark) receive the manifest and each look up the URL they are about to
+open. No further API calls are needed.
 
+Azure and GCS datasets carry their own credential fields — `account_name` and `sas_token`, `token`
+and `expiry` respectively — rather than the S3 set above. One manifest can mix them, because FDS
+resolves a provider per storage endpoint.
+
+### What the server does with the request
+
+FDS groups the requested URLs by storage endpoint and mints in chunks, so the number of calls it
+makes to each storage provider grows with the number of chunks rather than with the number of
+datasets, and each token's policy names only the prefixes in its own chunk. That is server-side
+behaviour, and the manifest does not expose it: a credential covering several datasets is repeated
+in full under each of their URLs, so the response grows linearly with the number of datasets
+requested.
+
+!!! note "A manifest entry is not a `storage_options` value"
+
+    The two vending paths return different shapes. `include_storage_options=true` on a dataset
+    returns opener-ready keyword arguments — `key`, `secret`, `token`, `client_kwargs` — which go
+    straight into `xr.open_dataset(..., storage_options=...)`. A manifest entry is the credential
+    itself, in the fields shown above. A worker reading from a manifest has to map those onto
+    whatever its opener expects; it cannot pass a manifest entry as `storage_options` unchanged.
 
 ## What FDS does NOT do
 
