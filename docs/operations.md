@@ -27,6 +27,33 @@ things about its behaviour bear on that:
 
 Any web front end is a separate deployable that calls the API.
 
+## Container images
+
+Two images are published to the GitHub Container Registry on every push to `main` and on every
+release tag:
+
+| Image | What it is |
+| --- | --- |
+| `ghcr.io/ukaea/fds` | The API. |
+| `ghcr.io/ukaea/fds-ui` | A brand-neutral reference web UI. |
+
+FDS serves JSON, never HTML. A catalogue people can browse, and the readable landing page a DOI
+has to resolve to, come from a web front end running alongside FDS. The reference UI is published
+so that a deployment has one without building it first, and so there is a working example to base
+your own on. Only a deployment serving machines alone can do without it.
+
+Each carries four kinds of tag:
+
+| Tag | Moves? | Use it for |
+| --- | --- | --- |
+| `sha-abc1234` | never | Deployments. It names one build and always will. |
+| `1.4.0` | never | Deployments pinned to a release. |
+| `latest` | with each release tag | Trying the newest release out. |
+| `main` | with every merge | Development only. |
+
+Pin a deployment to `sha-<short>` or a version, never to `main` or `latest`: a rollback is only
+possible if the tag you rolled back from still names the build you were running.
+
 ## Database
 
 FDS runs on PostgreSQL and has no other backend. Point it at one with `FDS_DB_HOST` and friends,
