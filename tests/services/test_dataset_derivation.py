@@ -66,7 +66,7 @@ def test_derive_from_registered_dataset(session: Session):
     assert [link.source_dataset_id for link in links] == [upstream_id]
 
     node = map_dataset_to_dcat(derived, BASE)["prov:wasDerivedFrom"][0]
-    assert node["@id"] == f"{BASE}/v1/datasets/id/{upstream_id}"
+    assert node["@id"] == f"{BASE}/datasets/{upstream_id}"
     assert node["@type"] == "prov:Entity"
 
 
@@ -164,7 +164,7 @@ def test_qualified_derivation_names_the_activity(session: Session):
     doc = map_dataset_to_dcat(derived, BASE)
     qualified = doc["prov:qualifiedDerivation"][0]
     assert qualified["prov:hadActivity"]["@id"].endswith(f"/activities/{_id(activity)}")
-    assert qualified["prov:entity"]["@id"].endswith(f"/datasets/id/{upstream_id}")
+    assert qualified["prov:entity"]["@id"].endswith(f"/datasets/{upstream_id}")
 
 
 def test_no_derivations_emits_nothing(session: Session):

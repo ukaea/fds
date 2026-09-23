@@ -100,6 +100,9 @@ def test_every_published_identifier_resolves(
     published = identifiers(response.json())
     # The dataset, its activity, the source that ran it, and its upstream.
     assert len(published) >= 4, published
+    # None of them names an API route: a version belongs to the contract, not
+    # to the thing being named.
+    assert not any("/v1/" in identifier for identifier in published), published
 
     for identifier in sorted(published):
         resolved = http_client.get(identifier, headers=admin_headers)
@@ -108,3 +111,5 @@ def test_every_published_identifier_resolves(
         # A name lookup answers with a list, and an empty one at that: the
         # identifier would look fine and name nothing.
         assert isinstance(body, dict), f"{identifier} did not resolve to one resource"
+        assert resolved.headers["content-type"].startswith("application/ld+json")
+        assert body["@id"] == identifier, "resolved to a different identifier"

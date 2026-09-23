@@ -377,9 +377,7 @@ def test_collection_jsonld_members_as_prov_had_member(
     assert response.status_code == 200
     data = response.json()
     assert "prov:Collection" in data["@type"]
-    assert data["prov:hadMember"] == [
-        {"@id": f"http://testserver/v1/datasets/id/{ds_id}"}
-    ]
+    assert data["prov:hadMember"] == [{"@id": f"http://testserver/datasets/{ds_id}"}]
 
 
 def test_collection_jsonld_includes_root_url_distribution(

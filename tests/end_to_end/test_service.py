@@ -62,4 +62,4 @@ def test_json_ld_is_served_when_negotiated(
     assert "@context" in body
     # Identifiers are built from the host the request arrived on, so they name
     # whatever address this deployment is reached at.
-    assert body["@id"].endswith(f"/v1/devices/{created['name']}")
+    assert body["@id"].endswith(f"/devices/{created['name']}")

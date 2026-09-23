@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import (
     ActivityServiceDep,
+    BaseURLDep,
     CurrentUserDep,
     DatasetServiceDep,
     DistributionServiceDep,
@@ -236,6 +237,7 @@ def read_dataset_by_id(
     include_geometry: bool = False,
     include_calibration: bool = False,
     include_annotations: bool = False,
+    base: BaseURLDep,
 ) -> DatasetRead | JSONResponse:
     """
     Retrieve a single dataset by its internal integer ID.
@@ -250,7 +252,7 @@ def read_dataset_by_id(
     if "application/ld+json" in request.headers.get("accept", ""):
         dcat_metadata = dataset_service.to_dcat(
             dataset,
-            str(request.base_url).rstrip("/"),
+            base,
             include_geometry=include_geometry,
             include_calibration=include_calibration,
             include_annotations=include_annotations,

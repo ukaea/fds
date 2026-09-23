@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
-from app.api.deps import CurrentUserDep, DeviceServiceDep, SourceServiceDep
+from app.api.deps import (
+    BaseURLDep,
+    CurrentUserDep,
+    DeviceServiceDep,
+    SourceServiceDep,
+)
 from app.models.device import DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.source import SourceCreate, SourceRead
 from app.services.jsonld import map_device_to_dcat
@@ -45,6 +50,7 @@ def read_device(
     device_service: DeviceServiceDep,
     device_name: str,
     user: CurrentUserDep,
+    base: BaseURLDep,
 ) -> DeviceRead | JSONResponse:
     """
     Retrieve a single device by name.
@@ -55,7 +61,7 @@ def read_device(
 
     # Content Negotiation
     if "application/ld+json" in request.headers.get("accept", ""):
-        dcat_metadata = map_device_to_dcat(device, str(request.base_url).rstrip("/"))
+        dcat_metadata = map_device_to_dcat(device, base)
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
 
     return device_service.to_read_model(device)

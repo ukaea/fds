@@ -136,7 +136,7 @@ def test_jsonld_exposes_derivation(test_client: TestClient, admin_user_token: di
     )
     assert resp.status_code == 200
     sources = resp.json()["prov:wasDerivedFrom"]
-    assert sources[0]["@id"].endswith(f"/datasets/id/{upstream}")
+    assert sources[0]["@id"].endswith(f"/datasets/{upstream}")
 
 
 def test_lineage_endpoint_nests_the_chain(

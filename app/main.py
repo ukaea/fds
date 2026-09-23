@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app import __version__
 from app.api.exception_handlers import add_exception_handlers
+from app.api.identifiers import router as identifier_router
 from app.api.middleware import AuditMiddleware
 from app.api.v1 import (
     activity_router,
@@ -33,6 +34,7 @@ def health() -> dict[str, str]:
     return {"status": "ok", "version": __version__}
 
 
+app.include_router(identifier_router)
 app.include_router(device_router.router, prefix="/v1/devices", tags=["devices"])
 app.include_router(shot_router.router, prefix="/v1", tags=["shots"])
 app.include_router(source_router.router, prefix="/v1/sources", tags=["sources"])

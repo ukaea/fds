@@ -96,7 +96,7 @@ def test_map_shot_to_dcat_includes_scientific_metadata():
     )
     ld = map_shot_to_dcat(shot, BASE)
     assert ld["@type"] == "dcat:Catalog"
-    assert ld["@id"] == f"{BASE}/v1/devices/MAST/shots/30420"
+    assert ld["@id"] == f"{BASE}/devices/MAST/shots/30420"
     props = ld.get("schema:additionalProperty")
     assert props is not None
     assert len(props) == 2

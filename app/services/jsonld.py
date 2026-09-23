@@ -8,6 +8,7 @@ from app.models.device import Device, DeviceRead
 from app.models.distribution import Distribution
 from app.models.shot import Shot, ShotRead
 from app.models.source import Source, SourceKind
+from app.services.identifiers import Identifiers
 
 if TYPE_CHECKING:
     from app.models.activity import Activity
@@ -91,13 +92,12 @@ def _build_used(activity: "Activity", base_url: str) -> tuple[list[Any], list[An
     Returns ``(used, qualified_usage)``. ``used`` is the plain shortcut list of
     entity references; ``qualified_usage`` carries the role on each.
     """
+    names = Identifiers(base_url)
     entries: list[tuple[str, str]] = []  # (entity @id, FuEL role concept)
     for ds in getattr(activity, "input_datasets", None) or []:
-        entries.append((f"{base_url}/v1/datasets/id/{ds.id}", FUEL_INPUT_ROLE))
+        entries.append((names.dataset(ds.id), FUEL_INPUT_ROLE))
     for instrument in getattr(activity, "instruments", None) or []:
-        entries.append(
-            (f"{base_url}/v1/sources/id/{instrument.id}", FUEL_INSTRUMENT_ROLE)
-        )
+        entries.append((names.source(instrument.id), FUEL_INSTRUMENT_ROLE))
 
     used = [{"@id": uri, "@type": "prov:Entity"} for uri, _ in entries]
     qualified_usage = [
@@ -122,9 +122,10 @@ def _agent_node(
     ``acted_on_behalf_of`` is the list of agent URIs this agent acted on behalf of
     within the activity, emitted as ``prov:actedOnBehalfOf`` when present.
     """
+    names = Identifiers(base_url)
     agent_type = _AGENT_TYPE_BY_KIND[source.kind]
     node: dict[str, Any] = {
-        "@id": f"{base_url}/v1/sources/id/{source.id}",
+        "@id": names.source(source.id),
         "@type": agent_type,
         "dct:title": source.name,
         "dct:description": source.description,
@@ -143,11 +144,12 @@ def _build_associations(
     ``prov:qualifiedAssociation`` list (executor + additional roled agents),
     threading ``prov:actedOnBehalfOf`` onto any agent that delegated.
     """
+    names = Identifiers(base_url)
     # subordinate source id -> URIs of the agents it acted on behalf of
     behalf: dict[int, list[str]] = {}
     for link in getattr(activity, "delegation_links", None) or []:
         behalf.setdefault(link.subordinate_source_id, []).append(
-            f"{base_url}/v1/sources/id/{link.responsible_source_id}"
+            names.source(link.responsible_source_id)
         )
 
     primary: dict[str, Any] | None = None
@@ -198,10 +200,11 @@ def _derivation_source_node(derivation: Any, base_url: str) -> dict[str, Any]:
     described is a blank node with just its title and description, which is
     honest about being unresolvable.
     """
+    names = Identifiers(base_url)
     node: dict[str, Any] = {"@type": "prov:Entity"}
 
     if derivation.source_dataset_id is not None:
-        node["@id"] = f"{base_url}/v1/datasets/id/{derivation.source_dataset_id}"
+        node["@id"] = names.dataset(derivation.source_dataset_id)
     elif derivation.source_identifier:
         uri = _as_uri(derivation.source_identifier)
         if uri:
@@ -381,7 +384,8 @@ def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, 
     """
     Maps a Device to a dcat:Catalog.
     """
-    device_uri = f"{base_url}/v1/devices/{device.name}"
+    names = Identifiers(base_url)
+    device_uri = names.device(device.name)
 
     data = {
         "@context": METADATA_CONTEXT,
@@ -419,7 +423,11 @@ def map_shot_to_dcat(
     for datasets with that ``shot_id``, there can be any number of them, and the
     Device catalog does not list its contents either.
     """
-    shot_uri = f"{base_url}/v1/devices/{shot.device_name}/shots/{shot.id}"
+    names = Identifiers(base_url)
+    # ShotRead types device_name as optional though a shot cannot exist without
+    # one, it being half the primary key. Guarded so a malformed read model
+    # cannot mint an identifier naming a device called "None".
+    shot_uri = names.shot(shot.device_name, shot.id) if shot.device_name else None
     data: dict[str, Any] = {
         "@context": METADATA_CONTEXT,
         "@type": "dcat:Catalog",
@@ -478,12 +486,9 @@ def map_dataset_to_dcat(
     via a ``dcat:qualifiedRelation`` carrying a FuEL role — ``fuel:geometry`` or
     ``fuel:calibration`` (calibration one per chain stage, in order).
     """
-    # Construct URI
-    # Note: Using the API path as the URI
+    names = Identifiers(base_url)
     dataset_uri = (
-        f"{base_url}/v1/datasets/id/{dataset.id}"
-        if hasattr(dataset, "id") and dataset.id
-        else None
+        names.dataset(dataset.id) if hasattr(dataset, "id") and dataset.id else None
     )
 
     data = {
@@ -564,7 +569,7 @@ def map_dataset_to_dcat(
             _derivation_source_node(d, base_url) for d in derivations
         ]
         if activity:
-            activity_uri = f"{base_url}/v1/activities/{activity.id}"
+            activity_uri = names.activity(activity.id)
             data["prov:qualifiedDerivation"] = [
                 {
                     "@type": "prov:Derivation",
@@ -614,6 +619,30 @@ def map_dataset_to_dcat(
     return {k: v for k, v in data.items() if v is not None}
 
 
+def map_source_to_dcat(source: "Source", base_url: str) -> dict[str, Any]:
+    """A Source as a standalone PROV-O agent document.
+
+    The same node that is embedded in the provenance of anything this Source
+    produced, given a context so that the identifier FDS publishes for it
+    resolves to a description rather than to nothing.
+    """
+    return {"@context": METADATA_CONTEXT, **_agent_node(source, base_url)}
+
+
+def map_activity_to_dcat(activity: "Activity", base_url: str) -> dict[str, Any]:
+    """An Activity as a standalone PROV-O activity document.
+
+    As with a Source, this is the node embedded elsewhere, given a context and
+    its own identifier so the published identifier resolves.
+    """
+    names = Identifiers(base_url)
+    return {
+        "@context": METADATA_CONTEXT,
+        "@id": names.activity(activity.id),
+        **_build_activity_node(activity, base_url),
+    }
+
+
 def _build_activity_node(activity: "Activity", base_url: str) -> dict[str, Any]:
     """Build the embedded ``prov:Activity`` node."""
     prov_node: dict[str, Any] = {
@@ -651,8 +680,9 @@ def _qualified_relation(
 
 def _map_reference_version(version: "DatasetRead", base_url: str) -> dict[str, Any]:
     """A resolved reference version (geometry or calibration) as a linked node."""
+    names = Identifiers(base_url)
     node: dict[str, Any] = {
-        "@id": f"{base_url}/v1/datasets/id/{version.id}",
+        "@id": names.dataset(version.id),
         "@type": "dcat:Dataset",
         "dct:title": version.title or version.name,
     }
@@ -700,10 +730,9 @@ def map_collection_to_dcat(
     ``prov:Collection``. The producing Activity, if present, is embedded as a
     ``prov:wasGeneratedBy`` node, consistent with ``map_dataset_to_dcat``.
     """
+    names = Identifiers(base_url)
     collection_id = getattr(collection, "id", None)
-    collection_uri = (
-        f"{base_url}/v1/collections/id/{collection_id}" if collection_id else None
-    )
+    collection_uri = names.collection(collection_id) if collection_id else None
 
     data: dict[str, Any] = {
         "@context": METADATA_CONTEXT,
@@ -747,7 +776,7 @@ def map_collection_to_dcat(
     member_datasets: list[Any] = getattr(collection, "datasets", []) or []
     dataset_refs = [
         {
-            "@id": f"{base_url}/v1/datasets/id/{ds.id}",
+            "@id": names.dataset(ds.id),
             "@type": "dcat:Dataset",
             "dct:title": ds.title or ds.name,
         }
@@ -761,7 +790,7 @@ def map_collection_to_dcat(
     child_collections: list[Any] = getattr(collection, "child_collections", []) or []
     catalog_refs = [
         {
-            "@id": f"{base_url}/v1/collections/id/{c.id}",
+            "@id": names.collection(c.id),
             "@type": "dcat:Catalog",
             "dct:title": c.title or c.name,
         }
