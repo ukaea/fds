@@ -1,15 +1,20 @@
 # FDS and the services it depends on, for local development and the end-to-end
 # tests.
 #
-#   docker compose up -d --build          FDS on :8000, PostgreSQL on :5432
-#   docker compose --profile idp up -d    and Keycloak on :8080, for the UI
-#   docker compose --profile ui up -d     and the reference UI on :3000
+#   docker compose up -d --build          the reference UI on :3000, FDS on
+#                                         :8000, PostgreSQL on :5432
+#   docker compose --profile idp up -d    and Keycloak on :8080, to log in
+#
+# The UI runs by default because an FDS people can use is the ordinary case: FDS
+# serves JSON and never HTML, so the identifiers it publishes are answered as
+# landing pages by whatever serves the service address, which here is the UI.
 #
 # No identity provider runs by default. The tests and any automation sign their
 # own tokens against dev/local-issuer.jwks.json (see the README), so Keycloak is
 # only needed to log in through the UI, or to check that a realm's mappers
-# produce tokens FDS accepts. No object store runs either: credential vending
-# needs a real S3-compatible endpoint with STS, which is a deployment concern.
+# produce tokens FDS accepts. Browsing public records needs no login. No object
+# store runs either: credential vending needs a real S3-compatible endpoint with
+# STS, which is a deployment concern.
 #
 # A fixed project name so every worktree talks to the same stack; only one runs
 # at a time on these ports.
@@ -37,6 +42,11 @@ services:
       # container network, while the issuer stays the browser-facing URL.
       - FDS_TRUSTED_IDPS=[{"issuer":"urn:fds:local","jwks_file":"/fds/dev/local-issuer.jwks.json"},{"issuer":"http://localhost:8080/realms/fds","jwks_uri":"http://idp:8080/realms/fds/protocol/openid-connect/certs","allowed_scopes":["*"]}]
       - FDS_OIDC_AUDIENCE=fds-client
+      # The address the service is reached at, which is the UI: it serves the
+      # identifier paths as landing pages and hands JSON-LD to anything asking
+      # for it. Without this FDS would name itself after whichever host the
+      # request arrived on, which for the UI's own calls is http://fds:8000.
+      - FDS_BASE_URL=http://localhost:3000
       - FDS_DB_HOST=postgres
       - FDS_DB_USER=fds
       - FDS_DB_PASSWORD=fds
@@ -78,7 +88,7 @@ services:
 
   idp:
     # Also started by the ui profile: logging in goes through it.
-    profiles: [idp, ui]
+    profiles: [idp]
     logging:
       # A file driver, not podman's journald default, which accepts these
       # options and silently ignores them. json-file is the name both podman
@@ -106,7 +116,6 @@ services:
       options:
         max-size: 10m
         max-file: "3"
-    profiles: [ui]
     build:
       context: ./ui
       dockerfile: Dockerfile
@@ -126,8 +135,8 @@ services:
       - AUTH_KEYCLOAK_METADATA_URL=http://idp:8080/realms/fds/.well-known/openid-configuration
       - AUTH_KEYCLOAK_PUBLIC_URL=http://localhost:8080/realms/fds/protocol/openid-connect/auth
     depends_on:
-      - fds
-      - idp
+      fds:
+        condition: service_healthy
 
 volumes:
   pgdata:

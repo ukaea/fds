@@ -127,16 +127,19 @@ jobs:
       - name: Start the stack
         run: docker compose up -d --build
 
-      - name: Wait for FDS to become ready
+      # The UI as well as the API: identifiers name the service address, which
+      # the UI serves, so the suite dereferences them through it.
+      - name: Wait for the stack to become ready
         run: |
           for _ in $(seq 1 30); do
-            if curl -fsS http://localhost:8000/health > /dev/null; then
-              echo "FDS is up"
+            if curl -fsS http://localhost:8000/health > /dev/null \
+              && curl -fsS http://localhost:3000/ > /dev/null; then
+              echo "The stack is up"
               exit 0
             fi
             sleep 5
           done
-          echo "FDS did not become ready in time"
+          echo "The stack did not become ready in time"
           docker compose logs --no-color
           exit 1
 
