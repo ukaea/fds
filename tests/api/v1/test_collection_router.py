@@ -263,7 +263,8 @@ def test_add_and_remove_dataset_membership(
         f"/v1/collections/{col_id}/datasets/{ds_id}",
         headers=admin_user_token,
     )
-    assert add_resp.status_code == 204
+    assert add_resp.status_code == 201
+    assert add_resp.json() == {"collection_id": col_id, "dataset_id": ds_id}
 
     # Verify inlined in GET response
     get_resp = test_client.get("/v1/collections/run", headers=admin_user_token)
@@ -310,7 +311,8 @@ def test_add_and_remove_child_collection(
         f"/v1/collections/{parent_id}/collections/{child_id}",
         headers=admin_user_token,
     )
-    assert add_resp.status_code == 204
+    assert add_resp.status_code == 201
+    assert add_resp.json() == {"parent_id": parent_id, "child_id": child_id}
 
     # Verify child appears in parent's read model
     get_resp = test_client.get("/v1/collections/parent", headers=admin_user_token)
