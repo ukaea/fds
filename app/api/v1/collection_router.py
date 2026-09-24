@@ -89,7 +89,7 @@ def export_collections(
         )
     )
     for row in rows:
-        yield row
+        yield row.model_dump_json(exclude_none=True).encode("utf-8")
 
 
 @router.get(
