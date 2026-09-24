@@ -44,6 +44,20 @@ class CollectionMember(SQLModel, table=True):
     child_id: int = Field(foreign_key="collection.id", primary_key=True)
 
 
+class CollectionDatasetRead(SQLModel):
+    """A Dataset membership link on a Collection (``dcat:dataset``)."""
+
+    collection_id: int
+    dataset_id: int
+
+
+class CollectionMemberRead(SQLModel):
+    """A child-Collection membership link (``dcat:catalog``)."""
+
+    parent_id: int
+    child_id: int
+
+
 class CollectionBase(
     DescriptiveMixin, ScientificMetadataMixin, TimestampMixin, SQLModel
 ):
