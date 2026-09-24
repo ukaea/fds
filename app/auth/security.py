@@ -26,13 +26,15 @@ class TokenClaims(TypedDict):
 
     `scp` and `scope` are both supported to accommodate different IdP claim
     conventions. Either claim may be represented as a space-delimited string or
-    a list of strings.
+    a list of strings. `roles` carries Microsoft Entra ID app roles, which are
+    merged with the scopes.
     """
 
     iss: str
     sub: NotRequired[str]
     scp: NotRequired[str | list[str]]
     scope: NotRequired[str | list[str]]
+    roles: NotRequired[list[str]]
 
 
 async def get_token_claims(
@@ -69,11 +71,17 @@ def _extract_scopes(claims: TokenClaims) -> list[str]:
     if scope_claim is None:
         scope_claim = claims.get("scope", "")
 
+    scopes: list[str] = []
     if isinstance(scope_claim, str):
-        return scope_claim.split()
-    if isinstance(scope_claim, list):
-        return [str(item) for item in scope_claim]
-    return []
+        scopes = scope_claim.split()
+    elif isinstance(scope_claim, list):
+        scopes = [str(item) for item in scope_claim]
+
+    roles = claims.get("roles")
+    if isinstance(roles, list):
+        scopes += [str(role) for role in roles]
+
+    return list(dict.fromkeys(scopes))
 
 
 def _filter_scopes(raw_scopes: list[str], issuer: str) -> tuple[str, ...]:

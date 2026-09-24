@@ -120,6 +120,21 @@ def test_extract_scopes_empty():
     assert _extract_scopes({"iss": "https://test-idp.com"}) == []
 
 
+def test_extract_scopes_merges_entra_roles():
+    claims: TokenClaims = {
+        "iss": "https://test-idp.com",
+        "scp": "read fds-admin",
+        "roles": ["fds-admin", "mast_admin"],
+    }
+    assert _extract_scopes(claims) == ["read", "fds-admin", "mast_admin"]
+
+
+def test_extract_scopes_roles_only():
+    """Entra ID app-only tokens carry `roles` and no `scp`."""
+    claims: TokenClaims = {"iss": "https://test-idp.com", "roles": ["fds-admin"]}
+    assert _extract_scopes(claims) == ["fds-admin"]
+
+
 def test_hash_user_id():
     # Expected: SHA256("issuer|sub")
     issuer = "https://idp.com"
