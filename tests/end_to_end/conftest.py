@@ -123,4 +123,54 @@ def device(http_client: httpx.Client, admin_headers: dict[str, str]):
     yield make
 
     for name in created:
-        http_client.delete(f"{FDS_URL}/devices/{name}", headers=admin_headers)
+        _remove_device(http_client, admin_headers, name)
+
+
+def _remove_device(
+    http_client: httpx.Client, admin_headers: dict[str, str], name: str
+) -> None:
+    """Empty a device, then delete it, checking every step.
+
+    A device holding shots cannot be deleted, by design. Cleanup that ignored
+    its own failures is how that came to be a 500 nobody noticed, so each
+    response is asserted and every run leaves the catalogue as it found it.
+    """
+    shots = http_client.get(f"{FDS_URL}/devices/{name}/shots", headers=admin_headers)
+    if shots.status_code == 404:
+        return  # the test deleted it itself, which is the thing it was testing
+    assert shots.status_code == 200, shots.text
+
+    for shot in shots.json():
+        base = f"{FDS_URL}/devices/{name}/shots/{shot['id']}"
+        _remove_all(http_client, admin_headers, f"{base}/collections", "collections")
+        _remove_all(http_client, admin_headers, f"{base}/datasets", "datasets")
+
+        removed = http_client.delete(base, headers=admin_headers)
+        assert removed.status_code == 204, removed.text
+
+    removed = http_client.delete(f"{FDS_URL}/devices/{name}", headers=admin_headers)
+    assert removed.status_code in (204, 404), removed.text
+
+
+def _remove_all(
+    http_client: httpx.Client, admin_headers: dict[str, str], listing: str, kind: str
+) -> None:
+    """Delete everything the listing holds, in whatever order succeeds.
+
+    A dataset another one derives from refuses to go first, and the listing does
+    not say which those are, so sweep until a pass removes nothing.
+    """
+    listed = http_client.get(listing, headers=admin_headers)
+    assert listed.status_code == 200, listed.text
+    remaining = {item["id"] for item in listed.json()}
+
+    while remaining:
+        removed_this_pass = set()
+        for item_id in sorted(remaining):
+            response = http_client.delete(
+                f"{FDS_URL}/{kind}/{item_id}", headers=admin_headers
+            )
+            if response.status_code in (204, 404):
+                removed_this_pass.add(item_id)
+        assert removed_this_pass, f"could not remove {kind} {sorted(remaining)}"
+        remaining -= removed_this_pass

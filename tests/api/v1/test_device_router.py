@@ -5,8 +5,10 @@ from app.auth.security import AuthenticatedUser
 from app.models.device import DeviceCreate
 from app.models.policy import AccessLevel
 from app.models.shot import ShotCreate
+from app.models.source import SourceCreate, SourceKind
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
+from app.services.source_service import SourceService
 
 # Dummy admin user for test setup
 admin_user = AuthenticatedUser(id="test-admin", scopes=("fds-admin",))
@@ -57,6 +59,52 @@ def test_delete_device(
     # Verify the device is actually deleted
     response = test_client.get(f"/v1/devices/{device.name}", headers=admin_user_token)
     assert response.status_code == 404
+
+
+def test_delete_device_holding_shots_is_refused(
+    test_client: TestClient, session: Session, admin_user_token: dict[str, str]
+):
+    """Deleting a device must not quietly take its shots and datasets with it."""
+    device = DeviceService(session).create(
+        DeviceCreate(name="Occupied", type="Test", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    ShotService(session).create(
+        ShotCreate(id="1", device_name=device.name), user=admin_user
+    )
+
+    response = test_client.delete(
+        f"/v1/devices/{device.name}", headers=admin_user_token
+    )
+
+    assert response.status_code == 409
+    assert "1 shot" in response.json()["detail"]
+    assert (
+        test_client.get(
+            f"/v1/devices/{device.name}", headers=admin_user_token
+        ).status_code
+        == 200
+    )
+
+
+def test_delete_device_holding_sources_is_refused(
+    test_client: TestClient, session: Session, admin_user_token: dict[str, str]
+):
+    device = DeviceService(session).create(
+        DeviceCreate(name="HasSources", type="Test", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    SourceService(session).create(
+        SourceCreate(name="efit", kind=SourceKind.SOFTWARE, device_name=device.name),
+        user=admin_user,
+    )
+
+    response = test_client.delete(
+        f"/v1/devices/{device.name}", headers=admin_user_token
+    )
+
+    assert response.status_code == 409
+    assert "1 source" in response.json()["detail"]
 
 
 def test_delete_device_not_found(
