@@ -190,8 +190,33 @@ A Distribution is a physical access path for a Dataset, describing *how* to retr
 | `media_type` | string | No | IANA media type (e.g. `application/x-zarr`, `application/x-hdf5`) |
 | `format` | string | No | Human-readable format label (e.g. `NetCDF4`, `HDF5`) |
 | `endpoint_url` | string | No | Storage endpoint, used for credential vending |
+| `region` | string | No | Storage region, used for credential vending |
+| `storage_options_type` | enum | No | Which consumer library `storage_options` is rendered for (see below) |
 | `access_level` | enum | No | Override access policy for this distribution |
 
 In most cases a Dataset will have exactly one Distribution, and you won't need to think about the distinction. The Dataset endpoints return the primary distribution's `url`, `media_type`, and `format` inlined directly on the Dataset response, so there is nothing extra to fetch.
+
+### How the data is opened
+
+When FDS vends credentials it also renders them as `storage_options`, ready to pass to whichever
+library opens the data. `storage_options_type` says which library that is:
+
+| Value | For | Shape |
+| --- | --- | --- |
+| `fsspec_s3` | s3fs, xarray, zarr, dask, pyarrow | `key`, `secret`, `token`, `client_kwargs` |
+| `icechunk_s3` | `icechunk.s3_storage()` | `access_key_id`, `secret_access_key`, `session_token`, `endpoint_url`, `region` |
+| unset | Anything opened by its URL alone, such as an HTTPS download or an MDSplus reference | FDS renders no `storage_options` |
+
+**Set it when you know, and FDS infers it when you do not.** An `s3://` URL whose `media_type`
+mentions Icechunk is taken as `icechunk_s3`, any other `s3://` URL as `fsspec_s3`, and anything
+else is left unset.
+
+The inference is right for the common cases and wrong in one that matters: an Icechunk store
+registered under a generic media type such as `application/x-zarr` is taken for plain Zarr, so the
+credentials come back in the wrong shape for the opener you are about to use. Setting
+`storage_options_type` explicitly removes the guess.
+
+An unset value is also the reason `include_storage_options=true` can come back with nothing: FDS
+will not invent a shape for a distribution it cannot place.
 
 Multiple distributions are supported when the same underlying data is available in more than one form, for example as both Zarr and HDF5, or through multiple access endpoints. All distributions of a given Dataset must be scientifically interchangeable; different data belongs in a separate Dataset. Additional distributions can be registered via `POST /datasets/{id}/distributions`.

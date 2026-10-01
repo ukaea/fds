@@ -125,10 +125,40 @@ def test_serialised_excludes_type_discriminator():
     """
     fsspec_dump = build_storage_options(
         StorageOptionsType.FSSPEC_S3, endpoint_url="http://x", anonymous=True
-    ).model_dump()
+    ).model_dump(exclude_none=True)
     assert "type" not in fsspec_dump
 
     icechunk_dump = build_storage_options(
         StorageOptionsType.ICECHUNK_S3, endpoint_url="http://x", anonymous=True
-    ).model_dump()
+    ).model_dump(exclude_none=True)
     assert "type" not in icechunk_dump
+
+
+def test_serialised_drops_unset_keys():
+    """Unset keys must not reach the wire as nulls.
+
+    ``icechunk.s3_storage`` takes ``bucket`` and ``prefix`` from the caller, so
+    a serialised ``bucket: null`` makes ``s3_storage(bucket=..., **opts)`` raise
+    rather than open the store. The same holds for every other unset key.
+    """
+    icechunk_dump = build_storage_options(
+        StorageOptionsType.ICECHUNK_S3,
+        endpoint_url="http://localhost:9000",
+        access_key_id="AK",
+        secret_access_key="SK",
+        session_token="ST",
+    ).model_dump(exclude_none=True)
+    assert "bucket" not in icechunk_dump
+    assert "prefix" not in icechunk_dump
+    assert "anonymous" not in icechunk_dump
+    assert icechunk_dump["force_path_style"] is True
+
+    fsspec_dump = build_storage_options(
+        StorageOptionsType.FSSPEC_S3,
+        endpoint_url="http://localhost:9000",
+        access_key_id="AK",
+        secret_access_key="SK",
+        session_token="ST",
+    ).model_dump(exclude_none=True)
+    assert "anon" not in fsspec_dump
+    assert fsspec_dump["key"] == "AK"

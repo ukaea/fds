@@ -8,12 +8,13 @@ from app.core.storage.s3_provider import S3CredentialProvider
 from app.models.dataset import Dataset
 from app.models.device import Device
 from app.models.distribution import Distribution
-from app.models.file_access import CredentialRequest, S3Credentials
+from app.models.file_access import AzureCredentials, CredentialRequest, S3Credentials
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.models.shot import Shot
+from app.models.storage_options import StorageOptionsType
 from app.services.exceptions import ForbiddenError
-from app.services.file_access_service import FileAccessService
+from app.services.file_access_service import FileAccessService, ResolvedDistribution
 
 
 @pytest.fixture
@@ -138,7 +139,9 @@ def test_fail_fast_malformed_url(access_service, mocker):
     mock_urlparse.side_effect = ValueError("Invalid URL")
 
     with pytest.raises(ValueError, match="Invalid URL"):
-        access_service._group_by_endpoint([("http://bad-url", None)])
+        access_service._group_by_endpoint(
+            [ResolvedDistribution("http://bad-url", None, None, None)]
+        )
 
 
 def test_polyglot_routing_s3(session, access_service, mock_s3_provider):
@@ -328,3 +331,234 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
 
     # Check provider was called with correct URLs - we can use any call_args
     assert mock_provider.generate_credentials.call_count >= 1
+
+
+# --- storage_options parity with the single-dataset path ---------------------
+
+
+def _public_dataset_with_distribution(session, **distribution_kwargs) -> None:
+    """Register one public dataset whose distribution carries the given fields."""
+    ds = Dataset(
+        name=distribution_kwargs["url"].rsplit("/", 1)[-1],
+        level=1,
+        access_level=AccessLevel.PUBLIC,
+    )
+    session.add(ds)
+    session.flush()
+    assert ds.id is not None
+    session.add(
+        Distribution(dataset_id=ds.id, default_distribution=True, **distribution_kwargs)
+    )
+    session.commit()
+
+
+def _fake_s3_credentials(endpoint_url: str | None = None, region: str | None = None):
+    return S3Credentials(
+        access_key_id="k",
+        secret_access_key="s",
+        session_token="t",
+        expiration=datetime.fromisoformat("2099-01-01T00:00:00+00:00"),
+        endpoint_url=endpoint_url,
+        region=region,
+    )
+
+
+def test_storage_options_absent_unless_asked(session, access_service, mock_s3_provider):
+    """The default response is unchanged: the raw credential and nothing more."""
+    user = AuthenticatedUser(id="user", scopes=())
+    _public_dataset_with_distribution(
+        session,
+        url="s3://bucket/plain",
+        storage_options_type=StorageOptionsType.FSSPEC_S3,
+    )
+    mock_s3_provider.generate_credentials.return_value = {
+        "bucket": _fake_s3_credentials()
+    }
+
+    manifest = access_service.generate_session_credentials(
+        user, CredentialRequest(data_urls=["s3://bucket/plain"])
+    )
+
+    assert manifest.resource_map["s3://bucket/plain"].storage_options is None
+
+
+def test_storage_options_fsspec_shape(session, access_service, mock_s3_provider):
+    """An fsspec distribution renders s3fs kwargs, splat-ready for xarray."""
+    user = AuthenticatedUser(id="user", scopes=())
+    _public_dataset_with_distribution(
+        session,
+        url="s3://bucket/zarr",
+        endpoint_url="https://s3.example.org",
+        storage_options_type=StorageOptionsType.FSSPEC_S3,
+    )
+    mock_s3_provider.generate_credentials.return_value = {
+        "bucket": _fake_s3_credentials(endpoint_url="https://s3.example.org")
+    }
+
+    manifest = access_service.generate_session_credentials(
+        user,
+        CredentialRequest(data_urls=["s3://bucket/zarr"]),
+        include_storage_options=True,
+    )
+
+    entry = manifest.resource_map["s3://bucket/zarr"]
+    assert entry.storage_options is not None
+    dumped = entry.storage_options.model_dump(exclude_none=True)
+    assert dumped == {
+        "key": "k",
+        "secret": "s",
+        "token": "t",
+        "client_kwargs": {"endpoint_url": "https://s3.example.org"},
+    }
+    # The raw credential is still there for callers that want it.
+    assert entry.access_key_id == "k"
+
+
+def test_storage_options_icechunk_fills_endpoint_defaults(
+    session, access_service, mock_s3_provider
+):
+    """A non-AWS plain-http endpoint gets force_path_style and allow_http.
+
+    These are properties of the endpoint rather than of the credential, so a
+    hand-written mapping misses them; omitting force_path_style against an
+    S3-compatible store gives a connection that resolves but finds no bucket.
+    """
+    user = AuthenticatedUser(id="user", scopes=())
+    _public_dataset_with_distribution(
+        session,
+        url="s3://bucket/store",
+        endpoint_url="http://s3.echo.example.ac.uk",
+        media_type="application/vnd.icechunk+zarr",
+        storage_options_type=StorageOptionsType.ICECHUNK_S3,
+    )
+    mock_s3_provider.generate_credentials.return_value = {
+        "bucket": _fake_s3_credentials(endpoint_url="http://s3.echo.example.ac.uk")
+    }
+
+    manifest = access_service.generate_session_credentials(
+        user,
+        CredentialRequest(data_urls=["s3://bucket/store"]),
+        include_storage_options=True,
+    )
+
+    options = manifest.resource_map["s3://bucket/store"].storage_options
+    assert options is not None
+    dumped = options.model_dump(exclude_none=True)
+    assert dumped["allow_http"] is True
+    assert dumped["force_path_style"] is True
+    assert dumped["access_key_id"] == "k"
+    # bucket/prefix stay the caller's choice.
+    assert "bucket" not in dumped
+
+
+def test_storage_options_are_per_url_not_shared(
+    session, access_service, mock_s3_provider
+):
+    """Two URLs on one credential render their own shapes.
+
+    The S3 provider returns a single credential object per bucket, so rendering
+    has to copy rather than mutate.
+    """
+    user = AuthenticatedUser(id="user", scopes=())
+    _public_dataset_with_distribution(
+        session,
+        url="s3://bucket/as-fsspec",
+        endpoint_url="https://s3.example.org",
+        storage_options_type=StorageOptionsType.FSSPEC_S3,
+    )
+    _public_dataset_with_distribution(
+        session,
+        url="s3://bucket/as-icechunk",
+        endpoint_url="https://s3.example.org",
+        storage_options_type=StorageOptionsType.ICECHUNK_S3,
+    )
+    shared = _fake_s3_credentials(endpoint_url="https://s3.example.org")
+    mock_s3_provider.generate_credentials.return_value = {"bucket": shared}
+
+    manifest = access_service.generate_session_credentials(
+        user,
+        CredentialRequest(
+            data_urls=["s3://bucket/as-fsspec", "s3://bucket/as-icechunk"]
+        ),
+        include_storage_options=True,
+    )
+
+    fsspec = manifest.resource_map["s3://bucket/as-fsspec"].storage_options
+    icechunk = manifest.resource_map["s3://bucket/as-icechunk"].storage_options
+    assert fsspec is not None and icechunk is not None
+    assert fsspec.type is StorageOptionsType.FSSPEC_S3
+    assert icechunk.type is StorageOptionsType.ICECHUNK_S3
+    # The provider's own object is untouched.
+    assert shared.storage_options is None
+
+
+def test_storage_options_region_override_from_distribution(
+    session, access_service, mock_s3_provider
+):
+    """A Distribution region overrides the provider's, as on the dataset path."""
+    user = AuthenticatedUser(id="user", scopes=())
+    _public_dataset_with_distribution(
+        session,
+        url="s3://bucket/regional",
+        endpoint_url="https://s3.example.org",
+        region="eu-west-2",
+        storage_options_type=StorageOptionsType.FSSPEC_S3,
+    )
+    mock_s3_provider.generate_credentials.return_value = {
+        "bucket": _fake_s3_credentials(
+            endpoint_url="https://s3.example.org", region="us-east-1"
+        )
+    }
+
+    manifest = access_service.generate_session_credentials(
+        user,
+        CredentialRequest(data_urls=["s3://bucket/regional"]),
+        include_storage_options=True,
+    )
+
+    options = manifest.resource_map["s3://bucket/regional"].storage_options
+    assert options is not None
+    assert options.model_dump()["client_kwargs"]["region_name"] == "eu-west-2"
+
+
+def test_storage_options_skipped_when_distribution_opts_out(
+    session, access_service, mock_s3_provider
+):
+    """A null storage_options_type is an opt-out, same as on the dataset path."""
+    user = AuthenticatedUser(id="user", scopes=())
+    _public_dataset_with_distribution(
+        session, url="s3://bucket/opted-out", storage_options_type=None
+    )
+    mock_s3_provider.generate_credentials.return_value = {
+        "bucket": _fake_s3_credentials()
+    }
+
+    manifest = access_service.generate_session_credentials(
+        user,
+        CredentialRequest(data_urls=["s3://bucket/opted-out"]),
+        include_storage_options=True,
+    )
+
+    entry = manifest.resource_map["s3://bucket/opted-out"]
+    assert entry.storage_options is None
+    assert entry.access_key_id == "k"
+
+
+def test_storage_options_azure_entry(session, access_service, mock_s3_provider):
+    """Azure has one shape and no target type, so it renders regardless."""
+    user = AuthenticatedUser(id="user", scopes=())
+    _public_dataset_with_distribution(
+        session, url="az://container/blob", storage_options_type=None
+    )
+    mock_s3_provider.generate_credentials.return_value = {
+        "container": AzureCredentials(account_name="acct", sas_token="sas")
+    }
+
+    manifest = access_service.generate_session_credentials(
+        user,
+        CredentialRequest(data_urls=["az://container/blob"]),
+        include_storage_options=True,
+    )
+
+    entry = manifest.resource_map["az://container/blob"]
+    assert entry.storage_options == {"account_name": "acct", "sas_token": "sas"}
