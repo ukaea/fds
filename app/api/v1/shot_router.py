@@ -4,11 +4,13 @@ from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import BaseURLDep, CurrentUserDep, ShotServiceDep
+from app.models.available_properties import AvailableProperties, PropertyValues
 from app.models.shot import (
     ShotCreate,
     ShotRead,
     ShotUpdate,
 )
+from app.services.available_properties import DEFAULT_MAX_VALUES
 
 router = APIRouter()
 
@@ -47,21 +49,31 @@ def read_shots(
     limit: int = 100,
     include_device: bool = False,
     include_annotations: bool = False,
-    annotation: Annotated[list[str] | None, Query()] = None,
+    properties: Annotated[list[str] | None, Query(alias="property")] = None,
+    property_min: Annotated[list[str] | None, Query()] = None,
+    property_max: Annotated[list[str] | None, Query()] = None,
 ) -> list[ShotRead]:
     """
     Retrieve all shots for a specific device.
 
-    `annotation` filters on the shot's `scientific_metadata`. Use `disruption` to
-    match any shot that carries that annotation, or `confinement_mode:H-mode` to
-    match a particular value. Repeat the parameter to require all of them.
+    `property` filters on the shot's `scientific_metadata`. Use `disruption`
+    to match any shot carrying that name, or `confinement_mode:H-mode` to match
+    a value. Repeat the parameter to give more than one: two values of the same
+    property match a shot with either, while values of different properties must
+    all match.
+
+    `property_min` and `property_max` bound a numeric value, as
+    `plasma_current_max:700000`. Values that are not numbers are skipped rather
+    than matched.
     """
     shots = shot_service.get_multi_by_device_name(
         device_name=device_name,
         user=user,
         offset=offset,
         limit=limit,
-        annotations=annotation,
+        properties=properties,
+        minimums=property_min,
+        maximums=property_max,
     )
 
     return [
@@ -70,6 +82,76 @@ def read_shots(
         )
         for shot in shots
     ]
+
+
+# Declared before /shots/{shot_id}: the paths have the same shape, so the other
+# order would bind shot_id to the literal "annotations". Reserving a segment this
+# way is what /datasets/id/{id} already does ahead of /datasets/{name}.
+@router.get(
+    "/devices/{device_name}/shots/properties",
+    response_model=AvailableProperties,
+    response_model_exclude_none=True,
+)
+def read_shot_properties(
+    *,
+    device_name: str,
+    shot_service: ShotServiceDep,
+    user: CurrentUserDep,
+    properties: Annotated[list[str] | None, Query(alias="property")] = None,
+    property_min: Annotated[list[str] | None, Query()] = None,
+    property_max: Annotated[list[str] | None, Query()] = None,
+    max_values: int = DEFAULT_MAX_VALUES,
+) -> AvailableProperties:
+    """
+    The properties this device's shots carry, for building a filter.
+
+    One entry per property name, with how many shots carry it, how many
+    distinct values it has, and the values themselves when there are at most
+    `max_values` of them. A missing `values` alongside a large `distinct` marks
+    a measurement or free text: filter on the name's presence, not on a value.
+
+    `property` takes the same forms as the listing and narrows the scope, so
+    `total` is the number of matching shots.
+    """
+    return shot_service.available_properties(
+        device_name=device_name,
+        user=user,
+        properties=properties,
+        minimums=property_min,
+        maximums=property_max,
+        max_values=max_values,
+    )
+
+
+# Declared before /shots/{shot_id} for the same reason as the properties route: one
+# path segment after /shots/, so the other order binds shot_id to "properties".
+@router.get(
+    "/devices/{device_name}/shots/properties/{name}/values",
+    response_model=PropertyValues,
+    response_model_exclude_none=True,
+)
+def read_shot_property_values(
+    *,
+    device_name: str,
+    name: str,
+    shot_service: ShotServiceDep,
+    user: CurrentUserDep,
+    q: str | None = None,
+    limit: int = 50,
+) -> PropertyValues:
+    """
+    The values one scientific-metadata name takes, with a count per value.
+
+    For a vocabulary too large for the properties listing to enumerate. `q` matches
+    values containing it, case-insensitively, and the most common come first.
+    """
+    return shot_service.property_values(
+        device_name=device_name,
+        name=name,
+        user=user,
+        query=q,
+        limit=limit,
+    )
 
 
 @router.get(

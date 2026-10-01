@@ -2,10 +2,10 @@
 
 import { Tag } from 'lucide-react';
 import { ScientificProperty } from '@/lib/types';
-import { extentSummary, formatValue, splitProperties } from '@/lib/features';
+import { extentSummary, formatValue, splitProperties } from '@/lib/properties';
 
-// One annotated feature: its name and value, plus where it sits on its axis.
-function FeatureRow({ property }: { property: ScientificProperty }) {
+// One annotation: its name and value, plus where it sits on its axis.
+function AnnotationRow({ property }: { property: ScientificProperty }) {
   const extent = extentSummary(property.extent);
   const isPoint = property.extent?.end == null;
   return (
@@ -45,7 +45,7 @@ function PlainRow({ property }: { property: ScientificProperty }) {
 
 // The row-level treatment of the same annotations: name and value only, with the
 // extent on hover. Keeps a list row readable where the card below would not fit.
-export function AnnotationBadges({
+export function PropertyBadges({
   properties,
   limit = 4,
 }: {
@@ -79,7 +79,7 @@ export function AnnotationBadges({
   );
 }
 
-// Renders a scientific_metadata list, separating the features (localised on an
+// Renders a scientific_metadata list, separating the annotations (localised on an
 // axis) from the plain properties. Renders nothing when there is nothing to show.
 export function ScientificMetadata({
   properties,
@@ -88,25 +88,25 @@ export function ScientificMetadata({
   properties?: ScientificProperty[];
   className?: string;
 }) {
-  const { features, plain } = splitProperties(properties);
-  if (features.length === 0 && plain.length === 0) return null;
+  const { annotations, plain } = splitProperties(properties);
+  if (annotations.length === 0 && plain.length === 0) return null;
 
   return (
     <div className={`card p-6 ${className}`}>
       <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground flex items-center gap-2">
         <Tag className="w-5 h-5 text-muted-foreground" />
-        {features.length > 0 ? 'Features' : 'Scientific Metadata'}
+        {annotations.length > 0 ? 'Annotations' : 'Scientific Metadata'}
       </h3>
-      {features.length > 0 && (
+      {annotations.length > 0 && (
         <div className="space-y-2">
-          {features.map((property, i) => (
-            <FeatureRow key={`${property.name}-${i}`} property={property} />
+          {annotations.map((property, i) => (
+            <AnnotationRow key={`${property.name}-${i}`} property={property} />
           ))}
         </div>
       )}
       {plain.length > 0 && (
-        <div className={`text-sm ${features.length > 0 ? 'mt-4 pt-3 border-t border-border' : ''}`}>
-          {features.length > 0 && (
+        <div className={`text-sm ${annotations.length > 0 ? 'mt-4 pt-3 border-t border-border' : ''}`}>
+          {annotations.length > 0 && (
             <p className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-2">
               Other properties
             </p>
@@ -116,7 +116,7 @@ export function ScientificMetadata({
           ))}
         </div>
       )}
-      {features.length > 0 && (
+      {annotations.length > 0 && (
         <p className="text-xs text-muted-foreground mt-4 leading-relaxed">
           Each coordinate is on the named axis, in that axis&apos;s own frame. Aligning one to a
           particular diagnostic is the consumer&apos;s call.

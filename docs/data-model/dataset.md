@@ -20,8 +20,8 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 | `scientific_metadata` | list | No | Diagnostic-specific parameters, see [Scientific metadata](index.md#scientific-metadata) below |
 | `activity_id` | integer | No | FK to the Activity that produced this dataset (provenance) |
 | `derived_from` | list | No | Upstream entities this dataset was built from, see below |
-| `annotates` | string | No | For a feature annotation dataset: the feature it localises (see [Feature annotations](reference-datasets.md#feature-annotations)) |
-| `subject_dataset_id` | integer | No | For a dataset-frame annotation: the source dataset it localises a feature in |
+| `annotates` | string | No | For an annotation dataset: the property it localises (see [Annotation datasets](reference-datasets.md#annotation-datasets)) |
+| `subject_dataset_id` | integer | No | For a dataset-frame annotation: the source dataset it localises a property in |
 
 ### Recording a dataset's provenance
 
@@ -171,14 +171,14 @@ A `Dataset` can also link to **reference geometry**. A `Dataset` declares the ge
 
 ### Listing and filtering
 
-The dataset lists accept a `name` filter, an `annotation` filter on the dataset's own `scientific_metadata`, and a `shot_annotation` filter on an annotation carried by its *parent shot*:
+The dataset lists accept a `name` filter, a `property` filter on the dataset's own `scientific_metadata`, and a `shot_property` filter on a property carried by its *parent shot*:
 
 ```text
 GET /v1/devices/mastu/datasets?name=equilibrium
-GET /v1/devices/mastu/datasets?name=equilibrium&shot_annotation=elm
+GET /v1/devices/mastu/datasets?name=equilibrium&shot_property=elm
 ```
 
-The second form answers a question spanning both levels ("equilibrium datasets from shots that had an ELM train") in one request. Datasets that don't belong to a shot never match a `shot_annotation` filter. Shot- and device-scoped dataset lists accept `annotation` on the same terms. See [Finding annotated records](index.md#finding-annotated-records).
+The second form answers a question spanning both levels ("equilibrium datasets from shots that had an ELM train") in one request. Datasets that don't belong to a shot never match a `shot_property` filter. Shot- and device-scoped dataset lists accept `property` on the same terms. See [Finding annotated records](index.md#finding-annotated-records).
 
 ## Distribution
 

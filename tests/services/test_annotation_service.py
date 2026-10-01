@@ -1,4 +1,4 @@
-"""Feature-annotation resolution, frame-scoped."""
+"""Annotation-dataset resolution, frame-scoped."""
 
 from datetime import UTC, datetime
 

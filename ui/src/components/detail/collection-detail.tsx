@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Collection, Activity } from '@/lib/types';
 import ProvenanceGraph from '@/components/ProvenanceGraph';
-import { ScientificMetadata } from '@/components/features';
+import { ScientificMetadata } from '@/components/properties';
 import { useDeviceLabel } from '@/lib/use-device-label';
 import { Layers, Database, FileCode, ChevronRight, Activity as ActivityIcon, Clock, ExternalLink } from 'lucide-react';
 

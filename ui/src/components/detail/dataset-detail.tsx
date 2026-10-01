@@ -8,7 +8,7 @@ import useSWR from 'swr';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Activity as ActivityType, Dataset } from '@/lib/types';
 import ProvenanceGraph from '@/components/ProvenanceGraph';
-import { ScientificMetadata } from '@/components/features';
+import { ScientificMetadata } from '@/components/properties';
 import { RelatedGroup } from '@/components/related-data';
 import { useDeviceLabel } from '@/lib/use-device-label';
 
@@ -1116,7 +1116,7 @@ export default function DatasetDetail({ id }: { id: string }) {
                 </div>
             </div>
 
-            {/* Features annotated on this dataset's own axes */}
+            {/* Annotations on this dataset's own axes */}
             <ScientificMetadata properties={datasetData?.scientific_metadata} className="bg-card/60 shadow-xl border-border" />
 
             {/* Datasets resolved for this one. The annotations are those whose

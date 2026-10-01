@@ -41,7 +41,7 @@ class ScientificMetadataMixin(SQLModel):
 
     Carried by the things a user searches for: a Shot, a Dataset, and a
     Collection. What the claims are *about* differs by model, but their shape,
-    their projection to ``schema:additionalProperty`` and the ``annotation``
+    their projection to ``schema:additionalProperty`` and the ``property``
     filter that queries them do not, which is what makes one field serve all
     three. An Activity deliberately has no such field: it is the record of an
     event, not something discovered.

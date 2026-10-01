@@ -37,7 +37,7 @@ from app.services.exceptions import (
     ForbiddenError,
     ResourceNotFoundError,
 )
-from app.services.filters import annotation_clauses
+from app.services.filters import property_clauses
 from app.services.shot_service import ShotService
 
 logger = structlog.get_logger(__name__)
@@ -247,7 +247,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         *,
         offset: int = 0,
         limit: int = 100,
-        annotations: list[str] | None = None,
+        properties: list[str] | None = None,
     ) -> Sequence[Collection]:
         """Return the global list of Collections, filtered by access level."""
         statement = (
@@ -255,7 +255,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             .where(
                 col(Collection.device_name).is_(None),
                 col(Collection.shot_id).is_(None),
-                *annotation_clauses(Collection.scientific_metadata, annotations),
+                *property_clauses(Collection.scientific_metadata, properties),
             )
             .order_by(col(Collection.id))
             .offset(offset)
@@ -322,7 +322,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         user: AuthenticatedUser = ANONYMOUS_USER,
         offset: int = 0,
         limit: int = 100,
-        annotations: list[str] | None = None,
+        properties: list[str] | None = None,
     ) -> Sequence[Collection]:
         """Return device-level Collections (not tied to any shot), filtered by access."""
         statement = (
@@ -330,7 +330,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             .where(
                 Collection.device_name == normalise_device_name(device_name),
                 col(Collection.shot_id).is_(None),
-                *annotation_clauses(Collection.scientific_metadata, annotations),
+                *property_clauses(Collection.scientific_metadata, properties),
             )
             .offset(offset)
             .limit(limit)
@@ -345,7 +345,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         user: AuthenticatedUser = ANONYMOUS_USER,
         offset: int = 0,
         limit: int = 100,
-        annotations: list[str] | None = None,
+        properties: list[str] | None = None,
     ) -> Sequence[Collection]:
         """Return all Collections scoped to a specific shot, filtered by access."""
         statement = (
@@ -353,7 +353,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             .where(
                 Collection.shot_id == shot_id,
                 Collection.device_name == normalise_device_name(device_name),
-                *annotation_clauses(Collection.scientific_metadata, annotations),
+                *property_clauses(Collection.scientific_metadata, properties),
             )
             .offset(offset)
             .limit(limit)

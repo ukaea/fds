@@ -1,9 +1,10 @@
 import pytest
-from sqlmodel import Session
+from sqlmodel import Session, select
 
+from app.auth.access_control import get_effective_policy, resolve_policy
 from app.auth.security import AuthenticatedUser
 from app.models.dataset import DatasetCreate
-from app.models.device import DeviceCreate
+from app.models.device import Device, DeviceCreate
 from app.models.policy import AccessLevel
 from app.models.shot import ShotCreate
 from app.services.dataset_service import DatasetService
@@ -123,3 +124,51 @@ def test_shot_inherits_from_device(
 
     read_model = shot_service.to_read_model(shot)
     assert read_model.effective_access_level == AccessLevel.PUBLIC
+
+
+@pytest.mark.parametrize(
+    "shot_policy",
+    [
+        {},
+        {"access_level": AccessLevel.PUBLIC},
+        {"access_level": AccessLevel.RESTRICTED},
+        {"access_level": AccessLevel.RESTRICTED, "required_scopes": ["mast_admin"]},
+        {"access_level": AccessLevel.RESTRICTED, "required_scopes": []},
+        {
+            "access_level": AccessLevel.RESTRICTED,
+            "allowed_idps": ["https://idp-a.example.com"],
+        },
+    ],
+)
+@pytest.mark.usefixtures("two_idp_config")
+def test_resolve_policy_agrees_with_get_effective_policy(
+    session: Session, admin_user: AuthenticatedUser, shot_policy: dict
+) -> None:
+    """The tuple form must decide exactly what the instance form decides.
+
+    ``resolve_policy`` restates the inheritance rule over a tuple so an
+    aggregate can resolve a policy without loading the row. Restating a rule is
+    how two rules appear, so this pins them together: each field must still fall
+    back independently.
+    """
+    DeviceService(session).create(
+        DeviceCreate(
+            name="EQUIV",
+            type="Tokamak",
+            access_level=AccessLevel.RESTRICTED,
+            required_scopes=["device_scope"],
+            allowed_idps=["https://idp-b.example.com"],
+        ),
+        admin_user,
+    )
+    device = session.exec(select(Device).where(Device.name == "equiv")).one()
+    shot = ShotService(session).create(
+        ShotCreate(id="1", device_name="EQUIV", **shot_policy), admin_user
+    )
+
+    assert resolve_policy(
+        shot.access_level,
+        shot.required_scopes,
+        shot.allowed_idps,
+        get_effective_policy(device, session),
+    ) == get_effective_policy(shot, session)

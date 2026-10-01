@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { Dataset } from '@/lib/types';
 import { coverageSummary } from '@/lib/coverage';
 
-// A resolved related dataset (geometry version, calibration version, or feature
-// annotation) as a compact linked row. An annotation labels the feature it
+// A resolved related dataset (geometry version, calibration version, or
+// annotation) as a compact linked row. An annotation labels the property it
 // localises; a reference version labels the roles it provides.
 export function ResolvedRef({ version }: { version: Dataset }) {
   const roles =

@@ -60,12 +60,12 @@ Shots are created under their parent device:
 
 ## Listing and filtering
 
-Shots are listed under their device, and can be filtered by feature annotation:
+Shots are listed under their device, and can be filtered by property:
 
 ```text
 GET /v1/devices/mast/shots
-GET /v1/devices/mast/shots?annotation=disruption
-GET /v1/devices/mast/shots?annotation=confinement_mode:H-mode
+GET /v1/devices/mast/shots?property=disruption
+GET /v1/devices/mast/shots?property=confinement_mode:H-mode
 ```
 
 See [Finding annotated records](index.md#finding-annotated-records) for the full syntax.

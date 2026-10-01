@@ -9,6 +9,7 @@ from .activity import (
     ActivityType,
     ActivityUpdate,
 )
+from .available_properties import AvailableProperties, AvailableProperty
 from .collection import (
     Collection,
     CollectionCreate,
@@ -63,6 +64,8 @@ __all__ = [
     "ActivityRead",
     "ActivityType",
     "ActivityUpdate",
+    "AvailableProperties",
+    "AvailableProperty",
     "Collection",
     "CollectionCreate",
     "CollectionDataset",
