@@ -20,6 +20,7 @@ nav = [
     { "Source" = "data-model/source.md" },
     { "Activity" = "data-model/activity.md" },
     { "Reference Datasets" = "data-model/reference-datasets.md" },
+    { "Scientific Metadata" = "data-model/scientific-metadata.md" },
   ]},
   { "Semantic Metadata (DCAT & JSON-LD)" = "dcat-jsonld.md" },
   { "Provenance" = "provenance.md" },

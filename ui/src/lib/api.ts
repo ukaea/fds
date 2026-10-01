@@ -12,4 +12,13 @@ export const fetcher = async (url: string) => {
   return res.json();
 };
 
+// FDS serves the same resource as DCAT JSON-LD under content negotiation.
+export const ldFetcher = async (url: string) => {
+  const res = await fetch(url, { headers: { Accept: 'application/ld+json' } });
+  if (!res.ok) {
+    throw new Error(`Could not load JSON-LD: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+};
+
 export const API_BASE = '/api/v1';

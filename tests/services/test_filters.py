@@ -1,7 +1,7 @@
 import pytest
 
 from app.services.exceptions import FDSValidationError
-from app.services.filters import _value_candidates, parse_annotation
+from app.services.filters import _value_candidates, parse_property
 
 
 @pytest.mark.parametrize(
@@ -14,20 +14,20 @@ from app.services.filters import _value_candidates, parse_annotation
         ("elm:type-I", ("elm", "type-I")),
     ],
 )
-def test_parse_annotation(raw: str, expected: tuple[str, str | None]):
-    assert parse_annotation(raw) == expected
+def test_parse_property(raw: str, expected: tuple[str, str | None]):
+    assert parse_property(raw) == expected
 
 
 @pytest.mark.parametrize("raw", ["", ":", ":H-mode"])
-def test_parse_annotation_rejects_missing_name(raw: str):
-    with pytest.raises(FDSValidationError, match="Invalid annotation filter"):
-        parse_annotation(raw)
+def test_parse_property_rejects_missing_name(raw: str):
+    with pytest.raises(FDSValidationError, match="Invalid property filter"):
+        parse_property(raw)
 
 
-def test_parse_annotation_rejects_empty_value():
+def test_parse_property_rejects_empty_value():
     """A trailing separator is ambiguous: presence, or equality to empty string?"""
     with pytest.raises(FDSValidationError, match="value is expected"):
-        parse_annotation("disruption:")
+        parse_property("disruption:")
 
 
 @pytest.mark.parametrize(

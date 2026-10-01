@@ -252,14 +252,14 @@ That is the listing to reach for when you want to see which versions of a role e
 - **No overlap.** At most one geometry version per role covers a shot; for calibration, at most one per `(role, stage)`.
 - **Shot integrity.** A shot named in coverage must exist and carry a `shot_at`; it can't be deleted while referenced, and a `shot_at` change that would create an overlap or orphan a range endpoint is rejected.
 
-## Feature annotations
+## Annotation datasets
 
-Some features are too big or too numerous for an inline [`extent`](index.md#feature-annotation): a multi-dimensional region (a UFO's outline in (x, y), a per-frame mask), or a dense 1D series (every ELM in a shot). These are bulk data, so FDS models them as a relationship, like geometry and calibration, but with a difference: an annotation is not a `Device`-level version pulled by role. It is a `Dataset` that localises a feature and names its **subject** directly, resolved on read.
+Some annotations are too big or too numerous for an inline [`extent`](index.md#annotations): a multi-dimensional region (a UFO's outline in (x, y), a per-frame mask), or a dense 1D series (every ELM in a shot). These are bulk data, so FDS models them as a relationship, like geometry and calibration, but with a difference: an annotation is not a `Device`-level version pulled by role. It is a `Dataset` that localises a property and names its **subject** directly, resolved on read.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `annotates` | string | No | The feature this dataset localises (e.g. `elm`). Marks the dataset as an annotation and matches the inline annotation of the same `name` on its subject |
-| `subject_dataset_id` | integer | No | For a dataset-frame annotation: the source `Dataset` it localises a feature in |
+| `annotates` | string | No | The property this dataset localises (e.g. `elm`). Marks the dataset as an annotation and matches the inline annotation of the same `name` on its subject |
+| `subject_dataset_id` | integer | No | For a dataset-frame annotation: the source `Dataset` it localises a property in |
 | `applies_to` | object | No | For a device-frame annotation: which shots it covers (same selectors as geometry) |
 
 An annotation's coordinates live in its subject's frame, and FDS never re-frames them. The subject fixes the frame:

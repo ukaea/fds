@@ -6,9 +6,9 @@ from app.services.coverage import CoverageMatcher
 
 
 class AnnotationService:
-    """Resolve feature annotations for a subject, within its frame.
+    """Resolve annotations for a subject, within its frame.
 
-    An annotation ``Dataset`` (``annotates`` set) localises a feature in a subject's
+    An annotation ``Dataset`` (``annotates`` set) localises a property in a subject's
     frame. Resolution never crosses frames: a dataset resolves only its own
     dataset-frame annotations; a shot resolves its shot-frame annotations plus the
     device-level (shot-ranged) annotations whose coverage includes it. FDS never

@@ -13,7 +13,7 @@ A named, citable group of Datasets.
 
 ## Making a run discoverable
 
-A Collection carries `scientific_metadata` like a Shot or a Dataset, and its list endpoints take the same `annotation` filter. That is how a simulation run becomes something you can search for.
+A Collection carries `scientific_metadata` like a Shot or a Dataset, and its list endpoints take the same `property` filter. That is how a simulation run becomes something you can search for.
 
 A run's outputs are always reachable as the datasets carrying its `activity_id`, so a bundle is never required. It is what you create when you want the run itself to be findable and citable. Set `activity_id` to the run and record what the run was about:
 
@@ -31,7 +31,7 @@ A run's outputs are always reachable as the datasets carrying its `activity_id`,
 Then the run answers a catalogue question:
 
 ```http
-GET /v1/devices/mast/shots/30420/collections?annotation=confinement_mode:H-mode
+GET /v1/devices/mast/shots/30420/collections?property=confinement_mode:H-mode
 ```
 
 If you do not bundle a run, its claims belong on its output datasets instead, and the run is not searchable as a run. That is a choice, not a gap: FDS records what a producer asserts and never infers claims they did not make.

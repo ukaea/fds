@@ -7,12 +7,13 @@ import { fetcher, API_BASE } from '@/lib/api';
 import { Dataset, Collection, Activity, Source, Shot } from '@/lib/types';
 import { useDeviceLabel } from '@/lib/use-device-label';
 import { Database, ChevronRight, Layers, MapPin, SlidersHorizontal, Highlighter } from 'lucide-react';
-import { annotationFacets, annotationQuery, withQuery } from '@/lib/features';
+import { availableProperties, propertyQuery, withQuery } from '@/lib/properties';
 import { dedupeById } from '@/components/resolved-ref';
-import { AnnotationFilter } from '@/components/annotation-filter';
+import { PropertyFilter } from '@/components/property-filter';
+import { JsonLdPanel } from '@/components/jsonld-panel';
 import { DatasetCard } from '@/components/dataset-card';
 import { DatasetResults } from '@/components/dataset-results';
-import { AnnotationBadges, ScientificMetadata } from '@/components/features';
+import { PropertyBadges, ScientificMetadata } from '@/components/properties';
 import { RelatedGroup } from '@/components/related-data';
 
 function formatSourceName(name: string): string {
@@ -65,12 +66,12 @@ function CollectionSection({
         </span>
       </div>
 
-      {/* The collection's own features, kept apart from the shot's above: a
+      {/* The collection's own annotations, kept apart from the shot's above: a
           simulation may report H-mode on a shot that never reached it. */}
       {collection.scientific_metadata && collection.scientific_metadata.length > 0 && (
         <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <span className="text-xs text-muted-foreground">Features:</span>
-          <AnnotationBadges properties={collection.scientific_metadata} />
+          <span className="text-xs text-muted-foreground">Annotations:</span>
+          <PropertyBadges properties={collection.scientific_metadata} />
         </div>
       )}
 
@@ -92,7 +93,7 @@ export default function ShotDetail({
 }) {
   const deviceLabel = useDeviceLabel(deviceName);
 
-  // The shot itself carries its features (inline scientific_metadata) and, with
+  // The shot itself carries its annotations (inline scientific_metadata) and, with
   // include_annotations, the annotation datasets expressed in its own frame.
   const { data: shot } = useSWR<Shot>(
     deviceName && shotId
@@ -101,7 +102,7 @@ export default function ShotDetail({
     fetcher
   );
 
-  const [annotations, setAnnotations] = useState<string[]>([]);
+  const [propertyTokens, setPropertyTokens] = useState<string[]>([]);
 
   const datasetsUrl =
     deviceName && shotId
@@ -110,10 +111,10 @@ export default function ShotDetail({
 
   const { data: datasets, error, isLoading } = useSWR<Dataset[]>(datasetsUrl, fetcher);
 
-  // The shot's datasets narrowed to those carrying the selected annotations.
+  // The shot's datasets narrowed to those carrying the selected properties.
   const { data: matchingDatasets, isLoading: matchingLoading } = useSWR<Dataset[]>(
-    datasetsUrl && annotations.length > 0
-      ? withQuery(datasetsUrl, annotationQuery('annotation', annotations))
+    datasetsUrl && propertyTokens.length > 0
+      ? withQuery(datasetsUrl, propertyQuery('property', propertyTokens))
       : null,
     fetcher,
     { keepPreviousData: true }
@@ -163,7 +164,7 @@ export default function ShotDetail({
         )}
       </div>
 
-      {/* Features annotated on the shot record itself — metadata, not a dataset, so
+      {/* Annotations on the shot record itself — metadata, not a dataset, so
           it sits with the shot rather than with the data resolved for it. */}
       <ScientificMetadata properties={shot?.scientific_metadata} className="mb-10" />
 
@@ -177,16 +178,16 @@ export default function ShotDetail({
       {/* Annotations carried by this shot's datasets, describing the data itself
           rather than the plasma. Absent on most shots, in which case this and the
           filtered view below never appear. */}
-      <AnnotationFilter
+      <PropertyFilter
         label="Filter datasets by annotation"
-        facets={annotationFacets(datasets)}
-        selected={annotations}
-        onChange={setAnnotations}
+        properties={availableProperties(datasets)}
+        selected={propertyTokens}
+        onChange={setPropertyTokens}
       />
 
       {/* Filtering answers with one flat list. The collections below group every
           dataset they hold, so a filtered count against them would not add up. */}
-      {annotations.length > 0 && (
+      {propertyTokens.length > 0 && (
         <div className="mb-10">
           <div className="flex items-center gap-3 mb-4">
             <div className="bg-muted p-2 rounded-lg text-foreground">
@@ -209,7 +210,7 @@ export default function ShotDetail({
       )}
 
       {/* One section per collection */}
-      {annotations.length === 0 &&
+      {propertyTokens.length === 0 &&
         collections?.map((collection) => (
           <CollectionSection
             key={collection.id}
@@ -219,7 +220,7 @@ export default function ShotDetail({
         ))}
 
       {/* Datasets not in any collection */}
-      {annotations.length === 0 && uncollectedDatasets.length > 0 && (
+      {propertyTokens.length === 0 && uncollectedDatasets.length > 0 && (
         <div>
           <div className="flex items-center gap-3 mb-4">
             <div className="bg-muted p-2 rounded-lg text-foreground">
@@ -237,7 +238,7 @@ export default function ShotDetail({
       )}
 
       {/* Datasets resolved for this shot: the reference versions its data reads
-          against, and the annotations localising its features. */}
+          against, and the annotation datasets localising them. */}
       {(resolvedGeometry.length > 0 || resolvedCalibration.length > 0 || (shot?.annotations?.length ?? 0) > 0) && (
         <div className="mt-10">
           <div className="flex items-center gap-3 mb-4">
@@ -270,6 +271,10 @@ export default function ShotDetail({
           No datasets found for this shot.
         </div>
       )}
+
+      <div className="mt-10">
+        <JsonLdPanel url={`${API_BASE}/devices/${deviceName}/shots/${shotId}`} />
+      </div>
     </div>
   );
 }

@@ -155,7 +155,7 @@ class DatasetBase(DescriptiveMixin, ScientificMetadataMixin, TimestampMixin, SQL
         default=None,
         index=True,
         description=(
-            "For a feature annotation dataset: the feature it localises (e.g. 'elm'). "
+            "For an annotation dataset: the property it localises (e.g. 'elm'). "
             "Marks the dataset as an annotation and matches the inline annotation of the "
             "same name on its subject. "
             "The subject fixes the frame: subject_dataset_id (dataset frame) or the "
@@ -212,8 +212,8 @@ class Dataset(DatasetBase, table=True):
         foreign_key="dataset.id",
         index=True,
         description=(
-            "For a feature annotation linked to a specific Dataset: the source Dataset "
-            "this annotation localises a feature in. Null for a shot-frame "
+            "For an annotation linked to a specific Dataset: the source Dataset "
+            "this annotation localises a property in. Null for a shot-frame "
             "annotation, whose subject is the shot it belongs to."
         ),
     )

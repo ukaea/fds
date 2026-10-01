@@ -111,7 +111,7 @@ def shot_ids(
     shots: ShotService, device: str, annotations: list[str] | None
 ) -> list[str]:
     return sorted(
-        s.id for s in shots.get_multi_by_device_name(device, annotations=annotations)
+        s.id for s in shots.get_multi_by_device_name(device, properties=annotations)
     )
 
 
@@ -121,7 +121,7 @@ def test_use_case_mast_shots_that_disrupted(session: Session):
 
 def test_use_case_equilibrium_datasets_from_elmy_shots(session: Session):
     results = DatasetService(session).get_datasets_for_device(
-        MAST_U, name="equilibrium", shot_annotations=["elm"]
+        MAST_U, name="equilibrium", shot_properties=["elm"]
     )
     assert [(d.name, d.shot_id) for d in results] == [("equilibrium", "50000")]
 
@@ -160,15 +160,34 @@ def test_repeated_annotations_are_anded(session: Session):
     assert shot_ids(shots, MAST, ["disruption", "confinement_mode:L-mode"]) == []
 
 
-def test_two_values_of_one_name_find_shots_that_had_both(session: Session):
-    """Each annotation gets its own EXISTS, so ANDing two values of one property
-    asks for a record carrying both entries, not for one entry holding two values.
+def test_two_values_of_one_name_find_shots_matching_either(session: Session):
+    """Values of one name widen the query rather than narrowing it.
 
-    That is the query for a transition: 30423 was in L-mode and later in H-mode,
-    so it matches; 30421 and 30422 held one mode each and do not.
+    Selecting two values of one property in a filter means "either", which is
+    what every faceted search does and what the catalogue conventions this
+    follows do too. So all three annotated shots match: 30421 and 30422 held one
+    mode each, and 30423 held both.
+
+    Asking for a shot that carried *both* simultaneously, a transition, is a
+    different and richer question. It belongs with the extent predicates in a
+    structured search rather than in a query string, and is not expressible
+    here.
     """
-    both = ["confinement_mode:L-mode", "confinement_mode:H-mode"]
-    assert shot_ids(ShotService(session), MAST, both) == ["30423"]
+    either = ["confinement_mode:L-mode", "confinement_mode:H-mode"]
+    assert shot_ids(ShotService(session), MAST, either) == ["30421", "30422", "30423"]
+
+
+def test_different_names_still_narrow(session: Session):
+    """Across names the query narrows, so the two readings cannot be confused."""
+    shots = ShotService(session)
+    assert shot_ids(shots, MAST, ["disruption", "elm"]) == ["30421"]
+
+
+def test_presence_and_a_value_of_one_name_widen(session: Session):
+    """A bare name under the same name as a value ORs with it: presence is
+    satisfied by any entry, so it subsumes the value term."""
+    mixed = ["confinement_mode", "confinement_mode:H-mode"]
+    assert shot_ids(ShotService(session), MAST, mixed) == ["30421", "30422", "30423"]
 
 
 def test_unknown_annotation_matches_nothing(session: Session):
@@ -195,7 +214,7 @@ def test_filter_is_scoped_to_the_device(session: Session):
 
 def test_malformed_annotation_raises_validation_error(session: Session):
     with pytest.raises(FDSValidationError):
-        ShotService(session).get_multi_by_device_name(MAST, annotations=["disruption:"])
+        ShotService(session).get_multi_by_device_name(MAST, properties=["disruption:"])
 
 
 def test_shot_annotation_filter_excludes_datasets_with_no_shot(session: Session):
@@ -206,7 +225,7 @@ def test_shot_annotation_filter_excludes_datasets_with_no_shot(session: Session)
     assert None in [d.shot_id for d in unfiltered]
 
     filtered = datasets.get_datasets_for_device(
-        MAST_U, name="equilibrium", shot_annotations=["elm"]
+        MAST_U, name="equilibrium", shot_properties=["elm"]
     )
     assert [d.shot_id for d in filtered] == ["50000"]
 
@@ -242,5 +261,5 @@ def test_dataset_own_annotations_are_independent_of_shot_annotations(
     session.commit()
 
     # The dataset carries `ufo`; its shot (50001) carries no annotations at all.
-    assert [d.name for d in datasets.get_multi(annotations=["ufo"])] == ["camera"]
-    assert datasets.get_multi(annotations=["ufo"], shot_annotations=["elm"]) == []
+    assert [d.name for d in datasets.get_multi(properties=["ufo"])] == ["camera"]
+    assert datasets.get_multi(properties=["ufo"], shot_properties=["elm"]) == []
