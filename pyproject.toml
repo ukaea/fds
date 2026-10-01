@@ -23,11 +23,11 @@ dependencies = [
     "cachetools>=7.2.0",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.141.1",
     "pydantic-settings>=2.15.0",
-    "pyjwt>=2.14.0",
+    "pyjwt>=2.15.0",
     "cryptography>=50.0.1",
-    "sqlmodel>=0.0.42",
+    "sqlmodel>=0.0.47",
     "structlog>=26.1.0",
-    "opentelemetry-api>=1.44.0",
+    "opentelemetry-api>=1.45.0",
 ]
 
 [project.urls]
@@ -38,14 +38,14 @@ Issues = "https://github.com/ukaea/fds/issues"
 
 [project.optional-dependencies]
 s3 = [
-    "boto3>=1.43.98",
+    "boto3>=1.43.103",
 ]
 gcs = [
-    "google-auth>=2.58.0",
+    "google-auth>=2.58.1",
     "requests>=2.34.2",
 ]
 azure = [
-    "azure-storage-blob>=12.30.2",
+    "azure-storage-blob>=12.30.3",
     "azure-identity>=1.25.3",
 ]
 otel = [
@@ -59,9 +59,9 @@ otel = [
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
-    "pytest-mock>=3.15.1",
+    "pytest-mock>=3.16.0",
     "httpx>=0.27.2",
-    "ruff>=0.16.7",
+    "ruff>=0.16.9",
     "pyright>=1.1.414",
     "testcontainers[postgres]>=4.15.0",
     "moto[s3,sts]>=5.2.3",
