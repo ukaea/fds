@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -57,12 +57,22 @@ function rangeQuery(ranges: Record<string, Range>): string {
  * page happens to hold, and its shot count is not the length of that page.
  */
 export function ShotList({ deviceName }: { deviceName: string }) {
-  const [propertyTokens, setPropertyTokens] = useState<string[]>([]);
-  const [ranges, setRanges] = useState<Record<string, Range>>({});
+  const [propertyTokens, selectProperties] = useState<string[]>([]);
+  const [ranges, boundRanges] = useState<Record<string, Range>>({});
   const [page, setPage] = useState(0);
 
-  // A narrower filter can leave the current page past the end of the results.
-  useEffect(() => setPage(0), [propertyTokens, ranges, deviceName]);
+  // Narrowing the filter can leave the current page past the end of the
+  // results, so changing it returns to the first. Done here rather than in an
+  // effect: an effect would set state after the render that caused it, which
+  // costs a second render for every keystroke on a filter.
+  const setPropertyTokens = (next: string[]) => {
+    selectProperties(next);
+    setPage(0);
+  };
+  const setRanges = (next: Record<string, Range>) => {
+    boundRanges(next);
+    setPage(0);
+  };
 
   // Unfiltered: the chips are the control you are using, so they must not
   // rearrange themselves as you narrow. Shared as an SWR key with DeviceDetail
