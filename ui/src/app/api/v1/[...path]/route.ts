@@ -43,6 +43,12 @@ async function proxyRequest(request: NextRequest) {
     if (contentType) {
       headers.set('content-type', contentType);
     }
+    // FDS negotiates on Accept: without it every request reads as plain JSON
+    // and the JSON-LD representations are unreachable through the UI.
+    const accept = request.headers.get('accept');
+    if (accept) {
+      headers.set('accept', accept);
+    }
 
     // Inject Authorization header if user is authenticated
     if (session?.accessToken) {

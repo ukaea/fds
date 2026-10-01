@@ -8,6 +8,7 @@ import ProvenanceGraph from '@/components/ProvenanceGraph';
 import { ScientificMetadata } from '@/components/properties';
 import { useDeviceLabel } from '@/lib/use-device-label';
 import { Layers, Database, FileCode, ChevronRight, Activity as ActivityIcon, Clock, ExternalLink } from 'lucide-react';
+import { JsonLdPanel } from '@/components/jsonld-panel';
 
 function formatMediaType(mediaType?: string): string {
   if (!mediaType) return 'Zarr';
@@ -236,6 +237,10 @@ export default function CollectionDetail({ id }: { id: string }) {
           <ProvenanceGraph collection={collection} />
         </div>
       ) : null}
+
+      <div className="mt-10">
+        <JsonLdPanel url={`${API_BASE}/collections/id/${id}`} />
+      </div>
     </div>
   );
 }

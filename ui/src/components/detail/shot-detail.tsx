@@ -10,6 +10,7 @@ import { Database, ChevronRight, Layers, MapPin, SlidersHorizontal, Highlighter 
 import { availableProperties, propertyQuery, withQuery } from '@/lib/properties';
 import { dedupeById } from '@/components/resolved-ref';
 import { PropertyFilter } from '@/components/property-filter';
+import { JsonLdPanel } from '@/components/jsonld-panel';
 import { DatasetCard } from '@/components/dataset-card';
 import { DatasetResults } from '@/components/dataset-results';
 import { PropertyBadges, ScientificMetadata } from '@/components/properties';
@@ -270,6 +271,10 @@ export default function ShotDetail({
           No datasets found for this shot.
         </div>
       )}
+
+      <div className="mt-10">
+        <JsonLdPanel url={`${API_BASE}/devices/${deviceName}/shots/${shotId}`} />
+      </div>
     </div>
   );
 }

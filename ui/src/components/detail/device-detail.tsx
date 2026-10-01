@@ -12,6 +12,7 @@ import { PropertyFilter } from '@/components/property-filter';
 import { DatasetResults } from '@/components/dataset-results';
 import { DeviceDatasets } from '@/components/device-datasets';
 import { ShotList, shotPropertiesUrl } from '@/components/shot-list';
+import { JsonLdPanel } from '@/components/jsonld-panel';
 
 type Tab = 'shots' | 'shot-datasets' | 'datasets';
 
@@ -182,6 +183,10 @@ export default function DeviceDetail({ deviceName }: { deviceName: string }) {
         >
           Device Datasets
         </TabButton>
+      </div>
+
+      <div className="mb-8">
+        <JsonLdPanel url={`${API_BASE}/devices/${deviceName}`} />
       </div>
 
       {activeTab === 'shots' && <ShotList deviceName={deviceName} />}

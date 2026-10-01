@@ -11,6 +11,7 @@ import ProvenanceGraph from '@/components/ProvenanceGraph';
 import { ScientificMetadata } from '@/components/properties';
 import { RelatedGroup } from '@/components/related-data';
 import { useDeviceLabel } from '@/lib/use-device-label';
+import { JsonLdPanel } from '@/components/jsonld-panel';
 
 // Heatmap Color Scale Approximation (Viridis)
 const VIRIDIS_STOPS = [[68, 1, 84], [59, 82, 139], [33, 145, 140], [93, 201, 99], [253, 231, 37]];
@@ -1210,6 +1211,10 @@ export default function DatasetDetail({ id }: { id: string }) {
           <ProvenanceGraph datasetId={datasetData.id} />
         </div>
       ) : null}
+
+      <div className="mt-10">
+        <JsonLdPanel url={`${API_BASE}/datasets/id/${id}`} />
+      </div>
     </div>
   );
 }
