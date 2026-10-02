@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.models.coverage import Coverage, DateRange, ShotRange
 from app.services.jsonld import map_dataset_to_dcat
+from tests.conftest import resource
 
 THOMSON = Coverage(shot_ranges=[ShotRange(from_shot="150")])
 
@@ -82,8 +83,10 @@ def test_jsonld_qualified_relation_resolved_geometry(
     signal = make_signal(["thomson_positions"])
 
     read_model = datasets.to_read_model(signal, include_geometry=True)
-    doc = map_dataset_to_dcat(
-        read_model, "http://testserver", geometry=read_model.geometry
+    doc = resource(
+        map_dataset_to_dcat(
+            read_model, "http://testserver", geometry=read_model.geometry
+        )
     )
     relations = doc["dcat:qualifiedRelation"]
     assert len(relations) == 1

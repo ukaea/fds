@@ -11,6 +11,7 @@ from app.models.shot import ShotCreate
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
+from tests.conftest import resource
 
 
 def test_content_negotiation_device(test_client: TestClient, session: Session):
@@ -42,7 +43,7 @@ def test_content_negotiation_device(test_client: TestClient, session: Session):
     )
     assert response.status_code == 200
     assert "application/ld+json" in response.headers["content-type"]
-    data = response.json()
+    data = resource(response.json())
     assert "@type" in data
     assert data["@type"] == "dcat:Catalog"
     assert data["title"] == "Negotiation Test Device"
@@ -63,9 +64,10 @@ def test_creator_in_device_jsonld(test_client: TestClient, session: Session):
         f"/v1/devices/{device.name}", headers={"Accept": "application/ld+json"}
     )
     assert response.status_code == 200
-    data = response.json()
+    document = response.json()
+    data = resource(document)
     assert data["creator"] == "Dr. A. Example"
-    assert data["@context"]["creator"] == "dct:creator"
+    assert document["@context"]["creator"] == "dct:creator"
 
 
 def test_content_negotiation_shot(test_client: TestClient, session: Session):
@@ -91,7 +93,7 @@ def test_content_negotiation_shot(test_client: TestClient, session: Session):
     )
     assert response.status_code == 200
     assert "application/ld+json" in response.headers["content-type"]
-    data = response.json()
+    data = resource(response.json())
     # A Shot is a grouping with no store of its own, so it is a catalog.
     assert data["@type"] == "dcat:Catalog"
     assert data["identifier"] == "30420"
@@ -126,7 +128,7 @@ def test_content_negotiation_shot_open_period(
         headers={"Accept": "application/ld+json"},
     )
     assert response.status_code == 200
-    cov = response.json()["dct:temporal"]
+    cov = resource(response.json())["dct:temporal"]
     assert cov["@type"] == "dct:PeriodOfTime"
     assert cov["startDate"].startswith("2024-03-15T14:32:00")
     assert "endDate" not in cov
@@ -165,7 +167,7 @@ def test_content_negotiation_dataset(test_client: TestClient, session: Session):
     )
     assert response.status_code == 200
     assert "application/ld+json" in response.headers["content-type"]
-    data = response.json()
+    data = resource(response.json())
     assert "@type" in data
     assert data["@type"] == "dcat:Dataset"
     assert data["title"] == "Negotiation Test Dataset"

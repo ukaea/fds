@@ -21,6 +21,7 @@ from app.services.exceptions import (
 )
 from app.services.jsonld import map_dataset_to_dcat
 from app.services.source_service import SourceService
+from tests.conftest import resource
 
 admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
 BASE = "http://testserver"
@@ -65,7 +66,7 @@ def test_derive_from_registered_dataset(session: Session):
     links = DatasetService(session).get_derivations(_id(derived), admin)
     assert [link.source_dataset_id for link in links] == [upstream_id]
 
-    node = map_dataset_to_dcat(derived, BASE)["prov:wasDerivedFrom"][0]
+    node = resource(map_dataset_to_dcat(derived, BASE))["prov:wasDerivedFrom"][0]
     assert node["@id"] == f"{BASE}/datasets/{upstream_id}"
     assert node["@type"] == "prov:Entity"
 
@@ -100,7 +101,7 @@ def test_external_identifier_becomes_id(
             DatasetDerivationCreate(source_identifier=identifier, source_label="Zen")
         ],
     )
-    node = map_dataset_to_dcat(derived, BASE)["prov:wasDerivedFrom"][0]
+    node = resource(map_dataset_to_dcat(derived, BASE))["prov:wasDerivedFrom"][0]
     assert node["@id"] == expected_id
     assert node["dct:title"] == "Zen"
 
@@ -126,7 +127,7 @@ def test_unresolvable_identifier_is_not_an_id(session: Session, identifier: str)
         "processed",
         derived_from=[DatasetDerivationCreate(source_identifier=identifier)],
     )
-    node = map_dataset_to_dcat(derived, BASE)["prov:wasDerivedFrom"][0]
+    node = resource(map_dataset_to_dcat(derived, BASE))["prov:wasDerivedFrom"][0]
     assert "@id" not in node
     assert node["dct:identifier"] == identifier
 
@@ -143,7 +144,7 @@ def test_description_only_upstream_is_a_blank_node(session: Session):
             )
         ],
     )
-    node = map_dataset_to_dcat(derived, BASE)["prov:wasDerivedFrom"][0]
+    node = resource(map_dataset_to_dcat(derived, BASE))["prov:wasDerivedFrom"][0]
     assert "@id" not in node
     assert "dct:identifier" not in node
     assert node["dct:title"] == "Legacy tape"
@@ -161,7 +162,7 @@ def test_qualified_derivation_names_the_activity(session: Session):
     )
     session.refresh(derived)
 
-    doc = map_dataset_to_dcat(derived, BASE)
+    doc = resource(map_dataset_to_dcat(derived, BASE))
     qualified = doc["prov:qualifiedDerivation"][0]
     assert qualified["prov:hadActivity"]["@id"].endswith(f"/activities/{_id(activity)}")
     assert qualified["prov:entity"]["@id"].endswith(f"/datasets/{upstream_id}")

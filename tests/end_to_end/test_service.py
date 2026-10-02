@@ -62,4 +62,5 @@ def test_json_ld_is_served_when_negotiated(
     assert "@context" in body
     # Identifiers are built from the host the request arrived on, so they name
     # whatever address this deployment is reached at.
-    assert body["@id"].endswith(f"/devices/{created['name']}")
+    device = next(n for n in body["@graph"] if n["@type"] == "dcat:Catalog")
+    assert device["@id"].endswith(f"/devices/{created['name']}")

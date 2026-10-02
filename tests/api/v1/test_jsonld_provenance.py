@@ -24,6 +24,7 @@ from app.services.jsonld import (
     FUEL_ORCHESTRATOR_ROLE,
 )
 from app.services.source_service import SourceService
+from tests.conftest import resource
 
 
 def test_jsonld_provenance(
@@ -88,11 +89,12 @@ def test_jsonld_provenance(
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/ld+json"
 
-    data = resp.json()
+    document = resp.json()
+    data = resource(document)
 
     # 3. Verify PROV-O structure
-    assert "@context" in data
-    assert "prov" in data["@context"]
+    assert "@context" in document
+    assert "prov" in document["@context"]
     assert "prov:wasGeneratedBy" in data
 
     prov = data["prov:wasGeneratedBy"]
@@ -188,7 +190,7 @@ def test_jsonld_provenance_with_timestamps(
     url = f"/v1/datasets/id/{dataset.id}"
     resp = test_client.get(url, headers=headers)
     assert resp.status_code == 200
-    prov = resp.json()["prov:wasGeneratedBy"]
+    prov = resource(resp.json())["prov:wasGeneratedBy"]
     assert "prov:startedAtTime" in prov
     assert "prov:endedAtTime" in prov
 
@@ -251,7 +253,7 @@ def test_jsonld_provenance_with_inputs(
     resp = test_client.get(url, headers=headers)
     assert resp.status_code == 200
 
-    prov = resp.json()["prov:wasGeneratedBy"]
+    prov = resource(resp.json())["prov:wasGeneratedBy"]
     assert "prov:used" in prov
     used = prov["prov:used"]
     assert len(used) == 1
@@ -309,7 +311,7 @@ def test_jsonld_provenance_with_instrument(
     resp = test_client.get(f"/v1/datasets/id/{raw.id}", headers=headers)
     assert resp.status_code == 200
 
-    prov = resp.json()["prov:wasGeneratedBy"]
+    prov = resource(resp.json())["prov:wasGeneratedBy"]
     usage = prov["prov:qualifiedUsage"]
     instrument_usages = [
         u for u in usage if u["prov:hadRole"] == {"@id": FUEL_INSTRUMENT_ROLE}
@@ -374,7 +376,7 @@ def test_jsonld_multi_agent_associations(
     resp = test_client.get(f"/v1/datasets/id/{profile.id}", headers=headers)
     assert resp.status_code == 200
 
-    prov = resp.json()["prov:wasGeneratedBy"]
+    prov = resource(resp.json())["prov:wasGeneratedBy"]
     # Executor still serialises as the primary wasAssociatedWith (a SoftwareAgent).
     assert prov["prov:wasAssociatedWith"]["@type"] == "prov:SoftwareAgent"
     assert str(code.id) in prov["prov:wasAssociatedWith"]["@id"]

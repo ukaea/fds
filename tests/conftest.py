@@ -255,3 +255,17 @@ def log_lines(monkeypatch):
 
     monkeypatch.undo()
     setup_logging()
+
+
+def resource(document: dict) -> dict:
+    """The resource node of a served JSON-LD document, without FDS's record of it."""
+    return next(
+        node for node in document["@graph"] if node["@type"] != "dcat:CatalogRecord"
+    )
+
+
+def record(document: dict) -> dict:
+    """FDS's ``dcat:CatalogRecord`` for the resource a document describes."""
+    return next(
+        node for node in document["@graph"] if node["@type"] == "dcat:CatalogRecord"
+    )

@@ -9,6 +9,7 @@ from app.services.jsonld import (
     map_dataset_to_dcat,
     map_shot_to_dcat,
 )
+from tests.conftest import resource
 
 admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
 BASE = "http://testserver"
@@ -59,7 +60,7 @@ def test_map_dataset_to_dcat_includes_scientific_metadata(session):
     )
     session.commit()
 
-    ld = map_dataset_to_dcat(dataset, BASE)
+    ld = resource(map_dataset_to_dcat(dataset, BASE))
     props = ld.get("schema:additionalProperty")
     assert props is not None
     assert len(props) == 2
@@ -94,7 +95,7 @@ def test_map_shot_to_dcat_includes_scientific_metadata():
             ScientificProperty(name="confinement_mode", value="H-mode"),
         ],
     )
-    ld = map_shot_to_dcat(shot, BASE)
+    ld = resource(map_shot_to_dcat(shot, BASE))
     assert ld["@type"] == "dcat:Catalog"
     assert ld["@id"] == f"{BASE}/devices/MAST/shots/30420"
     props = ld.get("schema:additionalProperty")
@@ -258,7 +259,7 @@ def test_shot_is_a_catalog_carrying_no_distribution():
     """
     shot = Shot(id="30420", device_name="MAST", creator="MAST Team")
 
-    ld = map_shot_to_dcat(shot, BASE)
+    ld = resource(map_shot_to_dcat(shot, BASE))
 
     assert ld["@type"] == "dcat:Catalog"
     assert "dcat:distribution" not in ld

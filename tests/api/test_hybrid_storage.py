@@ -3,6 +3,7 @@ from sqlmodel import Session
 
 from app.models.device import Device
 from app.models.shot import Shot
+from tests.conftest import resource
 
 
 def test_hybrid_storage_fields(
@@ -48,7 +49,7 @@ def test_hybrid_storage_fields(
         headers={"Accept": "application/ld+json"},
     )
     assert response.status_code == 200
-    ld_data = response.json()
+    ld_data = resource(response.json())
 
     # 4. Verify JSON-LD mapping — media_type and format now live in dcat:distribution
     assert "dcat:distribution" in ld_data

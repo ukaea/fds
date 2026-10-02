@@ -13,6 +13,7 @@ import pytest
 
 from app.api.base_url import _warn_about_guessing, get_base_url
 from app.core.config import config
+from tests.conftest import resource
 
 
 @pytest.fixture(autouse=True)
@@ -95,8 +96,8 @@ def test_every_route_publishes_the_same_name(test_client, monkeypatch, session):
     )
 
     ld = {"Accept": "application/ld+json"}
-    by_identifier = test_client.get("/devices/agree", headers=ld).json()
-    by_api = test_client.get("/v1/devices/agree", headers=ld).json()
+    by_identifier = resource(test_client.get("/devices/agree", headers=ld).json())
+    by_api = resource(test_client.get("/v1/devices/agree", headers=ld).json())
 
     assert by_identifier["@id"] == "https://fds.example.org/devices/agree"
     assert by_api["@id"] == by_identifier["@id"]
