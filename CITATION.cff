@@ -14,7 +14,7 @@ authors:
 repository-code: "https://github.com/ukaea/fds"
 url: "https://ukaea.github.io/fds/"
 license: Apache-2.0
-version: 0.0.1
+version: 0.0.1  # x-release-please-version
 keywords:
   - fusion
   - FAIR data

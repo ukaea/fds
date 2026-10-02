@@ -2,13 +2,17 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import ColumnElement, cast, distinct, false, func, or_, true, tuple_
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from app.auth.access_control import (
+    DEFAULT_ACCESS_LEVEL,
     EffectivePolicy,
     get_effective_access_level,
     get_effective_policy,
+    resolve_policy,
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_shot_operator
@@ -16,11 +20,17 @@ from app.core.audit import record_restricted_read
 from app.core.context import ReadTier, record_returned
 from app.core.naming import normalise_device_name
 from app.core.timeutils import as_utc
+from app.models.available_properties import (
+    AvailableProperties,
+    PropertyValue,
+    PropertyValues,
+)
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.models.shot import Shot, ShotCreate, ShotRead, ShotUpdate
 from app.services.annotation_service import AnnotationService
+from app.services.available_properties import DEFAULT_MAX_VALUES, available_properties
 from app.services.base_service import BaseService
 from app.services.dataset_service import DatasetService
 from app.services.exceptions import (
@@ -30,7 +40,12 @@ from app.services.exceptions import (
     ForbiddenError,
     ResourceNotFoundError,
 )
-from app.services.filters import annotation_clauses
+from app.services.filters import (
+    entries_of,
+    policy_tuple_clause,
+    property_bound_clauses,
+    property_clauses,
+)
 from app.services.jsonld import map_shot_to_dcat
 from app.services.reference_service import REFERENCE_KINDS, ReferenceService
 
@@ -232,34 +247,218 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         user: AuthenticatedUser = ANONYMOUS_USER,
         offset: int = 0,
         limit: int = 100,
-        annotations: list[str] | None = None,
+        properties: list[str] | None = None,
+        minimums: list[str] | None = None,
+        maximums: list[str] | None = None,
     ) -> Sequence[Shot]:
         """
         Retrieve all shots for a given device by its name.
 
-        ``annotations`` filters on feature annotations in ``scientific_metadata``;
+        ``properties`` filters on entries in ``scientific_metadata``;
         several must all be present (see ``app.services.filters``).
         """
+        device = normalise_device_name(device_name) or ""
+        where = self._metadata_clauses(device, properties, minimums, maximums)
+        where.append(self._readable_shots_clause(device, user, where))
+
         statement = (
             select(Shot)
-            .where(Shot.device_name == normalise_device_name(device_name))
-            .where(*annotation_clauses(Shot.scientific_metadata, annotations))
-            .order_by(col(Shot.id))
+            .where(*where)
+            .order_by(col(Shot.shot_at).desc().nullslast(), col(Shot.id).desc())
             .offset(offset)
             .limit(limit)
         )
-        result = self.session.exec(statement).all()
+        shots = self.session.exec(statement).all()
 
-        accessible_shots = []
-        for s in result:
+        record_returned(len(shots))
+        return shots
+
+    def _readable_shots_clause(
+        self,
+        device_name: str,
+        user: AuthenticatedUser,
+        where: Sequence[ColumnElement[bool]],
+    ) -> ColumnElement[bool]:
+        """Restrict a scope to the shots whose policy this user satisfies.
+
+        A shot's policy is its own ``(access_level, required_scopes,
+        allowed_idps)`` falling back to its device's, and a scope under one
+        device has one device to fall back to. So the distinct tuples over the
+        scope, one to three in practice, are enumerated and the read policy is
+        enforced once per tuple rather than once per row.
+
+        That keeps the rules in ``_enforce_read_policy`` rather than restating
+        them in SQL, and makes visibility a WHERE clause: pagination then counts
+        only rows the caller can see, instead of slicing first and discarding
+        afterwards.
+        """
+        device = self.session.exec(
+            select(Device).where(Device.name == device_name)
+        ).first()
+        # No device means no shots (the foreign key sees to that), so the scope
+        # is empty and this fallback is never actually consulted. Stated rather
+        # than fabricated, so it cannot resolve to something surprising.
+        parent_policy = (
+            get_effective_policy(device, self.session)
+            if device
+            else EffectivePolicy(
+                access_level=DEFAULT_ACCESS_LEVEL,
+                required_scopes=None,
+                allowed_idps=None,
+            )
+        )
+
+        scopes = cast(col(Shot.required_scopes), JSONB)
+        idps = cast(col(Shot.allowed_idps), JSONB)
+        tuples = self.session.exec(
+            select(col(Shot.access_level), scopes, idps).where(*where).distinct()
+        ).all()
+
+        allowed: list[ColumnElement[bool]] = []
+        for access_level, required_scopes, allowed_idps in tuples:
+            policy = resolve_policy(
+                access_level, required_scopes, allowed_idps, parent_policy
+            )
             try:
-                self.check_read_access(s, user, ReadTier.LISTED)
-                accessible_shots.append(s)
+                self._enforce_read_policy(policy, user)
             except ForbiddenError:
                 continue
+            allowed.append(
+                policy_tuple_clause(
+                    col(Shot.access_level),
+                    col(Shot.required_scopes),
+                    col(Shot.allowed_idps),
+                    access_level,
+                    required_scopes,
+                    allowed_idps,
+                )
+            )
 
-        record_returned(len(accessible_shots))
-        return accessible_shots
+        # Checked before the all-allowed case so an empty scope fails closed.
+        if not allowed:
+            return false()
+        if len(allowed) == len(tuples):
+            return true()
+        return or_(*allowed)
+
+    def _metadata_clauses(
+        self,
+        device: str,
+        properties: list[str] | None,
+        minimums: list[str] | None,
+        maximums: list[str] | None,
+    ) -> list[Any]:
+        """The scope a filter describes, before access is applied.
+
+        Shared by the listing and the properties so the two cannot drift: a count
+        that does not match the rows it counts is worse than no count.
+        """
+        return [
+            Shot.device_name == device,
+            *property_clauses(Shot.scientific_metadata, properties),
+            *property_bound_clauses(Shot.scientific_metadata, minimums, lower=True),
+            *property_bound_clauses(Shot.scientific_metadata, maximums, lower=False),
+        ]
+
+    def _readable_scope(
+        self,
+        device_name: str,
+        user: AuthenticatedUser,
+        properties: list[str] | None = None,
+        minimums: list[str] | None = None,
+        maximums: list[str] | None = None,
+    ) -> list[Any]:
+        """The filtered scope, restricted to shots this caller may read."""
+        device = normalise_device_name(device_name) or ""
+        if not self.session.exec(select(Device).where(Device.name == device)).first():
+            raise DeviceNotFoundError(f"Device '{device_name}' not found")
+
+        where = self._metadata_clauses(device, properties, minimums, maximums)
+        where.append(self._readable_shots_clause(device, user, where))
+        return where
+
+    def property_values(
+        self,
+        device_name: str,
+        name: str,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        query: str | None = None,
+        limit: int = 50,
+    ) -> PropertyValues:
+        """The values one name takes, with counts, for a vocabulary too big to list.
+
+        Searched here rather than in the client: a device's `objective` runs to
+        hundreds of values several hundred characters long, and shipping all of
+        them to filter in a browser wastes the bandwidth the cap exists to save.
+        """
+        if not 1 <= limit <= 500:
+            raise FDSValidationError(f"limit must be between 1 and 500, got {limit}.")
+
+        where = self._readable_scope(device_name, user)
+        entries = entries_of(col(Shot.scientific_metadata))
+        entry_name = entries.c.value.op("->>")("name")
+        entry_value = entries.c.value.op("->>")("value")
+        conditions = [*where, entry_name == name, entry_value.is_not(None)]
+        if query:
+            conditions.append(entry_value.ilike(f"%{query}%"))
+
+        rows = self.session.exec(
+            select(
+                entry_value.label("value"),
+                func.count(distinct(tuple_(col(Shot.device_name), col(Shot.id)))).label(
+                    "records"
+                ),
+            )
+            .select_from(Shot)
+            .join(entries, onclause=true())
+            .where(*conditions)
+            .group_by(entry_value)
+            .order_by(
+                func.count(
+                    distinct(tuple_(col(Shot.device_name), col(Shot.id)))
+                ).desc(),
+                entry_value,
+            )
+            .limit(limit)
+        ).all()
+
+        total_distinct = self.session.exec(
+            select(func.count(distinct(entry_value)))
+            .select_from(Shot)
+            .join(entries, onclause=true())
+            .where(*conditions)
+        ).one()
+
+        return PropertyValues(
+            name=name,
+            distinct=total_distinct,
+            values=[
+                PropertyValue(value=value, records=records) for value, records in rows
+            ],
+        )
+
+    def available_properties(
+        self,
+        device_name: str,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        properties: list[str] | None = None,
+        minimums: list[str] | None = None,
+        maximums: list[str] | None = None,
+        max_values: int = DEFAULT_MAX_VALUES,
+    ) -> AvailableProperties:
+        """The properties a device's shots carry, for building a filter.
+
+        Scoped by the same ``properties`` filter as the listing, so ``total``
+        counts the matching shots this caller may read.
+        """
+        where = self._readable_scope(device_name, user, properties, minimums, maximums)
+        return available_properties(
+            self.session,
+            Shot,
+            col(Shot.scientific_metadata),
+            where=where,
+            max_values=max_values,
+        )
 
     def update(
         self,
@@ -347,8 +546,8 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         """
         Converts a Shot ORM object to a ShotRead DTO, optionally including the full device object.
         Centralises the presentation logic for shots. When ``include_annotations``
-        is set, resolves the shot's shot-frame and device-frame annotations,
-        frame-scoped, so no dataset-frame annotations leak in.
+        is set, resolves the shot's shot-frame and device-frame properties,
+        frame-scoped, so no dataset-frame properties leak in.
         """
         read_model = ShotRead.model_validate(shot)
         read_model.effective_access_level = get_effective_access_level(

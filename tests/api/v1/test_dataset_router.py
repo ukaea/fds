@@ -16,6 +16,7 @@ from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
 from app.services.source_service import SourceService
+from tests.conftest import resource
 
 # Dummy users for setup
 admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
@@ -454,7 +455,7 @@ def test_temporal_coverage_roundtrip(
         f"/v1/datasets/id/{dataset.id}", headers={"Accept": "application/ld+json"}
     )
     assert response.status_code == 200
-    ld = response.json()
+    ld = resource(response.json())
     cov = ld["dct:temporal"]
     assert cov["@type"] == "dct:PeriodOfTime"
     assert cov["startDate"].startswith("2024-03-15T14:00:00")

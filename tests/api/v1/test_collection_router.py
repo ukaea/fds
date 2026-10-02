@@ -14,6 +14,7 @@ from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
+from tests.conftest import resource
 
 admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
 
@@ -356,7 +357,7 @@ def test_collection_jsonld_response(
     )
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/ld+json")
-    data = response.json()
+    data = resource(response.json())
     assert data["@type"] == ["dcat:Catalog", "prov:Collection"]
     # No root_url set → no dcat:distribution node
     assert "dcat:distribution" not in data
@@ -377,7 +378,7 @@ def test_collection_jsonld_members_as_prov_had_member(
         headers={**admin_user_token, "accept": "application/ld+json"},
     )
     assert response.status_code == 200
-    data = response.json()
+    data = resource(response.json())
     assert "prov:Collection" in data["@type"]
     assert data["prov:hadMember"] == [{"@id": f"http://testserver/datasets/{ds_id}"}]
 
@@ -402,7 +403,7 @@ def test_collection_jsonld_includes_root_url_distribution(
         headers={**admin_user_token, "accept": "application/ld+json"},
     )
     assert response.status_code == 200
-    data = response.json()
+    data = resource(response.json())
     assert data["dcat:distribution"] == {
         "@type": "dcat:Distribution",
         "dcat:accessURL": "s3://fds-data/shots/50000/analysed",
@@ -486,7 +487,7 @@ def test_collection_jsonld_carries_scientific_metadata(
     )
 
     assert response.status_code == 200
-    props = response.json()["schema:additionalProperty"]
+    props = resource(response.json())["schema:additionalProperty"]
     assert [p["schema:name"] for p in props] == ["confinement_mode", "plasma_current"]
     assert props[0]["@type"] == "schema:PropertyValue"
     assert props[1]["schema:unitText"] == "MA"

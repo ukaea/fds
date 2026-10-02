@@ -19,6 +19,29 @@ Global
 
 Datasets and Collections can exist at any scope level: Global, Device, or Shot. A Collection can contain other Collections as well as Datasets.
 
+## Dates and times
+
+Every datetime is an instant, and FDS returns it in UTC with a `Z` suffix:
+`2012-01-27T15:52:00Z`. Send one with an offset, such as
+`2012-07-03T10:15:00+01:00`, and FDS stores that instant. Send one without an
+offset and it is taken to be UTC, so a local time sent that way is stored an
+hour out during summer time. Include the offset, or convert to UTC first.
+
+### When FDS listed a record
+
+Every Device, Shot, Dataset and Collection also carries two fields that FDS
+sets itself:
+
+| Field | Description |
+| --- | --- |
+| `created_at` | When FDS listed the record |
+| `updated_at` | When FDS last changed the record |
+
+They describe FDS's entry, not the thing it describes. Shot 28352 was fired in
+2012 and listed in 2026, so its `shot_at` is in 2012 and its `created_at` in
+2026. In JSON-LD they appear on the [catalogue record](../dcat-jsonld.md#the-resource-and-fdss-record-of-it),
+not on the resource.
+
 ## Scientific metadata
 
 The `scientific_metadata` field on Shot, Dataset and Collection holds a structured list of experimental conditions. Each entry is a `{name, value, unit, description}` property:
@@ -29,7 +52,7 @@ The `scientific_metadata` field on Shot, Dataset and Collection holds a structur
 | `value` | any | Yes | Any JSON-compatible type: number, string, boolean, or list |
 | `unit` | string | No | Unit for physical quantities (e.g. `MA`, `T`) |
 | `description` | string | No | Free-text explanation |
-| `extent` | object | No | Optional 1D range that localises the property on one named axis, making it a *feature* (see below) |
+| `extent` | object | No | Optional 1D range that localises the property on one named axis, making it an *annotation* (see below) |
 
 ```json
 "scientific_metadata": [
@@ -43,9 +66,9 @@ The `scientific_metadata` field on Shot, Dataset and Collection holds a structur
 
 In JSON-LD, these are mapped to `schema:additionalProperty` / `schema:PropertyValue` nodes, making them indexable by Google Dataset Search. See [Semantic Metadata](../dcat-jsonld.md).
 
-### Feature annotation
+### Annotations
 
-A property may carry an optional `extent`: a 1D range on one named axis of the data, making it a *feature*. Time is the common case (an H-mode window, a disruption), but the axis can be any dimension the store has, such as frequency for an MHD mode. A property with no `extent` is a plain scalar property.
+A property may carry an optional `extent`: a 1D range on one named axis of the data, making it an *annotation*. Time is the common case (an H-mode window, a disruption), but the axis can be any dimension the store has, such as frequency for an MHD mode. A property with no `extent` is a plain scalar property.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -64,41 +87,116 @@ A property may carry an optional `extent`: a 1D range on one named axis of the d
 
 `start`/`end` are coordinates on the named axis, in that axis's own frame, so a consumer overlays them directly on the axis it plots the signal against. Time is not privileged: aligning a shot-level `time` extent to a particular diagnostic's axis is the consumer's job and is not guaranteed, since processing may put that diagnostic on a different base. A Shot can declare `t0_at`, the wall-clock instant of its relative `t=0`, so a provider can communicate the offset from `shot_at`; FDS stores it but never uses it to convert event times or to assume two datasets share a time base.
 
-Only 1D localisation can be stored in the metadata. Multi-dimensional regions (a mask, a 2D shape) and dense series (every ELM in a shot) are referenced as [feature annotations](reference-datasets.md#feature-annotations).
+Only 1D localisation can be stored in the metadata. Multi-dimensional regions (a mask, a 2D shape) and dense series (every ELM in a shot) are referenced as [annotation datasets](reference-datasets.md#annotation-datasets).
 
 A `time` extent projects to a [W3C Time](https://www.w3.org/TR/owl-time/) `time:Interval` in JSON-LD; an extent on any other axis projects to a numeric range.
 
 ### Finding annotated records
 
-Shot, Dataset and Collection list endpoints accept an `annotation` parameter that filters on `scientific_metadata`, in one of two forms:
+Shot, Dataset and Collection list endpoints accept a `property` parameter that filters on `scientific_metadata`, in one of two forms:
 
 | Form | Meaning | Example |
 | --- | --- | --- |
-| `name` | The property is present, whatever its value | `?annotation=disruption` |
-| `name:value` | The property is present with this value | `?annotation=confinement_mode:H-mode` |
+| `name` | The property is present, whatever its value | `?property=disruption` |
+| `name:value` | The property is present with this value | `?property=confinement_mode:H-mode` |
 
 ```text
-GET /v1/devices/mast/shots?annotation=disruption
-GET /v1/devices/mast/shots?annotation=confinement_mode:H-mode
+GET /v1/devices/mast/shots?property=disruption
+GET /v1/devices/mast/shots?property=confinement_mode:H-mode
 ```
 
-Repeat the parameter to require several annotations at once. They combine with AND, so this returns only shots carrying both:
+Repeat the parameter to give more than one. Whether that broadens or narrows the result depends on whether you repeat the same property:
+
+- **The same property with different values matches a shot with any of them.**
+- **Different properties must all match.**
 
 ```text
-GET /v1/devices/mast/shots?annotation=disruption&annotation=elm
+GET /v1/devices/mast/shots?property=heating:SS Beam&property=heating:SW Beam
 ```
 
-Only the first `:` separates name from value, so a value may itself contain one (`?annotation=mode:n=1:tearing` looks for the value `n=1:tearing`). A trailing separator with no value is rejected: omit it to filter on presence alone.
-
-Values are compared against the text you supply or its natural type, so `?annotation=disruption:true` matches a stored boolean `true` as well as the string `"true"`.
-
-Dataset lists additionally accept `name`, plus `shot_annotation`, which filters on an annotation carried by the dataset's *parent shot* rather than the dataset itself. That answers questions spanning both levels in one request:
+Shots heated by either beam, because both values are `heating`.
 
 ```text
-GET /v1/devices/mastu/datasets?name=equilibrium&shot_annotation=elm
+GET /v1/devices/mast/shots?property=disruption&property=elm
 ```
 
-Datasets that belong to no shot never match a `shot_annotation` filter. Annotation names are not validated, so a name that nothing uses returns an empty list rather than an error.
+Only shots that had both, because `disruption` and `elm` are different properties.
+
+The two combine, so this asks for shots on either beam that also had a disruption:
+
+```text
+GET /v1/devices/mast/shots?property=heating:SS Beam&property=heating:SW Beam&property=disruption
+```
+
+This is what ticking two values in one filter and one in another means.
+
+Requiring *several values of one property at once*, such as a shot that was in L-mode and later in H-mode, is a different question. It needs nesting that a query string cannot express.
+
+Only the first `:` separates name from value, so a value may itself contain one (`?property=mode:n=1:tearing` looks for the value `n=1:tearing`). A trailing separator with no value is rejected: omit it to filter on presence alone.
+
+Values are compared against the text you supply or its natural type, so `?property=disruption:true` matches a stored boolean `true` as well as the string `"true"`.
+
+`property_min` and `property_max` bound a numeric value:
+
+```text
+GET /v1/devices/mast/shots?property_min=plasma_current_max:700000
+GET /v1/devices/mast/shots?property_min=plasma_current_max:700000&property_max=plasma_current_max:900000
+```
+
+Bounds combine with AND and with any `property` filter. A record whose value for that name is not a number is skipped rather than matched.
+
+Dataset lists additionally accept `name`, plus `shot_property`, which filters on an annotation carried by the dataset's *parent shot* rather than the dataset itself. That answers questions spanning both levels in one request:
+
+```text
+GET /v1/devices/mastu/datasets?name=equilibrium&shot_property=elm
+```
+
+Datasets that belong to no shot never match a `shot_property` filter. Annotation names are not validated, so a name that nothing uses returns an empty list rather than an error.
+
+### Discovering what to filter on
+
+Annotation names are an open vocabulary, so a device's shots tell you what they can be filtered by:
+
+```text
+GET /v1/devices/mast/shots/properties
+```
+
+```json
+{
+  "total": 5300,
+  "annotations": [
+    {"name": "flat_top", "records": 5300, "distinct": 1, "values": ["true"]},
+    {"name": "campaign", "records": 5300, "distinct": 6, "values": ["M5", "M6", "M7", "M8", "M9", "M9a"]},
+    {"name": "plasma_current_max", "records": 5300, "distinct": 5267, "unit": "A"}
+  ]
+}
+```
+
+Each entry gives the number of shots carrying that name, the number of distinct values it takes, and its **kind**:
+
+| kind | what it is | how to filter it |
+| --- | --- | --- |
+| `term` | a value drawn from a vocabulary | equality, with `property` |
+| `quantity` | a magnitude on a scale | range, with `property_min` / `property_max` |
+| `text` | prose written for a human | not filterable; never listed |
+
+A producer sets `kind` on the property to say what a value is. When they have not, FDS infers it from the values in scope: a handful of repeated values is a term whether or not those values are numbers, a number that differs on nearly every record is a quantity, and text that is near-unique per record is prose. [Scientific Metadata](scientific-metadata.md) covers what to declare and how each kind is presented.
+
+A `term`'s values appear only when there are at most `max_values` of them, 20 by default and at most 200. Above that, fetch them a page at a time:
+
+```text
+GET /v1/devices/mast/shots/properties/objective/values?q=conditioning
+```
+
+That returns each matching value with the number of shots carrying it, most common first. `unit` appears only when every record agrees on one, and `min`/`max` are set for quantities. A property carrying an extent also reports the `dimension` it is localised on, which makes it an annotation: a claim about a region of the data rather than about the shot as a whole.
+
+`total` counts the shots you may read, and the endpoint accepts the same `property` parameter as the listing, so a filtered scope can be counted exactly:
+
+```text
+GET /v1/devices/mast/shots/properties?property=campaign:M9
+```
+
+Values a caller is not permitted to read never appear, so two callers can see different properties over the same device.
 
 ## URL structure
 

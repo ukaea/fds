@@ -53,12 +53,13 @@ METADATA_CONTEXT = {
     "time": "http://www.w3.org/2006/time#",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
     "dqv": "http://www.w3.org/ns/dqv#",
+    "foaf": "http://xmlns.com/foaf/0.1/",
     "oa": "http://www.w3.org/ns/oa#",
     "title": "dct:title",
     "description": "dct:description",
     "publisher": "dct:publisher",
     "identifier": "dct:identifier",
-    "created": {"@id": "dct:created", "@type": "xsd:dateTime"},
+    "issued": {"@id": "dct:issued", "@type": "xsd:dateTime"},
     "modified": {"@id": "dct:modified", "@type": "xsd:dateTime"},
     "creator": "dct:creator",
     "startDate": {"@id": "dcat:startDate", "@type": "xsd:dateTime"},
@@ -380,15 +381,44 @@ def _numeric_range_node(
     return node
 
 
+def _with_catalog_record(node: dict[str, Any], entry: Any) -> dict[str, Any]:
+    """Return ``node`` and FDS's record of it as one document.
+
+    ``created_at`` and ``updated_at`` say when FDS listed the resource and last
+    changed its entry, not when the resource was made or changed. They belong to
+    a ``dcat:CatalogRecord`` about the resource rather than to the resource.
+    """
+    resource = {k: v for k, v in node.items() if k != "@context"}
+    if "@id" not in resource:
+        return node
+    created_at = getattr(entry, "created_at", None)
+    updated_at = getattr(entry, "updated_at", None)
+    record = {
+        "@id": f"{resource['@id']}#record",
+        "@type": "dcat:CatalogRecord",
+        "foaf:primaryTopic": {"@id": resource["@id"]},
+        "issued": created_at.isoformat() if created_at else None,
+        "modified": updated_at.isoformat() if updated_at else None,
+    }
+    return {
+        "@context": METADATA_CONTEXT,
+        "@graph": [resource, {k: v for k, v in record.items() if v is not None}],
+    }
+
+
 def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, Any]:
-    """
-    Maps a Device to a dcat:Catalog.
-    """
+    """Maps a Device to a ``dcat:Catalog`` document with FDS's record of it."""
+    return _with_catalog_record(
+        {"@context": METADATA_CONTEXT, **device_node(device, base_url)}, device
+    )
+
+
+def device_node(device: Device | DeviceRead, base_url: str) -> dict[str, Any]:
+    """The Device's ``dcat:Catalog`` node alone, for embedding in another document."""
     names = Identifiers(base_url)
     device_uri = names.device(device.name)
 
     data = {
-        "@context": METADATA_CONTEXT,
         "@type": "dcat:Catalog",
         "@id": device_uri,
         "title": device.title or f"Device: {device.name}",
@@ -396,12 +426,6 @@ def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, 
         "identifier": device.name,
         "publisher": device.publisher,
         "creator": device.creator,
-        "created": device.created_at.isoformat()
-        if hasattr(device, "created_at")
-        else None,
-        "modified": device.updated_at.isoformat()
-        if hasattr(device, "updated_at")
-        else None,
     }
 
     return {k: v for k, v in data.items() if v is not None}
@@ -437,10 +461,6 @@ def map_shot_to_dcat(
         "identifier": shot.id,
         "publisher": shot.publisher,
         "creator": shot.creator,
-        "created": shot.created_at.isoformat() if hasattr(shot, "created_at") else None,
-        "modified": shot.updated_at.isoformat()
-        if hasattr(shot, "updated_at")
-        else None,
     }
     # dct:temporal → dct:PeriodOfTime. Emit a closed period when an end is known or
     # derivable from the duration; otherwise an open period (start only).
@@ -468,7 +488,7 @@ def map_shot_to_dcat(
             _qualified_relation(version, FUEL_ANNOTATION_ROLE, base_url)
             for version in resolved_annotations
         ]
-    return {k: v for k, v in data.items() if v is not None}
+    return _with_catalog_record({k: v for k, v in data.items() if v is not None}, shot)
 
 
 def map_dataset_to_dcat(
@@ -500,12 +520,6 @@ def map_dataset_to_dcat(
         "identifier": str(dataset.id) if hasattr(dataset, "id") else dataset.name,
         "publisher": dataset.publisher,
         "creator": dataset.creator,
-        "created": dataset.created_at.isoformat()
-        if hasattr(dataset, "created_at")
-        else None,
-        "modified": dataset.updated_at.isoformat()
-        if hasattr(dataset, "updated_at")
-        else None,
         "keywords": dataset.keywords.split(",") if dataset.keywords else [],
         "license": dataset.license,
         "version": dataset.version,
@@ -616,7 +630,9 @@ def map_dataset_to_dcat(
     if qualified_relations:
         data["dcat:qualifiedRelation"] = qualified_relations
 
-    return {k: v for k, v in data.items() if v is not None}
+    return _with_catalog_record(
+        {k: v for k, v in data.items() if v is not None}, dataset
+    )
 
 
 def map_source_to_dcat(source: "Source", base_url: str) -> dict[str, Any]:
@@ -743,12 +759,6 @@ def map_collection_to_dcat(
         "identifier": str(collection_id) if collection_id else collection.name,
         "publisher": collection.publisher,
         "creator": collection.creator,
-        "created": collection.created_at.isoformat()
-        if hasattr(collection, "created_at")
-        else None,
-        "modified": collection.updated_at.isoformat()
-        if hasattr(collection, "updated_at")
-        else None,
     }
 
     if collection.access_level:
@@ -810,4 +820,6 @@ def map_collection_to_dcat(
     if activity:
         data["prov:wasGeneratedBy"] = _build_activity_node(activity, base_url)
 
-    return {k: v for k, v in data.items() if v is not None}
+    return _with_catalog_record(
+        {k: v for k, v in data.items() if v is not None}, collection
+    )

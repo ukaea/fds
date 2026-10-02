@@ -235,12 +235,13 @@ exchange without returning credentials for a real store.
 ## Bulk access: the Credential Manifest
 
 Requesting credentials one dataset at a time costs a round trip per dataset, and one set of
-credentials cannot cover an unlimited number of objects — an IAM session policy has a size limit, so
+credentials cannot cover an unlimited number of objects. An IAM session policy has a size limit, so
 there is a ceiling on how many prefixes a single token can name. For workflows that open many
 datasets at once, `POST /v1/file-access/credentials` vends for a whole set in one request.
 
-The request body selects what to vend for. Every field is optional, and omitting the body entirely
-vends for everything the caller is allowed to read.
+The request body selects what to vend for. At least one of `device_name`, `shot_id` and
+`data_urls` has to be given: a body naming none of them vends nothing, so that a stray empty
+request cannot ask for the whole catalogue.
 
 === "curl"
 
@@ -270,12 +271,13 @@ that URL:
 {
   "resource_map": {
     "s3://mast/level2/shots/30421.zarr/thomson_scattering": {
-      "access_key_id": "ASIA...",
+      "access_key_id": "...",
       "secret_access_key": "...",
       "session_token": "...",
       "expiration": "2026-09-23T16:04:05Z",
       "endpoint_url": "https://s3.echo.stfc.ac.uk",
-      "region": null
+      "region": null,
+      "storage_options": null
     },
     "s3://mast/level2/shots/30421.zarr/equilibrium": { "...": "..." }
   }
@@ -285,8 +287,8 @@ that URL:
 Worker nodes (Dask, Ray, Spark) receive the manifest and each look up the URL they are about to
 open. No further API calls are needed.
 
-Azure and GCS datasets carry their own credential fields — `account_name` and `sas_token`, `token`
-and `expiry` respectively — rather than the S3 set above. One manifest can mix them, because FDS
+Azure and GCS datasets carry their own credential fields rather than the S3 set above:
+`account_name` and `sas_token` for Azure, `token` and `expiry` for GCS. One manifest can mix them, because FDS
 resolves a provider per storage endpoint.
 
 ### What the server does with the request
@@ -298,13 +300,68 @@ behaviour, and the manifest does not expose it: a credential covering several da
 in full under each of their URLs, so the response grows linearly with the number of datasets
 requested.
 
-!!! note "A manifest entry is not a `storage_options` value"
+### Opener-ready storage options
 
-    The two vending paths return different shapes. `include_storage_options=true` on a dataset
-    returns opener-ready keyword arguments — `key`, `secret`, `token`, `client_kwargs` — which go
-    straight into `xr.open_dataset(..., storage_options=...)`. A manifest entry is the credential
-    itself, in the fields shown above. A worker reading from a manifest has to map those onto
-    whatever its opener expects; it cannot pass a manifest entry as `storage_options` unchanged.
+Ask for `include_storage_options=true` and every entry carries `storage_options` as well as the
+raw credential, in the same opener-ready shape the single-dataset path returns.
+
+```python
+import requests
+
+# One request covers every dataset on the shot.
+resource_map = requests.post(
+    f"{API}/file-access/credentials",
+    headers=headers,
+    params={"include_storage_options": True},
+    json={"device_name": "mast", "shot_id": "30421"},
+).json()["resource_map"]
+
+url = "s3://mast/level2/shots/30421.zarr/thomson_scattering"
+```
+
+A worker looks up the URL it was given and hands that entry's `storage_options` to its opener.
+
+=== "fsspec (xarray, zarr, dask, pyarrow)"
+
+    ```python
+    ds = xr.open_dataset(
+        url, engine="zarr", storage_options=resource_map[url]["storage_options"]
+    )
+    ```
+
+=== "icechunk"
+
+    ```python
+    storage = icechunk.s3_storage(
+        bucket="mast",
+        prefix="level2/shots/30421.zarr",
+        **resource_map[url]["storage_options"],
+    )
+    ```
+
+FDS picks the shape per URL from that distribution's [`storage_options_type`](data-model/dataset.md#how-the-data-is-opened): `fsspec_s3` for the
+s3fs family, `icechunk_s3` for `icechunk.s3_storage`. It also fills in the two settings that belong
+to the endpoint rather than the credential, and that a hand-written mapping tends to miss:
+`allow_http` for a plain `http://` endpoint, and `force_path_style` for an S3-compatible endpoint
+that is not AWS. Against a non-AWS store, a missing `force_path_style` is the usual cause of a
+connection that resolves but cannot find the bucket.
+
+Azure and GCS entries carry their one shape instead: `account_name` and `sas_token` for adlfs,
+`token` for gcsfs. A distribution whose `storage_options_type` is null is opened by its URL
+directly, so it gets a credential and no `storage_options`.
+
+Two things stay yours to supply.
+
+**`bucket` and `prefix`.** FDS leaves them unset because only the caller knows which URL it is
+opening: a Distribution's own `url` for a standalone Zarr, or a Collection's `root_url` for an
+IceChunk store that holds the Distribution as a group.
+
+**A fresh manifest when `expiration` passes.** It is the credential's lifetime, not a hint. A
+worker holding a manifest across a long job has to request a new one rather than retry on failure.
+
+As with the single-dataset path, vending needs a configured provider whose `endpoint_url` matches
+the distribution, and the local stack configures none. These examples show the shape of the
+exchange rather than something that runs against `compose.yaml` as shipped.
 
 ## What FDS does NOT do
 

@@ -33,6 +33,40 @@ def test_create_shot_nested_endpoint(
     assert data["id"] == "shot-54321"
 
 
+def test_shot_at_without_an_offset_is_taken_as_utc(
+    test_client: TestClient,
+    session: Session,
+    admin_user_token: dict,
+):
+    DeviceService(session).create(DeviceCreate(name="MAST"), user=admin_user)
+    session.commit()
+
+    response = test_client.post(
+        "/v1/devices/mast/shots/",
+        headers=admin_user_token,
+        json={"id": "28352", "shot_at": "2012-01-27T15:52:00"},
+    )
+    assert response.status_code == 201
+    assert response.json()["shot_at"] == "2012-01-27T15:52:00Z"
+
+
+def test_shot_at_with_an_offset_is_returned_in_utc(
+    test_client: TestClient,
+    session: Session,
+    admin_user_token: dict,
+):
+    DeviceService(session).create(DeviceCreate(name="MAST"), user=admin_user)
+    session.commit()
+
+    response = test_client.post(
+        "/v1/devices/mast/shots/",
+        headers=admin_user_token,
+        json={"id": "29000", "shot_at": "2012-07-03T10:15:00+01:00"},
+    )
+    assert response.status_code == 201
+    assert response.json()["shot_at"] == "2012-07-03T09:15:00Z"
+
+
 def test_create_shot_conflict(
     test_client: TestClient,
     session: Session,

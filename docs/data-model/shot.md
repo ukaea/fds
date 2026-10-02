@@ -6,7 +6,7 @@ A single plasma discharge on a Device.
 | --- | --- | --- | --- |
 | `id` | string | Yes | Shot ID/number (e.g. `30421`) |
 | `device_name` | string | No | Parent device (taken from the URL path) |
-| `shot_at` | datetime | No | When the plasma discharge began, distinct from `created_at` (the catalogue record timestamp) |
+| `shot_at` | datetime | No | When the plasma discharge began. Not `created_at`, which is when FDS listed the shot: see [When FDS listed a record](index.md#when-fds-listed-a-record) |
 | `shot_end` | datetime | No | When the discharge ended |
 | `shot_duration` | float | No | Discharge duration in seconds; must equal `shot_end − shot_at` when both are set |
 | `t0_at` | datetime | No | Wall-clock instant of the shot's relative time base zero (`t=0`), e.g. plasma breakdown; may differ from `shot_at`. Provider-declared and optional; FDS stores it but never applies it to convert event times or assume datasets share a time base |
@@ -60,12 +60,12 @@ Shots are created under their parent device:
 
 ## Listing and filtering
 
-Shots are listed under their device, and can be filtered by feature annotation:
+Shots are listed under their device, and can be filtered by property:
 
 ```text
 GET /v1/devices/mast/shots
-GET /v1/devices/mast/shots?annotation=disruption
-GET /v1/devices/mast/shots?annotation=confinement_mode:H-mode
+GET /v1/devices/mast/shots?property=disruption
+GET /v1/devices/mast/shots?property=confinement_mode:H-mode
 ```
 
 See [Finding annotated records](index.md#finding-annotated-records) for the full syntax.

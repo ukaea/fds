@@ -55,18 +55,18 @@ def read_collections_global(
     offset: int = 0,
     limit: int = 100,
     include_storage_options: bool = False,
-    annotation: Annotated[list[str] | None, Query()] = None,
+    properties: Annotated[list[str] | None, Query(alias="property")] = None,
 ) -> list[CollectionRead]:
     """Retrieve all global Collections accessible to the current user.
 
-    `annotation` filters on the Collection's own `scientific_metadata`. Use `elm`
-    to match any collection that carries that annotation, or `elm:type-I` to match
+    `property` filters on the Collection's own `scientific_metadata`. Use `elm`
+    to match any collection that carries that property, or `elm:type-I` to match
     a particular value. Repeat it with a *different* name to require both:
-    `?annotation=disruption&annotation=elm` matches only collections carrying
+    `?property=disruption&property=elm` matches only collections carrying
     each.
     """
     collections = collection_service.get_multi(
-        user=user, offset=offset, limit=limit, annotations=annotation
+        user=user, offset=offset, limit=limit, properties=properties
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
 
@@ -165,18 +165,18 @@ def read_collections_device(
     offset: int = 0,
     limit: int = 100,
     include_storage_options: bool = False,
-    annotation: Annotated[list[str] | None, Query()] = None,
+    properties: Annotated[list[str] | None, Query(alias="property")] = None,
 ) -> list[CollectionRead]:
     """Retrieve all device-level Collections accessible to the current user.
 
-    `annotation` filters on the Collection's own `scientific_metadata`. Use `elm`
-    to match any collection that carries that annotation, or `elm:type-I` to match
+    `property` filters on the Collection's own `scientific_metadata`. Use `elm`
+    to match any collection that carries that property, or `elm:type-I` to match
     a particular value. Repeat it with a *different* name to require both:
-    `?annotation=disruption&annotation=elm` matches only collections carrying
+    `?property=disruption&property=elm` matches only collections carrying
     each.
     """
     collections = collection_service.get_collections_for_device(
-        device_name, user=user, offset=offset, limit=limit, annotations=annotation
+        device_name, user=user, offset=offset, limit=limit, properties=properties
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
 
@@ -246,14 +246,14 @@ def read_collections_shot(
     offset: int = 0,
     limit: int = 100,
     include_storage_options: bool = False,
-    annotation: Annotated[list[str] | None, Query()] = None,
+    properties: Annotated[list[str] | None, Query(alias="property")] = None,
 ) -> list[CollectionRead]:
     """Retrieve all Collections scoped to a specific shot.
 
-    `annotation` filters on the Collection's own `scientific_metadata`. Use `elm`
-    to match any collection that carries that annotation, or `elm:type-I` to match
+    `property` filters on the Collection's own `scientific_metadata`. Use `elm`
+    to match any collection that carries that property, or `elm:type-I` to match
     a particular value. Repeat it with a *different* name to require both:
-    `?annotation=disruption&annotation=elm` matches only collections carrying
+    `?property=disruption&property=elm` matches only collections carrying
     each.
     """
     collections = collection_service.get_collections_for_shot(
@@ -262,7 +262,7 @@ def read_collections_shot(
         user=user,
         offset=offset,
         limit=limit,
-        annotations=annotation,
+        properties=properties,
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
 

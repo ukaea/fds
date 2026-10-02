@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Database, FileCode } from 'lucide-react';
 import { Dataset } from '@/lib/types';
-import { AnnotationBadges } from '@/components/features';
+import { PropertyBadges } from '@/components/properties';
 
 const BADGE = 'text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border';
 
@@ -98,7 +98,7 @@ export function DatasetCard({
 
       {dataset.scientific_metadata && (
         <div className="mt-3">
-          <AnnotationBadges properties={dataset.scientific_metadata} />
+          <PropertyBadges properties={dataset.scientific_metadata} />
         </div>
       )}
     </>

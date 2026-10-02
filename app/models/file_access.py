@@ -18,6 +18,12 @@ class S3Credentials(BaseModel):
     expiration: datetime
     endpoint_url: str | None = None
     region: str | None = None
+    storage_options: StorageOptions | None = None
+    """Opener-ready rendering of this credential.
+
+    Populated only when the caller asks for it
+    (``?include_storage_options=true``); ``None`` otherwise.
+    """
 
     def to_storage_options(
         self,
@@ -46,6 +52,8 @@ class AzureCredentials(BaseModel):
 
     account_name: str
     sas_token: str
+    storage_options: dict[str, Any] | None = None
+    """Opener-ready rendering of this credential, when the caller asks for it."""
 
     def to_storage_options(self) -> dict[str, Any]:
         """Convert SAS token into FSSpec kwargs for adlfs."""
@@ -62,6 +70,8 @@ class GCSCredentials(BaseModel):
 
     token: str
     expiry: str | None = None
+    storage_options: dict[str, Any] | None = None
+    """Opener-ready rendering of this credential, when the caller asks for it."""
 
     def to_storage_options(self) -> dict[str, Any]:
         """Convert Downscoped token into FSSpec kwargs for gcsfs."""
@@ -86,6 +96,10 @@ class CredentialRequest(BaseModel):
 class CredentialManifest(BaseModel):
     """
     Maps each dataset URL to its temporary storage credential.
+
+    Each value carries the raw credential fields. With
+    ``include_storage_options=true`` it also carries ``storage_options``, the
+    same opener-ready shape the single-dataset path returns.
     """
 
     resource_map: dict[str, CredentialPayload]

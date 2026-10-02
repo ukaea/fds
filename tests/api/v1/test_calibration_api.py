@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.models.coverage import Coverage
 from app.services.jsonld import map_dataset_to_dcat
+from tests.conftest import resource
 
 COVERS_150 = Coverage(shots=["150"])
 
@@ -59,8 +60,10 @@ def test_jsonld_calibration_qualified_relation_ordered(
     signal = make_cal_signal(["signal"])
 
     read_model = datasets.to_read_model(signal, include_calibration=True)
-    doc = map_dataset_to_dcat(
-        read_model, "http://testserver", calibration=read_model.calibration
+    doc = resource(
+        map_dataset_to_dcat(
+            read_model, "http://testserver", calibration=read_model.calibration
+        )
     )
     relations = doc["dcat:qualifiedRelation"]
     # A qualified relation per stage, in order, each tagged with the fuel role.

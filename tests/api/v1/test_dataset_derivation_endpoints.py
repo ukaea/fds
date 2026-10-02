@@ -7,6 +7,7 @@ from app.models.device import DeviceCreate
 from app.models.policy import AccessLevel
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
+from tests.conftest import resource
 
 
 def _create_dataset(client: TestClient, token: dict, name: str, **body) -> int:
@@ -135,7 +136,7 @@ def test_jsonld_exposes_derivation(test_client: TestClient, admin_user_token: di
         headers={**admin_user_token, "Accept": "application/ld+json"},
     )
     assert resp.status_code == 200
-    sources = resp.json()["prov:wasDerivedFrom"]
+    sources = resource(resp.json())["prov:wasDerivedFrom"]
     assert sources[0]["@id"].endswith(f"/datasets/{upstream}")
 
 

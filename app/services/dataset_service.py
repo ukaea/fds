@@ -47,7 +47,7 @@ from app.services.exceptions import (
     ResourceNotFoundError,
 )
 from app.services.file_access_service import FileAccessService
-from app.services.filters import annotation_clauses
+from app.services.filters import property_clauses
 from app.services.jsonld import map_dataset_to_dcat
 from app.services.reference_service import (
     CALIBRATION,
@@ -71,41 +71,41 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         offset: int = 0,
         limit: int = 100,
         name: str | None = None,
-        annotations: list[str] | None = None,
-        shot_annotations: list[str] | None = None,
+        properties: list[str] | None = None,
+        shot_properties: list[str] | None = None,
     ) -> Sequence[Dataset]:
         """
         Global list of datasets. Filters by access level.
 
-        ``annotations`` filters on the dataset's own feature annotations;
-        ``shot_annotations`` on those of its parent shot. A dataset with no shot
-        never matches ``shot_annotations``. To scope to one device, use
+        ``properties`` filters on the dataset's own properties;
+        ``shot_properties`` on those of its parent shot. A dataset with no shot
+        never matches ``shot_properties``. To scope to one device, use
         ``get_datasets_for_device`` rather than filtering here.
         """
         statement = select(self.model)
         if name is not None:
             statement = statement.where(self.model.name == name)
         statement = statement.where(
-            *annotation_clauses(self.model.scientific_metadata, annotations)
+            *property_clauses(self.model.scientific_metadata, properties)
         )
-        statement = self._apply_shot_annotations(statement, shot_annotations)
+        statement = self._apply_shot_properties(statement, shot_properties)
         statement = statement.order_by(col(Dataset.id)).offset(offset).limit(limit)
         datasets = self.session.exec(statement).all()
         return self._filter_accessible_datasets(datasets, user)
 
-    def _apply_shot_annotations(self, statement, shot_annotations: list[str] | None):
-        """Join Dataset to its parent Shot and filter on the shot's annotations.
+    def _apply_shot_properties(self, statement, shot_properties: list[str] | None):
+        """Join Dataset to its parent Shot and filter on the shot's properties.
 
         Shared by the global and per-device listings so the two-level query behaves
         identically wherever it is offered.
         """
-        if not shot_annotations:
+        if not shot_properties:
             return statement
         return statement.join(
             Shot,
             (col(Dataset.shot_id) == col(Shot.id))
             & (col(Dataset.device_name) == col(Shot.device_name)),
-        ).where(*annotation_clauses(Shot.scientific_metadata, shot_annotations))
+        ).where(*property_clauses(Shot.scientific_metadata, shot_properties))
 
     def check_read_access(
         self,
@@ -608,8 +608,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         offset: int = 0,
         limit: int = 100,
         name: str | None = None,
-        annotations: list[str] | None = None,
-        shot_annotations: list[str] | None = None,
+        properties: list[str] | None = None,
+        shot_properties: list[str] | None = None,
     ) -> Sequence[Dataset]:
         """
         Get datasets hosted by a device, filtering by access.
@@ -619,10 +619,10 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         device as a whole rather than to any one shot, ``SHOT`` only those
         attached to one of the device's shots.
 
-        ``annotations`` filters on each dataset's own feature annotations;
-        ``shot_annotations`` on those of its parent shot, which answers questions
+        ``properties`` filters on each dataset's own properties;
+        ``shot_properties`` on those of its parent shot, which answers questions
         spanning both levels (e.g. equilibrium datasets from shots that had ELMs).
-        Since device-level datasets have no shot, combining ``shot_annotations``
+        Since device-level datasets have no shot, combining ``shot_properties``
         with ``scope=DEVICE`` matches nothing.
         """
         statement = select(Dataset).where(
@@ -635,9 +635,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         if name is not None:
             statement = statement.where(Dataset.name == name)
         statement = statement.where(
-            *annotation_clauses(Dataset.scientific_metadata, annotations)
+            *property_clauses(Dataset.scientific_metadata, properties)
         )
-        statement = self._apply_shot_annotations(statement, shot_annotations)
+        statement = self._apply_shot_properties(statement, shot_properties)
         statement = statement.order_by(col(Dataset.id)).offset(offset).limit(limit)
         datasets = self.session.exec(statement).all()
         return self._filter_accessible_datasets(datasets, user)
@@ -649,7 +649,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         user: AuthenticatedUser = ANONYMOUS_USER,
         offset: int = 0,
         limit: int = 100,
-        annotations: list[str] | None = None,
+        properties: list[str] | None = None,
     ) -> Sequence[Dataset]:
         """
         Get all datasets for a specific shot (scoped by device name).
@@ -660,7 +660,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 Dataset.shot_id == shot_id,
                 Dataset.device_name == normalise_device_name(device_name),
             )
-            .where(*annotation_clauses(Dataset.scientific_metadata, annotations))
+            .where(*property_clauses(Dataset.scientific_metadata, properties))
             .order_by(col(Dataset.id))
             .offset(offset)
             .limit(limit)
@@ -736,7 +736,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         include_annotations: bool = False,
     ) -> dict[str, Any]:
         """Build the dataset's DCAT/JSON-LD document, resolving the requested
-        related datasets (geometry, calibration, annotations) into qualified
+        related datasets (geometry, calibration, properties) into qualified
         relations."""
         enriched = self.to_read_model(
             dataset,
@@ -759,16 +759,16 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         user: AuthenticatedUser | None = None,
     ) -> list[DatasetRead] | None:
         """
-        Dataset annotations as read models, or ``None``.
+        Dataset properties as read models, or ``None``.
         """
-        annotations = AnnotationService(self.session).for_dataset(dataset)
+        properties = AnnotationService(self.session).for_dataset(dataset)
         models = [
             self.to_read_model(
-                annotation,
+                prop,
                 include_storage_options=include_storage_options,
                 user=user,
             )
-            for annotation in annotations
+            for prop in properties
         ]
         return models or None
 

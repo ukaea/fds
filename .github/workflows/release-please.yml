@@ -1,0 +1,38 @@
+name: Release PR
+
+# Keeps one open pull request that bumps the version and the changelog from the
+# Conventional Commit titles merged since the last release. Merging it tags the
+# release, and the tag builds the images in release.yml.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    name: Release PR
+    runs-on: ubuntu-latest
+    steps:
+      # GitHub does not start workflows for events caused by the built-in token,
+      # so a release PR opened with it would never run the required checks and
+      # its tag would never build an image. The app's token is an ordinary actor.
+      - name: Mint the release app's token
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.app.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

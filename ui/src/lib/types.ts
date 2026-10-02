@@ -11,7 +11,7 @@ export interface Shot {
   timestamp?: string;
   shot_at?: string;
   // Wall-clock instant of the shot's relative t=0. Provider-declared; never used
-  // to convert a feature's coordinates into another frame.
+  // to convert an annotation's coordinates into another frame.
   t0_at?: string;
   description?: string;
   scientific_metadata?: ScientificProperty[];
@@ -28,7 +28,7 @@ export interface Extent {
   unit?: string | null;
 }
 
-// An entry in scientific_metadata. With an extent it is a *feature*: the same
+// An entry in scientific_metadata. With an extent it is an *annotation*: the same
 // property, localised on one axis. Without one it is a plain scalar property.
 export interface ScientificProperty {
   name: string;
@@ -36,6 +36,50 @@ export interface ScientificProperty {
   unit?: string | null;
   description?: string | null;
   extent?: Extent | null;
+  // What the value is, as the producer declared it. Absent means FDS infers it.
+  kind?: MetadataKind | null;
+}
+
+// What a scientific property's value is, as the producer declared it or as FDS
+// inferred it. It says what the value *is*, not how to draw it; the control
+// follows from the kind together with how many distinct values there are.
+export type MetadataKind = 'term' | 'quantity' | 'text';
+
+// One scientific-metadata name in scope. `values` is absent when there are too
+// many to enumerate; `distinct` is always present, so absence is never
+// ambiguous. `dimension` is set when the property carries an extent, which
+// makes it an annotation: a claim about a region of the data rather than the whole
+// record. `text` names never appear, because prose describes a record rather than
+// classifying it.
+export interface AvailableProperty {
+  name: string;
+  records: number;
+  distinct: number;
+  kind: MetadataKind;
+  unit?: string | null;
+  dimension?: string | null;
+  min?: number | null;
+  max?: number | null;
+  values?: string[];
+}
+
+// `total` counts the records in scope after any filter, which is the count a
+// listing page cannot give: the page is capped, the scope is not.
+export interface AvailableProperties {
+  total: number;
+  properties: AvailableProperty[];
+}
+
+// A page of one name's values, for a vocabulary too large to enumerate inline.
+export interface PropertyValue {
+  value: string;
+  records: number;
+}
+
+export interface PropertyValues {
+  name: string;
+  distinct: number;
+  values: PropertyValue[];
 }
 
 export interface Dataset {
@@ -61,7 +105,7 @@ export interface Dataset {
   calibration_stage?: number | null;
   applies_to?: Coverage;
   scientific_metadata?: ScientificProperty[];
-  // Set on a feature annotation dataset: the feature it localises. Its subject
+  // Set on an annotation dataset: the property it localises. Its subject
   // fixes the frame — subject_dataset_id, or else the shot it belongs to.
   annotates?: string | null;
   subject_dataset_id?: number | null;
