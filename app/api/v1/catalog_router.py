@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from app.api.deps import BaseURLDep, CurrentUserDep, DeviceServiceDep
-from app.services.jsonld import generate_context, map_device_to_dcat
+from app.services.jsonld import device_node, generate_context
 
 router = APIRouter()
 
@@ -34,7 +34,7 @@ def get_catalog(
     sub_catalogs: list[dict[str, Any]] = []
 
     for device in devices:
-        dcat_device = map_device_to_dcat(device, base)
+        dcat_device = device_node(device, base)
         sub_catalogs.append(dcat_device)
 
     catalog["dcat:catalog"] = sub_catalogs

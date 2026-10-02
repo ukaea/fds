@@ -15,6 +15,7 @@ from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.jsonld import map_dataset_to_dcat, map_shot_to_dcat
 from app.services.shot_service import ShotService
+from tests.conftest import resource
 
 _SHOT_AT = datetime(2016, 8, 3, 14, 32, tzinfo=UTC)
 
@@ -115,7 +116,9 @@ def test_no_annotations_resolved_by_default(dataset_service, shot_service, scene
 
 def test_dataset_jsonld_emits_annotation_qualified_relation(dataset_service, scene):
     read = dataset_service.to_read_model(scene["signal"], include_annotations=True)
-    doc = map_dataset_to_dcat(read, "http://testserver", annotations=read.annotations)
+    doc = resource(
+        map_dataset_to_dcat(read, "http://testserver", annotations=read.annotations)
+    )
     relations = doc["dcat:qualifiedRelation"]
     assert len(relations) == 1
     assert relations[0]["@type"] == "dcat:Relationship"
@@ -126,7 +129,9 @@ def test_shot_jsonld_emits_annotation_qualified_relations(shot_service, scene):
     read = shot_service.to_read_model(
         shot_service.get(("DEV", "100")), include_annotations=True
     )
-    doc = map_shot_to_dcat(read, "http://testserver", annotations=read.annotations)
+    doc = resource(
+        map_shot_to_dcat(read, "http://testserver", annotations=read.annotations)
+    )
     relations = doc["dcat:qualifiedRelation"]
     # shot-frame (elm-times) + device-frame (deadregion)
     assert len(relations) == 2

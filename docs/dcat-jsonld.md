@@ -74,6 +74,44 @@ there is no interface, the API answers those paths itself with the JSON-LD above
 DOIs, which must land a reader on something readable: registering one means having an interface
 that answers the identifier.
 
+## The resource and FDS's record of it
+
+A Device, Shot, Dataset or Collection document holds two nodes in an `@graph`. One is the
+resource, carrying what its provider said about it. The other is a `dcat:CatalogRecord`: FDS's
+entry for that resource, saying when FDS listed it (`dct:issued`) and when FDS last changed the
+entry (`dct:modified`).
+
+```json
+{
+  "@context": { "...": "..." },
+  "@graph": [
+    {
+      "@type": "dcat:Catalog",
+      "@id": "https://example.org/devices/mast/shots/28352",
+      "title": "Shot 28352",
+      "dct:temporal": {"@type": "dct:PeriodOfTime", "startDate": "2012-01-27T15:52:00+00:00"}
+    },
+    {
+      "@type": "dcat:CatalogRecord",
+      "@id": "https://example.org/devices/mast/shots/28352#record",
+      "foaf:primaryTopic": {"@id": "https://example.org/devices/mast/shots/28352"},
+      "issued": "2026-09-28T13:55:58+00:00",
+      "modified": "2026-10-01T15:46:07+00:00"
+    }
+  ]
+}
+```
+
+The two are kept apart because they are claims about different things. Shot 28352 happened in
+2012 and nothing about it has changed since; FDS listed it in 2026 and has edited its entry.
+Putting FDS's dates on the shot would say the shot was created in 2026. The resource node therefore
+carries no creation or modification date of its own, and a shot's one date is its temporal
+coverage.
+
+The record has no route of its own: its identifier is the resource's with `#record` appended, so it
+resolves to the document that holds it. A catalogue that lists other resources, such as the
+catalogue of devices, embeds their nodes without their records.
+
 ## Dataset vs Distribution
 
 FDS follows the [W3C DCAT ontology](https://www.w3.org/TR/vocab-dcat/): a **`dcat:Dataset`** is the abstract metadata entity describing *what* the data is, while a **`dcat:Distribution`** is a concrete physical access path describing *how* to retrieve it.
@@ -310,6 +348,7 @@ See [Provenance](provenance.md) for the model behind these terms.
 | `xsd` | `http://www.w3.org/2001/XMLSchema#` | Typed literals (dateTime) |
 | `schema` | `https://schema.org/` | Scientific metadata properties (`schema:PropertyValue`) |
 | `dqv` | `http://www.w3.org/ns/dqv#` | Data quality annotations (`dqv:hasQualityAnnotation`) |
+| `foaf` | `http://xmlns.com/foaf/0.1/` | `foaf:primaryTopic`, linking a catalogue record to the resource it describes |
 | `oa` | `http://www.w3.org/ns/oa#` | Web Annotation, used by `dqv:QualityAnnotation` (`oa:motivatedBy`, `oa:hasBody`) |
 | `fuel` | `https://w3id.org/fuel/ns#` | Fusion Energy Lexicon, the role concepts used by `prov:hadRole` and `dcat:hadRole` |
 
@@ -335,6 +374,8 @@ See [Provenance](provenance.md) for the model behind these terms.
 | `shot_at` / `shot_end` / `shot_duration` | `dct:temporal` → `dct:PeriodOfTime` | Dublin Core / DCAT 3 |
 | `temporal_start` / `temporal_end` | `dct:temporal` → `dct:PeriodOfTime` | Dublin Core / DCAT 3 |
 | `quality_flag` | `dqv:hasQualityAnnotation` | W3C DQV |
+| `created_at` (when FDS listed the resource) | `dct:issued` on its `dcat:CatalogRecord` | DCAT 3, Dublin Core |
+| `updated_at` (when FDS last changed the entry) | `dct:modified` on its `dcat:CatalogRecord` | DCAT 3, Dublin Core |
 | `scientific_metadata` | `schema:additionalProperty` / `schema:PropertyValue` | schema.org |
 
 ## FAIR alignment

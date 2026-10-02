@@ -22,13 +22,26 @@ from tests.end_to_end.conftest import FDS_URL
 pytestmark = pytest.mark.end_to_end
 
 
+def about(document: dict[str, Any]) -> dict[str, Any]:
+    """The node a document is about.
+
+    Devices, shots, datasets and collections arrive as an `@graph` of the
+    resource and FDS's catalogue record of it; sources and activities as one
+    node.
+    """
+    graph = document.get("@graph")
+    if graph is None:
+        return document
+    return next(n for n in graph if n["@type"] != "dcat:CatalogRecord")
+
+
 def service_root(document: dict[str, Any]) -> str:
     """Where the service publishes its names, as the document itself reports.
 
     Not the API's address. `FDS_BASE_URL` names the service, and a deployment
     serves the API on a hostname of its own, so the two differ.
     """
-    parsed = urlsplit(str(document["@id"]))
+    parsed = urlsplit(str(about(document)["@id"]))
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
@@ -129,8 +142,11 @@ def test_every_published_identifier_resolves(
     assert not any("/v1/" in identifier for identifier in published), published
 
     for identifier in sorted(published):
+        # A catalogue record is named by a fragment of its resource's address,
+        # so it resolves to the document that holds it.
+        address = identifier.partition("#")[0]
         resolved = http_client.get(
-            identifier, headers={**admin_headers, "Accept": "application/ld+json"}
+            address, headers={**admin_headers, "Accept": "application/ld+json"}
         )
         assert resolved.status_code == 200, f"{identifier} -> {resolved.status_code}"
         body = resolved.json()
@@ -138,7 +154,7 @@ def test_every_published_identifier_resolves(
         # identifier would look fine and name nothing.
         assert isinstance(body, dict), f"{identifier} did not resolve to one resource"
         assert resolved.headers["content-type"].startswith("application/ld+json")
-        assert body["@id"] == identifier, "resolved to a different identifier"
+        assert about(body)["@id"] == address, "resolved to a different identifier"
 
 
 def test_identifiers_answer_a_browser_with_a_page(
@@ -153,7 +169,7 @@ def test_identifiers_answer_a_browser_with_a_page(
         f"{FDS_URL}/datasets/id/{dataset_with_provenance['id']}",
         headers={**admin_headers, "Accept": "application/ld+json"},
     )
-    identifier = response.json()["@id"]
+    identifier = about(response.json())["@id"]
 
     page = http_client.get(identifier, headers={**admin_headers, "Accept": "text/html"})
 

@@ -37,9 +37,22 @@ export async function fetchJsonLd(path: string): Promise<JsonLd | null> {
   return response ? ((await response.json()) as JsonLd) : null;
 }
 
+/**
+ * The node a document is about. Devices, shots, datasets and collections come
+ * as an `@graph` holding the resource and FDS's catalogue record of it; sources
+ * and activities are a single node.
+ */
+function resourceNode(document: JsonLd | null): JsonLd | null {
+  const graph = document?.['@graph'];
+  if (!Array.isArray(graph)) return document;
+  const node = graph.find((n: JsonLd) => n['@type'] !== 'dcat:CatalogRecord');
+  return (node as JsonLd | undefined) ?? null;
+}
+
 function firstString(document: JsonLd | null, keys: string[]): string | undefined {
+  const node = resourceNode(document);
   for (const key of keys) {
-    const value = document?.[key];
+    const value = node?.[key];
     if (typeof value === 'string' && value.length > 0) return value;
   }
   return undefined;

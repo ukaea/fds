@@ -27,6 +27,21 @@ Every datetime is an instant, and FDS returns it in UTC with a `Z` suffix:
 offset and it is taken to be UTC, so a local time sent that way is stored an
 hour out during summer time. Include the offset, or convert to UTC first.
 
+### When FDS listed a record
+
+Every Device, Shot, Dataset and Collection also carries two fields that FDS
+sets itself:
+
+| Field | Description |
+| --- | --- |
+| `created_at` | When FDS listed the record |
+| `updated_at` | When FDS last changed the record |
+
+They describe FDS's entry, not the thing it describes. Shot 28352 was fired in
+2012 and listed in 2026, so its `shot_at` is in 2012 and its `created_at` in
+2026. In JSON-LD they appear on the [catalogue record](../dcat-jsonld.md#the-resource-and-fdss-record-of-it),
+not on the resource.
+
 ## Scientific metadata
 
 The `scientific_metadata` field on Shot, Dataset and Collection holds a structured list of experimental conditions. Each entry is a `{name, value, unit, description}` property:
