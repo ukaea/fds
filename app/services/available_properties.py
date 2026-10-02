@@ -85,6 +85,7 @@ def available_properties(
     name = entries.c.value.op("->>")("name")
     value = entries.c.value.op("->>")("value")
     unit = entries.c.value.op("->>")("unit")
+    description = entries.c.value.op("->>")("description")
     declared = entries.c.value.op("->>")("kind")
     # -> then ->> rather than the #>> path operator, which wants a text[] on
     # the right and so cannot take a bound parameter.
@@ -114,6 +115,10 @@ def available_properties(
                 func.max(unit),
                 "units",
                 func.count(distinct(unit)),
+                "description",
+                func.max(description),
+                "descriptions",
+                func.count(distinct(description)),
                 "kind",
                 func.max(declared),
                 "kinds",
@@ -161,6 +166,9 @@ def available_properties(
                 distinct=distinct_values,
                 kind=kind,
                 unit=extra["unit"] if extra["units"] == 1 else None,
+                description=(
+                    extra["description"] if extra["descriptions"] == 1 else None
+                ),
                 dimension=extra["dimension"],
                 min=float(extra["min"]) if extra["min"] is not None else None,
                 max=float(extra["max"]) if extra["max"] is not None else None,

@@ -33,12 +33,17 @@ function AnnotationRow({ property }: { property: ScientificProperty }) {
 // A property with no extent: a plain scalar, shown as a compact label/value line.
 function PlainRow({ property }: { property: ScientificProperty }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 py-1 border-b border-border last:border-b-0">
-      <span className="text-muted-foreground">{property.name}</span>
-      <span className="text-foreground font-mono text-xs">
-        {formatValue(property.value)}
-        {property.unit ? ` ${property.unit}` : ''}
-      </span>
+    <div className="py-1 border-b border-border last:border-b-0">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-muted-foreground">{property.name}</span>
+        <span className="text-foreground font-mono text-xs">
+          {formatValue(property.value)}
+          {property.unit ? ` ${property.unit}` : ''}
+        </span>
+      </div>
+      {property.description && (
+        <p className="text-xs text-muted-foreground mt-0.5">{property.description}</p>
+      )}
     </div>
   );
 }

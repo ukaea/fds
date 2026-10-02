@@ -10,11 +10,16 @@ import { useDeviceLabel } from '@/lib/use-device-label';
 import { availableProperties, propertyQuery, withQuery } from '@/lib/properties';
 import { PropertyFilter } from '@/components/property-filter';
 import { DatasetResults } from '@/components/dataset-results';
+import { FilterLayout } from '@/components/filter-layout';
+import { LoadMore } from '@/components/load-more';
+import { usePagedList } from '@/lib/use-paged-list';
 import { DeviceDatasets } from '@/components/device-datasets';
 import { ShotList, shotPropertiesUrl } from '@/components/shot-list';
 import { JsonLdPanel } from '@/components/jsonld-panel';
 
 type Tab = 'shots' | 'shot-datasets' | 'datasets';
+
+const DATASET_PAGE_SIZE = 100;
 
 function TabButton({
   active,
@@ -59,7 +64,13 @@ function TabButton({
  * Scoped to shot-level datasets deliberately. A device-level dataset has no
  * parent shot, so it could never satisfy a shot annotation filter.
  */
-function ShotDatasets({ deviceName }: { deviceName: string }) {
+function ShotDatasets({
+  deviceName,
+  aside,
+}: {
+  deviceName: string;
+  aside?: React.ReactNode;
+}) {
   const [propertyTokens, setPropertyTokens] = useState<string[]>([]);
   const [shotPropertyTokens, setShotPropertyTokens] = useState<string[]>([]);
 
@@ -72,10 +83,20 @@ function ShotDatasets({ deviceName }: { deviceName: string }) {
   );
 
   const baseUrl = `${API_BASE}/devices/${deviceName}/datasets?scope=shot`;
-  const { data: allDatasets } = useSWR<Dataset[]>(deviceName ? baseUrl : null, fetcher);
+  // The dataset chips are read from this first page alone, since no endpoint
+  // aggregates dataset properties across a device.
+  const { data: firstPage } = useSWR<Dataset[]>(deviceName ? baseUrl : null, fetcher);
+  const datasetProperties = availableProperties(firstPage);
+  const shotPropertyList = shotProperties?.properties ?? [];
 
-  // keepPreviousData so the list settles under the chips rather than blanking.
-  const { data: datasets, error, isLoading } = useSWR<Dataset[]>(
+  const {
+    items: datasets,
+    error,
+    isLoading,
+    done,
+    loadingMore,
+    loadMore,
+  } = usePagedList<Dataset>(
     deviceName
       ? withQuery(
           baseUrl,
@@ -83,8 +104,7 @@ function ShotDatasets({ deviceName }: { deviceName: string }) {
           propertyQuery('shot_property', shotPropertyTokens)
         )
       : null,
-    fetcher,
-    { keepPreviousData: true }
+    DATASET_PAGE_SIZE
   );
 
   const filtered = propertyTokens.length > 0 || shotPropertyTokens.length > 0;
@@ -95,26 +115,27 @@ function ShotDatasets({ deviceName }: { deviceName: string }) {
   }
 
   return (
-    <div>
-      <PropertyFilter
-        label="Filter by dataset property"
-        properties={availableProperties(allDatasets)}
-        selected={propertyTokens}
-        onChange={setPropertyTokens}
-      />
-      <PropertyFilter
-        label="Filter by shot property"
-        properties={shotProperties?.properties ?? []}
-        selected={shotPropertyTokens}
-        onChange={setShotPropertyTokens}
-      />
-
-      {filtered && (
-        <p className="text-sm text-muted-foreground mb-4">
-          {datasets?.length ?? 0} of {allDatasets?.length ?? 0} datasets
-        </p>
-      )}
-
+    <FilterLayout
+      filters={
+        (datasetProperties.length > 0 || shotPropertyList.length > 0 || aside) && (
+          <>
+            <PropertyFilter
+              label="Filter by dataset property"
+              properties={datasetProperties}
+              selected={propertyTokens}
+              onChange={setPropertyTokens}
+            />
+            <PropertyFilter
+              label="Filter by shot property"
+              properties={shotPropertyList}
+              selected={shotPropertyTokens}
+              onChange={setShotPropertyTokens}
+            />
+            {aside}
+          </>
+        )
+      }
+    >
       <DatasetResults
         datasets={datasets}
         emptyMessage={
@@ -123,7 +144,10 @@ function ShotDatasets({ deviceName }: { deviceName: string }) {
             : 'No shot-level datasets for this device.'
         }
       />
-    </div>
+      {datasets && datasets.length > 0 && (
+        <LoadMore onLoad={loadMore} loading={loadingMore} done={done} />
+      )}
+    </FilterLayout>
   );
 }
 
@@ -143,6 +167,8 @@ export default function DeviceDetail({ deviceName }: { deviceName: string }) {
     deviceName ? `${API_BASE}/devices/${deviceName}/datasets?scope=device` : null,
     fetcher
   );
+
+  const jsonLd = <JsonLdPanel url={`${API_BASE}/devices/${deviceName}`} />;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -185,17 +211,16 @@ export default function DeviceDetail({ deviceName }: { deviceName: string }) {
         </TabButton>
       </div>
 
-      <div className="mb-8">
-        <JsonLdPanel url={`${API_BASE}/devices/${deviceName}`} />
-      </div>
+      {activeTab === 'shots' && <ShotList deviceName={deviceName} aside={jsonLd} />}
 
-      {activeTab === 'shots' && <ShotList deviceName={deviceName} />}
+      {activeTab === 'shot-datasets' && (
+        <ShotDatasets deviceName={deviceName} aside={jsonLd} />
+      )}
 
-      {activeTab === 'shot-datasets' && <ShotDatasets deviceName={deviceName} />}
-
-      {/* Device Datasets Tab */}
+      {/* Device Datasets Tab: no filters, so no side column to hold the JSON-LD. */}
       {activeTab === 'datasets' && (
         <div>
+          <div className="mb-8">{jsonLd}</div>
           {datasetsLoading && <div className="py-8 text-muted-foreground">Loading datasets...</div>}
           {datasetsError && <div className="py-8 text-destructive">Failed to load datasets.</div>}
           {!datasetsLoading && !datasetsError && datasets && datasets.length > 0 && (

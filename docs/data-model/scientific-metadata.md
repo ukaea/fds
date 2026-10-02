@@ -99,6 +99,8 @@ Two things are left out, and both are deliberate.
 
 `unit` is reported for a property only when every record agrees on one. A name recorded in both `A` and `kA` has no single unit, so FDS says nothing rather than picking one of them.
 
+`description` follows the same rule, so a client can explain a property beside its filter. Give every entry of a name the same `description` and it is reported; vary it and it is not.
+
 Values sort numerically when they are numbers and alphabetically otherwise. This is a reason to keep a magnitude out of its value: `700` with `"unit": "kA"` sorts before `1000`, while the string `"700 kA"` sorts after `"1000 kA"`.
 
 ## Filtering

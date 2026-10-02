@@ -77,23 +77,6 @@ export const MAX_INLINE_VALUES = 20;
 const PROSE_RATIO = 0.5;
 const RATIO_FLOOR = 20;
 
-// Render a magnitude with its unit. Large values get thousands separators
-// rather than an exponent: a plasma current reads as 1,418,442 A on the axis
-// and in the input beside it, where 1.42e+6 reads as neither. Only genuinely
-// tiny values fall back to an exponent, where separators would not help.
-export function formatQuantity(value: number, unit?: string | null): string {
-  const magnitude = Math.abs(value);
-  let text: string;
-  if (magnitude > 0 && magnitude < 0.001) {
-    text = value.toExponential(2);
-  } else if (magnitude >= 1000) {
-    text = Math.round(value).toLocaleString('en-GB');
-  } else {
-    text = String(Number(value.toPrecision(4)));
-  }
-  return unit ? `${text} ${unit}` : text;
-}
-
 function inferKind(distinct: number, records: number, numeric: boolean): MetadataKind {
   const repeats = records >= RATIO_FLOOR && distinct / records < PROSE_RATIO;
   const small = distinct > 0 && distinct <= 200;

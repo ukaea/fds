@@ -8,7 +8,6 @@ export interface Device {
 export interface Shot {
   device_name: string;
   id: string; // Changed from shot_id: number to match backend ShotRead model
-  timestamp?: string;
   shot_at?: string;
   // Wall-clock instant of the shot's relative t=0. Provider-declared; never used
   // to convert an annotation's coordinates into another frame.
@@ -57,6 +56,7 @@ export interface AvailableProperty {
   distinct: number;
   kind: MetadataKind;
   unit?: string | null;
+  description?: string | null;
   dimension?: string | null;
   min?: number | null;
   max?: number | null;
