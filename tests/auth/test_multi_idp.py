@@ -118,6 +118,21 @@ async def test_scope_filtering_wildcard():
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("setup_trusted_idps")
+async def test_roles_are_filtered_like_scopes():
+    """Entra ID `roles` go through the same per-IdP allow-list as scopes."""
+    claims: TokenClaims = {
+        "iss": IDP_JET,
+        "sub": "user1",
+        "scp": "openid",
+        "roles": ["jet:admin", "mast:admin"],
+    }
+    user = await get_current_user(claims=claims)
+
+    assert user.scopes == ("openid", "jet:admin")
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("setup_trusted_idps")
 async def test_pii_hashing():
     """Verify user ID is hashed and namespaced"""
     claims: TokenClaims = {"iss": IDP_JET, "sub": "user_123", "scope": "openid"}
