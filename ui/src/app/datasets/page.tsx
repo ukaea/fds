@@ -203,12 +203,6 @@ export default function DatasetsPage() {
                             </p>
                           </div>
                         </Link>
-                        <Link
-                          href={`/devices/${device.name}/shots`}
-                          className="px-4 py-2 bg-muted hover:bg-accent text-foreground text-sm rounded-lg transition-colors"
-                        >
-                          View Shots
-                        </Link>
                       </div>
                     </div>
                     <div className="p-6">
