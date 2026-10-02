@@ -6,7 +6,7 @@ from .scientific_metadata import ScientificProperty
 
 
 class TimestampMixin(SQLModel):
-    """When FDS listed a record and last changed it set by FDS itself."""
+    """When FDS listed a record and last changed it, both set by FDS itself."""
 
     created_at: UTCDatetime = Field(
         default_factory=utcnow,
