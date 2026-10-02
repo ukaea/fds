@@ -88,8 +88,39 @@ are faster and can look more closely.
 
 - Branch from `main`.
 - One cohesive change per PR, with a short subject line saying what it does.
+- Title the PR as a [Conventional Commit](https://www.conventionalcommits.org/):
+  a type, a colon, then the subject. A check enforces it, because the PR is
+  squash-merged and its title becomes the commit that decides the next version.
 - Include tests. For a bug fix, a test that fails without the fix is the point.
 - CI must pass before review.
+
+| Type | Use it for | Effect on the next release |
+| --- | --- | --- |
+| `feat` | A change a user of FDS can notice | Bumps the patch version below 1.0, the minor one after; listed under Features |
+| `fix` | A bug fix | Bumps the patch version; listed under Bug Fixes |
+| `perf` | A faster path with the same behaviour | Bumps the patch version |
+| `docs`, `refactor`, `test`, `ci`, `build`, `chore` | Everything else | No release on its own |
+
+`feat!: Serve the API under /v2` (or a `BREAKING CHANGE:` footer) marks a change
+that breaks existing callers. A scope is optional: `fix(ui): …`.
+
+## Releases
+
+Versions follow [Semantic Versioning](https://semver.org/). While FDS is below
+1.0, a feature bumps the patch version and a breaking change bumps the minor
+one; `0.1.0` is kept for a deliberate milestone.
+
+Releasing is a pull request like any other change.
+[release-please](https://github.com/googleapis/release-please) keeps one open,
+titled `chore(main): release X.Y.Z`, and updates it after every merge to
+`main`. It bumps the version in `pyproject.toml`, `uv.lock`, `app/__init__.py` and
+`CITATION.cff` and adds the merged changes to `CHANGELOG.md`. Merging it tags
+`vX.Y.Z` and publishes a GitHub release, and the tag publishes the
+`ghcr.io/ukaea/fds` and `ghcr.io/ukaea/fds-ui` images as `X.Y.Z` and `latest`.
+
+To release a specific version instead of the computed one, add
+`"release-as": "0.1.0"` to the package in `release-please-config.json` in an
+ordinary PR, and remove it again after that release.
 
 ## Reporting bugs
 
