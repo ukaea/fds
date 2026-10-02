@@ -41,7 +41,7 @@ class DatasetScope(str, Enum):
     SHOT = "shot"
 
 
-class DatasetBase(DescriptiveMixin, ScientificMetadataMixin, TimestampMixin, SQLModel):
+class DatasetBase(DescriptiveMixin, ScientificMetadataMixin, SQLModel):
     """Core metadata for a dataset (maps to ``dcat:Dataset``).
 
     A Dataset is a metadata container describing *what* the data is.  The
@@ -166,7 +166,7 @@ class DatasetBase(DescriptiveMixin, ScientificMetadataMixin, TimestampMixin, SQL
     )
 
 
-class Dataset(DatasetBase, table=True):
+class Dataset(DatasetBase, TimestampMixin, table=True):
     __table_args__ = (
         ForeignKeyConstraint(
             ["device_name", "shot_id"],
@@ -356,7 +356,7 @@ class DatasetCreate(DatasetBase):
     derived_from: list[DatasetDerivationCreate] = Field(default_factory=list)
 
 
-class DatasetRead(DatasetBase):
+class DatasetRead(DatasetBase, TimestampMixin):
     """Dataset response schema.
 
     ``url``, ``media_type``, ``format``, and ``storage_options`` are

@@ -44,9 +44,7 @@ class CollectionMember(SQLModel, table=True):
     child_id: int = Field(foreign_key="collection.id", primary_key=True)
 
 
-class CollectionBase(
-    DescriptiveMixin, ScientificMetadataMixin, TimestampMixin, SQLModel
-):
+class CollectionBase(DescriptiveMixin, ScientificMetadataMixin, SQLModel):
     """Core metadata for a Collection (maps to ``dcat:Catalog``).
 
     A Collection is an independently citable grouping of Datasets and/or other
@@ -106,7 +104,7 @@ class CollectionBase(
     )
 
 
-class Collection(CollectionBase, table=True):
+class Collection(CollectionBase, TimestampMixin, table=True):
     """ORM table for a Collection (``dcat:Catalog``).
 
     A Collection is uniquely identified within the triple (device_name, shot_id,
@@ -166,7 +164,7 @@ class CollectionCreate(CollectionBase):
     origin: str | None = None
 
 
-class CollectionRead(CollectionBase):
+class CollectionRead(CollectionBase, TimestampMixin):
     """Collection response schema.
 
     Member Datasets are inlined as ``DatasetRead`` objects. Child Collections

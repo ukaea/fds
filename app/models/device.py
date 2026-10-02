@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from .source import Source
 
 
-class DeviceBase(DescriptiveMixin, TimestampMixin, SQLModel):
+class DeviceBase(DescriptiveMixin, SQLModel):
     name: str = Field(index=True, unique=True)
     type: str | None = Field(default=None, index=True)
     began_operations: str | None = None
@@ -36,7 +36,7 @@ class DeviceBase(DescriptiveMixin, TimestampMixin, SQLModel):
     )
 
 
-class Device(DeviceBase, table=True):
+class Device(DeviceBase, TimestampMixin, table=True):
     id: int | None = Field(default=None, primary_key=True, index=True)
     shots: list["Shot"] = Relationship(
         back_populates="device",
@@ -52,7 +52,7 @@ class DeviceCreate(DeviceBase):
     pass
 
 
-class DeviceRead(DeviceBase):
+class DeviceRead(DeviceBase, TimestampMixin):
     id: int
     effective_access_level: AccessLevel | None = None
 

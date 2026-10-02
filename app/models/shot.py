@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from .device import Device, DeviceRead
 
 
-class ShotBase(ScientificMetadataMixin, TimestampMixin, SQLModel):
+class ShotBase(ScientificMetadataMixin, SQLModel):
     id: str = Field(index=True)
     shot_at: UTCDatetime | None = Field(default=None, index=True)
     shot_end: UTCDatetime | None = Field(default=None, index=True)
@@ -54,7 +54,7 @@ class ShotBase(ScientificMetadataMixin, TimestampMixin, SQLModel):
     )
 
 
-class Shot(ShotBase, table=True):
+class Shot(ShotBase, TimestampMixin, table=True):
     __table_args__ = (PrimaryKeyConstraint("device_name", "id"),)
     id: str = Field(primary_key=True)
     device_name: str = Field(foreign_key="device.name", primary_key=True, index=True)
@@ -89,7 +89,7 @@ class ShotCreate(ShotBase):
     device_name: str | None = None
 
 
-class ShotRead(ShotBase):
+class ShotRead(ShotBase, TimestampMixin):
     effective_access_level: AccessLevel | None = None
     device_name: str | None = None
     device: "DeviceRead | None" = None
