@@ -19,6 +19,14 @@ Global
 
 Datasets and Collections can exist at any scope level: Global, Device, or Shot. A Collection can contain other Collections as well as Datasets.
 
+## Dates and times
+
+Every datetime is an instant, and FDS returns it in UTC with a `Z` suffix:
+`2012-01-27T15:52:00Z`. Send one with an offset, such as
+`2012-07-03T10:15:00+01:00`, and FDS stores that instant. Send one without an
+offset and it is taken to be UTC, so a local time sent that way is stored an
+hour out during summer time. Include the offset, or convert to UTC first.
+
 ## Scientific metadata
 
 The `scientific_metadata` field on Shot, Dataset and Collection holds a structured list of experimental conditions. Each entry is a `{name, value, unit, description}` property:

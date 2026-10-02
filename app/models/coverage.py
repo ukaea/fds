@@ -1,6 +1,6 @@
-from datetime import datetime
-
 from sqlmodel import SQLModel
+
+from app.core.timeutils import UTCDatetime
 
 
 class ShotRange(SQLModel):
@@ -14,8 +14,8 @@ class ShotRange(SQLModel):
 class DateRange(SQLModel):
     """A half-open ``[from_date, to_date)`` window; ``to_date=None`` is open-ended."""
 
-    from_date: datetime
-    to_date: datetime | None = None
+    from_date: UTCDatetime
+    to_date: UTCDatetime | None = None
 
 
 class Coverage(SQLModel):

@@ -1,6 +1,6 @@
 """Reference-geometry resolution and validation."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 from sqlmodel import Session
@@ -275,7 +275,7 @@ def test_harmless_shot_at_edit_allowed(make_version, update_shot):
     )
     make_version("explicit", ["pos"], Coverage(shots=["300"]))
     updated = update_shot("300", shot_at=datetime(2011, 1, 1))
-    assert updated.shot_at == datetime(2011, 1, 1)
+    assert updated.shot_at == datetime(2011, 1, 1, tzinfo=UTC)
 
 
 def test_delete_explicit_member_rejected(make_version, delete_shot):

@@ -1,8 +1,6 @@
-from datetime import datetime
-
 from sqlmodel import JSON, Field, SQLModel
 
-from app.core.timeutils import utcnow
+from app.core.timeutils import UTCDatetime, utcnow
 
 from .scientific_metadata import ScientificProperty
 
@@ -12,12 +10,12 @@ class TimestampMixin(SQLModel):
     Mixin to add creation and update timestamps to a model.
     """
 
-    created_at: datetime = Field(
+    created_at: UTCDatetime = Field(
         default_factory=utcnow,
         nullable=False,
         index=True,
     )
-    updated_at: datetime = Field(
+    updated_at: UTCDatetime = Field(
         default_factory=utcnow,
         nullable=False,
         index=True,

@@ -1,9 +1,10 @@
-from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Self
 
 from pydantic import model_validator
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
+
+from app.core.timeutils import UTCDatetime
 
 
 class ActivityType(str, Enum):
@@ -78,8 +79,8 @@ class ActivityBase(SQLModel):
     source_version: str | None = None
     activity_type: ActivityType | None = None
     parameters: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
-    started_at: datetime | None = None
-    ended_at: datetime | None = None
+    started_at: UTCDatetime | None = None
+    ended_at: UTCDatetime | None = None
 
 
 class Activity(ActivityBase, table=True):
@@ -218,5 +219,5 @@ class ActivityUpdate(SQLModel):
     source_version: str | None = None
     activity_type: ActivityType | None = None
     parameters: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
-    started_at: datetime | None = None
-    ended_at: datetime | None = None
+    started_at: UTCDatetime | None = None
+    ended_at: UTCDatetime | None = None
