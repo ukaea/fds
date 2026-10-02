@@ -10,7 +10,7 @@ import { useDeviceLabel } from '@/lib/use-device-label';
 import { availableProperties, propertyQuery, withQuery } from '@/lib/properties';
 import { PropertyFilter } from '@/components/property-filter';
 import { DatasetResults } from '@/components/dataset-results';
-import { FilterLayout } from '@/components/filter-layout';
+import { SidePanelLayout } from '@/components/side-panel-layout';
 import { LoadMore } from '@/components/load-more';
 import { usePagedList } from '@/lib/use-paged-list';
 import { DeviceDatasets } from '@/components/device-datasets';
@@ -115,8 +115,8 @@ function ShotDatasets({
   }
 
   return (
-    <FilterLayout
-      filters={
+    <SidePanelLayout
+      side={
         (datasetProperties.length > 0 || shotPropertyList.length > 0 || aside) && (
           <>
             <PropertyFilter
@@ -147,7 +147,7 @@ function ShotDatasets({
       {datasets && datasets.length > 0 && (
         <LoadMore onLoad={loadMore} loading={loadingMore} done={done} />
       )}
-    </FilterLayout>
+    </SidePanelLayout>
   );
 }
 

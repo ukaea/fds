@@ -1,11 +1,12 @@
 'use client';
 
-import { useId, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
 import { AvailableProperty, PropertyValues } from '@/lib/types';
 import { propertyToken } from '@/lib/properties';
+import { DESCRIBED, DescribedName } from '@/components/described-name';
 
 const PILL = 'text-xs px-2.5 py-1 rounded-full border transition-colors';
 const IDLE = 'bg-card text-muted-foreground border-border hover:text-foreground hover:border-foreground/40';
@@ -35,31 +36,8 @@ function Pill({
 
 const NAME = 'text-xs text-foreground font-medium';
 
-// The name, with what it means on hover or focus when the provider has said.
-// The dotted underline is the cue that there is something to read. Focusable,
-// so a keyboard user reaches the description too; CSS rather than `title`,
-// which never shows on focus and only after a delay on hover.
 function PropertyName({ prop }: { prop: AvailableProperty }) {
-  const id = useId();
-  if (!prop.description) return <span className={NAME}>{prop.name}</span>;
-  return (
-    <span className="relative inline-block group">
-      <span
-        tabIndex={0}
-        aria-describedby={id}
-        className={`${NAME} cursor-help underline decoration-dotted decoration-muted-foreground underline-offset-2 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
-      >
-        {prop.name}
-      </span>
-      <span
-        role="tooltip"
-        id={id}
-        className="pointer-events-none absolute left-0 top-full z-20 mt-1 w-64 rounded-md border border-border bg-card px-2.5 py-1.5 text-[11px] font-normal leading-snug text-foreground shadow-lg invisible opacity-0 transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
-      >
-        {prop.description}
-      </span>
-    </span>
-  );
+  return <DescribedName name={prop.name} description={prop.description} className={NAME} />;
 }
 
 /**
@@ -172,7 +150,7 @@ function ValueSearch({
             overflow-hidden, and a focusable name cannot sit inside a button. */}
         <span
           title={prop.description ?? undefined}
-          className={`${NAME} ${prop.description ? 'cursor-help underline decoration-dotted decoration-muted-foreground underline-offset-2' : ''}`}
+          className={`${NAME} ${prop.description ? DESCRIBED : ''}`}
         >
           {prop.name}
         </span>

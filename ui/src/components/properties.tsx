@@ -3,29 +3,28 @@
 import { Tag } from 'lucide-react';
 import { ScientificProperty } from '@/lib/types';
 import { extentSummary, formatValue, splitProperties } from '@/lib/properties';
+import { DescribedName } from '@/components/described-name';
 
-// One annotation: its name and value, plus where it sits on its axis.
+// One annotation: its name and value, plus where it sits on its axis. A value
+// of `true` only says the feature is present, which the row already says.
 function AnnotationRow({ property }: { property: ScientificProperty }) {
   const extent = extentSummary(property.extent);
-  const isPoint = property.extent?.end == null;
   return (
     <div className="bg-card border border-border rounded p-3">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="font-medium text-foreground">{property.name}</span>
-        <span className="text-sm text-foreground font-mono">
-          {formatValue(property.value)}
-          {property.unit ? ` ${property.unit}` : ''}
-        </span>
+        <DescribedName
+          name={property.name}
+          description={property.description}
+          className="font-medium text-foreground"
+        />
+        {property.value !== true && (
+          <span className="text-sm text-foreground font-mono">
+            {formatValue(property.value)}
+            {property.unit ? ` ${property.unit}` : ''}
+          </span>
+        )}
       </div>
-      {extent && (
-        <p className="text-xs text-muted-foreground font-mono mt-1">
-          {extent}
-          <span className="ml-2 not-italic opacity-70">{isPoint ? '(point)' : '(span)'}</span>
-        </p>
-      )}
-      {property.description && (
-        <p className="text-xs text-muted-foreground mt-1">{property.description}</p>
-      )}
+      {extent && <p className="text-xs text-muted-foreground font-mono mt-1">{extent}</p>}
     </div>
   );
 }
@@ -33,17 +32,16 @@ function AnnotationRow({ property }: { property: ScientificProperty }) {
 // A property with no extent: a plain scalar, shown as a compact label/value line.
 function PlainRow({ property }: { property: ScientificProperty }) {
   return (
-    <div className="py-1 border-b border-border last:border-b-0">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-muted-foreground">{property.name}</span>
-        <span className="text-foreground font-mono text-xs">
-          {formatValue(property.value)}
-          {property.unit ? ` ${property.unit}` : ''}
-        </span>
-      </div>
-      {property.description && (
-        <p className="text-xs text-muted-foreground mt-0.5">{property.description}</p>
-      )}
+    <div className="flex items-baseline justify-between gap-2 py-1 border-b border-border last:border-b-0">
+      <DescribedName
+        name={property.name}
+        description={property.description}
+        className="text-muted-foreground"
+      />
+      <span className="text-foreground font-mono text-xs">
+        {formatValue(property.value)}
+        {property.unit ? ` ${property.unit}` : ''}
+      </span>
     </div>
   );
 }
@@ -120,12 +118,6 @@ export function ScientificMetadata({
             <PlainRow key={`${property.name}-${i}`} property={property} />
           ))}
         </div>
-      )}
-      {annotations.length > 0 && (
-        <p className="text-xs text-muted-foreground mt-4 leading-relaxed">
-          Each coordinate is on the named axis, in that axis&apos;s own frame. Aligning one to a
-          particular diagnostic is the consumer&apos;s call.
-        </p>
       )}
     </div>
   );

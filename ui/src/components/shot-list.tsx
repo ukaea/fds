@@ -9,7 +9,7 @@ import { AvailableProperties, Shot } from '@/lib/types';
 import { propertyQuery, withQuery } from '@/lib/properties';
 import { usePagedList } from '@/lib/use-paged-list';
 import { PropertyFilter } from '@/components/property-filter';
-import { FilterLayout } from '@/components/filter-layout';
+import { SidePanelLayout } from '@/components/side-panel-layout';
 import { LoadMore } from '@/components/load-more';
 import { PropertyBadges } from '@/components/properties';
 import { ClientDate } from '@/components/client-date';
@@ -109,8 +109,8 @@ export function ShotList({
   const matched = filterQuery.length > 0 ? matching?.total ?? 0 : total;
 
   return (
-    <FilterLayout
-      filters={
+    <SidePanelLayout
+      side={
         (!!properties?.properties.length || aside) && (
           <>
             {/* Outside the loading branch below: the chips are the control you
@@ -190,6 +190,6 @@ export function ShotList({
       {shots && shots.length > 0 && (
         <LoadMore onLoad={loadMore} loading={loadingMore} done={done} />
       )}
-    </FilterLayout>
+    </SidePanelLayout>
   );
 }

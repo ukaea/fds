@@ -28,14 +28,16 @@ function formatCoordinate(value: number): string {
   return String(Number(value.toPrecision(4)));
 }
 
-// "time 0.20 → 0.45 s" for a span, "time 0.606 s" for a point. The dimension is
-// always shown: the axis is what makes the numbers meaningful.
+// "0.20 → 0.45 s" for a span, "0.606 s" for a point. The axis name is left to
+// the unit and the property's own name and description, and shown only when
+// there is no unit: "channel 3 → 7" says something, "3 → 7" does not.
 export function extentSummary(extent?: Extent | null): string | null {
   if (!extent) return null;
   const unit = extent.unit ? ` ${extent.unit}` : '';
+  const axis = extent.unit ? '' : `${extent.dimension} `;
   const start = formatCoordinate(extent.start);
-  if (extent.end == null) return `${extent.dimension} ${start}${unit}`;
-  return `${extent.dimension} ${start} → ${formatCoordinate(extent.end)}${unit}`;
+  if (extent.end == null) return `${axis}${start}${unit}`;
+  return `${axis}${start} → ${formatCoordinate(extent.end)}${unit}`;
 }
 
 // scientific_metadata values are any JSON type, so render them without assuming.
