@@ -4,6 +4,8 @@ import './globals.css';
 import Link from 'next/link';
 import { Providers } from "@/components/providers";
 import { UserMenu } from "@/components/user-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { THEME_SCRIPT } from "@/lib/theme";
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -18,7 +20,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    // The head script sets data-theme before React hydrates, so the server's
+    // markup and the client's differ on that one attribute by design.
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className={inter.className}>
         <Providers>
           <div className="min-h-screen flex flex-col">
@@ -44,6 +51,7 @@ export default function RootLayout({
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
+                  <ThemeToggle />
                   <UserMenu />
                 </div>
               </div>

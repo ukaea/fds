@@ -2,8 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The palette follows data-theme on <html>, which a script in <head> resolves
+   from the reader's choice or, by default, the system setting. */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
   /* Monochrome palette (light) */
   --background: 0 0% 100%;
@@ -38,37 +40,37 @@
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Monochrome palette (dark) */
-    --background: 0 0% 7%;
-    --foreground: 0 0% 98%;
+:root[data-theme='dark'] {
+  color-scheme: dark;
 
-    --card: 0 0% 10%;
-    --card-foreground: 0 0% 98%;
+  /* Monochrome palette (dark) */
+  --background: 0 0% 7%;
+  --foreground: 0 0% 98%;
 
-    --popover: 0 0% 10%;
-    --popover-foreground: 0 0% 98%;
+  --card: 0 0% 10%;
+  --card-foreground: 0 0% 98%;
 
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
+  --popover: 0 0% 10%;
+  --popover-foreground: 0 0% 98%;
 
-    --secondary: 0 0% 16%;
-    --secondary-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 0 0% 9%;
 
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 64%;
+  --secondary: 0 0% 16%;
+  --secondary-foreground: 0 0% 98%;
 
-    --accent: 0 0% 18%;
-    --accent-foreground: 0 0% 98%;
+  --muted: 0 0% 15%;
+  --muted-foreground: 0 0% 64%;
 
-    --destructive: 0 63% 46%;
-    --destructive-foreground: 0 0% 98%;
+  --accent: 0 0% 18%;
+  --accent-foreground: 0 0% 98%;
 
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
-    --ring: 0 0% 83%;
-  }
+  --destructive: 0 63% 46%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 0 0% 18%;
+  --input: 0 0% 18%;
+  --ring: 0 0% 83%;
 }
 
 body {
