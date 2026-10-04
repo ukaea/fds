@@ -25,6 +25,10 @@ module.exports = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        brand: {
+          DEFAULT: "hsl(var(--brand-accent) / <alpha-value>)",
+          text: "hsl(var(--brand-accent-text) / <alpha-value>)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

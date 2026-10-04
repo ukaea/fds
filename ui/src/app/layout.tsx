@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Providers } from "@/components/providers";
 import { UserMenu } from "@/components/user-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { BrandMark } from "@/components/brand-mark";
 import { THEME_SCRIPT } from "@/lib/theme";
 
 const inter = Inter({ subsets: ['latin'] });
@@ -28,11 +29,15 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <Providers>
+          <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 flex items-center justify-start overflow-hidden">
+            <BrandMark className="h-[110vh] translate-x-[10%] opacity-[0.10]" />
+          </div>
           <div className="min-h-screen flex flex-col">
             <nav className="glass sticky top-0 z-50 border-b border-border">
               <div className="container mx-auto h-16 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-8">
-                  <Link href="/" className="text-foreground hover:text-muted-foreground transition-colors">
+                  <Link href="/" className="flex items-center gap-2.5 text-foreground hover:text-muted-foreground transition-colors">
+                    <BrandMark className="h-7" />
                     <span className="text-lg font-bold tracking-tight">Fusion Data Service</span>
                   </Link>
                   <div className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">

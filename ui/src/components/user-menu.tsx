@@ -57,8 +57,7 @@ export function UserMenu() {
   if (status === "authenticated" && session?.user) {
     const role = getUserRole(session.scopes);
     const roleColor = getRoleColor(role);
-    // Use the helper, or fallback if not imported yet (though it is)
-    const roleBg = getRoleBgColor ? getRoleBgColor(role) : "bg-muted";
+    const roleBg = getRoleBgColor(role);
 
     return (
       <div className="flex items-center justify-end gap-4 ml-auto">
