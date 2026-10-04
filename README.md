@@ -29,7 +29,7 @@ The Fusion Data Service (FDS) is a platform designed to provide scalable, FAIR-c
 
 ## Documentation
 
-Published at **<https://ukaea.github.io/fds/>**, covering the data model, access control, provenance, and the DCAT / JSON-LD semantic projection. Built with [Zensical](https://zensical.org/) from the `docs/` directory and deployed by GitHub Actions on every push to `main`, so it does not depend on anyone running a local stack.
+Published at **<https://ukaea.github.io/fds/>**, covering the data model, access control, provenance, and the DCAT / JSON-LD semantic projection. Built with [Zensical](https://zensical.org/) from the `docs/` directory and deployed by GitHub Actions on every release, so it does not depend on anyone running a local stack.
 
 To preview changes locally before opening a pull request:
 

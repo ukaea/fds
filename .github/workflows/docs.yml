@@ -1,8 +1,11 @@
 name: Documentation
 
+# The published docs describe the latest release rather than main, so they do not get
+# ahead of what can be deployed. To republish without a release (a docs fix), run this
+# workflow by hand against the latest tag; run against a branch it only builds.
 on:
   push:
-    branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -39,9 +42,9 @@ jobs:
 
   deploy:
     name: Deploy to GitHub Pages
-    # Only the default branch publishes. Pull requests stop at the build above,
-    # which is what validates them.
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    # Only release tags publish. Pull requests stop at the build above, which is
+    # what validates them.
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     permissions:
