@@ -5,14 +5,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from app.auth.access_control import (
-    EffectivePolicy,
+    check_read,
     get_effective_access_level,
-    get_effective_policy,
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_is_admin
-from app.core.audit import record_restricted_read
-from app.core.context import ReadTier, record_returned
+from app.core.context import ReadTier
 from app.core.naming import normalise_device_name
 from app.models.activity import Activity
 from app.models.collection import (
@@ -26,7 +24,6 @@ from app.models.collection import (
 from app.models.dataset import Dataset
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
-from app.models.policy import AccessLevel
 from app.models.source import Source
 from app.services.base_service import BaseService
 from app.services.dataset_service import DatasetService
@@ -40,6 +37,7 @@ from app.services.exceptions import (
 from app.services.filters import property_clauses
 from app.services.jsonld import map_collection_to_dcat
 from app.services.shot_service import ShotService
+from app.services.visibility import read_page
 
 logger = structlog.get_logger(__name__)
 
@@ -68,55 +66,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         tier: ReadTier = ReadTier.READ,
     ) -> None:
         """Enforce read access, and record it when the resource is not public."""
-        policy = get_effective_policy(collection, self.session)
-        self._enforce_read_policy(collection, policy, user)
-        record_restricted_read(collection, policy.access_level, tier)
-
-    def _enforce_read_policy(
-        self, collection: Collection, policy: EffectivePolicy, user: AuthenticatedUser
-    ) -> None:
-        """Enforce read access for Collection metadata.
-
-        Resolves the full effective policy (inherited ``access_level``,
-        ``required_scopes``, ``allowed_idps``) from the
-        Collection → Shot → Device hierarchy.
-
-        - PUBLIC / EMBARGOED: metadata is discoverable by everyone (EMBARGOED
-          restricts data, not metadata — enforced at credential vending).
-        - RESTRICTED: requires an authenticated user, then any IdP and scope
-          gates set by the policy. With no explicit ``required_scopes`` it
-          falls back to a capability check (device admin or global admin).
-
-        Raises ``ForbiddenError`` when the user does not satisfy the policy.
-        """
-        # PUBLIC and EMBARGOED: metadata is discoverable by everyone
-        if policy.access_level in (AccessLevel.PUBLIC, AccessLevel.EMBARGOED):
-            return
-
-        # RESTRICTED: must be authenticated
-        if user.is_anonymous:
-            raise ForbiddenError("Authentication required for this resource")
-
-        # Enforce IdP restriction if specified
-        if policy.allowed_idps is not None and user.issuer not in policy.allowed_idps:
-            raise ForbiddenError(
-                "Access denied: your identity provider is not permitted "
-                "for this resource"
-            )
-
-        # Enforce required scopes if explicitly set
-        # None → capability fallback; [] → auth-only gate (already passed above)
-        if policy.required_scopes is not None:
-            for scope in policy.required_scopes:
-                if scope not in user.scopes:
-                    raise ForbiddenError(f"Not authorized, requires scope: {scope}")
-            return
-
-        # Capability fallback (no explicit required_scopes at any level)
-        if collection.device_name:
-            check_device_admin(user, collection.device_name)
-        else:
-            check_is_admin(user)
+        check_read(collection, self.session, user, tier)
 
     def create(self, obj_in: CollectionCreate, user: AuthenticatedUser) -> Collection:
         """Create a new Collection at Global, Device, or Shot scope.
@@ -262,11 +212,10 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 *property_clauses(Collection.scientific_metadata, properties),
             )
             .order_by(col(Collection.id))
-            .offset(offset)
-            .limit(limit)
         )
-        collections = self.session.exec(statement).all()
-        return self._filter_accessible(collections, user)
+        return read_page(
+            self.session, Collection, statement, user, offset=offset, limit=limit
+        )
 
     def get_by_name_in_context(
         self,
@@ -336,11 +285,11 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 col(Collection.shot_id).is_(None),
                 *property_clauses(Collection.scientific_metadata, properties),
             )
-            .offset(offset)
-            .limit(limit)
+            .order_by(col(Collection.id))
         )
-        collections = self.session.exec(statement).all()
-        return self._filter_accessible(collections, user)
+        return read_page(
+            self.session, Collection, statement, user, offset=offset, limit=limit
+        )
 
     def get_collections_for_shot(
         self,
@@ -359,11 +308,11 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 Collection.device_name == normalise_device_name(device_name),
                 *property_clauses(Collection.scientific_metadata, properties),
             )
-            .offset(offset)
-            .limit(limit)
+            .order_by(col(Collection.id))
         )
-        collections = self.session.exec(statement).all()
-        return self._filter_accessible(collections, user)
+        return read_page(
+            self.session, Collection, statement, user, offset=offset, limit=limit
+        )
 
     def get_for_source(
         self,
@@ -378,11 +327,11 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             .join(Activity, Activity.id == Collection.activity_id)  # type: ignore[arg-type]
             .join(Source, Source.id == Activity.source_id)  # type: ignore[arg-type]
             .where(Source.name == source_name)
-            .offset(offset)
-            .limit(limit)
+            .order_by(col(Collection.id))
         )
-        collections = self.session.exec(statement).all()
-        return self._filter_accessible(collections, user)
+        return read_page(
+            self.session, Collection, statement, user, offset=offset, limit=limit
+        )
 
     def add_dataset(
         self, collection_id: int, dataset_id: int, user: AuthenticatedUser
@@ -559,20 +508,6 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         else:
             check_is_admin(user)
 
-    def _filter_accessible(
-        self, collections: Sequence[Collection], user: AuthenticatedUser
-    ) -> list[Collection]:
-        """Return only the Collections the user is permitted to read."""
-        result = []
-        for collection in collections:
-            try:
-                self.check_read_access(collection, user, ReadTier.LISTED)
-                result.append(collection)
-            except ForbiddenError:
-                continue
-        record_returned(len(result))
-        return result
-
     def to_summary_read_models(
         self, collections: Sequence[Collection]
     ) -> list[CollectionRead]:
@@ -605,16 +540,15 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         """
         if collection_id is None:
             return []
-        stmt = (
+        statement = (
             select(Dataset)
             .join(CollectionDataset, col(CollectionDataset.dataset_id) == Dataset.id)
             .where(col(CollectionDataset.collection_id) == collection_id)
             .order_by(col(Dataset.id))
-            .offset(offset)
-            .limit(limit)
         )
-        datasets = self.session.exec(stmt).all()
-        return DatasetService(self.session)._filter_accessible_datasets(datasets, user)
+        return read_page(
+            self.session, Dataset, statement, user, offset=offset, limit=limit
+        )
 
     def get_child_collections(
         self,
@@ -630,15 +564,15 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         """
         if parent_id is None:
             return []
-        stmt = (
+        statement = (
             select(Collection)
             .join(CollectionMember, col(CollectionMember.child_id) == Collection.id)
             .where(col(CollectionMember.parent_id) == parent_id)
             .order_by(col(Collection.id))
-            .offset(offset)
-            .limit(limit)
         )
-        return self._filter_accessible(self.session.exec(stmt).all(), user)
+        return read_page(
+            self.session, Collection, statement, user, offset=offset, limit=limit
+        )
 
     def get_readable_or_raise(
         self, collection_id: int, user: AuthenticatedUser

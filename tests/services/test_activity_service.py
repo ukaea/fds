@@ -360,18 +360,20 @@ def test_add_remove_input(
     activity_service.add_input(
         activity_id=activity.id, dataset_id=dataset.id, user=admin_user
     )
-    assert [d.id for d in activity_service.get_inputs(activity.id)] == [dataset.id]
+    assert [d.id for d in activity_service.get_inputs(activity.id, admin_user)] == [
+        dataset.id
+    ]
 
     # Idempotent.
     activity_service.add_input(
         activity_id=activity.id, dataset_id=dataset.id, user=admin_user
     )
-    assert len(activity_service.get_inputs(activity.id)) == 1
+    assert len(activity_service.get_inputs(activity.id, admin_user)) == 1
 
     activity_service.remove_input(
         activity_id=activity.id, dataset_id=dataset.id, user=admin_user
     )
-    assert activity_service.get_inputs(activity.id) == []
+    assert activity_service.get_inputs(activity.id, admin_user) == []
 
 
 def test_add_remove_instrument(

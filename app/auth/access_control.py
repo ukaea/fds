@@ -4,13 +4,17 @@ from typing import Any
 
 from sqlmodel import Session, select
 
+from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
+from app.core.audit import record_restricted_read
 from app.core.config import config
+from app.core.context import ReadTier
 from app.models.collection import Collection
 from app.models.dataset import Dataset
 from app.models.device import Device
+from app.models.identity import AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.models.shot import Shot
-from app.services.exceptions import FDSValidationError
+from app.services.exceptions import FDSValidationError, ForbiddenError
 
 DEFAULT_ACCESS_LEVEL = AccessLevel.RESTRICTED
 
@@ -113,6 +117,72 @@ def get_effective_policy(obj: Policied, session: Session) -> EffectivePolicy:
 def get_effective_access_level(obj: Policied, session: Session) -> AccessLevel:
     """The effective access level for ``obj``, for callers wanting only that."""
     return get_effective_policy(obj, session).access_level
+
+
+# A policy with nothing above it, so every unset field falls to the default.
+NO_PARENT = EffectivePolicy(
+    access_level=DEFAULT_ACCESS_LEVEL, required_scopes=None, allowed_idps=None
+)
+
+
+def read_denial(
+    kind: type[Policied],
+    policy: EffectivePolicy,
+    user: AuthenticatedUser,
+    device_name: str | None,
+    in_shot: bool,
+) -> str | None:
+    """Why ``user`` may not read a ``kind`` record's metadata, or ``None`` if they may.
+
+    Credentials for the record's data are decided separately, at vending.
+    """
+    if "fds-admin" in user.scopes:
+        return None
+    if policy.access_level in (AccessLevel.PUBLIC, AccessLevel.EMBARGOED):
+        return None
+    if user.is_anonymous:
+        return "Authentication required for this resource"
+    if policy.allowed_idps is not None and user.issuer not in policy.allowed_idps:
+        return (
+            "Access denied: your identity provider is not permitted for this resource"
+        )
+    if policy.required_scopes is not None:
+        for scope in policy.required_scopes:
+            if scope not in user.scopes:
+                return f"Not authorized, requires scope: {scope}"
+        return None
+    if kind in (Device, Shot):
+        return None
+    try:
+        if device_name is None:
+            check_is_admin(user)
+        elif kind is Dataset and in_shot:
+            check_shot_operator(user, device_name)
+        else:
+            check_device_admin(user, device_name)
+    except ForbiddenError as denied:
+        return str(denied)
+    return None
+
+
+def check_read(
+    obj: Policied,
+    session: Session,
+    user: AuthenticatedUser,
+    tier: ReadTier = ReadTier.READ,
+) -> None:
+    """Enforce read access to ``obj``, and record it when it is restricted."""
+    policy = get_effective_policy(obj, session)
+    denial = read_denial(
+        type(obj),
+        policy,
+        user,
+        getattr(obj, "device_name", None),
+        bool(getattr(obj, "shot_id", None)),
+    )
+    if denial:
+        raise ForbiddenError(denial)
+    record_restricted_read(obj, policy.access_level, tier)
 
 
 @dataclass

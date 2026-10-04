@@ -6,15 +6,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from app.auth.access_control import (
-    EffectivePolicy,
+    check_read,
     get_effective_access_level,
-    get_effective_policy,
     validate_policy_fields,
 )
-from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
-from app.core.audit import record_restricted_read
+from app.auth.permissions import check_device_admin, check_is_admin
 from app.core.config import S3StorageProvider, config
-from app.core.context import ReadTier, record_returned
+from app.core.context import ReadTier
 from app.core.naming import normalise_device_name
 from app.models.dataset import (
     Dataset,
@@ -56,6 +54,7 @@ from app.services.reference_service import (
     ReferenceKind,
     ReferenceService,
 )
+from app.services.visibility import read_page, readable_only
 
 logger = structlog.get_logger(__name__)
 
@@ -89,9 +88,14 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             *property_clauses(self.model.scientific_metadata, properties)
         )
         statement = self._apply_shot_properties(statement, shot_properties)
-        statement = statement.order_by(col(Dataset.id)).offset(offset).limit(limit)
-        datasets = self.session.exec(statement).all()
-        return self._filter_accessible_datasets(datasets, user)
+        return read_page(
+            self.session,
+            Dataset,
+            statement.order_by(col(Dataset.id)),
+            user,
+            offset=offset,
+            limit=limit,
+        )
 
     def _apply_shot_properties(self, statement, shot_properties: list[str] | None):
         """Join Dataset to its parent Shot and filter on the shot's properties.
@@ -114,61 +118,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         tier: ReadTier = ReadTier.READ,
     ) -> None:
         """Enforce read access, and record it when the resource is not public."""
-        policy = get_effective_policy(dataset, self.session)
-        self._enforce_read_policy(dataset, policy, user)
-        record_restricted_read(dataset, policy.access_level, tier)
-
-    def _enforce_read_policy(
-        self, dataset: Dataset, policy: EffectivePolicy, user: AuthenticatedUser
-    ) -> None:
-        """Enforce read access for Dataset metadata.
-
-        Resolves the full effective policy (inherited ``access_level``,
-        ``required_scopes``, ``allowed_idps``) from the
-        Dataset → Shot → Device hierarchy.
-
-        - PUBLIC / EMBARGOED: metadata is discoverable by everyone (EMBARGOED
-          restricts data, not metadata — enforced at credential vending).
-        - RESTRICTED: requires an authenticated user, then any IdP and scope
-          gates set by the policy. With no explicit ``required_scopes`` it
-          falls back to a capability check (shot operator or device admin).
-
-        Raises ``ForbiddenError`` when the user does not satisfy the policy.
-        """
-        # PUBLIC and EMBARGOED: metadata is discoverable by everyone
-        if (
-            policy.access_level == AccessLevel.PUBLIC
-            or policy.access_level == AccessLevel.EMBARGOED
-        ):
-            return
-
-        # RESTRICTED: must be authenticated
-        if user.is_anonymous:
-            raise ForbiddenError("Authentication required for this resource")
-
-        # Enforce IdP restriction if specified
-        if policy.allowed_idps is not None and user.issuer not in policy.allowed_idps:
-            raise ForbiddenError(
-                "Access denied: your identity provider is not permitted "
-                "for this resource"
-            )
-
-        # Enforce required scopes if explicitly set
-        # None → use capability fallback; [] → auth-only gate (already passed above)
-        if policy.required_scopes is not None:
-            for scope in policy.required_scopes:
-                if scope not in user.scopes:
-                    raise ForbiddenError(f"Not authorized, requires scope: {scope}")
-            return
-
-        # Capability fallback (no explicit required_scopes at any level)
-        if dataset.device_name:
-            if dataset.shot_id:
-                check_shot_operator(user, dataset.device_name)
-            else:
-                check_device_admin(user, dataset.device_name)
-        else:
-            check_is_admin(user)
+        check_read(dataset, self.session, user, tier)
 
     def create(self, obj_in: DatasetCreate, user: AuthenticatedUser) -> Dataset:
         """Create a new dataset. Handles global, device, or shot context."""
@@ -597,8 +547,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             Dataset.device_name == normalise_device_name(device_name),
             Dataset.shot_id == shot_id,
         )
-        datasets = self.session.exec(statement).all()
-        return self._filter_accessible_datasets(datasets, user)
+        return read_page(
+            self.session, Dataset, statement.order_by(col(Dataset.id)), user
+        )
 
     def get_datasets_for_device(
         self,
@@ -638,9 +589,14 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             *property_clauses(Dataset.scientific_metadata, properties)
         )
         statement = self._apply_shot_properties(statement, shot_properties)
-        statement = statement.order_by(col(Dataset.id)).offset(offset).limit(limit)
-        datasets = self.session.exec(statement).all()
-        return self._filter_accessible_datasets(datasets, user)
+        return read_page(
+            self.session,
+            Dataset,
+            statement.order_by(col(Dataset.id)),
+            user,
+            offset=offset,
+            limit=limit,
+        )
 
     def get_datasets_for_shot(
         self,
@@ -662,11 +618,10 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             )
             .where(*property_clauses(Dataset.scientific_metadata, properties))
             .order_by(col(Dataset.id))
-            .offset(offset)
-            .limit(limit)
         )
-        datasets = self.session.exec(statement).all()
-        return self._filter_accessible_datasets(datasets, user)
+        return read_page(
+            self.session, Dataset, statement, user, offset=offset, limit=limit
+        )
 
     def to_read_model(
         self,
@@ -763,7 +718,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         Dataset properties as read models, or ``None``.
         """
-        properties = self._filter_accessible_datasets(
+        properties = readable_only(
+            self.session,
             AnnotationService(self.session).for_dataset(dataset),
             user or ANONYMOUS_USER,
         )
@@ -818,8 +774,10 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         else:
             resolved = service.resolve(shot, references)
             ordered = [resolved[role] for role in references]
-        readable = self._filter_accessible_datasets(
-            [v for v in ordered if v is not None], user or ANONYMOUS_USER
+        readable = readable_only(
+            self.session,
+            [v for v in ordered if v is not None],
+            user or ANONYMOUS_USER,
         )
         seen: set[int] = set()
         models: list[DatasetRead] = []
@@ -903,22 +861,6 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                     source, include_storage_options=include_storage_options, user=user
                 )
         return models
-
-    def _filter_accessible_datasets(
-        self, datasets: Sequence[Dataset], user: AuthenticatedUser
-    ) -> list[Dataset]:
-        """
-        Helper to filter a list of datasets, returning only those the user can read.
-        """
-        accessible_datasets = []
-        for dataset in datasets:
-            try:
-                self.check_read_access(dataset, user, ReadTier.LISTED)
-                accessible_datasets.append(dataset)
-            except ForbiddenError:
-                continue
-        record_returned(len(accessible_datasets))
-        return accessible_datasets
 
     def enrich_with_storage_options(
         self, read_models: list[DatasetRead], user: AuthenticatedUser

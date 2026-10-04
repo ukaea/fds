@@ -2,22 +2,17 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import ColumnElement, cast, distinct, false, func, or_, true, tuple_
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import distinct, func, true, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from app.auth.access_control import (
-    DEFAULT_ACCESS_LEVEL,
-    EffectivePolicy,
+    check_read,
     get_effective_access_level,
-    get_effective_policy,
-    resolve_policy,
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_shot_operator
-from app.core.audit import record_restricted_read
-from app.core.context import ReadTier, record_returned
+from app.core.context import ReadTier
 from app.core.naming import normalise_device_name
 from app.core.timeutils import as_utc
 from app.models.available_properties import (
@@ -27,7 +22,6 @@ from app.models.available_properties import (
 )
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
-from app.models.policy import AccessLevel
 from app.models.shot import Shot, ShotCreate, ShotRead, ShotUpdate
 from app.services.annotation_service import AnnotationService
 from app.services.available_properties import DEFAULT_MAX_VALUES, available_properties
@@ -37,17 +31,16 @@ from app.services.exceptions import (
     ConflictError,
     DeviceNotFoundError,
     FDSValidationError,
-    ForbiddenError,
     ResourceNotFoundError,
 )
 from app.services.filters import (
     entries_of,
-    policy_tuple_clause,
     property_bound_clauses,
     property_clauses,
 )
 from app.services.jsonld import map_shot_to_dcat
 from app.services.reference_service import REFERENCE_KINDS, ReferenceService
+from app.services.visibility import read_page, readable_clause, readable_only
 
 # Tolerance (seconds) when checking an explicit shot_duration against the
 # shot_at/shot_end interval, so a whole-second duration is not rejected against a
@@ -100,46 +93,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         tier: ReadTier = ReadTier.READ,
     ) -> None:
         """Enforce read access, and record it when the resource is not public."""
-        policy = get_effective_policy(shot, self.session)
-        self._enforce_read_policy(policy, user)
-        record_restricted_read(shot, policy.access_level, tier)
-
-    def _enforce_read_policy(
-        self, policy: EffectivePolicy, user: AuthenticatedUser
-    ) -> None:
-        """Enforce read access for Shot metadata.
-
-        Resolves the full effective policy (inherited ``access_level``,
-        ``required_scopes``, ``allowed_idps``) from the Shot → Device hierarchy.
-
-        - PUBLIC / EMBARGOED: metadata is discoverable by everyone (EMBARGOED
-          restricts data, not metadata — enforced at credential vending).
-        - RESTRICTED: requires an authenticated user, then any IdP and scope
-          gates set by the policy. With no explicit ``required_scopes`` an
-          authenticated user from a trusted IdP suffices (no capability check
-          for metadata reads — that belongs to credential vending).
-
-        Raises ``ForbiddenError`` when the user does not satisfy the policy.
-        """
-        if policy.access_level in (AccessLevel.PUBLIC, AccessLevel.EMBARGOED):
-            return
-
-        if user.is_anonymous:
-            raise ForbiddenError("Authentication required for this resource")
-
-        # Enforce IdP restriction if specified
-        if policy.allowed_idps is not None and user.issuer not in policy.allowed_idps:
-            raise ForbiddenError(
-                "Access denied: your identity provider is not permitted "
-                "for this resource"
-            )
-
-        # Enforce required scopes if explicitly set
-        # None → auth gate only (already passed); [] → same; [...] → all must be present
-        if policy.required_scopes is not None:
-            for scope in policy.required_scopes:
-                if scope not in user.scopes:
-                    raise ForbiddenError(f"Not authorized, requires scope: {scope}")
+        check_read(shot, self.session, user, tier)
 
     def create(
         self,
@@ -258,88 +212,14 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         several must all be present (see ``app.services.filters``).
         """
         device = normalise_device_name(device_name) or ""
-        where = self._metadata_clauses(device, properties, minimums, maximums)
-        where.append(self._readable_shots_clause(device, user, where))
-
         statement = (
             select(Shot)
-            .where(*where)
+            .where(*self._metadata_clauses(device, properties, minimums, maximums))
             .order_by(col(Shot.shot_at).desc().nullslast(), col(Shot.id).desc())
-            .offset(offset)
-            .limit(limit)
         )
-        shots = self.session.exec(statement).all()
-
-        record_returned(len(shots))
-        return shots
-
-    def _readable_shots_clause(
-        self,
-        device_name: str,
-        user: AuthenticatedUser,
-        where: Sequence[ColumnElement[bool]],
-    ) -> ColumnElement[bool]:
-        """Restrict a scope to the shots whose policy this user satisfies.
-
-        A shot's policy is its own ``(access_level, required_scopes,
-        allowed_idps)`` falling back to its device's, and a scope under one
-        device has one device to fall back to. So the distinct tuples over the
-        scope, one to three in practice, are enumerated and the read policy is
-        enforced once per tuple rather than once per row.
-
-        That keeps the rules in ``_enforce_read_policy`` rather than restating
-        them in SQL, and makes visibility a WHERE clause: pagination then counts
-        only rows the caller can see, instead of slicing first and discarding
-        afterwards.
-        """
-        device = self.session.exec(
-            select(Device).where(Device.name == device_name)
-        ).first()
-        # No device means no shots (the foreign key sees to that), so the scope
-        # is empty and this fallback is never actually consulted. Stated rather
-        # than fabricated, so it cannot resolve to something surprising.
-        parent_policy = (
-            get_effective_policy(device, self.session)
-            if device
-            else EffectivePolicy(
-                access_level=DEFAULT_ACCESS_LEVEL,
-                required_scopes=None,
-                allowed_idps=None,
-            )
+        return read_page(
+            self.session, Shot, statement, user, offset=offset, limit=limit
         )
-
-        scopes = cast(col(Shot.required_scopes), JSONB)
-        idps = cast(col(Shot.allowed_idps), JSONB)
-        tuples = self.session.exec(
-            select(col(Shot.access_level), scopes, idps).where(*where).distinct()
-        ).all()
-
-        allowed: list[ColumnElement[bool]] = []
-        for access_level, required_scopes, allowed_idps in tuples:
-            policy = resolve_policy(
-                access_level, required_scopes, allowed_idps, parent_policy
-            )
-            try:
-                self._enforce_read_policy(policy, user)
-            except ForbiddenError:
-                continue
-            allowed.append(
-                policy_tuple_clause(
-                    col(Shot.access_level),
-                    col(Shot.required_scopes),
-                    col(Shot.allowed_idps),
-                    access_level,
-                    required_scopes,
-                    allowed_idps,
-                )
-            )
-
-        # Checked before the all-allowed case so an empty scope fails closed.
-        if not allowed:
-            return false()
-        if len(allowed) == len(tuples):
-            return true()
-        return or_(*allowed)
 
     def _metadata_clauses(
         self,
@@ -374,7 +254,8 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
             raise DeviceNotFoundError(f"Device '{device_name}' not found")
 
         where = self._metadata_clauses(device, properties, minimums, maximums)
-        where.append(self._readable_shots_clause(device, user, where))
+        scope = select(Shot).where(*where)
+        where.append(readable_clause(self.session, Shot, user, scope))
         return where
 
     def property_values(
@@ -558,8 +439,8 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
             read_model.device = None
         if include_annotations:
             dataset_service = DatasetService(self.session)
-            annotations = dataset_service._filter_accessible_datasets(
-                AnnotationService(self.session).for_shot(shot), user
+            annotations = readable_only(
+                self.session, AnnotationService(self.session).for_shot(shot), user
             )
             read_model.annotations = [
                 dataset_service.to_read_model(annotation) for annotation in annotations

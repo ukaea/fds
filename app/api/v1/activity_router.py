@@ -115,11 +115,14 @@ def list_activity_inputs(
     activity_id: int,
     activity_service: ActivityServiceDep,
     dataset_service: DatasetServiceDep,
+    user: CurrentUserDep,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> list[DatasetRead]:
     """List the datasets an Activity used as inputs."""
-    datasets = activity_service.get_inputs(activity_id, offset=offset, limit=limit)
+    datasets = activity_service.get_inputs(
+        activity_id, user, offset=offset, limit=limit
+    )
     return dataset_service.to_read_models(list(datasets))
 
 

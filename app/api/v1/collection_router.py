@@ -342,7 +342,7 @@ def read_collection_datasets(
     """Page through a Collection's member Datasets, ordered by id.
 
     A collection read inlines only the first page; this returns the rest. A page
-    can hold fewer than `limit` entries, so a short page does not mark the end.
+    shorter than `limit` is the last.
     """
     collection_service.get_readable_or_raise(collection_id, user)
     datasets = collection_service.get_member_datasets(
@@ -369,7 +369,7 @@ def read_child_collections(
     """Page through the Collections nested directly in a Collection, ordered by id.
 
     Each child is returned without its own members; read it to get those. A page
-    can hold fewer than `limit` entries, so a short page does not mark the end.
+    shorter than `limit` is the last.
     """
     collection_service.get_readable_or_raise(collection_id, user)
     children = collection_service.get_child_collections(
