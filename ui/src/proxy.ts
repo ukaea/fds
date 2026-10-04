@@ -14,7 +14,7 @@ export const config = {
   ],
 };
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (!(request.headers.get('accept') ?? '').includes('application/ld+json')) {
     return NextResponse.next();
   }
