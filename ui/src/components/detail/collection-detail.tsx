@@ -3,7 +3,9 @@
 import useSWR from 'swr';
 import Link from 'next/link';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Collection, Activity } from '@/lib/types';
+import { Collection, Activity, Dataset } from '@/lib/types';
+import { usePagedList } from '@/lib/use-paged-list';
+import { LoadMore } from '@/components/load-more';
 import ProvenanceGraph from '@/components/ProvenanceGraph';
 import { ScientificMetadata } from '@/components/properties';
 import { useDeviceLabel } from '@/lib/use-device-label';
@@ -17,6 +19,8 @@ function formatMediaType(mediaType?: string): string {
   if (mediaType.includes('hdf')) return 'HDF5';
   return mediaType.split('/').pop() || mediaType;
 }
+
+const PAGE_SIZE = 100;
 
 function formatDate(iso?: string): string {
   if (!iso) return '—';
@@ -36,6 +40,15 @@ export default function CollectionDetail({ id }: { id: string }) {
   const deviceLabel = useDeviceLabel(deviceName);
   const shotId = collection?.shot_id ?? undefined;
   const collectionName = collection?.name;
+
+  const children = usePagedList<Collection>(
+    collection?.id != null ? `${API_BASE}/collections/${collection.id}/collections` : null,
+    PAGE_SIZE
+  );
+  const members = usePagedList<Dataset>(
+    collection?.id != null ? `${API_BASE}/collections/${collection.id}/datasets` : null,
+    PAGE_SIZE
+  );
 
   const { data: activity } = useSWR<Activity>(
     collection?.id != null && collection.activity_id != null
@@ -100,45 +113,92 @@ export default function CollectionDetail({ id }: { id: string }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Member datasets */}
-        <div className="lg:col-span-2">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="bg-muted p-2 rounded-lg text-foreground">
-              <Database className="w-5 h-5" />
-            </div>
-            <h2 className="text-lg font-semibold text-foreground">Member Datasets</h2>
-            <span className="text-sm text-muted-foreground">({collection.datasets?.length ?? 0})</span>
-          </div>
+        <div className="lg:col-span-2 space-y-8">
+          {!!children.items?.length && (
+            <section>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-muted p-2 rounded-lg text-foreground">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <h2 className="text-lg font-semibold text-foreground">Member Collections</h2>
+                {children.done && (
+                  <span className="text-sm text-muted-foreground">({children.items.length})</span>
+                )}
+              </div>
+              <div className="space-y-3">
+                {children.items.map((child) => (
+                  <Link
+                    key={child.id}
+                    href={`/collections/${child.id}`}
+                    className="card p-4 hover:border-primary/50 transition-all group flex items-start justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="bg-muted p-2 rounded text-foreground">
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                          {child.title || child.name}
+                        </p>
+                        {child.title && (
+                          <p className="text-xs text-muted-foreground font-mono mt-0.5">{child.name}</p>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronRight className="text-muted-foreground group-hover:text-primary transition-colors shrink-0 ml-4" />
+                  </Link>
+                ))}
+              </div>
+              <LoadMore onLoad={children.loadMore} loading={children.loadingMore} done={children.done} />
+            </section>
+          )}
 
-          {collection.datasets && collection.datasets.length > 0 ? (
-            <div className="space-y-3">
-              {collection.datasets.map((ds) => (
-                <Link
-                  key={ds.name}
-                  href={`/datasets/${ds.id}`}
-                  className="card p-4 hover:border-primary/50 transition-all group flex items-start justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="bg-muted p-2 rounded text-foreground">
-                      <Database className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-foreground group-hover:text-primary transition-colors">{ds.name}</p>
-                      <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate max-w-sm">{ds.url}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-4">
-                    <span className="text-xs px-2 py-0.5 bg-muted rounded text-foreground flex items-center gap-1">
-                      <FileCode className="w-3 h-3" />
-                      {formatMediaType(ds.media_type)}
-                    </span>
-                    <ChevronRight className="text-muted-foreground group-hover:text-primary transition-colors" />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="card p-8 text-center text-muted-foreground">No datasets in this collection.</div>
+          {(!!members.items?.length || !children.items?.length) && (
+            <section>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-muted p-2 rounded-lg text-foreground">
+                  <Database className="w-5 h-5" />
+                </div>
+                <h2 className="text-lg font-semibold text-foreground">Member Datasets</h2>
+                {members.done && (
+                  <span className="text-sm text-muted-foreground">({members.items?.length ?? 0})</span>
+                )}
+              </div>
+
+              {members.items?.length ? (
+                <div className="space-y-3">
+                  {members.items.map((ds) => (
+                    <Link
+                      key={ds.id}
+                      href={`/datasets/${ds.id}`}
+                      className="card p-4 hover:border-primary/50 transition-all group flex items-start justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="bg-muted p-2 rounded text-foreground">
+                          <Database className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-foreground group-hover:text-primary transition-colors">{ds.name}</p>
+                          <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate max-w-sm">{ds.url}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-4">
+                        <span className="text-xs px-2 py-0.5 bg-muted rounded text-foreground flex items-center gap-1">
+                          <FileCode className="w-3 h-3" />
+                          {formatMediaType(ds.media_type)}
+                        </span>
+                        <ChevronRight className="text-muted-foreground group-hover:text-primary transition-colors" />
+                      </div>
+                    </Link>
+                  ))}
+                  <LoadMore onLoad={members.loadMore} loading={members.loadingMore} done={members.done} />
+                </div>
+              ) : members.isLoading || children.isLoading ? (
+                <div className="card p-8 text-center text-muted-foreground">Loading members…</div>
+              ) : (
+                <div className="card p-8 text-center text-muted-foreground">No datasets in this collection.</div>
+              )}
+            </section>
           )}
         </div>
 
