@@ -14,7 +14,7 @@
         {
           "type": "toml",
           "path": "uv.lock",
-          "jsonpath": "$.package[?(@.name=='fds')].version"
+          "jsonpath": "$.package[?(@.name.value=='fds')].version"
         }
       ]
     }
