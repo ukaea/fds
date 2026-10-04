@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
 import { fetcher, API_BASE } from '@/lib/api';
@@ -9,8 +10,9 @@ import { LoadMore } from '@/components/load-more';
 import ProvenanceGraph from '@/components/ProvenanceGraph';
 import { ScientificMetadata } from '@/components/properties';
 import { useDeviceLabel } from '@/lib/use-device-label';
-import { Layers, Database, FileCode, ChevronRight, Activity as ActivityIcon, Clock, ExternalLink } from 'lucide-react';
+import { Layers, Database, FileCode, ChevronRight, Activity as ActivityIcon } from 'lucide-react';
 import { JsonLdPanel } from '@/components/jsonld-panel';
+import { CollapsibleSection } from '@/components/collapsible-section';
 
 function formatMediaType(mediaType?: string): string {
   if (!mediaType) return 'Zarr';
@@ -21,6 +23,15 @@ function formatMediaType(mediaType?: string): string {
 }
 
 const PAGE_SIZE = 100;
+
+function Property({ label, last, children }: { label: string; last?: boolean; children: ReactNode }) {
+  return (
+    <div className={`flex flex-col justify-start py-1 ${last ? '' : 'border-b border-border pb-2'}`}>
+      <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">{label}</span>
+      <span className="text-foreground">{children}</span>
+    </div>
+  );
+}
 
 function formatDate(iso?: string): string {
   if (!iso) return '—';
@@ -112,6 +123,7 @@ export default function CollectionDetail({ id }: { id: string }) {
         </div>
       </div>
 
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-8">
           {!!children.items?.length && (
@@ -202,104 +214,70 @@ export default function CollectionDetail({ id }: { id: string }) {
           )}
         </div>
 
-        {/* Provenance sidebar */}
-        <div className="space-y-4">
-          <ScientificMetadata properties={collection.scientific_metadata} />
-
-          <div className="card p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <ActivityIcon className="w-4 h-4 text-foreground" />
-              <h3 className="text-sm font-semibold text-foreground">Provenance</h3>
+        <div className="space-y-6">
+          <div className="card p-6 bg-card/60 shadow-xl border-border">
+            <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground">Collection Properties</h3>
+            <div className="space-y-3 text-sm">
+              <Property label="Created At">
+                {collection.created_at
+                  ? new Date(collection.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+                  : 'Unknown'}
+              </Property>
+              <Property label="Scope">
+                {shotId ? `${deviceLabel} / Shot ${shotId}` : deviceName ? deviceLabel : 'Global'}
+              </Property>
+              {collection.root_url && (
+                <Property label="Root URL">
+                  <span className="font-mono break-all">{collection.root_url}</span>
+                </Property>
+              )}
+              <Property label="Access Level" last>
+                <span className="capitalize">{collection.effective_access_level || collection.access_level || 'Unknown'}</span>
+              </Property>
             </div>
+          </div>
 
+          <ScientificMetadata properties={collection.scientific_metadata} className="bg-card/60 shadow-xl border-border" />
+
+          <div className="card p-6 bg-card/60 shadow-xl border-border">
+            <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground flex items-center gap-2">
+              <ActivityIcon className="w-5 h-5 text-muted-foreground" /> Provenance
+            </h3>
             {activity ? (
               <div className="space-y-3 text-sm">
-                <div>
-                  <p className="text-muted-foreground text-xs mb-1">Activity type</p>
-                  <p className="text-foreground font-mono">{activity.activity_type || '—'}</p>
-                </div>
+                {activity.activity_type && <Property label="Activity Type">{activity.activity_type}</Property>}
                 {activity.source_version && (
-                  <div>
-                    <p className="text-muted-foreground text-xs mb-1">Source version</p>
-                    <p className="text-foreground font-mono">{activity.source_version}</p>
-                  </div>
+                  <Property label="Source Version">
+                    <span className="font-mono">{activity.source_version}</span>
+                  </Property>
                 )}
-                {activity.started_at && (
-                  <div>
-                    <p className="text-muted-foreground text-xs mb-1">Started</p>
-                    <p className="text-foreground flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-muted-foreground" />
-                      {formatDate(activity.started_at)}
-                    </p>
-                  </div>
-                )}
-                {activity.ended_at && (
-                  <div>
-                    <p className="text-muted-foreground text-xs mb-1">Ended</p>
-                    <p className="text-foreground flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-muted-foreground" />
-                      {formatDate(activity.ended_at)}
-                    </p>
-                  </div>
-                )}
+                {activity.started_at && <Property label="Started">{formatDate(activity.started_at)}</Property>}
+                {activity.ended_at && <Property label="Ended">{formatDate(activity.ended_at)}</Property>}
                 {activity.parameters && Object.keys(activity.parameters).length > 0 && (
-                  <div>
-                    <p className="text-muted-foreground text-xs mb-1">Parameters</p>
-                    <pre className="text-xs text-foreground bg-card/50 rounded p-2 overflow-x-auto">
+                  <Property label="Parameters" last>
+                    <pre className="text-xs font-mono bg-background border border-border p-2 rounded overflow-x-auto">
                       {JSON.stringify(activity.parameters, null, 2)}
                     </pre>
-                  </div>
+                  </Property>
                 )}
               </div>
             ) : collection.activity_id ? (
               <p className="text-muted-foreground text-sm">Loading provenance…</p>
             ) : (
-              <p className="text-muted-foreground text-sm">No provenance recorded.</p>
+              <div className="text-center py-4 bg-card/30 rounded-lg border border-dashed border-border">
+                <p className="text-xs text-muted-foreground">No activity is recorded for this collection.</p>
+              </div>
             )}
-          </div>
-
-          {/* JSON-LD link */}
-          <div className="card p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <ExternalLink className="w-4 h-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold text-foreground">Semantic Metadata</h3>
-            </div>
-            <p className="text-xs text-muted-foreground mb-3">
-              This collection is serialisable as a <code className="text-foreground">dcat:Catalog</code> with full PROV-O provenance.
-            </p>
-            <a
-              href={`/api/v1/collections/id/${id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-              onClick={(e) => {
-                // Modify Accept header isn't possible via plain <a>, so just link to the endpoint
-                e.preventDefault();
-                window.open(
-                  `/api/v1/collections/id/${id}`,
-                  '_blank'
-                );
-              }}
+            <CollapsibleSection
+              label="Provenance graph"
+              className="mt-4 -mx-4 border-t border-border"
             >
-              View raw JSON <ExternalLink className="w-3 h-3" />
-            </a>
+              <ProvenanceGraph collection={collection} />
+            </CollapsibleSection>
           </div>
-        </div>
-      </div>
 
-      {(collection.datasets?.length ?? 0) > 0 ||
-      (collection.child_collections?.length ?? 0) > 0 ||
-      collection.activity_id != null ? (
-        <div className="card p-6 mt-8 bg-card/60 shadow-xl border-border">
-          <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground flex items-center gap-2">
-            <ActivityIcon className="w-5 h-5 text-muted-foreground" /> Provenance Graph
-          </h3>
-          <ProvenanceGraph collection={collection} />
+          <JsonLdPanel url={`${API_BASE}/collections/id/${id}`} />
         </div>
-      ) : null}
-
-      <div className="mt-10">
-        <JsonLdPanel url={`${API_BASE}/collections/id/${id}`} />
       </div>
     </div>
   );

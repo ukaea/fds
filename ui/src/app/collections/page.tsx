@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { fetcher, API_BASE } from '@/lib/api';
 import { usePagedList } from '@/lib/use-paged-list';
 import { LoadMore } from '@/components/load-more';
+import { CollapsibleSection } from '@/components/collapsible-section';
 import { Collection, Device } from '@/lib/types';
 import { Layers, Database, ChevronRight, Globe, Server } from 'lucide-react';
 
@@ -91,19 +92,24 @@ function ScopeCollections({
   if (isLoading || !items?.length) return null;
 
   return (
-    <section className="mb-10">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="bg-muted p-2 rounded-lg text-foreground">{icon}</div>
-        <h2 className="text-xl font-semibold text-foreground">{title}</h2>
-        {done && <span className="text-sm text-muted-foreground ml-1">({items.length})</span>}
-      </div>
+    <CollapsibleSection
+      label={
+        <>
+          {icon}
+          <span className="text-base font-semibold">{title}</span>
+          <span className="text-muted-foreground font-normal">
+            ({done ? items.length : `${items.length}+`})
+          </span>
+        </>
+      }
+    >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {items.map((col) => (
           <CollectionCard key={col.id} col={col} />
         ))}
       </div>
       <LoadMore onLoad={loadMore} loading={loadingMore} done={done} />
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -137,11 +143,11 @@ export default function CollectionsPage() {
       {isLoading && <div className="card p-8 text-center text-muted-foreground">Loading…</div>}
 
       {!isLoading && (
-        <>
+        <div className="space-y-3">
           <ScopeCollections
             scope="global"
             title="Global"
-            icon={<Globe className="w-5 h-5" />}
+            icon={<Globe className="w-4 h-4 text-muted-foreground" />}
             url={`${API_BASE}/collections`}
             onLoaded={onLoaded}
           />
@@ -150,12 +156,12 @@ export default function CollectionsPage() {
               key={device.name}
               scope={device.name}
               title={device.title || device.name}
-              icon={<Server className="w-5 h-5" />}
+              icon={<Server className="w-4 h-4 text-muted-foreground" />}
               url={`${API_BASE}/devices/${device.name}/collections`}
               onLoaded={onLoaded}
             />
           ))}
-        </>
+        </div>
       )}
 
       {empty && (

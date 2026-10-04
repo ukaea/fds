@@ -297,7 +297,7 @@ export default function ProvenanceGraph({ datasetId, collection }: ProvenanceGra
             setTip(null);
             setShowAll((v) => !v);
           }}
-          className="absolute right-3 top-3 rounded-md border border-border bg-white px-2.5 py-1 text-xs text-foreground shadow-sm hover:bg-muted"
+          className="absolute right-3 top-3 rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-xs text-neutral-800 shadow-sm hover:bg-neutral-100"
         >
           {showAll ? 'Hide all details' : 'Show all details'}
         </button>

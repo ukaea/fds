@@ -146,6 +146,8 @@ export interface Collection {
   access_level?: string;
   effective_access_level?: string;
   activity_id?: number | null;
+  root_url?: string | null;
+  created_at?: string;
   scientific_metadata?: ScientificProperty[];
   datasets?: Dataset[];
   child_collections?: Collection[];
