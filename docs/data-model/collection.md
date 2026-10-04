@@ -130,4 +130,4 @@ GET /v1/collections/{id}/datasets?offset=100&limit=100
 GET /v1/collections/{id}/collections?offset=100&limit=100
 ```
 
-Both are ordered by id. A page shorter than `limit` is the last one.
+Both are ordered by id and take at most 1000 per page. A page can hold fewer than `limit` entries, so a short page does not mark the end.

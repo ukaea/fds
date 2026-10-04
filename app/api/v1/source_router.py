@@ -2,7 +2,14 @@ from collections.abc import Sequence
 
 from fastapi import APIRouter, status
 
-from app.api.deps import CollectionServiceDep, CurrentUserDep, SourceServiceDep
+from app.api.deps import (
+    DEFAULT_PAGE_SIZE,
+    CollectionServiceDep,
+    CurrentUserDep,
+    Limit,
+    Offset,
+    SourceServiceDep,
+)
 from app.models.collection import CollectionRead
 from app.models.source import SourceCreate, SourceRead, SourceUpdate
 from app.services.exceptions import ResourceNotFoundError
@@ -26,7 +33,9 @@ def create_source(
 
 @router.get("/", response_model=list[SourceRead])
 def read_sources(
-    source_service: SourceServiceDep, offset: int = 0, limit: int = 100
+    source_service: SourceServiceDep,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> Sequence[SourceRead]:
     """
     Retrieve all sources.
@@ -40,8 +49,8 @@ def read_collections_for_source(
     name: str,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> Sequence[CollectionRead]:
     """
     Return all Collections whose linked Activity was produced by the named Source.

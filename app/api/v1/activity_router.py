@@ -3,9 +3,12 @@ from collections.abc import Sequence
 from fastapi import APIRouter, status
 
 from app.api.deps import (
+    DEFAULT_PAGE_SIZE,
     ActivityServiceDep,
     CurrentUserDep,
     DatasetServiceDep,
+    Limit,
+    Offset,
     SourceServiceDep,
 )
 from app.models.activity import (
@@ -112,8 +115,8 @@ def list_activity_inputs(
     activity_id: int,
     activity_service: ActivityServiceDep,
     dataset_service: DatasetServiceDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> list[DatasetRead]:
     """List the datasets an Activity used as inputs."""
     datasets = activity_service.get_inputs(activity_id, offset=offset, limit=limit)
@@ -160,8 +163,8 @@ def list_activity_instruments(
     activity_id: int,
     activity_service: ActivityServiceDep,
     source_service: SourceServiceDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> list[SourceRead]:
     """List the instruments an Activity used."""
     instruments = activity_service.get_instruments(

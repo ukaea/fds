@@ -4,11 +4,14 @@ from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import (
+    DEFAULT_PAGE_SIZE,
     ActivityServiceDep,
     BaseURLDep,
     CollectionServiceDep,
     CurrentUserDep,
     DatasetServiceDep,
+    Limit,
+    Offset,
 )
 from app.models.activity import ActivityRead
 from app.models.collection import CollectionCreate, CollectionRead, CollectionUpdate
@@ -45,8 +48,8 @@ def read_collections_global(
     *,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
 ) -> list[CollectionRead]:
@@ -155,8 +158,8 @@ def read_collections_device(
     device_name: str,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
 ) -> list[CollectionRead]:
@@ -236,8 +239,8 @@ def read_collections_shot(
     shot_id: str,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
 ) -> list[CollectionRead]:
@@ -332,14 +335,14 @@ def read_collection_datasets(
     collection_service: CollectionServiceDep,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
 ) -> list[DatasetRead]:
     """Page through a Collection's member Datasets, ordered by id.
 
     A collection read inlines only the first page; this returns the rest. A page
-    shorter than `limit` is the last.
+    can hold fewer than `limit` entries, so a short page does not mark the end.
     """
     collection_service.get_readable_or_raise(collection_id, user)
     datasets = collection_service.get_member_datasets(
@@ -360,13 +363,13 @@ def read_child_collections(
     collection_id: int,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> list[CollectionRead]:
     """Page through the Collections nested directly in a Collection, ordered by id.
 
     Each child is returned without its own members; read it to get those. A page
-    shorter than `limit` is the last.
+    can hold fewer than `limit` entries, so a short page does not mark the end.
     """
     collection_service.get_readable_or_raise(collection_id, user)
     children = collection_service.get_child_collections(

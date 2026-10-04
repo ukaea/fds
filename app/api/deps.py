@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Query
 
 from app.api.base_url import get_base_url
 from app.auth.security import get_current_user
@@ -14,6 +14,9 @@ from app.services.distribution_service import DistributionService
 from app.services.file_access_service import FileAccessService
 from app.services.shot_service import ShotService
 from app.services.source_service import SourceService
+
+DEFAULT_PAGE_SIZE = 100
+MAX_PAGE_SIZE = 1000
 
 
 def get_file_access_service(session: SessionDep) -> FileAccessService:
@@ -62,3 +65,6 @@ DistributionServiceDep = Annotated[
 
 CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]
 BaseURLDep = Annotated[str, Depends(get_base_url)]
+
+Offset = Annotated[int, Query(ge=0)]
+Limit = Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)]

@@ -165,7 +165,7 @@ curl "$API/devices/mast/datasets?scope=device"   # general device-level Datasets
 
 A device-level `Dataset` describes the machine rather than a single experiment. Geometry and calibration data are examples of this.
 
-Listings are paged with `offset` and `limit` (default 100) and returned in a stable order, so paging through a device covers it exactly once. A page can contain fewer than `limit` entries when some datasets are not readable by the caller; an empty page does not mean the end of the results.
+Listings are paged with `offset` and `limit` (default 100, at most 1000) and returned in a stable order, so paging through a device covers it exactly once. A page can contain fewer than `limit` entries when some datasets are not readable by the caller; an empty page does not mean the end of the results.
 
 A `Dataset` can also link to **reference geometry**. A `Dataset` declares the geometry it needs via `geometry_references`, or a `Device`-level `Dataset` *provides* geometry via `geometry_roles` and `applies_to`. The same machinery carries **reference calibration**: a `Dataset` names the calibration it needs via `calibration_references`, and a `Device`-level `Dataset` provides it via `calibration_roles`, `calibration_stage`, and `applies_to`. Unlike geometry, calibration can resolve to an ordered chain of stages. See [Reference Datasets](reference-datasets.md).
 

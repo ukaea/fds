@@ -4,11 +4,14 @@ from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import (
+    DEFAULT_PAGE_SIZE,
     ActivityServiceDep,
     BaseURLDep,
     CurrentUserDep,
     DatasetServiceDep,
     DistributionServiceDep,
+    Limit,
+    Offset,
     SourceServiceDep,
 )
 from app.models.activity import ActivityRead
@@ -60,8 +63,8 @@ def read_datasets_global(
     *,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
     include_geometry: bool = False,
     include_calibration: bool = False,
@@ -155,8 +158,8 @@ def read_datasets_shot(
     shot_id: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
     include_geometry: bool = False,
     include_calibration: bool = False,
@@ -310,8 +313,8 @@ def read_datasets_device(
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     scope: DatasetScope = DatasetScope.ALL,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
     include_geometry: bool = False,
     include_calibration: bool = False,
@@ -461,8 +464,8 @@ def read_derivations(
     dataset_id: int,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> list[DatasetDerivationRead]:
     """
     List the upstream entities asserted for a dataset.

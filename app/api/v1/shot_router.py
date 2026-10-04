@@ -3,7 +3,14 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
-from app.api.deps import BaseURLDep, CurrentUserDep, ShotServiceDep
+from app.api.deps import (
+    DEFAULT_PAGE_SIZE,
+    BaseURLDep,
+    CurrentUserDep,
+    Limit,
+    Offset,
+    ShotServiceDep,
+)
 from app.models.available_properties import AvailableProperties, PropertyValues
 from app.models.shot import (
     ShotCreate,
@@ -45,8 +52,8 @@ def read_shots(
     device_name: str,
     shot_service: ShotServiceDep,
     user: CurrentUserDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
     include_device: bool = False,
     include_annotations: bool = False,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
