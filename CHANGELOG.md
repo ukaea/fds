@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.4](https://github.com/ukaea/fds/compare/v0.0.3...v0.0.4) (2026-10-04)
+
+
+### Features
+
+* Add the FDS logo and brand colours to the UI and docs ([#121](https://github.com/ukaea/fds/issues/121)) ([8f97995](https://github.com/ukaea/fds/commit/8f97995742e6db2862d57daa0decdce0f29d67d9))
+* Show member collections and rework the collection page ([#118](https://github.com/ukaea/fds/issues/118)) ([a21d6c4](https://github.com/ukaea/fds/commit/a21d6c42dbaa92ca3b3b1ebb7b4822035d96f649))
+
 ## [0.0.3](https://github.com/ukaea/fds/compare/v0.0.2...v0.0.3) (2026-10-04)
 
 
