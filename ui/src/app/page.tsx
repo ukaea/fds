@@ -85,7 +85,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="text-xs text-foreground group-hover:text-foreground transition-colors font-medium">
-                  View Shots →
+                  View Data →
                 </div>
               </Link>
             ))}
