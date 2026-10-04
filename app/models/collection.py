@@ -149,7 +149,7 @@ class Collection(CollectionBase, TimestampMixin, table=True):
     datasets: list["Dataset"] = Relationship(link_model=CollectionDataset)
     # Child Collections are NOT declared as a SQLModel Relationship here because
     # SQLModel cannot automatically resolve self-referential M2M join columns.
-    # Use CollectionService._get_child_collections() instead.
+    # Use CollectionService.get_child_collections() instead.
 
 
 class CollectionCreate(CollectionBase):

@@ -542,6 +542,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         shot: Shot,
         include_device: bool = False,
         include_annotations: bool = False,
+        user: AuthenticatedUser = ANONYMOUS_USER,
     ) -> "ShotRead":
         """
         Converts a Shot ORM object to a ShotRead DTO, optionally including the full device object.
@@ -557,18 +558,27 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
             read_model.device = None
         if include_annotations:
             dataset_service = DatasetService(self.session)
+            annotations = dataset_service._filter_accessible_datasets(
+                AnnotationService(self.session).for_shot(shot), user
+            )
             read_model.annotations = [
-                dataset_service.to_read_model(annotation)
-                for annotation in AnnotationService(self.session).for_shot(shot)
+                dataset_service.to_read_model(annotation) for annotation in annotations
             ] or None
         return read_model
 
     def to_dcat(
-        self, shot: Shot, base_url: str, *, include_annotations: bool = False
+        self,
+        shot: Shot,
+        base_url: str,
+        *,
+        include_annotations: bool = False,
+        user: AuthenticatedUser = ANONYMOUS_USER,
     ) -> dict[str, Any]:
         """Build the shot's DCAT/JSON-LD document, resolving its annotations into
         qualified relations."""
-        enriched = self.to_read_model(shot, include_annotations=include_annotations)
+        enriched = self.to_read_model(
+            shot, include_annotations=include_annotations, user=user
+        )
         return map_shot_to_dcat(
             shot,
             base_url,

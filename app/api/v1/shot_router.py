@@ -78,7 +78,10 @@ def read_shots(
 
     return [
         shot_service.to_read_model(
-            shot, include_device=include_device, include_annotations=include_annotations
+            shot,
+            include_device=include_device,
+            include_annotations=include_annotations,
+            user=user,
         )
         for shot in shots
     ]
@@ -180,11 +183,12 @@ def read_shot(
                 shot,
                 base,
                 include_annotations=include_annotations,
+                user=user,
             ),
             media_type="application/ld+json",
         )
     return shot_service.to_read_model(
-        shot, include_device=True, include_annotations=include_annotations
+        shot, include_device=True, include_annotations=include_annotations, user=user
     )
 
 

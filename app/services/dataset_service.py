@@ -734,12 +734,14 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         include_geometry: bool = False,
         include_calibration: bool = False,
         include_annotations: bool = False,
+        user: AuthenticatedUser = ANONYMOUS_USER,
     ) -> dict[str, Any]:
         """Build the dataset's DCAT/JSON-LD document, resolving the requested
         related datasets (geometry, calibration, properties) into qualified
         relations."""
         enriched = self.to_read_model(
             dataset,
+            user=user,
             include_geometry=include_geometry,
             include_calibration=include_calibration,
             include_annotations=include_annotations,
@@ -761,7 +763,10 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         Dataset properties as read models, or ``None``.
         """
-        properties = AnnotationService(self.session).for_dataset(dataset)
+        properties = self._filter_accessible_datasets(
+            AnnotationService(self.session).for_dataset(dataset),
+            user or ANONYMOUS_USER,
+        )
         models = [
             self.to_read_model(
                 prop,
@@ -813,9 +818,12 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         else:
             resolved = service.resolve(shot, references)
             ordered = [resolved[role] for role in references]
+        readable = self._filter_accessible_datasets(
+            [v for v in ordered if v is not None], user or ANONYMOUS_USER
+        )
         seen: set[int] = set()
         models: list[DatasetRead] = []
-        for version in ordered:
+        for version in readable:
             if version is None or version.id is None or version.id in seen:
                 continue
             seen.add(version.id)

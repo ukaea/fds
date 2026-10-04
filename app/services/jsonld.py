@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -734,7 +735,11 @@ def _coverage_to_period(coverage: Any) -> dict[str, Any] | None:
 
 
 def map_collection_to_dcat(
-    collection: Collection | CollectionRead, base_url: str
+    collection: Collection | CollectionRead,
+    base_url: str,
+    *,
+    datasets: Sequence[Dataset],
+    child_collections: Sequence[Collection],
 ) -> dict[str, Any]:
     """Maps a Collection to a JSON-LD document typed as both ``dcat:Catalog``
     and ``prov:Collection``.
@@ -783,21 +788,19 @@ def map_collection_to_dcat(
     # references and, in PROV terms, collected via prov:hadMember below.
     member_ids: list[str] = []
 
-    member_datasets: list[Any] = getattr(collection, "datasets", []) or []
     dataset_refs = [
         {
             "@id": names.dataset(ds.id),
             "@type": "dcat:Dataset",
             "dct:title": ds.title or ds.name,
         }
-        for ds in member_datasets
-        if getattr(ds, "id", None)
+        for ds in datasets
+        if ds.id
     ]
     if dataset_refs:
         data["dcat:dataset"] = dataset_refs
         member_ids.extend(ref["@id"] for ref in dataset_refs)
 
-    child_collections: list[Any] = getattr(collection, "child_collections", []) or []
     catalog_refs = [
         {
             "@id": names.collection(c.id),
@@ -805,7 +808,7 @@ def map_collection_to_dcat(
             "dct:title": c.title or c.name,
         }
         for c in child_collections
-        if getattr(c, "id", None)
+        if c.id
     ]
     if catalog_refs:
         data["dcat:catalog"] = catalog_refs

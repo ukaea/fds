@@ -49,7 +49,7 @@ def read_collections_for_source(
     collections = collection_service.get_for_source(
         source_name=name, user=user, offset=offset, limit=limit
     )
-    return [collection_service.to_read_model(c) for c in collections]
+    return collection_service.to_read_models(collections, user=user)
 
 
 @router.get("/id/{id}", response_model=SourceRead)

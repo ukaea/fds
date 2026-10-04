@@ -118,3 +118,16 @@ Create a Collection, then add its member Datasets by id, one bodyless `POST` per
       });
     }
     ```
+
+## Reading members
+
+A collection read inlines its first 100 member Datasets as `datasets` and its first 100 child Collections as `child_collections`, ordered by id. Children are listed without their own members.
+
+A larger collection is read in pages:
+
+```http
+GET /v1/collections/{id}/datasets?offset=100&limit=100
+GET /v1/collections/{id}/collections?offset=100&limit=100
+```
+
+Both are ordered by id. A page shorter than `limit` is the last one.

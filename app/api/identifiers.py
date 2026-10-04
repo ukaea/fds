@@ -22,7 +22,6 @@ from app.services.identifiers import (
 )
 from app.services.jsonld import (
     map_activity_to_dcat,
-    map_collection_to_dcat,
     map_device_to_dcat,
     map_shot_to_dcat,
     map_source_to_dcat,
@@ -85,7 +84,7 @@ def resolve_collection(
     if not collection:
         raise ResourceNotFoundError(f"Collection {id} not found")
     collection_service.check_read_access(collection, user)
-    return _ld(map_collection_to_dcat(collection, base))
+    return _ld(collection_service.to_dcat(collection, base, user))
 
 
 @router.get(SOURCE, summary="The source this URI names")

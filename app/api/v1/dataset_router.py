@@ -256,6 +256,7 @@ def read_dataset_by_id(
             include_geometry=include_geometry,
             include_calibration=include_calibration,
             include_annotations=include_annotations,
+            user=user,
         )
         return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
 

@@ -38,9 +38,13 @@ from app.services.exceptions import (
     ResourceNotFoundError,
 )
 from app.services.filters import property_clauses
+from app.services.jsonld import map_collection_to_dcat
 from app.services.shot_service import ShotService
 
 logger = structlog.get_logger(__name__)
+
+# How many members a collection read inlines; the member endpoints page the rest.
+INLINE_MEMBERS = 100
 
 
 class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpdate]):
@@ -497,13 +501,15 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
     ) -> CollectionRead:
         """Convert a Collection ORM object to a ``CollectionRead`` DTO.
 
-        Member Datasets are inlined as ``DatasetRead`` objects. Pass
+        The first ``INLINE_MEMBERS`` member Datasets are inlined as
+        ``DatasetRead`` objects, and the first ``INLINE_MEMBERS`` child
+        Collections one level deep, without their own members. Pass
         ``include_storage_options=True`` to include short-lived credentials on
-        each dataset. Child Collections are inlined one level deep — their own
-        ``datasets`` and ``child_collections`` are omitted to prevent unbounded
-        recursive serialisation.
+        each dataset.
         """
-        member_datasets = self.get_member_datasets(collection.id)
+        member_datasets = self.get_member_datasets(
+            collection.id, user, limit=INLINE_MEMBERS
+        )
         dataset_reads = (
             DatasetService(self.session).to_read_models(
                 member_datasets,
@@ -512,21 +518,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             )
             or None
         )
-
-        child_orm = self._get_child_collections(collection.id)
-        child_reads = [
-            CollectionRead.model_validate(
-                c,
-                update={
-                    "effective_access_level": get_effective_access_level(
-                        c, self.session
-                    ),
-                    "datasets": None,
-                    "child_collections": None,
-                },
-            )
-            for c in child_orm
-        ] or None
+        children = self.get_child_collections(collection.id, user, limit=INLINE_MEMBERS)
+        child_reads = self.to_summary_read_models(children) or None
 
         return CollectionRead.model_validate(
             collection,
@@ -580,34 +573,94 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         record_returned(len(result))
         return result
 
-    def get_member_datasets(self, collection_id: int | None) -> list[Dataset]:
-        """Return the Datasets that are members of a given Collection.
+    def to_summary_read_models(
+        self, collections: Sequence[Collection]
+    ) -> list[CollectionRead]:
+        """``CollectionRead`` DTOs without their members, as listed inside a parent."""
+        return [
+            CollectionRead.model_validate(
+                c,
+                update={
+                    "effective_access_level": get_effective_access_level(
+                        c, self.session
+                    ),
+                    "datasets": None,
+                    "child_collections": None,
+                },
+            )
+            for c in collections
+        ]
+
+    def get_member_datasets(
+        self,
+        collection_id: int | None,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        *,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> list[Dataset]:
+        """Return a page of the Datasets that are members of a Collection, by id.
 
         Returns an empty list if ``collection_id`` is ``None`` (unpersisted Collection).
         """
         if collection_id is None:
             return []
-        stmt = select(Dataset).where(
-            col(Dataset.id).in_(
-                select(col(CollectionDataset.dataset_id)).where(
-                    col(CollectionDataset.collection_id) == collection_id
-                )
-            )
+        stmt = (
+            select(Dataset)
+            .join(CollectionDataset, col(CollectionDataset.dataset_id) == Dataset.id)
+            .where(col(CollectionDataset.collection_id) == collection_id)
+            .order_by(col(Dataset.id))
+            .offset(offset)
+            .limit(limit)
         )
-        return list(self.session.exec(stmt).all())
+        datasets = self.session.exec(stmt).all()
+        return DatasetService(self.session)._filter_accessible_datasets(datasets, user)
 
-    def _get_child_collections(self, parent_id: int | None) -> list[Collection]:
-        """Return the Collections directly nested inside a given parent Collection.
+    def get_child_collections(
+        self,
+        parent_id: int | None,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        *,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> list[Collection]:
+        """Return a page of the Collections nested directly inside a parent, by id.
 
         Returns an empty list if ``parent_id`` is ``None`` (unpersisted Collection).
         """
         if parent_id is None:
             return []
-        stmt = select(Collection).where(
-            col(Collection.id).in_(
-                select(col(CollectionMember.child_id)).where(
-                    col(CollectionMember.parent_id) == parent_id
-                )
-            )
+        stmt = (
+            select(Collection)
+            .join(CollectionMember, col(CollectionMember.child_id) == Collection.id)
+            .where(col(CollectionMember.parent_id) == parent_id)
+            .order_by(col(Collection.id))
+            .offset(offset)
+            .limit(limit)
         )
-        return list(self.session.exec(stmt).all())
+        return self._filter_accessible(self.session.exec(stmt).all(), user)
+
+    def get_readable_or_raise(
+        self, collection_id: int, user: AuthenticatedUser
+    ) -> Collection:
+        """Retrieve a Collection by id, enforcing read access."""
+        collection = self.get(collection_id)
+        if not collection:
+            raise ResourceNotFoundError(f"Collection {collection_id} not found")
+        self.check_read_access(collection, user)
+        return collection
+
+    def to_dcat(
+        self, collection: Collection, base_url: str, user: AuthenticatedUser
+    ) -> dict:
+        """The collection's ``dcat:Catalog`` document, with the same members as its read."""
+        return map_collection_to_dcat(
+            collection,
+            base_url,
+            datasets=self.get_member_datasets(
+                collection.id, user, limit=INLINE_MEMBERS
+            ),
+            child_collections=self.get_child_collections(
+                collection.id, user, limit=INLINE_MEMBERS
+            ),
+        )

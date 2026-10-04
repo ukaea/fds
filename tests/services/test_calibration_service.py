@@ -127,7 +127,7 @@ def test_calibrated_geometry_resolves_at_anchor_shot(datasets, admin_user):
         url="s3://sig/te.zarr",
     )
 
-    model = datasets.to_read_model(signal, include_geometry=True)
+    model = datasets.to_read_model(signal, include_geometry=True, user=admin_user)
     assert [g.id for g in model.geometry] == [geom.id]
     assert [c.id for c in model.geometry[0].calibration] == [cal.id]
 
@@ -167,7 +167,7 @@ def test_reference_cycle_terminates(datasets, admin_user):
         url="s3://sig/te.zarr",
     )
 
-    model = datasets.to_read_model(signal, include_geometry=True)
+    model = datasets.to_read_model(signal, include_geometry=True, user=admin_user)
     nested_geom = model.geometry[0].calibration[0].geometry[0]
     assert model.geometry[0].id == geom.id
     assert model.geometry[0].calibration[0].id == cal.id
