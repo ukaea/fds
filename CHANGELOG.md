@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.0.5](https://github.com/ukaea/fds/compare/v0.0.4...v0.0.5) (2026-10-05)
+
+
+### Features
+
+* Find a shot by ID on the device page ([#123](https://github.com/ukaea/fds/issues/123)) ([efb6898](https://github.com/ukaea/fds/commit/efb68989fd53295fec38c85815896908218aaca4))
+* Record a persistent identifier on citable records ([#128](https://github.com/ukaea/fds/issues/128)) ([a36ea37](https://github.com/ukaea/fds/commit/a36ea3746cd2d422713c3e5c8b22775c48bc7e01))
+* Rework the dataset page ([#130](https://github.com/ukaea/fds/issues/130)) ([9b528cd](https://github.com/ukaea/fds/commit/9b528cd39a86e7f53130f45ca49e25f4a13354ad))
+* Say why a shot cannot be shown ([#126](https://github.com/ukaea/fds/issues/126)) ([6ba35cd](https://github.com/ukaea/fds/commit/6ba35cd01f8baf2dcfd8289a61c60a3a9cca7aa3))
+
+
+### Bug Fixes
+
+* Match the shot property filter only on readable shots ([#125](https://github.com/ukaea/fds/issues/125)) ([f2e34a5](https://github.com/ukaea/fds/commit/f2e34a5d846c8838ae53b126cf2588c5eb70b003))
+* Update records with PATCH, not PUT ([#129](https://github.com/ukaea/fds/issues/129)) ([bb1a314](https://github.com/ukaea/fds/commit/bb1a314e79de2a67611b1dc187d5d0c6782c2b49))
+
 ## [0.0.4](https://github.com/ukaea/fds/compare/v0.0.3...v0.0.4) (2026-10-04)
 
 
