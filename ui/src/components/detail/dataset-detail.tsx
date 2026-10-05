@@ -837,7 +837,7 @@ export default function DatasetDetail({ id }: { id: string }) {
                             <p className="text-muted-foreground text-sm mb-6">Authenticate to decrypt and visualize this Zarr store natively in your browser.</p>
                             <button
                                 onClick={handleRequestAccess}
-                                className="bg-primary hover:bg-accent text-foreground font-bold py-2 px-6 rounded transition-colors flex items-center justify-center gap-2 mx-auto"
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2 px-6 rounded transition-colors flex items-center justify-center gap-2 mx-auto"
                             >
                                 <Unlock className="w-4 h-4" />
                                 {status === "authenticated" ? "Grant Access" : "Sign In"}
@@ -1133,7 +1133,7 @@ export default function DatasetDetail({ id }: { id: string }) {
                         {accessValues.error && <p className="text-destructive mb-4 text-sm bg-destructive/10 p-2 rounded border border-destructive/40">{accessValues.error}</p>}
                         <button
                             onClick={handleRequestAccess}
-                            className="bg-primary hover:bg-accent text-foreground font-bold py-3 px-4 rounded w-full transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/25"
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-4 rounded w-full transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/25"
                         >
                             <Unlock className="w-4 h-4" />
                             {datasetData?.effective_access_level === 'public'
