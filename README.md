@@ -78,6 +78,10 @@ docker compose --profile idp up -d --build   # adds Keycloak on :8080
 Keycloak is `admin`/`admin`; its realm users are `admin`, `user` and `mast_admin`, all with
 password `password`.
 
+If you are developing your own UI, run it on `http://localhost:3001` and it can sit beside the
+reference UI against the same stack: the realm accepts logins from either port. A UI running in a
+container reaches FDS and Keycloak by joining the stack's network, `fds-dev_default`.
+
 To work on FDS itself, start the database alone and run FDS from your checkout with reload:
 
 ```bash
