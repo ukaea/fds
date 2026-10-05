@@ -61,7 +61,8 @@ function firstString(document: JsonLd | null, keys: string[]): string | undefine
 /**
  * What a DOI registry, a crawler or a pasted link shows for this identifier.
  * `canonical` is the identifier itself, so the browsing route rendering the
- * same thing does not compete with it.
+ * same thing does not compete with it. It is the document's `@id`, which FDS
+ * makes absolute; the path stands in only when there is no document.
  */
 export function landingMetadata(
   document: JsonLd | null,
@@ -70,11 +71,12 @@ export function landingMetadata(
 ): Metadata {
   const title = firstString(document, ['title', 'dct:title', 'name']) ?? fallbackTitle;
   const description = firstString(document, ['description', 'dct:description']);
+  const canonical = firstString(document, ['@id']) ?? path;
 
   return {
     title,
     description,
-    alternates: { canonical: path },
+    alternates: { canonical },
     openGraph: { title, description, type: 'article' },
   };
 }

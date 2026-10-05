@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Database, Lock, Unlock, Download, Activity, ChevronRight, MapPin, SlidersHorizontal, Highlighter, Copy, Check } from 'lucide-react';
 import { useSession, signIn } from "next-auth/react";
@@ -12,6 +12,7 @@ import { ScientificMetadata } from '@/components/properties';
 import { RelatedGroup } from '@/components/related-data';
 import { useDeviceLabel } from '@/lib/use-device-label';
 import { citation, resolveIdentifier } from '@/lib/identifiers';
+import type { JsonLd } from '@/lib/identifier-page';
 import { JsonLdPanel } from '@/components/jsonld-panel';
 
 // Heatmap Color Scale Approximation (Viridis)
@@ -115,6 +116,18 @@ function canVisualise(d: Distribution): boolean {
 function distributionLabel(d: Distribution): string {
   return d.format || d.media_type || 'Unknown format';
 }
+
+function Property({ label, children, last = false }: { label: string; children: ReactNode; last?: boolean }) {
+  return (
+    <div className={`flex flex-col justify-start py-1 ${last ? '' : 'border-b border-border pb-2'}`}>
+      <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+const DATE: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+const INSTANT: Intl.DateTimeFormatOptions = { ...DATE, hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC', timeZoneName: 'short' };
 
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
@@ -483,7 +496,7 @@ data = fs.cat("${url}")  # ${dist.media_type || 'unknown format'}: open these by
 `;
 }
 
-export default function DatasetDetail({ id }: { id: string }) {
+export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: JsonLd | null }) {
 
   const { status } = useSession();
   // Access is decided for the dataset as a whole, so one request covers every
@@ -958,7 +971,6 @@ export default function DatasetDetail({ id }: { id: string }) {
          <div className="flex flex-wrap gap-3">
              {device && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Device: {deviceLabel}</span>}
              {shot && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Shot: {shot}</span>}
-             {datasetData?.publisher && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border">Publisher: {datasetData.publisher}</span>}
              {datasetData?.annotates && (
                 <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border flex items-center gap-1">
                     <Highlighter className="w-3.5 h-3.5" />
@@ -979,37 +991,63 @@ export default function DatasetDetail({ id }: { id: string }) {
                     {datasetData?.persistent_identifier && (() => {
                         const href = resolveIdentifier(datasetData.persistent_identifier);
                         return (
-                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Persistent identifier</span>
+                            <Property label="Persistent identifier">
                                 {href
                                     ? <a href={href} className="font-mono text-primary hover:text-foreground break-all">{href}</a>
                                     : <span className="font-mono text-foreground break-all">{datasetData.persistent_identifier}</span>}
-                            </div>
+                            </Property>
                         );
                     })()}
-                    <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Listed in FDS</span>
-                        <span className="text-foreground">{datasetData?.created_at ? new Date(datasetData.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric'}) : 'Unknown'}</span>
-                    </div>
+                    {datasetData?.creator && <Property label="Creator"><span className="text-foreground">{datasetData.creator}</span></Property>}
                     {datasetData?.issued && (
-                        <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                            <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Published</span>
+                        <Property label="Published">
                             {/* A calendar date: read as UTC so no timezone shifts it a day. */}
-                            <span className="text-foreground">{new Date(datasetData.issued).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}</span>
-                        </div>
+                            <span className="text-foreground">{new Date(datasetData.issued).toLocaleDateString(undefined, { ...DATE, timeZone: 'UTC' })}</span>
+                        </Property>
                     )}
                     {datasetData?.license && (
-                        <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                            <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">License</span>
-                            <span className="text-foreground">{datasetData.license}</span>
-                        </div>
+                        <Property label="Licence">
+                            {/^https?:\/\//.test(datasetData.license)
+                                ? <a href={datasetData.license} className="text-primary hover:text-foreground break-all">{datasetData.license}</a>
+                                : <span className="text-foreground">{datasetData.license}</span>}
+                        </Property>
                     )}
-                     <div className="flex flex-col justify-start py-1">
-                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Access Level</span>
+                    <Property label="Access level">
                         <span className="text-foreground capitalize">{datasetData?.effective_access_level || datasetData?.access_level || 'Unknown'}</span>
-                    </div>
+                    </Property>
+                    {activityData?.ended_at && (
+                        <Property label="Generated">
+                            <Link href={`/activities/${activityData.id}`} className="text-primary hover:text-foreground">
+                                {new Date(activityData.ended_at).toLocaleString(undefined, INSTANT)}
+                            </Link>
+                        </Property>
+                    )}
+                    {datasetData?.version && <Property label="Version"><span className="text-foreground">{datasetData.version}</span></Property>}
+                    {datasetData?.publisher && <Property label="Publisher"><span className="text-foreground">{datasetData.publisher}</span></Property>}
+                    {(datasetData?.temporal_start || datasetData?.temporal_end) && (
+                        <Property label="Temporal coverage">
+                            <span className="text-foreground">
+                                {datasetData.temporal_start ? new Date(datasetData.temporal_start).toLocaleString(undefined, INSTANT) : 'unknown'}
+                                {' to '}
+                                {datasetData.temporal_end ? new Date(datasetData.temporal_end).toLocaleString(undefined, INSTANT) : 'unknown'}
+                            </span>
+                        </Property>
+                    )}
+                    {datasetData?.keywords && (
+                        <Property label="Keywords">
+                            <span className="flex flex-wrap gap-1.5">
+                                {datasetData.keywords.split(',').map((k) => k.trim()).filter(Boolean).map((k) => (
+                                    <span key={k} className="text-xs bg-muted border border-border rounded-full px-2 py-0.5 text-foreground">{k}</span>
+                                ))}
+                            </span>
+                        </Property>
+                    )}
+                    {datasetData?.quality_flag && <Property label="Quality"><span className="text-foreground">{datasetData.quality_flag}</span></Property>}
+                    <Property label="Listed in FDS" last>
+                        <span className="text-foreground">{datasetData?.created_at ? new Date(datasetData.created_at).toLocaleDateString(undefined, DATE) : 'Unknown'}</span>
+                    </Property>
                 </div>
-                <JsonLdPanel url={`${API_BASE}/datasets/id/${id}`} className="-mx-6 -mb-6 mt-4 border-t border-border px-2 py-1.5" />
+                <JsonLdPanel url={`${API_BASE}/datasets/id/${id}`} document={jsonLd} className="-mx-6 -mb-6 mt-4 border-t border-border px-2 py-1.5" />
             </div>
 
             <div className="card p-6 bg-muted/80 shadow-xl border-border">

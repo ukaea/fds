@@ -15,17 +15,25 @@ import { ldFetcher } from '@/lib/api';
  */
 export function JsonLdPanel({
   url,
+  document,
   label = 'JSON-LD',
   className = 'card overflow-hidden mb-10',
 }: {
   url: string;
+  // The copy already embedded in the page, when there is one, so opening the
+  // panel needs no second request.
+  document?: unknown;
   label?: string;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const { data, error, isLoading } = useSWR<unknown>(open ? url : null, ldFetcher);
+  const { data: fetched, error, isLoading } = useSWR<unknown>(
+    open && document == null ? url : null,
+    ldFetcher
+  );
+  const data = document ?? fetched;
   const text = data ? JSON.stringify(data, null, 2) : '';
 
   const copy = async () => {

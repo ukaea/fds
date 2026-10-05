@@ -12,11 +12,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function DatasetIdentifierPage({ params }: Params) {
   const { id } = await params;
+  const document = await fetchJsonLd(`/datasets/${id}`);
 
   return (
     <>
-      <JsonLdScript document={await fetchJsonLd(`/datasets/${id}`)} />
-      <DatasetDetail id={id} />
+      <JsonLdScript document={document} />
+      <DatasetDetail id={id} jsonLd={document} />
     </>
   );
 }
