@@ -313,6 +313,17 @@ def _issued_node(issued: date) -> dict[str, str]:
     return {"@value": issued.isoformat(), "@type": "xsd:date"}
 
 
+def _generated_at(activity: "Activity") -> dict[str, str] | None:
+    """When the resource was generated: the end of the activity that produced it.
+
+    Stated on the resource itself so a reader need not open the activity, and
+    derived rather than stored so the two cannot disagree.
+    """
+    if not activity.ended_at:
+        return None
+    return {"@value": activity.ended_at.isoformat(), "@type": "xsd:dateTime"}
+
+
 def _map_scientific_metadata_to_jsonld(metadata: list[Any]) -> list[dict[str, Any]]:
     result = []
     for prop in metadata:
@@ -642,6 +653,7 @@ def map_dataset_to_dcat(
     activity: Activity | None = getattr(dataset, "activity", None)
     if activity:
         data["prov:wasGeneratedBy"] = _build_activity_node(activity, base_url)
+        data["prov:generatedAtTime"] = _generated_at(activity)
 
     derivations = getattr(dataset, "derivations", None) or []
     if derivations:
@@ -898,6 +910,7 @@ def map_collection_to_dcat(
     activity: Activity | None = getattr(collection, "activity", None)
     if activity:
         data["prov:wasGeneratedBy"] = _build_activity_node(activity, base_url)
+        data["prov:generatedAtTime"] = _generated_at(activity)
 
     return _with_catalog_record(
         {k: v for k, v in data.items() if v is not None}, collection
