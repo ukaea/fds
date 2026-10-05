@@ -5,7 +5,7 @@ import useSWR from 'swr';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Calendar, ChevronRight, Search } from 'lucide-react';
-import { fetcher, API_BASE } from '@/lib/api';
+import { fetcher, API_BASE, FetchError } from '@/lib/api';
 import { AvailableProperties, Shot } from '@/lib/types';
 import { propertyQuery, withQuery } from '@/lib/properties';
 import { usePagedList } from '@/lib/use-paged-list';
@@ -78,15 +78,21 @@ export function ShotList({
   const [notFound, setNotFound] = useState<string | null>(null);
   const router = useRouter();
 
-  // Enter goes straight to the shot typed, checked first so a typo reports
-  // itself here rather than as an empty shot page.
+  // Enter goes straight to the shot typed. Only a missing shot keeps you here,
+  // so a typo reports itself beside the box; the shot page explains the rest.
   async function goToShot(e: React.FormEvent) {
     e.preventDefault();
     const shotId = idPrefix.trim();
     if (!shotId) return;
-    const res = await fetch(shotUrl(deviceName, shotId));
-    if (res.ok) router.push(`/devices/${deviceName}/shots/${encodeURIComponent(shotId)}`);
-    else setNotFound(shotId);
+    try {
+      await fetcher(shotUrl(deviceName, shotId));
+    } catch (err) {
+      if (err instanceof FetchError && err.status === 404) {
+        setNotFound(shotId);
+        return;
+      }
+    }
+    router.push(`/devices/${deviceName}/shots/${encodeURIComponent(shotId)}`);
   }
 
   // Unfiltered: the chips are the control you are using, so they must not
