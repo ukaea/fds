@@ -77,6 +77,17 @@ def test_build_icechunk_anonymous_aws():
     assert opts.force_path_style is None
 
 
+def test_lookalike_aws_host_is_not_aws():
+    """Only amazonaws.com and its subdomains count as AWS, not a host ending in it."""
+    opts = build_storage_options(
+        StorageOptionsType.ICECHUNK_S3,
+        endpoint_url="https://s3.notamazonaws.com",
+        anonymous=True,
+    )
+    assert isinstance(opts, IcechunkS3StorageOptions)
+    assert opts.force_path_style is True
+
+
 def test_build_icechunk_credentialed():
     opts = build_storage_options(
         StorageOptionsType.ICECHUNK_S3,

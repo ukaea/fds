@@ -404,6 +404,7 @@ function icechunkSnippet(url: string, access: DataAccess, storeRoot?: string): s
   const group = url.slice(root.length).replace(/^\/|\/$/g, '');
   const { bucket, key } = splitS3(root);
   const endpoint = new URL(access.endpointUrl);
+  const onAws = endpoint.hostname === 'amazonaws.com' || endpoint.hostname.endsWith('.amazonaws.com');
   const args = [
     `bucket="${bucket}"`,
     `prefix="${key}"`,
@@ -420,7 +421,7 @@ function icechunkSnippet(url: string, access: DataAccess, storeRoot?: string): s
         ]),
     ...(endpoint.protocol === 'http:' ? ['allow_http=True'] : []),
     // Any S3-compatible store other than AWS needs path-style addressing.
-    ...(endpoint.hostname.endsWith('amazonaws.com') ? [] : ['force_path_style=True']),
+    ...(onAws ? [] : ['force_path_style=True']),
   ];
   return `# pip install icechunk xarray
 import icechunk

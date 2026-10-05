@@ -90,7 +90,7 @@ def _is_non_aws(endpoint_url: str | None) -> bool:
     if not endpoint_url:
         return False
     host = urlparse(endpoint_url).hostname or ""
-    return not any(host.endswith(suffix) for suffix in _AWS_HOSTS)
+    return not any(host == d or host.endswith(f".{d}") for d in _AWS_HOSTS)
 
 
 def build_storage_options(
