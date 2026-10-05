@@ -78,6 +78,10 @@ markers = [
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+# Migrations are Alembic's output, kept exactly as generated. force-exclude
+# keeps the hooks off them too: they pass file names, which ruff otherwise checks.
+extend-exclude = ["alembic/versions"]
+force-exclude = true
 
 [tool.ruff.lint]
 # I: import sorting. ARG: unused arguments, which nothing else reports.
