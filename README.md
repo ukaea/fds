@@ -91,7 +91,7 @@ FDS_DB_PASSWORD=fds uv run uvicorn app.main:app --reload
 ```
 
 > **Podman on macOS:** if `podman compose up` hangs, `scripts/podman-up.sh` works around it
-> (add `--ui` for Keycloak and the UI). Docker users do not need it.
+> (add `--idp` for Keycloak). Docker users do not need it.
 
 To see request traces and browse them in Grafana, add the observability overlay:
 
