@@ -13,7 +13,15 @@ import { ldFetcher } from '@/lib/api';
  * what FDS serves. Fetched only when opened, since most visits will not want
  * it.
  */
-export function JsonLdPanel({ url, label = 'JSON-LD' }: { url: string; label?: string }) {
+export function JsonLdPanel({
+  url,
+  label = 'JSON-LD',
+  className = 'card overflow-hidden mb-10',
+}: {
+  url: string;
+  label?: string;
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -32,7 +40,7 @@ export function JsonLdPanel({ url, label = 'JSON-LD' }: { url: string; label?: s
   };
 
   return (
-    <div className="card overflow-hidden mb-10">
+    <div className={className}>
       <div className="flex items-center gap-2 px-4 py-2.5">
         <button
           type="button"

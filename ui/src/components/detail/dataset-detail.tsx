@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Database, Lock, Unlock, Download, Activity, ChevronRight, MapPin, SlidersHorizontal, Highlighter } from 'lucide-react';
+import { Database, Lock, Unlock, Download, Activity, ChevronRight, MapPin, SlidersHorizontal, Highlighter, Copy, Check } from 'lucide-react';
 import { useSession, signIn } from "next-auth/react";
 import useSWR from 'swr';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Activity as ActivityType, Dataset, Distribution } from '@/lib/types';
+import { Activity as ActivityType, Dataset, Distribution, Source } from '@/lib/types';
 import ProvenanceGraph from '@/components/ProvenanceGraph';
 import { ScientificMetadata } from '@/components/properties';
 import { RelatedGroup } from '@/components/related-data';
@@ -113,6 +113,30 @@ function canVisualise(d: Distribution): boolean {
 
 function distributionLabel(d: Distribution): string {
   return d.format || d.media_type || 'Unknown format';
+}
+
+// One line however long the value, so it cannot spill out of a narrow card.
+// The whole of it is in the tooltip and on the clipboard.
+function TruncatedValue({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard access is denied outside a secure context; the tooltip
+      // still shows the whole value.
+    }
+  };
+  return (
+    <span className="flex items-center gap-2">
+      <span className="font-mono text-foreground truncate" title={value}>{value}</span>
+      <button type="button" onClick={copy} aria-label="Copy" className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+        {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+      </button>
+    </span>
+  );
 }
 
 // How to open one dataset's bytes: either short-lived credentials FDS minted, or
@@ -375,6 +399,7 @@ export default function DatasetDetail({ id }: { id: string }) {
   // distribution. byUrl says how to open each one FDS granted.
   const [accessValues, setAccessValues] = useState<{granted: boolean, byUrl: Record<string, DataAccess>, error?: string}>({ granted: false, byUrl: {} });
   const [selectedDistId, setSelectedDistId] = useState<number | null>(null);
+  const [showGraph, setShowGraph] = useState(false);
   const [zarrMetadata, setZarrMetadata] = useState<NodeMeta | null>(null);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [variables, setVariables] = useState<string[]>([]);
@@ -397,6 +422,11 @@ export default function DatasetDetail({ id }: { id: string }) {
 
   const { data: activityData } = useSWR<ActivityType>(
     datasetData?.activity_id ? `${API_BASE}/datasets/${datasetData.id}/activity` : null,
+    fetcher
+  );
+
+  const { data: executor } = useSWR<Source>(
+    activityData?.source_id != null ? `${API_BASE}/sources/id/${activityData.source_id}` : null,
     fetcher
   );
 
@@ -483,6 +513,17 @@ export default function DatasetDetail({ id }: { id: string }) {
   };
 
   const [autoLoadAttempted, setAutoLoadAttempted] = useState(false);
+
+  useEffect(() => {
+      if (!showGraph && !showCodeModal) return;
+      const onKey = (e: KeyboardEvent) => {
+          if (e.key !== 'Escape') return;
+          setShowGraph(false);
+          setShowCodeModal(false);
+      };
+      window.addEventListener('keydown', onKey);
+      return () => window.removeEventListener('keydown', onKey);
+  }, [showGraph, showCodeModal]);
 
   useEffect(() => {
      if (datasetData && status !== "loading" && !autoLoadAttempted && !accessValues.granted && !accessValues.error) {
@@ -732,8 +773,8 @@ export default function DatasetDetail({ id }: { id: string }) {
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       {/* Code Snippet Modal */}
       {showCodeModal && selectedDist && selectedAccess && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl max-w-3xl w-full shadow-2xl relative overflow-hidden animate-fade-in">
+        <div onClick={() => setShowCodeModal(false)} className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-xl max-w-3xl w-full shadow-2xl relative overflow-hidden animate-fade-in">
               <div className="flex justify-between items-center bg-muted p-4 border-b border-border">
                   <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Activity className="w-5 h-5 text-primary"/> Connect via Python (Xarray)</h3>
                   <button onClick={() => setShowCodeModal(false)} className="text-muted-foreground hover:text-foreground text-2xl leading-none">&times;</button>
@@ -763,6 +804,20 @@ export default function DatasetDetail({ id }: { id: string }) {
                       <span className="font-bold shrink-0">Note:</span>
                       <p>This S3 STS token is temporary and scoped exclusively to your authenticated identity profile. Do not commit this code snippet to version control.</p>
                   </div>
+              </div>
+          </div>
+        </div>
+      )}
+
+      {showGraph && datasetData?.id && (
+        <div onClick={() => setShowGraph(false)} className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-xl max-w-6xl w-full shadow-2xl relative overflow-hidden animate-fade-in">
+              <div className="flex justify-between items-center bg-muted p-4 border-b border-border">
+                  <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Activity className="w-5 h-5 text-primary"/> Provenance Graph</h3>
+                  <button onClick={() => setShowGraph(false)} className="text-muted-foreground hover:text-foreground text-2xl leading-none">&times;</button>
+              </div>
+              <div className="p-6">
+                  <ProvenanceGraph datasetId={datasetData.id} />
               </div>
           </div>
         </div>
@@ -809,9 +864,218 @@ export default function DatasetDetail({ id }: { id: string }) {
 
       <div className={datasetData && !vizDist ? 'max-w-3xl' : 'grid grid-cols-1 lg:grid-cols-3 gap-8'}>
 
-        {/* Left Column: Zarr Visualizer (only rendered when a distribution is Zarr) */}
+        {/* Left Column: Metadata & Controls Sidebar */}
+        <div className="space-y-6">
+
+            <div className="card p-6 bg-card/60 shadow-xl border-border overflow-hidden">
+                <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground">Dataset Properties</h3>
+                <div className="space-y-3 text-sm">
+                    <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Created At</span>
+                        <span className="text-foreground">{datasetData?.created_at ? new Date(datasetData.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric'}) : 'Unknown'}</span>
+                    </div>
+                    <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Media Type</span>
+                        <span className="text-foreground">{datasetData?.media_type || 'Unknown'}</span>
+                    </div>
+                    {datasetData?.license && (
+                        <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                            <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">License</span>
+                            <span className="text-foreground">{datasetData.license}</span>
+                        </div>
+                    )}
+                     <div className="flex flex-col justify-start py-1">
+                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Access Level</span>
+                        <span className="text-foreground capitalize">{datasetData?.effective_access_level || datasetData?.access_level || 'Unknown'}</span>
+                    </div>
+                </div>
+                <JsonLdPanel url={`${API_BASE}/datasets/id/${id}`} className="-mx-6 -mb-6 mt-4 border-t border-border" />
+            </div>
+
+            <div className="card p-6 border-t-4 border-t-primary bg-muted/80 shadow-xl border-border">
+                <h3 className="text-lg font-bold mb-4 flex items-center justify-between text-foreground">
+                    Data Access
+                    {accessValues.granted ? <Unlock className="w-5 h-5 text-foreground" /> : <Lock className="w-5 h-5 text-muted-foreground" />}
+                </h3>
+
+                {distributions.length > 1 && (
+                    <div className="mb-6">
+                        <p className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-2">
+                            Distributions ({distributions.length})
+                        </p>
+                        <div className="space-y-1" role="radiogroup" aria-label="Distribution">
+                            {distributions.map((d) => {
+                                const selected = d.id === selectedDist?.id;
+                                return (
+                                    <button
+                                        key={d.id}
+                                        role="radio"
+                                        aria-checked={selected}
+                                        onClick={() => setSelectedDistId(d.id)}
+                                        className={`w-full text-left px-3 py-2 rounded border text-sm flex items-center gap-2 transition-colors ${selected ? 'border-primary bg-card' : 'border-border hover:bg-card/60'}`}
+                                    >
+                                        <span className={`w-3 h-3 shrink-0 rounded-full border ${selected ? 'border-primary bg-primary' : 'border-muted-foreground'}`} />
+                                        <span className="flex-1 min-w-0">
+                                            <span className="block text-foreground truncate">{distributionLabel(d)}</span>
+                                            {d.format && d.media_type && (
+                                                <span className="block text-xs text-muted-foreground font-mono truncate">{d.media_type}</span>
+                                            )}
+                                        </span>
+                                        {d.default_distribution && (
+                                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-border rounded px-1">Default</span>
+                                        )}
+                                        {d.id === vizDist?.id && (
+                                            <span className="text-[10px] uppercase tracking-wider text-primary border border-primary/50 rounded px-1">Plotted</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {!accessValues.granted ? (
+                    <div className="text-left">
+                        <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
+                          {datasetData?.effective_access_level === 'public'
+                            ? 'This dataset is publicly accessible. Click below to load credentials.'
+                            : 'Dataset files are secured in MinIO S3. Authenticate with an FDS account to acquire an S3 token.'}
+                        </p>
+                        {accessValues.error && <p className="text-destructive mb-4 text-sm bg-destructive/10 p-2 rounded border border-destructive/40">{accessValues.error}</p>}
+                        <button
+                            onClick={handleRequestAccess}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-4 rounded w-full transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/25"
+                        >
+                            <Unlock className="w-4 h-4" />
+                            {datasetData?.effective_access_level === 'public'
+                              ? 'Load Data'
+                              : status === "authenticated" ? "Request S3 Token" : "Sign In to Access"}
+                        </button>
+                    </div>
+                ) : (
+                    <div className="animate-fade-in text-sm">
+                        <div className="bg-muted border border-border text-foreground p-3 rounded mb-4 flex items-center gap-2 shadow-inner">
+                            <span className="w-2 h-2 rounded-full bg-muted animate-pulse"></span> Identity Verified
+                        </div>
+                        <div className="space-y-2 text-xs">
+                           <p className="text-muted-foreground font-medium uppercase tracking-wider">Mounted URI</p>
+                           <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded">{selectedDist?.url}</p>
+                           {selectedAccess ? (
+                               <a href="#" onClick={(e) => { e.preventDefault(); setShowCodeModal(true); }} className="text-primary hover:text-foreground inline-flex items-center gap-1 mt-2">
+                                   <Download className="w-3 h-3" /> Download Dataset
+                               </a>
+                           ) : (
+                               <p className="text-muted-foreground">FDS issued no credentials for this distribution.</p>
+                           )}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Annotations on this dataset's own axes */}
+            <ScientificMetadata properties={datasetData?.scientific_metadata} className="bg-card/60 shadow-xl border-border" />
+
+            {/* Datasets resolved for this one. The annotations are those whose
+                subject is this dataset — the shot's are resolved on the shot,
+                on its axes, and deliberately not folded in here. */}
+            {((datasetData?.geometry?.length ?? 0) > 0 || (datasetData?.calibration?.length ?? 0) > 0 || (datasetData?.annotations?.length ?? 0) > 0) && (
+                <div className="card p-6 bg-card/60 shadow-xl border-border">
+                    <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground">Related Data</h3>
+                    <div className="space-y-4 text-sm">
+                        <RelatedGroup icon={MapPin} label="Geometry" datasets={datasetData?.geometry} />
+                        <RelatedGroup
+                            icon={SlidersHorizontal}
+                            label="Calibration"
+                            hint="— applied in order"
+                            datasets={datasetData?.calibration}
+                        />
+                        <RelatedGroup
+                            icon={Highlighter}
+                            label="Annotations"
+                            hint="— on this dataset's axes"
+                            datasets={datasetData?.annotations}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {/* Provenance Card */}
+            <div className="card p-6 bg-card/60 shadow-xl border-border">
+                <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-muted-foreground" /> Provenance
+                </h3>
+                {activityData ? (
+                    <div className="space-y-3 text-sm">
+                        {activityData.activity_type && (
+                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Activity Type</span>
+                                <span className="text-foreground">{activityData.activity_type}</span>
+                            </div>
+                        )}
+                        {activityData.source_version && (
+                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Source Version</span>
+                                <TruncatedValue value={activityData.source_version} />
+                            </div>
+                        )}
+                        {activityData.started_at && (
+                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Started</span>
+                                <span className="text-foreground">{new Date(activityData.started_at).toLocaleString()}</span>
+                            </div>
+                        )}
+                        {activityData.ended_at && (
+                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Ended</span>
+                                <span className="text-foreground">{new Date(activityData.ended_at).toLocaleString()}</span>
+                            </div>
+                        )}
+                        {activityData.parameters && Object.keys(activityData.parameters).length > 0 && (
+                            <div className="flex flex-col justify-start py-1">
+                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Parameters</span>
+                                <pre className="text-xs text-foreground font-mono bg-background border border-border p-2 rounded overflow-x-auto">
+                                    {JSON.stringify(activityData.parameters, null, 2)}
+                                </pre>
+                            </div>
+                        )}
+                        {executor && (
+                            <Link
+                                href={`/sources/${executor.id}`}
+                                className="text-xs text-primary hover:text-foreground flex items-center gap-1 mt-2 transition-colors"
+                            >
+                                Source: {executor.name} <ChevronRight className="w-3 h-3" />
+                            </Link>
+                        )}
+                        <Link
+                            href={`/activities/${activityData.id}`}
+                            className="text-xs text-primary hover:text-foreground flex items-center gap-1 transition-colors"
+                        >
+                            View activity <ChevronRight className="w-3 h-3" />
+                        </Link>
+                        {datasetData?.id && (
+                            <button
+                                onClick={() => setShowGraph(true)}
+                                className="text-xs text-primary hover:text-foreground flex items-center gap-1 transition-colors"
+                            >
+                                Show provenance graph <ChevronRight className="w-3 h-3" />
+                            </button>
+                        )}
+                    </div>
+                ) : datasetData?.activity_id ? (
+                    <p className="text-muted-foreground text-sm">Loading provenance...</p>
+                ) : (
+                    <div className="text-center py-4 bg-card/30 rounded-lg border border-dashed border-border">
+                        <p className="text-xs text-muted-foreground">No provenance recorded for this dataset.</p>
+                    </div>
+                )}
+            </div>
+
+        </div>
+
+        {/* Right Column: Zarr Visualizer (only rendered when a distribution is Zarr) */}
         {(!datasetData || vizDist) && (
-          <div className="lg:col-span-2">
+          // Sticky, so it stays in view beside a metadata column taller than it.
+          <div className="lg:col-span-2 lg:sticky lg:top-20 self-start">
             <div className="card h-[650px] flex flex-col relative overflow-hidden shadow-2xl shadow-black/50 border border-border">
                 <div className="absolute inset-0 bg-background/80 z-0">
                     {/* Grid Background Pattern */}
@@ -1078,211 +1342,8 @@ export default function DatasetDetail({ id }: { id: string }) {
           </div>
         )}
 
-        {/* Right Column: Metadata & Controls Sidebar */}
-        <div className="space-y-6">
-
-            <div className="card p-6 border-t-4 border-t-primary bg-muted/80 shadow-xl border-border">
-                <h3 className="text-lg font-bold mb-4 flex items-center justify-between text-foreground">
-                    Data Access
-                    {accessValues.granted ? <Unlock className="w-5 h-5 text-foreground" /> : <Lock className="w-5 h-5 text-muted-foreground" />}
-                </h3>
-
-                {distributions.length > 1 && (
-                    <div className="mb-6">
-                        <p className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-2">
-                            Distributions ({distributions.length})
-                        </p>
-                        <div className="space-y-1" role="radiogroup" aria-label="Distribution">
-                            {distributions.map((d) => {
-                                const selected = d.id === selectedDist?.id;
-                                return (
-                                    <button
-                                        key={d.id}
-                                        role="radio"
-                                        aria-checked={selected}
-                                        onClick={() => setSelectedDistId(d.id)}
-                                        className={`w-full text-left px-3 py-2 rounded border text-sm flex items-center gap-2 transition-colors ${selected ? 'border-primary bg-card' : 'border-border hover:bg-card/60'}`}
-                                    >
-                                        <span className={`w-3 h-3 shrink-0 rounded-full border ${selected ? 'border-primary bg-primary' : 'border-muted-foreground'}`} />
-                                        <span className="flex-1 min-w-0">
-                                            <span className="block text-foreground truncate">{distributionLabel(d)}</span>
-                                            {d.format && d.media_type && (
-                                                <span className="block text-xs text-muted-foreground font-mono truncate">{d.media_type}</span>
-                                            )}
-                                        </span>
-                                        {d.default_distribution && (
-                                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-border rounded px-1">Default</span>
-                                        )}
-                                        {d.id === vizDist?.id && (
-                                            <span className="text-[10px] uppercase tracking-wider text-primary border border-primary/50 rounded px-1">Plotted</span>
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-
-                {!accessValues.granted ? (
-                    <div className="text-left">
-                        <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
-                          {datasetData?.effective_access_level === 'public'
-                            ? 'This dataset is publicly accessible. Click below to load credentials.'
-                            : 'Dataset files are secured in MinIO S3. Authenticate with an FDS account to acquire an S3 token.'}
-                        </p>
-                        {accessValues.error && <p className="text-destructive mb-4 text-sm bg-destructive/10 p-2 rounded border border-destructive/40">{accessValues.error}</p>}
-                        <button
-                            onClick={handleRequestAccess}
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-4 rounded w-full transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/25"
-                        >
-                            <Unlock className="w-4 h-4" />
-                            {datasetData?.effective_access_level === 'public'
-                              ? 'Load Data'
-                              : status === "authenticated" ? "Request S3 Token" : "Sign In to Access"}
-                        </button>
-                    </div>
-                ) : (
-                    <div className="animate-fade-in text-sm">
-                        <div className="bg-muted border border-border text-foreground p-3 rounded mb-4 flex items-center gap-2 shadow-inner">
-                            <span className="w-2 h-2 rounded-full bg-muted animate-pulse"></span> Identity Verified
-                        </div>
-                        <div className="space-y-2 text-xs">
-                           <p className="text-muted-foreground font-medium uppercase tracking-wider">Mounted URI</p>
-                           <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded">{selectedDist?.url}</p>
-                           {selectedAccess ? (
-                               <a href="#" onClick={(e) => { e.preventDefault(); setShowCodeModal(true); }} className="text-primary hover:text-foreground inline-flex items-center gap-1 mt-2">
-                                   <Download className="w-3 h-3" /> Download Dataset
-                               </a>
-                           ) : (
-                               <p className="text-muted-foreground">FDS issued no credentials for this distribution.</p>
-                           )}
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            <div className="card p-6 bg-card/60 shadow-xl border-border">
-                <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground">Dataset Properties</h3>
-                <div className="space-y-3 text-sm">
-                    <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Created At</span>
-                        <span className="text-foreground">{datasetData?.created_at ? new Date(datasetData.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric'}) : 'Unknown'}</span>
-                    </div>
-                    <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Media Type</span>
-                        <span className="text-foreground">{datasetData?.media_type || 'Unknown'}</span>
-                    </div>
-                    {datasetData?.license && (
-                        <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                            <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">License</span>
-                            <span className="text-foreground">{datasetData.license}</span>
-                        </div>
-                    )}
-                     <div className="flex flex-col justify-start py-1">
-                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Access Level</span>
-                        <span className="text-foreground capitalize">{datasetData?.effective_access_level || datasetData?.access_level || 'Unknown'}</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Annotations on this dataset's own axes */}
-            <ScientificMetadata properties={datasetData?.scientific_metadata} className="bg-card/60 shadow-xl border-border" />
-
-            {/* Datasets resolved for this one. The annotations are those whose
-                subject is this dataset — the shot's are resolved on the shot,
-                on its axes, and deliberately not folded in here. */}
-            {((datasetData?.geometry?.length ?? 0) > 0 || (datasetData?.calibration?.length ?? 0) > 0 || (datasetData?.annotations?.length ?? 0) > 0) && (
-                <div className="card p-6 bg-card/60 shadow-xl border-border">
-                    <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground">Related Data</h3>
-                    <div className="space-y-4 text-sm">
-                        <RelatedGroup icon={MapPin} label="Geometry" datasets={datasetData?.geometry} />
-                        <RelatedGroup
-                            icon={SlidersHorizontal}
-                            label="Calibration"
-                            hint="— applied in order"
-                            datasets={datasetData?.calibration}
-                        />
-                        <RelatedGroup
-                            icon={Highlighter}
-                            label="Annotations"
-                            hint="— on this dataset's axes"
-                            datasets={datasetData?.annotations}
-                        />
-                    </div>
-                </div>
-            )}
-
-            {/* Provenance Card */}
-            <div className="card p-6 bg-card/60 shadow-xl border-border">
-                <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-muted-foreground" /> Provenance
-                </h3>
-                {activityData ? (
-                    <div className="space-y-3 text-sm">
-                        {activityData.activity_type && (
-                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Activity Type</span>
-                                <span className="text-foreground">{activityData.activity_type}</span>
-                            </div>
-                        )}
-                        {activityData.source_version && (
-                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Source Version</span>
-                                <span className="font-mono text-foreground">{activityData.source_version}</span>
-                            </div>
-                        )}
-                        {activityData.started_at && (
-                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Started</span>
-                                <span className="text-foreground">{new Date(activityData.started_at).toLocaleString()}</span>
-                            </div>
-                        )}
-                        {activityData.ended_at && (
-                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Ended</span>
-                                <span className="text-foreground">{new Date(activityData.ended_at).toLocaleString()}</span>
-                            </div>
-                        )}
-                        {activityData.parameters && Object.keys(activityData.parameters).length > 0 && (
-                            <div className="flex flex-col justify-start py-1">
-                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Parameters</span>
-                                <pre className="text-xs text-foreground font-mono bg-background border border-border p-2 rounded overflow-x-auto">
-                                    {JSON.stringify(activityData.parameters, null, 2)}
-                                </pre>
-                            </div>
-                        )}
-                        <Link
-                            href="/sources"
-                            className="text-xs text-primary hover:text-foreground inline-flex items-center gap-1 mt-2 transition-colors"
-                        >
-                            View Sources <ChevronRight className="w-3 h-3" />
-                        </Link>
-                    </div>
-                ) : datasetData?.activity_id ? (
-                    <p className="text-muted-foreground text-sm">Loading provenance...</p>
-                ) : (
-                    <div className="text-center py-4 bg-card/30 rounded-lg border border-dashed border-border">
-                        <p className="text-xs text-muted-foreground">No provenance recorded for this dataset.</p>
-                    </div>
-                )}
-            </div>
-
-        </div>
-
       </div>
 
-      {datasetData?.id && datasetData?.activity_id ? (
-        <div className="card p-6 mt-8 bg-card/60 shadow-xl border-border">
-          <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground flex items-center gap-2">
-            <Activity className="w-5 h-5 text-muted-foreground" /> Provenance Graph
-          </h3>
-          <ProvenanceGraph datasetId={datasetData.id} />
-        </div>
-      ) : null}
-
-      <div className="mt-10">
-        <JsonLdPanel url={`${API_BASE}/datasets/id/${id}`} />
-      </div>
     </div>
   );
 }
