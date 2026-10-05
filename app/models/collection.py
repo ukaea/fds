@@ -1,3 +1,4 @@
+from datetime import date
 from typing import TYPE_CHECKING
 
 from sqlmodel import (
@@ -12,6 +13,7 @@ from sqlmodel import (
 
 from .mixins import (
     DescriptiveMixin,
+    IssuedMixin,
     PersistentIdentifierMixin,
     ScientificMetadataMixin,
     TimestampMixin,
@@ -50,7 +52,11 @@ class CollectionMember(SQLModel, table=True):
 
 
 class CollectionBase(
-    DescriptiveMixin, ScientificMetadataMixin, PersistentIdentifierMixin, SQLModel
+    DescriptiveMixin,
+    ScientificMetadataMixin,
+    PersistentIdentifierMixin,
+    IssuedMixin,
+    SQLModel,
 ):
     """Core metadata for a Collection (maps to ``dcat:Catalog``).
 
@@ -199,6 +205,7 @@ class CollectionUpdate(SQLModel):
 
     name: str | None = None
     persistent_identifier: str | None = None
+    issued: date | None = None
     device_name: str | None = None
     shot_id: str | None = None
     activity_id: int | None = None

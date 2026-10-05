@@ -11,6 +11,7 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 | `media_type` | string | No | MIME type of the primary distribution (e.g. `application/x-zarr`) |
 | `format` | string | No | Format label (e.g. `NetCDF4`) |
 | `persistent_identifier` | string | No | A DOI or other persistent identifier registered for the dataset. See [Persistent identifiers](../dcat-jsonld.md#persistent-identifiers) |
+| `issued` | date | No | When the dataset was formally published, the date a citation gives (`dct:issued`). Not when FDS listed it |
 | `level` | integer | No | Numeric processing level. No controlled vocabulary, so set it only where the producer has a meaning for it |
 | `quality_flag` | string | No | Free-form quality annotation (e.g. `good`, `suspect`), no controlled vocabulary |
 | `access_level` | enum | No | `public`, `embargoed`, or `restricted` |

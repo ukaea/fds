@@ -1,10 +1,16 @@
+from datetime import date
 from typing import TYPE_CHECKING
 
 from sqlmodel import JSON, Column, Field, PrimaryKeyConstraint, Relationship, SQLModel
 
 from app.core.timeutils import UTCDatetime
 
-from .mixins import PersistentIdentifierMixin, ScientificMetadataMixin, TimestampMixin
+from .mixins import (
+    IssuedMixin,
+    PersistentIdentifierMixin,
+    ScientificMetadataMixin,
+    TimestampMixin,
+)
 from .policy import AccessLevel
 from .scientific_metadata import ScientificProperty
 
@@ -14,7 +20,9 @@ if TYPE_CHECKING:
     from .device import Device, DeviceRead
 
 
-class ShotBase(ScientificMetadataMixin, PersistentIdentifierMixin, SQLModel):
+class ShotBase(
+    ScientificMetadataMixin, PersistentIdentifierMixin, IssuedMixin, SQLModel
+):
     id: str = Field(index=True)
     shot_at: UTCDatetime | None = Field(default=None, index=True)
     shot_end: UTCDatetime | None = Field(default=None, index=True)
@@ -98,6 +106,7 @@ class ShotRead(ShotBase, TimestampMixin):
 
 class ShotUpdate(SQLModel):
     persistent_identifier: str | None = None
+    issued: date | None = None
     shot_at: UTCDatetime | None = None
     shot_end: UTCDatetime | None = None
     shot_duration: float | None = None

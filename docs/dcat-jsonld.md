@@ -64,6 +64,11 @@ resolvers. It is published as `adms:identifier`, while `dct:identifier` stays FD
 
 A value in any other form is published exactly as given and is not turned into a link.
 
+A dataset, collection or shot can also record when it was formally published, in `issued`.
+That is the date a citation gives, published as the resource's own `dct:issued`
+(`{"@value": "2024-03-01", "@type": "xsd:date"}`). It is distinct from the catalogue record's
+`issued`, which is when FDS listed the resource.
+
 ### Where identifiers point
 
 An identifier names the **service**, not its API. A deployment typically answers on two addresses:
@@ -395,6 +400,7 @@ See [Provenance](provenance.md) for the model behind these terms.
 | "activity used input / instrument" | `prov:used` + `prov:qualifiedUsage` (`prov:hadRole`) | PROV-O |
 | "activity associated with agent" | `prov:wasAssociatedWith` + `prov:qualifiedAssociation` (`prov:hadRole`) | PROV-O |
 | `persistent_identifier` | `adms:identifier` → `adms:Identifier` | ADMS, DCAT-AP |
+| `issued` (publication date) | `dct:issued` on the resource | Dublin Core, DCAT 3 |
 | `publisher` | `dct:publisher` | Dublin Core |
 | `creator` | `dct:creator` | Dublin Core |
 | `shot_at` / `shot_end` / `shot_duration` | `dct:temporal` → `dct:PeriodOfTime` | Dublin Core / DCAT 3 |

@@ -1,3 +1,4 @@
+from datetime import date
 from enum import Enum
 from typing import TYPE_CHECKING, Self
 
@@ -18,6 +19,7 @@ from app.core.timeutils import UTCDatetime
 from .coverage import Coverage
 from .mixins import (
     DescriptiveMixin,
+    IssuedMixin,
     PersistentIdentifierMixin,
     ScientificMetadataMixin,
     TimestampMixin,
@@ -47,7 +49,11 @@ class DatasetScope(str, Enum):
 
 
 class DatasetBase(
-    DescriptiveMixin, ScientificMetadataMixin, PersistentIdentifierMixin, SQLModel
+    DescriptiveMixin,
+    ScientificMetadataMixin,
+    PersistentIdentifierMixin,
+    IssuedMixin,
+    SQLModel,
 ):
     """Core metadata for a dataset (maps to ``dcat:Dataset``).
 
@@ -395,6 +401,7 @@ class DatasetRead(DatasetBase, TimestampMixin):
 class DatasetUpdate(SQLModel):
     name: str | None = None
     persistent_identifier: str | None = None
+    issued: date | None = None
     level: int | None = None
     quality_flag: str | None = None
     temporal_start: UTCDatetime | None = None

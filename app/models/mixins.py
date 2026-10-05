@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlmodel import JSON, Field, SQLModel
 
 from app.core.timeutils import UTCDatetime, utcnow
@@ -14,6 +16,15 @@ class PersistentIdentifierMixin(SQLModel):
     """
 
     persistent_identifier: str | None = Field(default=None)
+
+
+class IssuedMixin(SQLModel):
+    """When the data was formally published: the date a citation gives.
+
+    Not ``created_at``, which is when FDS listed the record.
+    """
+
+    issued: date | None = Field(default=None)
 
 
 class TimestampMixin(SQLModel):

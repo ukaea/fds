@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
 from app.models.activity import AgentRole
@@ -304,6 +304,15 @@ def _persistent_identifier_node(identifier: str) -> dict[str, Any]:
     return {"@type": "adms:Identifier", "skos:notation": notation}
 
 
+def _issued_node(issued: date) -> dict[str, str]:
+    """When the resource itself was published, as ``dct:issued``.
+
+    Typed as a date, unlike the catalogue record's ``issued``, which is when FDS
+    listed it.
+    """
+    return {"@value": issued.isoformat(), "@type": "xsd:date"}
+
+
 def _map_scientific_metadata_to_jsonld(metadata: list[Any]) -> list[dict[str, Any]]:
     result = []
     for prop in metadata:
@@ -510,6 +519,8 @@ def map_shot_to_dcat(
         data["adms:identifier"] = _persistent_identifier_node(
             shot.persistent_identifier
         )
+    if shot.issued:
+        data["dct:issued"] = _issued_node(shot.issued)
     # dct:temporal → dct:PeriodOfTime. Emit a closed period when an end is known or
     # derivable from the duration; otherwise an open period (start only).
     if shot.shot_at:
@@ -577,6 +588,8 @@ def map_dataset_to_dcat(
         data["adms:identifier"] = _persistent_identifier_node(
             dataset.persistent_identifier
         )
+    if dataset.issued:
+        data["dct:issued"] = _issued_node(dataset.issued)
 
     if dataset.access_level:
         data["accessRights"] = dataset.access_level.value
@@ -826,6 +839,8 @@ def map_collection_to_dcat(
         data["adms:identifier"] = _persistent_identifier_node(
             collection.persistent_identifier
         )
+    if collection.issued:
+        data["dct:issued"] = _issued_node(collection.issued)
 
     if collection.access_level:
         data["accessRights"] = collection.access_level.value
