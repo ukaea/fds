@@ -54,7 +54,7 @@ from app.services.reference_service import (
     ReferenceKind,
     ReferenceService,
 )
-from app.services.visibility import read_page, readable_only
+from app.services.visibility import read_page, readable_clause, readable_only
 
 logger = structlog.get_logger(__name__)
 
@@ -87,7 +87,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         statement = statement.where(
             *property_clauses(self.model.scientific_metadata, properties)
         )
-        statement = self._apply_shot_properties(statement, shot_properties)
+        statement = self._apply_shot_properties(statement, shot_properties, user)
         return read_page(
             self.session,
             Dataset,
@@ -97,19 +97,32 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             limit=limit,
         )
 
-    def _apply_shot_properties(self, statement, shot_properties: list[str] | None):
+    def _apply_shot_properties(
+        self,
+        statement,
+        shot_properties: list[str] | None,
+        user: AuthenticatedUser,
+    ):
         """Join Dataset to its parent Shot and filter on the shot's properties.
 
         Shared by the global and per-device listings so the two-level query behaves
         identically wherever it is offered.
+
+        Only shots ``user`` may read can match. A public dataset can belong to a
+        restricted shot, and without this the filter would answer questions about
+        that shot's properties.
         """
         if not shot_properties:
             return statement
+        matching = property_clauses(Shot.scientific_metadata, shot_properties)
         return statement.join(
             Shot,
             (col(Dataset.shot_id) == col(Shot.id))
             & (col(Dataset.device_name) == col(Shot.device_name)),
-        ).where(*property_clauses(Shot.scientific_metadata, shot_properties))
+        ).where(
+            *matching,
+            readable_clause(self.session, Shot, user, select(Shot).where(*matching)),
+        )
 
     def check_read_access(
         self,
@@ -588,7 +601,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         statement = statement.where(
             *property_clauses(Dataset.scientific_metadata, properties)
         )
-        statement = self._apply_shot_properties(statement, shot_properties)
+        statement = self._apply_shot_properties(statement, shot_properties, user)
         return read_page(
             self.session,
             Dataset,
