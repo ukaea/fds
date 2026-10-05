@@ -941,9 +941,11 @@ export default function DatasetDetail({ id }: { id: string }) {
             <Database className="text-primary w-8 h-8" />
             {datasetData?.name || id}
          </h1>
-         <p className="text-lg text-foreground max-w-4xl leading-relaxed mb-6">
-            {datasetData?.description || "Scientific data array containing experimental measurements from the plasma discharge."}
-         </p>
+         {datasetData?.description && (
+           <p className="text-lg text-foreground max-w-4xl leading-relaxed mb-6">
+              {datasetData.description}
+           </p>
+         )}
          <div className="flex flex-wrap gap-3">
              {device && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Device: {deviceLabel}</span>}
              {shot && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Shot: {shot}</span>}
@@ -968,10 +970,6 @@ export default function DatasetDetail({ id }: { id: string }) {
                     <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
                         <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Created At</span>
                         <span className="text-foreground">{datasetData?.created_at ? new Date(datasetData.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric'}) : 'Unknown'}</span>
-                    </div>
-                    <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Media Type</span>
-                        <span className="text-foreground">{datasetData?.media_type || 'Unknown'}</span>
                     </div>
                     {datasetData?.license && (
                         <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
@@ -1026,6 +1024,18 @@ export default function DatasetDetail({ id }: { id: string }) {
                                 );
                             })}
                         </div>
+                    </div>
+                )}
+
+                {distributions.length === 1 && selectedDist && (
+                    <div className="space-y-1 text-xs mb-4">
+                        <p className="text-muted-foreground font-medium uppercase tracking-wider">Format</p>
+                        <p className="text-sm text-foreground">
+                            {distributionLabel(selectedDist)}
+                            {selectedDist.format && selectedDist.media_type && (
+                                <span className="text-xs text-muted-foreground font-mono ml-2">{selectedDist.media_type}</span>
+                            )}
+                        </p>
                     </div>
                 )}
 
