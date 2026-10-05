@@ -4,7 +4,7 @@ from sqlmodel import JSON, Column, Field, PrimaryKeyConstraint, Relationship, SQ
 
 from app.core.timeutils import UTCDatetime
 
-from .mixins import ScientificMetadataMixin, TimestampMixin
+from .mixins import PersistentIdentifierMixin, ScientificMetadataMixin, TimestampMixin
 from .policy import AccessLevel
 from .scientific_metadata import ScientificProperty
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from .device import Device, DeviceRead
 
 
-class ShotBase(ScientificMetadataMixin, SQLModel):
+class ShotBase(ScientificMetadataMixin, PersistentIdentifierMixin, SQLModel):
     id: str = Field(index=True)
     shot_at: UTCDatetime | None = Field(default=None, index=True)
     shot_end: UTCDatetime | None = Field(default=None, index=True)
@@ -97,6 +97,7 @@ class ShotRead(ShotBase, TimestampMixin):
 
 
 class ShotUpdate(SQLModel):
+    persistent_identifier: str | None = None
     shot_at: UTCDatetime | None = None
     shot_end: UTCDatetime | None = None
     shot_duration: float | None = None

@@ -56,6 +56,8 @@ METADATA_CONTEXT = {
     "dqv": "http://www.w3.org/ns/dqv#",
     "foaf": "http://xmlns.com/foaf/0.1/",
     "oa": "http://www.w3.org/ns/oa#",
+    "adms": "http://www.w3.org/ns/adms#",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
     "title": "dct:title",
     "description": "dct:description",
     "publisher": "dct:publisher",
@@ -132,6 +134,10 @@ def _agent_node(
         "dct:title": source.name,
         "dct:description": source.description,
     }
+    if source.persistent_identifier:
+        node["adms:identifier"] = _persistent_identifier_node(
+            source.persistent_identifier
+        )
     if version:
         node["dcat:version"] = version
     if acted_on_behalf_of:
@@ -151,6 +157,10 @@ def _instrument_node(source: "Source", base_url: str) -> dict[str, Any]:
         "dct:title": source.name,
         "dct:description": source.description,
     }
+    if source.persistent_identifier:
+        node["adms:identifier"] = _persistent_identifier_node(
+            source.persistent_identifier
+        )
     return {k: v for k, v in node.items() if v is not None}
 
 
@@ -278,6 +288,20 @@ def _as_uri(identifier: str) -> str | None:
     if candidate.startswith("10."):
         return f"https://doi.org/{candidate}"
     return None
+
+
+def _persistent_identifier_node(identifier: str) -> dict[str, Any]:
+    """A registered persistent identifier as an ``adms:Identifier``.
+
+    ``dct:identifier`` stays the record's FDS identifier, as DCAT-AP has it. The
+    value is a full URI where its scheme has a canonical resolver, and as given
+    otherwise rather than a guessed link.
+    """
+    uri = _as_uri(identifier)
+    notation: str | dict[str, str] = (
+        {"@value": uri, "@type": "xsd:anyURI"} if uri else identifier
+    )
+    return {"@type": "adms:Identifier", "skos:notation": notation}
 
 
 def _map_scientific_metadata_to_jsonld(metadata: list[Any]) -> list[dict[str, Any]]:
@@ -443,6 +467,10 @@ def device_node(device: Device | DeviceRead, base_url: str) -> dict[str, Any]:
         "publisher": device.publisher,
         "creator": device.creator,
     }
+    if device.persistent_identifier:
+        data["adms:identifier"] = _persistent_identifier_node(
+            device.persistent_identifier
+        )
 
     return {k: v for k, v in data.items() if v is not None}
 
@@ -478,6 +506,10 @@ def map_shot_to_dcat(
         "publisher": shot.publisher,
         "creator": shot.creator,
     }
+    if shot.persistent_identifier:
+        data["adms:identifier"] = _persistent_identifier_node(
+            shot.persistent_identifier
+        )
     # dct:temporal → dct:PeriodOfTime. Emit a closed period when an end is known or
     # derivable from the duration; otherwise an open period (start only).
     if shot.shot_at:
@@ -540,6 +572,11 @@ def map_dataset_to_dcat(
         "license": dataset.license,
         "version": dataset.version,
     }
+
+    if dataset.persistent_identifier:
+        data["adms:identifier"] = _persistent_identifier_node(
+            dataset.persistent_identifier
+        )
 
     if dataset.access_level:
         data["accessRights"] = dataset.access_level.value
@@ -785,6 +822,10 @@ def map_collection_to_dcat(
         "publisher": collection.publisher,
         "creator": collection.creator,
     }
+    if collection.persistent_identifier:
+        data["adms:identifier"] = _persistent_identifier_node(
+            collection.persistent_identifier
+        )
 
     if collection.access_level:
         data["accessRights"] = collection.access_level.value

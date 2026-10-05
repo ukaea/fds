@@ -10,7 +10,12 @@ from sqlmodel import (
     UniqueConstraint,
 )
 
-from .mixins import DescriptiveMixin, ScientificMetadataMixin, TimestampMixin
+from .mixins import (
+    DescriptiveMixin,
+    PersistentIdentifierMixin,
+    ScientificMetadataMixin,
+    TimestampMixin,
+)
 from .policy import AccessLevel
 from .scientific_metadata import ScientificProperty
 
@@ -44,7 +49,9 @@ class CollectionMember(SQLModel, table=True):
     child_id: int = Field(foreign_key="collection.id", primary_key=True)
 
 
-class CollectionBase(DescriptiveMixin, ScientificMetadataMixin, SQLModel):
+class CollectionBase(
+    DescriptiveMixin, ScientificMetadataMixin, PersistentIdentifierMixin, SQLModel
+):
     """Core metadata for a Collection (maps to ``dcat:Catalog``).
 
     A Collection is an independently citable grouping of Datasets and/or other
@@ -191,6 +198,7 @@ class CollectionUpdate(SQLModel):
     """
 
     name: str | None = None
+    persistent_identifier: str | None = None
     device_name: str | None = None
     shot_id: str | None = None
     activity_id: int | None = None

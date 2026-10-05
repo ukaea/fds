@@ -278,6 +278,27 @@ def test_update_dataset(
     assert response.json()["level"] == 5
 
 
+def test_persistent_identifier_round_trips(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={"name": "cited", "url": "url"},
+    )
+    dataset = session.exec(select(Dataset).where(Dataset.name == "cited")).one()
+
+    response = test_client.patch(
+        f"/v1/datasets/{dataset.id}",
+        headers=admin_user_token,
+        json={"persistent_identifier": "doi:10.5072/fds.1"},
+    )
+    assert response.status_code == 200
+
+    read = test_client.get(f"/v1/datasets/id/{dataset.id}").json()
+    assert read["persistent_identifier"] == "doi:10.5072/fds.1"
+
+
 def test_delete_dataset(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):

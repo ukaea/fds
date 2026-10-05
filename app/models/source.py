@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING
 
 from sqlmodel import Field, Relationship, SQLModel
 
+from .mixins import PersistentIdentifierMixin
+
 if TYPE_CHECKING:
     from .activity import Activity
     from .device import Device
@@ -25,7 +27,7 @@ class SourceKind(str, Enum):
     ORGANIZATION = "organization"
 
 
-class SourceBase(SQLModel):
+class SourceBase(PersistentIdentifierMixin, SQLModel):
     name: str = Field(index=True, unique=True)
     description: str | None = None
     kind: SourceKind = Field(index=True)
@@ -50,5 +52,6 @@ class SourceCreate(SourceBase):
 
 class SourceUpdate(SQLModel):
     name: str | None = None
+    persistent_identifier: str | None = None
     description: str | None = None
     kind: SourceKind | None = None
