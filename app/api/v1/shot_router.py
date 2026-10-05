@@ -206,7 +206,7 @@ def read_shot(
     )
 
 
-@router.put(
+@router.patch(
     "/devices/{device_name}/shots/{shot_id}",
     response_model=ShotRead,
     response_model_exclude_none=True,

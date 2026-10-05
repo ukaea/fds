@@ -155,7 +155,7 @@ def test_update_activity(
     )
     activity_id = create_resp.json()["id"]
 
-    resp = test_client.put(
+    resp = test_client.patch(
         f"/v1/activities/{activity_id}",
         json={"activity_type": "simulation", "source_version": "v3.0"},
         headers=admin_user_token,
