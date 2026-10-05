@@ -83,7 +83,7 @@ def read_source_by_name(name: str, source_service: SourceServiceDep) -> SourceRe
     return source_service.to_read_model(source)
 
 
-@router.put("/{id}", response_model=SourceRead)
+@router.patch("/{id}", response_model=SourceRead)
 def update_source(
     *,
     id: int,

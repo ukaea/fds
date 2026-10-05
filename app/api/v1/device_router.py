@@ -70,7 +70,7 @@ def read_device(
     return device_service.to_read_model(device)
 
 
-@router.put("/{device_name}", response_model=DeviceRead)
+@router.patch("/{device_name}", response_model=DeviceRead)
 def update_device(
     *,
     device_service: DeviceServiceDep,

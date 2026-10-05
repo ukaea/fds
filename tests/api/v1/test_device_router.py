@@ -34,7 +34,7 @@ def test_update_device(
         DeviceCreate(name="Initial", type="Test", access_level=AccessLevel.PUBLIC),
         user=admin_user,
     )
-    response = test_client.put(
+    response = test_client.patch(
         f"/v1/devices/{device.name}",
         headers=admin_user_token,
         json={"name": "Updated Name"},

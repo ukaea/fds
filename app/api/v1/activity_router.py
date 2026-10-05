@@ -63,7 +63,7 @@ def read_activity(
     return ActivityRead.model_validate(activity)
 
 
-@router.put("/{activity_id}", response_model=ActivityRead)
+@router.patch("/{activity_id}", response_model=ActivityRead)
 def update_activity(
     *,
     activity_id: int,

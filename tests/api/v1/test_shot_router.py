@@ -116,7 +116,7 @@ def test_update_shot_nested_device_change(
 
     # Try to move from MAST to JET via nested endpoint - should fail
     update_data = {"device_name": "JET"}
-    response = test_client.put(
+    response = test_client.patch(
         f"/v1/devices/{mast.name}/shots/{shot.id}",
         headers=admin_user_token,
         json=update_data,
@@ -148,7 +148,7 @@ def test_update_shot_nested_mismatch_404(
     session.commit()
 
     # Try to update via JET endpoint although it belongs to MAST
-    response = test_client.put(
+    response = test_client.patch(
         f"/v1/devices/{jet.name}/shots/{shot.id}",
         headers=admin_user_token,
         json={"access_level": "restricted"},
