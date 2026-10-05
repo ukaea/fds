@@ -59,6 +59,7 @@ def read_shots(
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
     property_min: Annotated[list[str] | None, Query()] = None,
     property_max: Annotated[list[str] | None, Query()] = None,
+    id_prefix: str | None = None,
 ) -> list[ShotRead]:
     """
     Retrieve all shots for a specific device.
@@ -72,6 +73,9 @@ def read_shots(
     `property_min` and `property_max` bound a numeric value, as
     `plasma_current_max:700000`. Values that are not numbers are skipped rather
     than matched.
+
+    `id_prefix` keeps the shots whose ID starts with it, so `304` finds
+    30400 to 30499.
     """
     shots = shot_service.get_multi_by_device_name(
         device_name=device_name,
@@ -81,6 +85,7 @@ def read_shots(
         properties=properties,
         minimums=property_min,
         maximums=property_max,
+        id_prefix=id_prefix,
     )
 
     return [
@@ -111,6 +116,7 @@ def read_shot_properties(
     property_min: Annotated[list[str] | None, Query()] = None,
     property_max: Annotated[list[str] | None, Query()] = None,
     max_values: int = DEFAULT_MAX_VALUES,
+    id_prefix: str | None = None,
 ) -> AvailableProperties:
     """
     The properties this device's shots carry, for building a filter.
@@ -121,7 +127,7 @@ def read_shot_properties(
     a measurement or free text: filter on the name's presence, not on a value.
 
     `property` takes the same forms as the listing and narrows the scope, so
-    `total` is the number of matching shots.
+    `total` is the number of matching shots. So does `id_prefix`.
     """
     return shot_service.available_properties(
         device_name=device_name,
@@ -130,6 +136,7 @@ def read_shot_properties(
         minimums=property_min,
         maximums=property_max,
         max_values=max_values,
+        id_prefix=id_prefix,
     )
 
 

@@ -145,6 +145,12 @@ GET /v1/devices/mast/shots?property_min=plasma_current_max:700000&property_max=p
 
 Bounds combine with AND and with any `property` filter. A record whose value for that name is not a number is skipped rather than matched.
 
+Shot lists also accept `id_prefix`, which keeps the shots whose ID starts with it. This finds shots 30400 to 30499:
+
+```text
+GET /v1/devices/mast/shots?id_prefix=304
+```
+
 Dataset lists additionally accept `name`, plus `shot_property`, which filters on an annotation carried by the dataset's *parent shot* rather than the dataset itself. That answers questions spanning both levels in one request:
 
 ```text

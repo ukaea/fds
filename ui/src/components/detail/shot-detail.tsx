@@ -96,7 +96,7 @@ export default function ShotDetail({
 
   // The shot itself carries its annotations (inline scientific_metadata) and, with
   // include_annotations, the annotation datasets expressed in its own frame.
-  const { data: shot } = useSWR<Shot>(
+  const { data: shot, error: shotError } = useSWR<Shot>(
     deviceName && shotId
       ? `${API_BASE}/devices/${deviceName}/shots/${shotId}?include_annotations=true`
       : null,
@@ -145,6 +145,22 @@ export default function ShotDetail({
   const resolvedCalibration = dedupeById((datasets ?? []).flatMap(ds => ds.calibration ?? [])).sort(
     (a, b) => (a.calibration_stage ?? 0) - (b.calibration_stage ?? 0)
   );
+
+  // Without this a shot that does not exist renders as one with no data.
+  if (shotError) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold text-foreground mb-2">Shot #{shotId}</h1>
+        <p className="text-muted-foreground mb-4">
+          This shot could not be loaded. It may not exist on {deviceLabel}, or you may not have
+          access to it.
+        </p>
+        <Link href={`/devices/${deviceName}`} className="text-primary hover:underline">
+          Back to {deviceLabel}
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">

@@ -204,17 +204,23 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         properties: list[str] | None = None,
         minimums: list[str] | None = None,
         maximums: list[str] | None = None,
+        id_prefix: str | None = None,
     ) -> Sequence[Shot]:
         """
         Retrieve all shots for a given device by its name.
 
         ``properties`` filters on entries in ``scientific_metadata``;
         several must all be present (see ``app.services.filters``).
+        ``id_prefix`` keeps the shots whose ID starts with it.
         """
         device = normalise_device_name(device_name) or ""
         statement = (
             select(Shot)
-            .where(*self._metadata_clauses(device, properties, minimums, maximums))
+            .where(
+                *self._metadata_clauses(
+                    device, properties, minimums, maximums, id_prefix
+                )
+            )
             .order_by(col(Shot.shot_at).desc().nullslast(), col(Shot.id).desc())
         )
         return read_page(
@@ -227,18 +233,22 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         properties: list[str] | None,
         minimums: list[str] | None,
         maximums: list[str] | None,
+        id_prefix: str | None = None,
     ) -> list[Any]:
         """The scope a filter describes, before access is applied.
 
         Shared by the listing and the properties so the two cannot drift: a count
         that does not match the rows it counts is worse than no count.
         """
-        return [
+        clauses = [
             Shot.device_name == device,
             *property_clauses(Shot.scientific_metadata, properties),
             *property_bound_clauses(Shot.scientific_metadata, minimums, lower=True),
             *property_bound_clauses(Shot.scientific_metadata, maximums, lower=False),
         ]
+        if id_prefix:
+            clauses.append(col(Shot.id).startswith(id_prefix, autoescape=True))
+        return clauses
 
     def _readable_scope(
         self,
@@ -247,13 +257,16 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         properties: list[str] | None = None,
         minimums: list[str] | None = None,
         maximums: list[str] | None = None,
+        id_prefix: str | None = None,
     ) -> list[Any]:
         """The filtered scope, restricted to shots this caller may read."""
         device = normalise_device_name(device_name) or ""
         if not self.session.exec(select(Device).where(Device.name == device)).first():
             raise DeviceNotFoundError(f"Device '{device_name}' not found")
 
-        where = self._metadata_clauses(device, properties, minimums, maximums)
+        where = self._metadata_clauses(
+            device, properties, minimums, maximums, id_prefix
+        )
         scope = select(Shot).where(*where)
         where.append(readable_clause(self.session, Shot, user, scope))
         return where
@@ -326,13 +339,16 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         minimums: list[str] | None = None,
         maximums: list[str] | None = None,
         max_values: int = DEFAULT_MAX_VALUES,
+        id_prefix: str | None = None,
     ) -> AvailableProperties:
         """The properties a device's shots carry, for building a filter.
 
         Scoped by the same ``properties`` filter as the listing, so ``total``
         counts the matching shots this caller may read.
         """
-        where = self._readable_scope(device_name, user, properties, minimums, maximums)
+        where = self._readable_scope(
+            device_name, user, properties, minimums, maximums, id_prefix
+        )
         return available_properties(
             self.session,
             Shot,

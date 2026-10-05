@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { Calendar, ChevronRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Calendar, ChevronRight, Search } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
 import { AvailableProperties, Shot } from '@/lib/types';
 import { propertyQuery, withQuery } from '@/lib/properties';
@@ -15,6 +16,10 @@ import { PropertyBadges } from '@/components/properties';
 import { ClientDate } from '@/components/client-date';
 
 const PAGE_SIZE = 100;
+
+function shotUrl(deviceName: string, shotId: string): string {
+  return `${API_BASE}/devices/${deviceName}/shots/${encodeURIComponent(shotId)}`;
+}
 
 export function shotsUrl(deviceName: string): string {
   return `${API_BASE}/devices/${deviceName}/shots/`;
@@ -69,6 +74,20 @@ export function ShotList({
 }) {
   const [propertyTokens, setPropertyTokens] = useState<string[]>([]);
   const [ranges, setRanges] = useState<Record<string, Range>>({});
+  const [idPrefix, setIdPrefix] = useState('');
+  const [notFound, setNotFound] = useState<string | null>(null);
+  const router = useRouter();
+
+  // Enter goes straight to the shot typed, checked first so a typo reports
+  // itself here rather than as an empty shot page.
+  async function goToShot(e: React.FormEvent) {
+    e.preventDefault();
+    const shotId = idPrefix.trim();
+    if (!shotId) return;
+    const res = await fetch(shotUrl(deviceName, shotId));
+    if (res.ok) router.push(`/devices/${deviceName}/shots/${encodeURIComponent(shotId)}`);
+    else setNotFound(shotId);
+  }
 
   // Unfiltered: the chips are the control you are using, so they must not
   // rearrange themselves as you narrow. Shared as an SWR key with DeviceDetail
@@ -83,6 +102,7 @@ export function ShotList({
   const filterQuery = [
     propertyQuery('property', propertyTokens),
     rangeQuery(ranges),
+    idPrefix.trim() ? `id_prefix=${encodeURIComponent(idPrefix.trim())}` : '',
   ].filter(Boolean);
 
   const { data: matching } = useSWR<AvailableProperties>(
@@ -130,6 +150,28 @@ export function ShotList({
         )
       }
     >
+      <form onSubmit={goToShot} className="mb-4">
+        <div className="relative w-full md:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            type="search"
+            value={idPrefix}
+            onChange={(e) => {
+              setIdPrefix(e.target.value);
+              setNotFound(null);
+            }}
+            placeholder="Find a shot by ID"
+            aria-label="Find a shot by ID"
+            className="w-full pl-9 pr-3 py-2 text-sm bg-card border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-foreground/40"
+          />
+        </div>
+        {notFound && (
+          <p role="alert" className="text-sm text-destructive mt-2">
+            No shot {notFound} on this device.
+          </p>
+        )}
+      </form>
+
       {total > 0 && (
         <p className="text-sm text-muted-foreground mb-4">
           {filterQuery.length > 0
