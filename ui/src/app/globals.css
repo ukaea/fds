@@ -89,11 +89,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Provenance graph (Graphviz SVG): render its text in the site font, not
-   Graphviz's built-in Helvetica. A CSS rule overrides the SVG font-family
-   presentation attribute, so the graph matches the rest of the page. */
+/* Provenance graph (Graphviz SVG): its shapes are sized for Helvetica, so draw
+   the text in Helvetica or Arial, which has the same widths. */
 .prov-graph svg text {
-  font-family: inherit;
+  font-family: Helvetica, Arial, sans-serif;
 }
 
 /* Theme-aware sticky header. The orange rule along its top edge echoes the

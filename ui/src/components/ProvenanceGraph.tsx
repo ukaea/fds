@@ -87,8 +87,10 @@ function toDot(graph: ProvGraph, showAll: boolean): string {
   // ranksep is modest because each edge carries an inline label node, which
   // adds an intermediate rank of its own.
   L.push('  rankdir=BT; bgcolor="transparent"; nodesep=0.4; ranksep=0.3;');
-  L.push('  node [fontname="Helvetica,Arial,sans-serif", fontsize=11, penwidth=1.4];');
-  L.push('  edge [fontname="Helvetica,Arial,sans-serif", color="#8a8a8a", arrowsize=0.7];');
+  // A single font Graphviz knows: given a list it does not recognise, it sizes
+  // shapes for Times, and the wider Helvetica the browser draws spills out.
+  L.push('  node [fontname="Helvetica", fontsize=11, penwidth=1.4];');
+  L.push('  edge [fontname="Helvetica", color="#8a8a8a", arrowsize=0.7];');
 
   for (const n of graph.nodes) {
     L.push(`  "${n.id}" [${NODE_DOT[SHAPE_OF[n.kind]]}, label=${nodeLabel(n.label, n.sub)}];`);
