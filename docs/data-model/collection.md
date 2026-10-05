@@ -6,6 +6,7 @@ A named, citable group of Datasets.
 | --- | --- | --- | --- |
 | `name` | string | Yes | Short name, unique within its scope (e.g. `analysed-data`, `jintrac-30420-56`) |
 | `title` | string | No | Human-readable title |
+| `persistent_identifier` | string | No | A DOI or other persistent identifier registered for the collection. See [Persistent identifiers](../dcat-jsonld.md#persistent-identifiers) |
 | `access_level` | enum | No | Effective access level (inherited if not set) |
 | `root_url` | string | No | Access root for all physical data in this collection (`dcat:accessURL`) |
 | `activity_id` | integer | No | FK to the Activity that produced this collection |

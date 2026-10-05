@@ -41,6 +41,29 @@ one in the name would give the same dataset a second identifier every time the A
 versioned endpoints above are addresses for clients to read and write through; they are never
 published as identifiers.
 
+### Persistent identifiers
+
+A record can also carry an identifier registered for it elsewhere, in `persistent_identifier`:
+a DOI for a dataset, collection or shot, an instrument identifier (PIDINST) for a device or
+diagnostic, ORCID for a person, ROR for an organisation. FDS stores it; registering it is up
+to the record's owners.
+
+Give it as an absolute URI or in compact form: `doi:`, `hdl:` and `swh:` are expanded to their
+resolvers. It is published as `adms:identifier`, while `dct:identifier` stays FDS's own:
+
+```json
+{
+  "@id": "https://example.org/datasets/13",
+  "identifier": "13",
+  "adms:identifier": {
+    "@type": "adms:Identifier",
+    "skos:notation": {"@value": "https://doi.org/10.5072/example", "@type": "xsd:anyURI"}
+  }
+}
+```
+
+A value in any other form is published exactly as given and is not turned into a link.
+
 ### Where identifiers point
 
 An identifier names the **service**, not its API. A deployment typically answers on two addresses:
@@ -350,6 +373,8 @@ See [Provenance](provenance.md) for the model behind these terms.
 | `dqv` | `http://www.w3.org/ns/dqv#` | Data quality annotations (`dqv:hasQualityAnnotation`) |
 | `foaf` | `http://xmlns.com/foaf/0.1/` | `foaf:primaryTopic`, linking a catalogue record to the resource it describes |
 | `oa` | `http://www.w3.org/ns/oa#` | Web Annotation, used by `dqv:QualityAnnotation` (`oa:motivatedBy`, `oa:hasBody`) |
+| `adms` | `http://www.w3.org/ns/adms#` | `adms:identifier`, a persistent identifier registered elsewhere |
+| `skos` | `http://www.w3.org/2004/02/skos/core#` | `skos:notation`, the value of that identifier |
 | `fuel` | `https://w3id.org/fuel/ns#` | Fusion Energy Lexicon, the role concepts used by `prov:hadRole` and `dcat:hadRole` |
 
 ## Ontology mapping summary
@@ -369,6 +394,7 @@ See [Provenance](provenance.md) for the model behind these terms.
 | "dataset produced by" | `prov:wasGeneratedBy` | PROV-O |
 | "activity used input / instrument" | `prov:used` + `prov:qualifiedUsage` (`prov:hadRole`) | PROV-O |
 | "activity associated with agent" | `prov:wasAssociatedWith` + `prov:qualifiedAssociation` (`prov:hadRole`) | PROV-O |
+| `persistent_identifier` | `adms:identifier` → `adms:Identifier` | ADMS, DCAT-AP |
 | `publisher` | `dct:publisher` | Dublin Core |
 | `creator` | `dct:creator` | Dublin Core |
 | `shot_at` / `shot_end` / `shot_duration` | `dct:temporal` → `dct:PeriodOfTime` | Dublin Core / DCAT 3 |
