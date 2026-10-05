@@ -6,7 +6,7 @@ import { Database, Lock, Unlock, Download, Activity, ChevronRight, MapPin, Slide
 import { useSession, signIn } from "next-auth/react";
 import useSWR from 'swr';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Activity as ActivityType, Dataset, Distribution, Source } from '@/lib/types';
+import { Activity as ActivityType, Collection, Dataset, Distribution, Source } from '@/lib/types';
 import ProvenanceGraph from '@/components/ProvenanceGraph';
 import { ScientificMetadata } from '@/components/properties';
 import { RelatedGroup } from '@/components/related-data';
@@ -344,52 +344,136 @@ function makeZarrStore(opts: {
   };
 }
 
-function buildSnippet(
-  mediaType: string | null | undefined,
-  access: DataAccess,
-  s3Path: string,
-): string {
+function isHttp(url: string): boolean {
+  return /^https?:\/\//.test(url);
+}
+
+function isIcechunk(d: Distribution): boolean {
+  return d.storage_options_type === 'icechunk_s3' || Boolean(d.media_type?.toLowerCase().includes('icechunk'));
+}
+
+// "s3://bucket/some/prefix/" as its bucket and the key under it.
+function splitS3(url: string): { bucket: string; key: string } {
+  const rest = url.replace(/^s3:\/\//, '');
+  const i = rest.indexOf('/');
+  return i === -1
+    ? { bucket: rest, key: '' }
+    : { bucket: rest.slice(0, i), key: rest.slice(i + 1).replace(/\/$/, '') };
+}
+
+function fsspecOptions(access: DataAccess): string {
   // Public data in someone else's store needs no credentials at all, so the
   // snippet has to show anonymous access rather than empty credential fields.
-  const storageOptions = access.anon
+  return access.anon
     ? `storage_options = {
     "anon": True,
-    "client_kwargs": {
-        "endpoint_url": "${access.endpointUrl}"
-    }
+    "client_kwargs": {"endpoint_url": "${access.endpointUrl}"},
 }`
     : `storage_options = {
     "key": "${access.accessKeyId}",
     "secret": "${access.secretAccessKey}",
     "token": "${access.sessionToken}",
-    "client_kwargs": {
-        "endpoint_url": "${access.endpointUrl}"
-    }
+    "client_kwargs": {"endpoint_url": "${access.endpointUrl}"},
 }`;
+}
+
+// An icechunk dataset is often a group in a larger store, the collection's
+// root_url, so the store is opened there and the rest of the path is the group.
+function icechunkSnippet(url: string, access: DataAccess, storeRoot?: string): string {
+  const root = storeRoot && url.startsWith(storeRoot) ? storeRoot : url;
+  const group = url.slice(root.length).replace(/^\/|\/$/g, '');
+  const { bucket, key } = splitS3(root);
+  const endpoint = new URL(access.endpointUrl);
+  const args = [
+    `bucket="${bucket}"`,
+    `prefix="${key}"`,
+    `endpoint_url="${access.endpointUrl}"`,
+    // Without a region icechunk first asks the AWS instance metadata service,
+    // which is not there off AWS and costs a timeout.
+    `region="${access.region || 'us-east-1'}"`,
+    ...(access.anon
+      ? ['anonymous=True']
+      : [
+          `access_key_id="${access.accessKeyId}"`,
+          `secret_access_key="${access.secretAccessKey}"`,
+          `session_token="${access.sessionToken}"`,
+        ]),
+    ...(endpoint.protocol === 'http:' ? ['allow_http=True'] : []),
+    // Any S3-compatible store other than AWS needs path-style addressing.
+    ...(endpoint.hostname.endsWith('amazonaws.com') ? [] : ['force_path_style=True']),
+  ];
+  return `# pip install icechunk xarray
+import icechunk
+import xarray as xr
+
+storage = icechunk.s3_storage(
+${args.map((a) => `    ${a},`).join('\n')}
+)
+repo = icechunk.Repository.open(storage)
+session = repo.readonly_session("main")
+ds = xr.open_zarr(session.store${group ? `, group="${group}"` : ''}, consolidated=False)
+print(ds)`;
+}
+
+function buildSnippet(dist: Distribution, access: DataAccess, storeRoot?: string): string {
+  const url = dist.url;
+  const mediaType = (dist.media_type ?? '').toLowerCase();
+  const format = (dist.format ?? '').toLowerCase();
+
+  if (isIcechunk(dist)) return icechunkSnippet(url, access, storeRoot);
+
+  const options = fsspecOptions(access);
 
   if (isZarr(mediaType)) {
-    return `import xarray as xr
+    return `# pip install xarray zarr s3fs
+import xarray as xr
 
-${storageOptions}
+${options}
 
-ds = xr.open_zarr("${s3Path}", storage_options=storage_options)
+ds = xr.open_zarr("${url}", storage_options=storage_options)
 print(ds)`;
   }
 
-  // NetCDF / HDF5: fs.cat + BytesIO avoids the HeadObject call that
-  // xr.open_dataset(s3_url, ...) makes, our STS session policy grants
-  // s3:GetObject only.
-  return `import io
+  if (mediaType.includes('csv') || format.includes('csv')) {
+    return `# pip install pandas s3fs
+import pandas as pd
 
+${options}
+
+df = pd.read_csv("${url}", storage_options=storage_options)
+print(df)`;
+  }
+
+  if (mediaType.includes('parquet') || format.includes('parquet')) {
+    return `# pip install pandas s3fs
+import pandas as pd
+
+${options}
+
+df = pd.read_parquet("${url}", storage_options=storage_options)
+print(df)`;
+  }
+
+  if (/netcdf|hdf/.test(mediaType) || /netcdf|hdf/.test(format)) {
+    return `# pip install xarray h5netcdf h5py s3fs
 import s3fs
 import xarray as xr
 
-${storageOptions}
+${options}
 
 fs = s3fs.S3FileSystem(**storage_options)
-data = fs.cat("${s3Path}")
-ds = xr.open_dataset(io.BytesIO(data), engine="h5netcdf")
+ds = xr.open_dataset(fs.open("${url}"), engine="h5netcdf")
 print(ds)`;
+  }
+
+  return `# pip install s3fs
+import s3fs
+
+${options}
+
+fs = s3fs.S3FileSystem(**storage_options)
+data = fs.cat("${url}")  # ${dist.media_type || 'unknown format'}: open these bytes with a reader for it
+`;
 }
 
 export default function DatasetDetail({ id }: { id: string }) {
@@ -445,6 +529,19 @@ export default function DatasetDetail({ id }: { id: string }) {
   const shot = datasetData?.shot_id;
   const deviceLabel = useDeviceLabel(device);
 
+  // An icechunk dataset may be a group in its collection's store, whose root is
+  // the collection's root_url.
+  const { data: shotCollections } = useSWR<Collection[]>(
+    selectedDist && isIcechunk(selectedDist) && device && shot
+      ? `${API_BASE}/devices/${device}/shots/${shot}/collections`
+      : null,
+    fetcher
+  );
+  const storeRoot = (shotCollections ?? [])
+    .map((c) => c.root_url)
+    .filter((r): r is string => Boolean(r) && Boolean(selectedDist?.url.startsWith(r as string)))
+    .sort((a, b) => b.length - a.length)[0];
+
   const handleRequestAccess = async () => {
       if (datasetData?.effective_access_level !== "public" && status !== "authenticated") {
           signIn("keycloak");
@@ -463,7 +560,9 @@ export default function DatasetDetail({ id }: { id: string }) {
       const byUrl: Record<string, DataAccess> = {};
       const toVend: string[] = [];
       for (const d of distributions) {
-          if (isPublic && d.storage_options_type === 'fsspec_s3') {
+          // An HTTPS download is opened by its URL, with nothing to grant.
+          if (isHttp(d.url)) continue;
+          if (isPublic) {
               byUrl[d.url] = {
                   endpointUrl: d.endpoint_url ?? MINIO_FALLBACK,
                   anon: true,
@@ -504,8 +603,8 @@ export default function DatasetDetail({ id }: { id: string }) {
           }
       }
 
-      if (Object.keys(byUrl).length === 0) {
-          setAccessValues({ granted: false, byUrl: {}, error: error ?? "No valid token retrieved for this dataset." });
+      if (toVend.length > 0 && Object.keys(byUrl).length === 0) {
+          setAccessValues({ granted: false, byUrl: {}, error: error ?? "FDS issued no credentials for this dataset." });
           return;
       }
       setAccessValues({ granted: true, byUrl });
@@ -527,7 +626,8 @@ export default function DatasetDetail({ id }: { id: string }) {
 
   useEffect(() => {
      if (datasetData && status !== "loading" && !autoLoadAttempted && !accessValues.granted && !accessValues.error) {
-         if (vizDist && (datasetData.effective_access_level === 'public' || status === "authenticated")) {
+         // Public data opens without asking, so there is nothing to click for.
+         if (datasetData.effective_access_level === 'public' || (vizDist && status === "authenticated")) {
              setAutoLoadAttempted(true);
              handleRequestAccess();
          }
@@ -776,19 +876,18 @@ export default function DatasetDetail({ id }: { id: string }) {
         <div onClick={() => setShowCodeModal(false)} className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-xl max-w-3xl w-full shadow-2xl relative overflow-hidden animate-fade-in">
               <div className="flex justify-between items-center bg-muted p-4 border-b border-border">
-                  <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Activity className="w-5 h-5 text-primary"/> Connect via Python (Xarray)</h3>
+                  <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Activity className="w-5 h-5 text-primary"/> Open in Python</h3>
                   <button onClick={() => setShowCodeModal(false)} className="text-muted-foreground hover:text-foreground text-2xl leading-none">&times;</button>
               </div>
               <div className="p-6">
                   <p className="text-sm text-foreground mb-4">
-                      To prevent dark repositories and ensure you always analyze the latest version of the data, we recommend streaming directly into Python.
                       {selectedAccess.anon
-                        ? " This data is openly published, so it opens anonymously: no credentials, and the read goes straight to the store holding it."
-                        : " Your temporary access token has been injected below."}
+                        ? "This data is openly published, so it opens anonymously, straight from the store holding it."
+                        : "The credentials below were issued to you and expire. Do not share them or commit them to version control."}
                   </p>
                   <div className="bg-background p-4 rounded-lg overflow-x-auto border border-border relative group">
                       {(() => {
-                          const snippet = buildSnippet(selectedDist.media_type, selectedAccess, selectedDist.url);
+                          const snippet = buildSnippet(selectedDist, selectedAccess, storeRoot);
                           return (
                               <>
                                   <button
@@ -799,10 +898,6 @@ export default function DatasetDetail({ id }: { id: string }) {
                               </>
                           );
                       })()}
-                  </div>
-                  <div className="mt-4 bg-muted border border-border p-3 rounded flex gap-3 text-sm text-foreground">
-                      <span className="font-bold shrink-0">Note:</span>
-                      <p>This S3 STS token is temporary and scoped exclusively to your authenticated identity profile. Do not commit this code snippet to version control.</p>
                   </div>
               </div>
           </div>
@@ -892,10 +987,10 @@ export default function DatasetDetail({ id }: { id: string }) {
                 <JsonLdPanel url={`${API_BASE}/datasets/id/${id}`} className="-mx-6 -mb-6 mt-4 border-t border-border" />
             </div>
 
-            <div className="card p-6 border-t-4 border-t-primary bg-muted/80 shadow-xl border-border">
+            <div className="card p-6 bg-muted/80 shadow-xl border-border">
                 <h3 className="text-lg font-bold mb-4 flex items-center justify-between text-foreground">
                     Data Access
-                    {accessValues.granted ? <Unlock className="w-5 h-5 text-foreground" /> : <Lock className="w-5 h-5 text-muted-foreground" />}
+                    {selectedAccess || (selectedDist && isHttp(selectedDist.url)) ? <Unlock className="w-5 h-5 text-foreground" /> : <Lock className="w-5 h-5 text-muted-foreground" />}
                 </h3>
 
                 {distributions.length > 1 && (
@@ -934,12 +1029,27 @@ export default function DatasetDetail({ id }: { id: string }) {
                     </div>
                 )}
 
-                {!accessValues.granted ? (
-                    <div className="text-left">
-                        <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
-                          {datasetData?.effective_access_level === 'public'
-                            ? 'This dataset is publicly accessible. Click below to load credentials.'
-                            : 'Dataset files are secured in MinIO S3. Authenticate with an FDS account to acquire an S3 token.'}
+                {selectedDist && (
+                    <div className="space-y-2 text-xs">
+                        <p className="text-muted-foreground font-medium uppercase tracking-wider">URI</p>
+                        <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded">{selectedDist.url}</p>
+                    </div>
+                )}
+
+                {selectedDist && isHttp(selectedDist.url) ? (
+                    <a href={selectedDist.url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:text-foreground inline-flex items-center gap-1 mt-3">
+                        <Download className="w-4 h-4" /> Download
+                    </a>
+                ) : selectedAccess ? (
+                    <button onClick={() => setShowCodeModal(true)} className="text-sm text-primary hover:text-foreground inline-flex items-center gap-1 mt-3">
+                        <Download className="w-4 h-4" /> Open in Python
+                    </button>
+                ) : accessValues.granted ? (
+                    <p className="text-sm text-muted-foreground mt-3">FDS issued no credentials for this distribution.</p>
+                ) : selectedDist && datasetData?.effective_access_level !== 'public' ? (
+                    <div className="mt-4">
+                        <p className="text-muted-foreground text-sm mb-4 leading-relaxed">
+                            This data is restricted. Sign in with an account that has access, and FDS issues you temporary credentials for reading it.
                         </p>
                         {accessValues.error && <p className="text-destructive mb-4 text-sm bg-destructive/10 p-2 rounded border border-destructive/40">{accessValues.error}</p>}
                         <button
@@ -947,29 +1057,10 @@ export default function DatasetDetail({ id }: { id: string }) {
                             className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-4 rounded w-full transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/25"
                         >
                             <Unlock className="w-4 h-4" />
-                            {datasetData?.effective_access_level === 'public'
-                              ? 'Load Data'
-                              : status === "authenticated" ? "Request S3 Token" : "Sign In to Access"}
+                            {status === "authenticated" ? "Get access" : "Sign in to access"}
                         </button>
                     </div>
-                ) : (
-                    <div className="animate-fade-in text-sm">
-                        <div className="bg-muted border border-border text-foreground p-3 rounded mb-4 flex items-center gap-2 shadow-inner">
-                            <span className="w-2 h-2 rounded-full bg-muted animate-pulse"></span> Identity Verified
-                        </div>
-                        <div className="space-y-2 text-xs">
-                           <p className="text-muted-foreground font-medium uppercase tracking-wider">Mounted URI</p>
-                           <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded">{selectedDist?.url}</p>
-                           {selectedAccess ? (
-                               <a href="#" onClick={(e) => { e.preventDefault(); setShowCodeModal(true); }} className="text-primary hover:text-foreground inline-flex items-center gap-1 mt-2">
-                                   <Download className="w-3 h-3" /> Download Dataset
-                               </a>
-                           ) : (
-                               <p className="text-muted-foreground">FDS issued no credentials for this distribution.</p>
-                           )}
-                        </div>
-                    </div>
-                )}
+                ) : null}
             </div>
 
             {/* Annotations on this dataset's own axes */}
@@ -1098,13 +1189,13 @@ export default function DatasetDetail({ id }: { id: string }) {
                         <div className="text-center p-8 bg-card/50 backdrop-blur border border-border rounded-lg max-w-md">
                             <Lock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                             <h4 className="text-lg font-bold text-foreground mb-2">Data Locked</h4>
-                            <p className="text-muted-foreground text-sm mb-6">Authenticate to decrypt and visualize this Zarr store natively in your browser.</p>
+                            <p className="text-muted-foreground text-sm mb-6">Sign in with an account that has access to plot this data in your browser.</p>
                             <button
                                 onClick={handleRequestAccess}
                                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2 px-6 rounded transition-colors flex items-center justify-center gap-2 mx-auto"
                             >
                                 <Unlock className="w-4 h-4" />
-                                {status === "authenticated" ? "Grant Access" : "Sign In"}
+                                {status === "authenticated" ? "Get access" : "Sign in"}
                             </button>
                         </div>
                     ) : (
