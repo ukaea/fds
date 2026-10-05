@@ -6,7 +6,7 @@ import { Database, Lock, Unlock, Download, Activity, ChevronRight, MapPin, Slide
 import { useSession, signIn } from "next-auth/react";
 import useSWR from 'swr';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Activity as ActivityType, Dataset } from '@/lib/types';
+import { Activity as ActivityType, Dataset, Distribution } from '@/lib/types';
 import ProvenanceGraph from '@/components/ProvenanceGraph';
 import { ScientificMetadata } from '@/components/properties';
 import { RelatedGroup } from '@/components/related-data';
@@ -103,6 +103,16 @@ function HeatmapCanvas({ data, width, height, title }: HeatmapProps) {
 
 function isZarr(mediaType?: string | null): boolean {
   return Boolean(mediaType?.toLowerCase().includes('zarr'));
+}
+
+// The in-browser reader speaks plain Zarr. An icechunk store is Zarr underneath
+// but only opens through icechunk.
+function canVisualise(d: Distribution): boolean {
+  return isZarr(d.media_type) && !d.media_type!.toLowerCase().includes('icechunk');
+}
+
+function distributionLabel(d: Distribution): string {
+  return d.format || d.media_type || 'Unknown format';
 }
 
 // How to open one dataset's bytes: either short-lived credentials FDS minted, or
@@ -361,7 +371,10 @@ print(ds)`;
 export default function DatasetDetail({ id }: { id: string }) {
 
   const { status } = useSession();
-  const [accessValues, setAccessValues] = useState<{granted: boolean, token?: DataAccess, s3Path?: string, error?: string}>({ granted: false });
+  // Access is decided for the dataset as a whole, so one request covers every
+  // distribution. byUrl says how to open each one FDS granted.
+  const [accessValues, setAccessValues] = useState<{granted: boolean, byUrl: Record<string, DataAccess>, error?: string}>({ granted: false, byUrl: {} });
+  const [selectedDistId, setSelectedDistId] = useState<number | null>(null);
   const [zarrMetadata, setZarrMetadata] = useState<NodeMeta | null>(null);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [variables, setVariables] = useState<string[]>([]);
@@ -377,7 +390,7 @@ export default function DatasetDetail({ id }: { id: string }) {
 
   const { data: datasetData } = useSWR<Dataset>(
     id
-      ? `${API_BASE}/datasets/id/${id}?include_geometry=true&include_calibration=true&include_annotations=true&include_storage_options=true`
+      ? `${API_BASE}/datasets/id/${id}?include_geometry=true&include_calibration=true&include_annotations=true`
       : null,
     fetcher
   );
@@ -386,6 +399,17 @@ export default function DatasetDetail({ id }: { id: string }) {
     datasetData?.activity_id ? `${API_BASE}/datasets/${datasetData.id}/activity` : null,
     fetcher
   );
+
+  // Default first, so it is what is selected and, when it is Zarr, what is plotted.
+  const distributions = [...(datasetData?.distributions ?? [])].sort(
+    (a, b) => Number(b.default_distribution) - Number(a.default_distribution)
+  );
+  const selectedDist = distributions.find((d) => d.id === selectedDistId) ?? distributions[0];
+  const selectedAccess = selectedDist ? accessValues.byUrl[selectedDist.url] : undefined;
+  // Distributions are interchangeable, so any Zarr one can be plotted, whichever
+  // is selected.
+  const vizDist = distributions.find(canVisualise);
+  const vizAccess = vizDist ? accessValues.byUrl[vizDist.url] : undefined;
 
   const device = datasetData?.device_name;
   const shot = datasetData?.shot_id;
@@ -397,67 +421,72 @@ export default function DatasetDetail({ id }: { id: string }) {
           return;
       }
 
-      const s3Path = datasetData?.url;
-      if (!s3Path) {
-          setAccessValues({ granted: false, error: "Dataset has no data URL." });
+      if (distributions.length === 0) {
+          setAccessValues({ granted: false, byUrl: {}, error: "Dataset has no data URL." });
           return;
       }
 
-      // Public data carries its own anonymous storage options, so there is
-      // nothing to vend and no round trip to make. This is the path a dataset
-      // held in another organisation's public store takes.
-      const publicOpts = datasetData?.storage_options;
-      if (datasetData?.effective_access_level === 'public' && publicOpts?.anon) {
-          const access: DataAccess = {
-              endpointUrl: publicOpts.client_kwargs?.endpoint_url ?? MINIO_FALLBACK,
-              anon: true,
-              region: publicOpts.client_kwargs?.region_name,
-          };
-          setAccessValues({ granted: true, token: access, s3Path });
-          loadZarrData(access, s3Path);
-          return;
-      }
-
-      try {
-          const res = await fetch(`${API_BASE}/file-access/credentials`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_name: device, shot_id: shot })
-          });
-
-          if (!res.ok) throw new Error("Failed to get credentials");
-
-          const manifest = await res.json();
-
-          // resource_map maps URL → credential directly
-          const validCreds = manifest.resource_map[s3Path] ?? null;
-
-          if (validCreds) {
-             const access: DataAccess = {
-                 endpointUrl: validCreds.endpoint_url ?? MINIO_FALLBACK,
-                 anon: false,
-                 accessKeyId: validCreds.access_key_id,
-                 secretAccessKey: validCreds.secret_access_key,
-                 sessionToken: validCreds.session_token,
-                 region: validCreds.region,
-             };
-             setAccessValues({ granted: true, token: access, s3Path });
-             loadZarrData(access, s3Path);
+      // Public data in an S3 store opens anonymously, with nothing to vend and
+      // no round trip to make. This is the path a dataset held in another
+      // organisation's public store takes.
+      const isPublic = datasetData?.effective_access_level === 'public';
+      const byUrl: Record<string, DataAccess> = {};
+      const toVend: string[] = [];
+      for (const d of distributions) {
+          if (isPublic && d.storage_options_type === 'fsspec_s3') {
+              byUrl[d.url] = {
+                  endpointUrl: d.endpoint_url ?? MINIO_FALLBACK,
+                  anon: true,
+                  region: d.region ?? undefined,
+              };
           } else {
-             setAccessValues({ granted: false, error: "No valid token retrieved for this dataset." });
+              toVend.push(d.url);
           }
-
-      } catch (e) {
-          console.error(e);
-          setAccessValues({ granted: false, error: e instanceof Error ? e.message : String(e) });
       }
+
+      let error: string | undefined;
+      if (toVend.length > 0) {
+          try {
+              const res = await fetch(`${API_BASE}/file-access/credentials`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data_urls: toVend })
+              });
+
+              if (!res.ok) throw new Error("Failed to get credentials");
+
+              const manifest = await res.json();
+              for (const url of toVend) {
+                  const cred = manifest.resource_map[url];
+                  if (!cred) continue;
+                  byUrl[url] = {
+                      endpointUrl: cred.endpoint_url ?? MINIO_FALLBACK,
+                      anon: false,
+                      accessKeyId: cred.access_key_id,
+                      secretAccessKey: cred.secret_access_key,
+                      sessionToken: cred.session_token,
+                      region: cred.region,
+                  };
+              }
+          } catch (e) {
+              console.error(e);
+              error = e instanceof Error ? e.message : String(e);
+          }
+      }
+
+      if (Object.keys(byUrl).length === 0) {
+          setAccessValues({ granted: false, byUrl: {}, error: error ?? "No valid token retrieved for this dataset." });
+          return;
+      }
+      setAccessValues({ granted: true, byUrl });
+      if (vizDist && byUrl[vizDist.url]) loadZarrData(byUrl[vizDist.url], vizDist.url);
   };
 
   const [autoLoadAttempted, setAutoLoadAttempted] = useState(false);
 
   useEffect(() => {
      if (datasetData && status !== "loading" && !autoLoadAttempted && !accessValues.granted && !accessValues.error) {
-         if (isZarr(datasetData.media_type) && (datasetData.effective_access_level === 'public' || status === "authenticated")) {
+         if (vizDist && (datasetData.effective_access_level === 'public' || status === "authenticated")) {
              setAutoLoadAttempted(true);
              handleRequestAccess();
          }
@@ -686,10 +715,9 @@ export default function DatasetDetail({ id }: { id: string }) {
 
   const onSelectVariable = async (newVar: string) => {
       setSelectedVar(newVar);
-      if (!accessValues.token || !accessValues.s3Path) return;
+      if (!vizAccess || !vizDist) return;
 
-      const access = accessValues.token as DataAccess;
-      const { path: prefixPath } = objectUrl(access.endpointUrl, accessValues.s3Path);
+      const { path: prefixPath } = objectUrl(vizAccess.endpointUrl, vizDist.url);
 
       // Use the metadata resolved when the dataset was opened. Re-deriving it from
       // the group's own zarr.json loses everything for a store that consolidates
@@ -697,13 +725,13 @@ export default function DatasetDetail({ id }: { id: string }) {
       // axes and no sliders.
       const items = groupMeta.current?.items;
       if (!items) return;
-      fetchVariables(access, prefixPath, newVar, coordinates, items);
+      fetchVariables(vizAccess, prefixPath, newVar, coordinates, items);
   };
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       {/* Code Snippet Modal */}
-      {showCodeModal && accessValues.token && (
+      {showCodeModal && selectedDist && selectedAccess && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-card border border-border rounded-xl max-w-3xl w-full shadow-2xl relative overflow-hidden animate-fade-in">
               <div className="flex justify-between items-center bg-muted p-4 border-b border-border">
@@ -713,13 +741,13 @@ export default function DatasetDetail({ id }: { id: string }) {
               <div className="p-6">
                   <p className="text-sm text-foreground mb-4">
                       To prevent dark repositories and ensure you always analyze the latest version of the data, we recommend streaming directly into Python.
-                      {(accessValues.token as DataAccess | null)?.anon
+                      {selectedAccess.anon
                         ? " This data is openly published, so it opens anonymously: no credentials, and the read goes straight to the store holding it."
                         : " Your temporary access token has been injected below."}
                   </p>
                   <div className="bg-background p-4 rounded-lg overflow-x-auto border border-border relative group">
                       {(() => {
-                          const snippet = buildSnippet(datasetData?.media_type, accessValues.token as DataAccess, accessValues.s3Path!);
+                          const snippet = buildSnippet(selectedDist.media_type, selectedAccess, selectedDist.url);
                           return (
                               <>
                                   <button
@@ -779,10 +807,10 @@ export default function DatasetDetail({ id }: { id: string }) {
          </div>
       </div>
 
-      <div className={datasetData && !isZarr(datasetData.media_type) ? 'max-w-3xl' : 'grid grid-cols-1 lg:grid-cols-3 gap-8'}>
+      <div className={datasetData && !vizDist ? 'max-w-3xl' : 'grid grid-cols-1 lg:grid-cols-3 gap-8'}>
 
-        {/* Left Column: Zarr Visualizer (only rendered for Zarr datasets) */}
-        {(!datasetData || isZarr(datasetData.media_type)) && (
+        {/* Left Column: Zarr Visualizer (only rendered when a distribution is Zarr) */}
+        {(!datasetData || vizDist) && (
           <div className="lg:col-span-2">
             <div className="card h-[650px] flex flex-col relative overflow-hidden shadow-2xl shadow-black/50 border border-border">
                 <div className="absolute inset-0 bg-background/80 z-0">
@@ -802,7 +830,7 @@ export default function DatasetDetail({ id }: { id: string }) {
                 </div>
 
                 <div className="flex-1 flex items-center justify-center relative z-10">
-                    {!accessValues.granted ? (
+                    {!vizAccess ? (
                         <div className="text-center p-8 bg-card/50 backdrop-blur border border-border rounded-lg max-w-md">
                             <Lock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                             <h4 className="text-lg font-bold text-foreground mb-2">Data Locked</h4>
@@ -1059,6 +1087,42 @@ export default function DatasetDetail({ id }: { id: string }) {
                     {accessValues.granted ? <Unlock className="w-5 h-5 text-foreground" /> : <Lock className="w-5 h-5 text-muted-foreground" />}
                 </h3>
 
+                {distributions.length > 1 && (
+                    <div className="mb-6">
+                        <p className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-2">
+                            Distributions ({distributions.length})
+                        </p>
+                        <div className="space-y-1" role="radiogroup" aria-label="Distribution">
+                            {distributions.map((d) => {
+                                const selected = d.id === selectedDist?.id;
+                                return (
+                                    <button
+                                        key={d.id}
+                                        role="radio"
+                                        aria-checked={selected}
+                                        onClick={() => setSelectedDistId(d.id)}
+                                        className={`w-full text-left px-3 py-2 rounded border text-sm flex items-center gap-2 transition-colors ${selected ? 'border-primary bg-card' : 'border-border hover:bg-card/60'}`}
+                                    >
+                                        <span className={`w-3 h-3 shrink-0 rounded-full border ${selected ? 'border-primary bg-primary' : 'border-muted-foreground'}`} />
+                                        <span className="flex-1 min-w-0">
+                                            <span className="block text-foreground truncate">{distributionLabel(d)}</span>
+                                            {d.format && d.media_type && (
+                                                <span className="block text-xs text-muted-foreground font-mono truncate">{d.media_type}</span>
+                                            )}
+                                        </span>
+                                        {d.default_distribution && (
+                                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-border rounded px-1">Default</span>
+                                        )}
+                                        {d.id === vizDist?.id && (
+                                            <span className="text-[10px] uppercase tracking-wider text-primary border border-primary/50 rounded px-1">Plotted</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 {!accessValues.granted ? (
                     <div className="text-left">
                         <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
@@ -1084,10 +1148,14 @@ export default function DatasetDetail({ id }: { id: string }) {
                         </div>
                         <div className="space-y-2 text-xs">
                            <p className="text-muted-foreground font-medium uppercase tracking-wider">Mounted URI</p>
-                           <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded">{accessValues.s3Path}</p>
-                           <a href="#" onClick={(e) => { e.preventDefault(); setShowCodeModal(true); }} className="text-primary hover:text-foreground inline-flex items-center gap-1 mt-2">
-                               <Download className="w-3 h-3" /> Download Dataset
-                           </a>
+                           <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded">{selectedDist?.url}</p>
+                           {selectedAccess ? (
+                               <a href="#" onClick={(e) => { e.preventDefault(); setShowCodeModal(true); }} className="text-primary hover:text-foreground inline-flex items-center gap-1 mt-2">
+                                   <Download className="w-3 h-3" /> Download Dataset
+                               </a>
+                           ) : (
+                               <p className="text-muted-foreground">FDS issued no credentials for this distribution.</p>
+                           )}
                         </div>
                     </div>
                 )}
