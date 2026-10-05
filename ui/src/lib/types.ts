@@ -95,6 +95,13 @@ export interface Dataset {
   description?: string;
   license?: string;
   media_type?: string;
+  creator?: string | null;
+  version?: string | null;
+  // Registered elsewhere (a DOI, say), as an absolute URI or compact form.
+  persistent_identifier?: string | null;
+  // When the data was formally published, as a date. Not created_at, which is
+  // when FDS listed it.
+  issued?: string | null;
   access_level?: string;
   effective_access_level?: string;
   activity_id?: number;

@@ -11,6 +11,7 @@ import ProvenanceGraph from '@/components/ProvenanceGraph';
 import { ScientificMetadata } from '@/components/properties';
 import { RelatedGroup } from '@/components/related-data';
 import { useDeviceLabel } from '@/lib/use-device-label';
+import { citation, resolveIdentifier } from '@/lib/identifiers';
 import { JsonLdPanel } from '@/components/jsonld-panel';
 
 // Heatmap Color Scale Approximation (Viridis)
@@ -115,9 +116,7 @@ function distributionLabel(d: Distribution): string {
   return d.format || d.media_type || 'Unknown format';
 }
 
-// One line however long the value, so it cannot spill out of a narrow card.
-// The whole of it is in the tooltip and on the clipboard.
-function TruncatedValue({ value }: { value: string }) {
+function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
@@ -125,16 +124,24 @@ function TruncatedValue({ value }: { value: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // Clipboard access is denied outside a secure context; the tooltip
-      // still shows the whole value.
+      // Clipboard access is denied outside a secure context; the value is
+      // still on the page to select.
     }
   };
   return (
+    <button type="button" onClick={copy} aria-label="Copy" className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+    </button>
+  );
+}
+
+// One line however long the value, so it cannot spill out of a narrow card.
+// The whole of it is in the tooltip and on the clipboard.
+function TruncatedValue({ value }: { value: string }) {
+  return (
     <span className="flex items-center gap-2">
       <span className="font-mono text-foreground truncate" title={value}>{value}</span>
-      <button type="button" onClick={copy} aria-label="Copy" className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-        {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-      </button>
+      <CopyButton value={value} />
     </span>
   );
 }
@@ -524,6 +531,8 @@ export default function DatasetDetail({ id }: { id: string }) {
   // is selected.
   const vizDist = distributions.find(canVisualise);
   const vizAccess = vizDist ? accessValues.byUrl[vizDist.url] : undefined;
+
+  const cite = datasetData ? citation(datasetData) : null;
 
   const device = datasetData?.device_name;
   const shot = datasetData?.shot_id;
@@ -967,10 +976,28 @@ export default function DatasetDetail({ id }: { id: string }) {
             <div className="card p-6 bg-card/60 shadow-xl border-border overflow-hidden">
                 <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground">Dataset Properties</h3>
                 <div className="space-y-3 text-sm">
+                    {datasetData?.persistent_identifier && (() => {
+                        const href = resolveIdentifier(datasetData.persistent_identifier);
+                        return (
+                            <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                                <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Persistent identifier</span>
+                                {href
+                                    ? <a href={href} className="font-mono text-primary hover:text-foreground break-all">{href}</a>
+                                    : <span className="font-mono text-foreground break-all">{datasetData.persistent_identifier}</span>}
+                            </div>
+                        );
+                    })()}
                     <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
-                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Created At</span>
+                        <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Listed in FDS</span>
                         <span className="text-foreground">{datasetData?.created_at ? new Date(datasetData.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric'}) : 'Unknown'}</span>
                     </div>
+                    {datasetData?.issued && (
+                        <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
+                            <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Published</span>
+                            {/* A calendar date: read as UTC so no timezone shifts it a day. */}
+                            <span className="text-foreground">{new Date(datasetData.issued).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}</span>
+                        </div>
+                    )}
                     {datasetData?.license && (
                         <div className="flex flex-col justify-start py-1 border-b border-border pb-2">
                             <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">License</span>
@@ -982,7 +1009,7 @@ export default function DatasetDetail({ id }: { id: string }) {
                         <span className="text-foreground capitalize">{datasetData?.effective_access_level || datasetData?.access_level || 'Unknown'}</span>
                     </div>
                 </div>
-                <JsonLdPanel url={`${API_BASE}/datasets/id/${id}`} className="-mx-6 -mb-6 mt-4 border-t border-border" />
+                <JsonLdPanel url={`${API_BASE}/datasets/id/${id}`} className="-mx-6 -mb-6 mt-4 border-t border-border px-2 py-1.5" />
             </div>
 
             <div className="card p-6 bg-muted/80 shadow-xl border-border">
@@ -1170,6 +1197,16 @@ export default function DatasetDetail({ id }: { id: string }) {
                     </div>
                 )}
             </div>
+
+            {cite && (
+                <div className="card p-6 bg-card/60 shadow-xl border-border">
+                    <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground flex items-center justify-between">
+                        Cite this dataset
+                        <CopyButton value={cite} />
+                    </h3>
+                    <p className="text-sm text-foreground leading-relaxed break-words">{cite}</p>
+                </div>
+            )}
 
         </div>
 
