@@ -139,6 +139,21 @@ def _agent_node(
     return {k: v for k, v in node.items() if v is not None}
 
 
+def _instrument_node(source: "Source", base_url: str) -> dict[str, Any]:
+    """An instrument Source as the ``prov:Entity`` an activity uses.
+
+    It measures but does not act, so it is not an agent.
+    """
+    names = Identifiers(base_url)
+    node: dict[str, Any] = {
+        "@id": names.source(source.id),
+        "@type": "prov:Entity",
+        "dct:title": source.name,
+        "dct:description": source.description,
+    }
+    return {k: v for k, v in node.items() if v is not None}
+
+
 def _build_associations(
     activity: "Activity", base_url: str
 ) -> tuple[dict[str, Any] | None, list[Any]]:
@@ -637,13 +652,18 @@ def map_dataset_to_dcat(
 
 
 def map_source_to_dcat(source: "Source", base_url: str) -> dict[str, Any]:
-    """A Source as a standalone PROV-O agent document.
+    """A Source as a standalone PROV-O document.
 
     The same node that is embedded in the provenance of anything this Source
-    produced, given a context so that the identifier FDS publishes for it
-    resolves to a description rather than to nothing.
+    produced or measured, given a context so that the identifier FDS publishes
+    for it resolves to a description rather than to nothing.
     """
-    return {"@context": METADATA_CONTEXT, **_agent_node(source, base_url)}
+    node = (
+        _instrument_node(source, base_url)
+        if source.kind is SourceKind.INSTRUMENT
+        else _agent_node(source, base_url)
+    )
+    return {"@context": METADATA_CONTEXT, **node}
 
 
 def map_activity_to_dcat(activity: "Activity", base_url: str) -> dict[str, Any]:
