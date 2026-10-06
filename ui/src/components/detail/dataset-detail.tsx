@@ -14,94 +14,7 @@ import { useDeviceLabel } from '@/lib/use-device-label';
 import { citation, resolveIdentifier } from '@/lib/identifiers';
 import type { JsonLd } from '@/lib/identifier-page';
 import { JsonLdPanel } from '@/components/jsonld-panel';
-
-// Heatmap Color Scale Approximation (Viridis)
-const VIRIDIS_STOPS = [[68, 1, 84], [59, 82, 139], [33, 145, 140], [93, 201, 99], [253, 231, 37]];
-function getViridisColor(t: number) {
-    t = Math.max(0, Math.min(1, Number.isNaN(t) ? 0 : t));
-    const idx = Math.floor(t * 4);
-    if (idx >= 4) return VIRIDIS_STOPS[4];
-    const frac = (t * 4) - idx;
-    const c1 = VIRIDIS_STOPS[idx], c2 = VIRIDIS_STOPS[idx + 1];
-    return [
-       c1[0] + frac * (c2[0] - c1[0]),
-       c1[1] + frac * (c2[1] - c1[1]),
-       c1[2] + frac * (c2[2] - c1[2])
-    ];
-}
-
-interface HeatmapProps {
-    data: Float32Array | Float64Array;
-    width: number;
-    height: number;
-    title: string;
-}
-
-function HeatmapCanvas({ data, width, height, title }: HeatmapProps) {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-
-    // A slice outside the reconstruction window is entirely NaN. Normalising it
-    // yields NaN everywhere, which paints a uniform square that looks like data.
-    // Say the slice is empty instead.
-    let hasData = false;
-    for (let i = 0; i < data.length; i++) {
-        if (Number.isFinite(data[i])) { hasData = true; break; }
-    }
-
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        let min = Infinity, max = -Infinity;
-        for (let i = 0; i < data.length; i++) {
-            if (Number.isFinite(data[i])) {
-                if (data[i] < min) min = data[i];
-                if (data[i] > max) max = data[i];
-            }
-        }
-        if (!Number.isFinite(min) || min === max) { min = (min || 0) - 1; max = (max || 0) + 1; }
-
-        const imgData = ctx.createImageData(width, height);
-        for (let i = 0; i < data.length; i++) {
-            const x = i % width;
-            const y = height - 1 - Math.floor(i / width); // Invert Y logically for physics
-            const pixelIdx = (y * width + x) * 4;
-
-            const normalized = (data[i] - min) / (max - min);
-            const rgb = getViridisColor(normalized);
-            imgData.data[pixelIdx] = rgb[0];
-            imgData.data[pixelIdx + 1] = rgb[1];
-            imgData.data[pixelIdx + 2] = rgb[2];
-            imgData.data[pixelIdx + 3] = 255;
-        }
-        ctx.putImageData(imgData, 0, 0);
-    }, [data, width, height]);
-
-    return (
-        <div className="w-full flex flex-col items-center justify-center p-2">
-             {hasData ? (
-                <canvas
-                   ref={canvasRef}
-                   width={width}
-                   height={height}
-                   className="w-full max-w-[300px] aspect-square object-contain pixelated border border-border bg-black/50"
-                   style={{ imageRendering: 'pixelated' }}
-                />
-             ) : (
-                <div className="w-full max-w-[300px] aspect-square border border-border border-dashed rounded flex items-center justify-center p-4">
-                    <p className="text-xs text-muted-foreground text-center">
-                        No data at this index.<br />Move the slider into the reconstruction window.
-                    </p>
-                </div>
-             )}
-             <p className="text-xs text-muted-foreground mt-4 bg-card px-3 py-1 rounded inline-flex font-mono">
-                 Heatmap: {title}
-             </p>
-        </div>
-    );
-}
+import { HeatmapCanvas } from '@/components/heatmap';
 
 function isZarr(mediaType?: string | null): boolean {
   return Boolean(mediaType?.toLowerCase().includes('zarr'));
@@ -231,6 +144,12 @@ function toFloatArray(data: unknown): Float32Array | Float64Array {
   return Float64Array.from(data as ArrayLike<number>);
 }
 
+// CF "units" attribute of an array in the group, if it declares one.
+function unitsOf(items: Record<string, NodeMeta>, name: string | undefined): string | undefined {
+  const units = name ? items[name]?.attributes?.units : undefined;
+  return typeof units === "string" && units.trim() ? units : undefined;
+}
+
 function rowMajorStrides(shape: number[]): number[] {
   const stride = new Array(shape.length);
   stride[shape.length - 1] = 1;
@@ -276,6 +195,7 @@ interface NodeMeta {
   attributes?: Record<string, unknown> & { name?: string; dimension_names?: string[] };
   shape?: number[];
   dimension_names?: string[];
+  codecs?: { name: string }[];
   consolidated_metadata?: { metadata?: Record<string, NodeMeta> };
   members?: Record<string, NodeMeta>;
   [key: string]: unknown;
@@ -515,7 +435,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
   const [variables, setVariables] = useState<string[]>([]);
   const [coordinates, setCoordinates] = useState<string[]>([]);
   const [selectedVar, setSelectedVar] = useState<string | null>(null);
-  const [chunkData, setChunkData] = useState<{ data: Float32Array | Float64Array, shape: number[], x?: Float32Array | Float64Array, yL?: string, xL?: string, xIdx?: number, yIdx?: number, yAxisL?: string, sliders?: { name: string, data?: Float32Array | Float64Array, shapeSize: number, idx: number }[] } | null>(null);
+  const [chunkData, setChunkData] = useState<{ data: Float32Array | Float64Array, shape: number[], x?: Float32Array | Float64Array, yAxis?: Float32Array | Float64Array, units?: { x?: string, y?: string, value?: string }, yL?: string, xL?: string, xIdx?: number, yIdx?: number, yAxisL?: string, sliders?: { name: string, data?: Float32Array | Float64Array, shapeSize: number, idx: number }[] } | null>(null);
   const [loadingData, setLoadingData] = useState(false);
   const [sliderIndices, setSliderIndices] = useState<number[]>([]);
   const [progress, setProgress] = useState<LoadProgress | null>(null);
@@ -668,6 +588,9 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
       // a public store, or "s3://fds-data/shots/50000/analysed" for data the demo
       // holds itself. Which host serves it is FDS's answer, not ours to assume.
       const { origin, path: prefixPath } = objectUrl(access.endpointUrl, s3Path);
+      // fetchVariables needs zarrita as soon as the metadata is in, so load it
+      // alongside the metadata rather than after.
+      import('zarrita').catch(() => {});
       const doFetch = await makeFetcher(access);
       const host = new URL(access.endpointUrl).host;
       setLoadError(null);
@@ -691,7 +614,13 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
       try {
         // 1. Group metadata. A store that consolidates only at its root leaves
         //    each group's own zarr.json bare, so fall back to the root listing
-        //    and take the slice for this group.
+        //    and take the slice for this group. The root listing is requested
+        //    with the group's rather than after it, since waiting costs a round trip.
+        const rootRef = zarrRootOf(prefixPath);
+        const rootMetaRead = rootRef ? getJson(`${origin}/${rootRef.root}/zarr.json`) : null;
+        // Never awaited when the group lists itself, so a failure must not
+        // surface as an unhandled rejection.
+        rootMetaRead?.catch(() => {});
         const metadata = await getJson(`${origin}/${prefixPath}/zarr.json`);
         if (metadata) {
            setZarrMetadata(metadata);
@@ -700,12 +629,9 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
            if (!resolved && metadata.members) {
                resolved = { nodes: metadata.members, items: metadata.members };
            }
-           if (!resolved) {
-               const rootRef = zarrRootOf(prefixPath);
-               if (rootRef) {
-                   const rootMeta = await getJson(`${origin}/${rootRef.root}/zarr.json`);
-                   if (rootMeta) resolved = sliceConsolidated(rootMeta, rootRef.group);
-               }
+           if (!resolved && rootRef && rootMetaRead) {
+               const rootMeta = await rootMetaRead;
+               if (rootMeta) resolved = sliceConsolidated(rootMeta, rootRef.group);
            }
            groupMeta.current = resolved;
            const items: Record<string, NodeMeta> = resolved?.items ?? {};
@@ -784,33 +710,28 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
 
           const root = zarr.root(customStore);
 
-          // Reading one coordinate does not depend on reading another, so they go
-          // out together rather than one round trip after the next.
-          const readArray = async (name: string) => {
-              const arr = await zarr.open(root.resolve(name), { kind: "array" });
-              return toFloatArray((await zarr.get(arr)).data);
+          // The store is Zarr v3. zarr.open would look for v2 metadata first,
+          // which is two requests per array that cannot succeed.
+          const openArray = (name: string) => zarr.open.v3(root.resolve(name), { kind: "array" });
+          const readCoordinate = async (name: string | undefined) => {
+              if (!name || !coordsList.includes(name)) return undefined;
+              return toFloatArray((await zarr.get(await openArray(name))).data);
           };
 
-          const dataArr = await zarr.open(root.resolve(varName), { kind: "array" });
-          const view = await zarr.get(dataArr);
-          const viewData = toFloatArray(view.data);
+          const dataArr = await openArray(varName);
 
           // Coordinate Array Matching
           const dataAxisNames = allItems[varName]?.dimension_names || [];
 
-          let xData: Float32Array | Float64Array | undefined;
           let xL: string | undefined;
           let yAxisL: string | undefined;
           let xIdx: number | undefined;
           let yIdx: number | undefined;
-          let sliders: { name: string, data?: Float32Array | Float64Array, shapeSize: number, idx: number }[] = [];
+          let sliderDims: { name: string; i: number }[] = [];
 
           if (dataAxisNames.length === 1) {
               xL = dataAxisNames.find((d: string) => coordsList.includes(d));
               xIdx = 0;
-              if (xL) {
-                  xData = await readArray(xL);
-              }
           } else if (dataAxisNames.length >= 2) {
               const spatialIndices: number[] = [];
               for (let i = 0; i < dataAxisNames.length; i++) {
@@ -831,35 +752,48 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
 
               xL = dataAxisNames[xIdx];
 
-              // One scalar slider per non-X, non-Y dimension. The X coordinate and
-              // every slider coordinate are independent reads, so issue them as a
-              // single batch: over a remote store this is the difference between
-              // one round trip and one per axis.
-              const sliderDims = dataAxisNames
+              // One scalar slider per non-X, non-Y dimension.
+              sliderDims = dataAxisNames
                   .map((name: string, i: number) => ({ name, i }))
                   .filter(({ i }: { i: number }) => i !== xIdx && i !== yIdx);
-
-              const xName = xL;
-              const [xResult, ...sliderResults] = await Promise.all([
-                  xName && coordsList.includes(xName) ? readArray(xName) : Promise.resolve(undefined),
-                  ...sliderDims.map(({ name }: { name: string }) =>
-                      coordsList.includes(name) ? readArray(name) : Promise.resolve(undefined)
-                  ),
-              ]);
-
-              xData = xResult;
-              sliders = sliderDims.map(({ name, i }: { name: string; i: number }, n: number) => ({
-                  name,
-                  data: sliderResults[n],
-                  shapeSize: view.shape[i],
-                  idx: i,
-              }));
           }
+
+          // zarrita imports a decompressor when it decodes the first chunk that
+          // needs it, so the import would wait for that chunk to download.
+          // Starting it now overlaps the two.
+          new Set(
+              [varName, xL, ...sliderDims.map(({ name }) => name)]
+                  .flatMap((name) => (name && allItems[name]?.codecs) || [])
+                  .map((codec) => codec.name)
+          ).forEach((name) => Promise.resolve(zarr.registry.get(name)?.()).catch(() => {}));
+
+          // The variable, its X and Y coordinates and every slider coordinate are
+          // independent reads, so issue them as a single batch: over a remote
+          // store this is the difference between one round trip and one per array.
+          const [view, xData, yData, ...sliderData] = await Promise.all([
+              zarr.get(dataArr),
+              readCoordinate(xL),
+              readCoordinate(yAxisL),
+              ...sliderDims.map(({ name }) => readCoordinate(name)),
+          ]);
+          const viewData = toFloatArray(view.data);
+          const sliders = sliderDims.map(({ name, i }, n) => ({
+              name,
+              data: sliderData[n],
+              shapeSize: view.shape[i],
+              idx: i,
+          }));
 
           setChunkData({
               data: viewData,
               shape: view.shape,
               x: xData as Float32Array | Float64Array | undefined,
+              yAxis: yData,
+              units: {
+                  x: unitsOf(allItems, xL),
+                  y: unitsOf(allItems, yAxisL),
+                  value: unitsOf(allItems, varName),
+              },
               yL: varName,
               xL: xL,
               yAxisL,
@@ -1424,6 +1358,9 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                                                             data={data2D}
                                                             width={width}
                                                             height={height}
+                                                            x={{ label: chunkData.xL ?? 'x', units: chunkData.units?.x, coords: chunkData.x }}
+                                                            y={{ label: chunkData.yAxisL ?? 'y', units: chunkData.units?.y, coords: chunkData.yAxis }}
+                                                            value={{ label: chunkData.yL ?? '', units: chunkData.units?.value }}
                                                             title={`${chunkData.yL} vs ${chunkData.xL} & ${chunkData.yAxisL}`}
                                                         />
                                                     );
