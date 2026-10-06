@@ -4,11 +4,7 @@ from typing import Any
 from sqlmodel import Session, SQLModel, inspect, select
 
 
-class BaseService[
-    ModelType: SQLModel,
-    CreateSchemaType: SQLModel,
-    UpdateSchemaType: SQLModel,
-]:
+class BaseService[ModelType: SQLModel, CreateType: SQLModel, UpdateType: SQLModel]:
     def __init__(self, model: type[ModelType], session: Session):
         """
         Base service for CRUD operations.
@@ -43,7 +39,7 @@ class BaseService[
         objects = result.all()
         return objects
 
-    def create_unchecked(self, obj_in: CreateSchemaType) -> ModelType:
+    def create_unchecked(self, obj_in: CreateType) -> ModelType:
         """
         Unchecked persistence helper for creating a new object.
 
@@ -57,9 +53,7 @@ class BaseService[
         self.session.refresh(db_obj)
         return db_obj
 
-    def update_unchecked(
-        self, *, db_obj: ModelType, obj_in: UpdateSchemaType
-    ) -> ModelType:
+    def update_unchecked(self, *, db_obj: ModelType, obj_in: UpdateType) -> ModelType:
         """
         Unchecked persistence helper for updating an existing object.
 
