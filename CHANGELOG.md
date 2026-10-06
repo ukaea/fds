@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.6](https://github.com/ukaea/fds/compare/v0.0.5...v0.0.6) (2026-10-06)
+
+
+### Features
+
+* Draw the provenance graph from the published JSON-LD ([#131](https://github.com/ukaea/fds/issues/131)) ([a9284fa](https://github.com/ukaea/fds/commit/a9284fab82fd143bc137aa1e291a76f04e5db8ca))
+* Let a distribution name its group within a file ([#136](https://github.com/ukaea/fds/issues/136)) ([8205090](https://github.com/ukaea/fds/commit/82050904be380d6921e15ad7c0fe520c3026f2c3))
+* Load the zarr viewer faster and draw heatmaps to scale ([#135](https://github.com/ukaea/fds/issues/135)) ([b73bfd4](https://github.com/ukaea/fds/commit/b73bfd48cf5a6960d892277d504ee385e3c8d026))
+
 ## [0.0.5](https://github.com/ukaea/fds/compare/v0.0.4...v0.0.5) (2026-10-05)
 
 
