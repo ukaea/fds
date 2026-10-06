@@ -97,20 +97,27 @@ def _build_used(activity: "Activity", base_url: str) -> tuple[list[Any], list[An
     entity references; ``qualified_usage`` carries the role on each.
     """
     names = Identifiers(base_url)
-    entries: list[tuple[str, str]] = []  # (entity @id, FuEL role concept)
+    # (entity @id, FuEL role concept, title). The title saves a reader fetching
+    # each entity's own document just to name it.
+    entries: list[tuple[str, str, str]] = []
     for ds in getattr(activity, "input_datasets", None) or []:
-        entries.append((names.dataset(ds.id), FUEL_INPUT_ROLE))
+        entries.append((names.dataset(ds.id), FUEL_INPUT_ROLE, ds.title or ds.name))
     for instrument in getattr(activity, "instruments", None) or []:
-        entries.append((names.source(instrument.id), FUEL_INSTRUMENT_ROLE))
+        entries.append(
+            (names.source(instrument.id), FUEL_INSTRUMENT_ROLE, instrument.name)
+        )
 
-    used = [{"@id": uri, "@type": "prov:Entity"} for uri, _ in entries]
+    used = [
+        {"@id": uri, "@type": "prov:Entity", "dct:title": title}
+        for uri, _, title in entries
+    ]
     qualified_usage = [
         {
             "@type": "prov:Usage",
-            "prov:entity": {"@id": uri, "@type": "prov:Entity"},
+            "prov:entity": {"@id": uri, "@type": "prov:Entity", "dct:title": title},
             "prov:hadRole": {"@id": role},
         }
-        for uri, role in entries
+        for uri, role, title in entries
     ]
     return used, qualified_usage
 
@@ -118,7 +125,6 @@ def _build_used(activity: "Activity", base_url: str) -> tuple[list[Any], list[An
 def _agent_node(
     source: "Source",
     base_url: str,
-    version: str | None = None,
     acted_on_behalf_of: list[str] | None = None,
 ) -> dict[str, Any]:
     """Build a PROV-O agent node for a Source, typed by its kind.
@@ -138,8 +144,6 @@ def _agent_node(
         node["adms:identifier"] = _persistent_identifier_node(
             source.persistent_identifier
         )
-    if version:
-        node["dcat:version"] = version
     if acted_on_behalf_of:
         node["prov:actedOnBehalfOf"] = [{"@id": uri} for uri in acted_on_behalf_of]
     return {k: v for k, v in node.items() if v is not None}
@@ -187,16 +191,22 @@ def _build_associations(
         primary = _agent_node(
             executor,
             base_url,
-            activity.source_version,
             acted_on_behalf_of=behalf.get(executor.id) if executor.id else None,
         )
-        qualified.append(
-            {
-                "@type": "prov:Association",
-                "prov:agent": {"@id": primary["@id"]},
-                "prov:hadRole": {"@id": FUEL_EXECUTOR_ROLE},
+        association: dict[str, Any] = {
+            "@type": "prov:Association",
+            "prov:agent": {"@id": primary["@id"]},
+            "prov:hadRole": {"@id": FUEL_EXECUTOR_ROLE},
+        }
+        # The version this run used is the plan the executor followed, so it
+        # belongs to this association, not to the Source every run shares. A
+        # blank node: nothing is stored per version.
+        if activity.source_version:
+            association["prov:hadPlan"] = {
+                "@type": "prov:Plan",
+                "dcat:version": activity.source_version,
             }
-        )
+        qualified.append(association)
 
     for link in getattr(activity, "agent_links", None) or []:
         agent = getattr(link, "source", None)
@@ -748,6 +758,8 @@ def _build_activity_node(activity: "Activity", base_url: str) -> dict[str, Any]:
         "@type": "prov:Activity",
         "prov:type": activity.activity_type,
     }
+    if activity.id:
+        prov_node["@id"] = Identifiers(base_url).activity(activity.id)
     primary, qualified = _build_associations(activity, base_url)
     if primary:
         prov_node["prov:wasAssociatedWith"] = primary

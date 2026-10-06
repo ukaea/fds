@@ -105,7 +105,14 @@ def test_jsonld_provenance(
     agent = prov["prov:wasAssociatedWith"]
     assert agent["@type"] == "prov:SoftwareAgent"
     assert agent["dct:title"] == "prov-source"
-    assert agent["dcat:version"] == "v1.0"
+    # The version is this run's, not the Source's: it rides on the association
+    # as the plan the executor followed, and the shared agent node has none.
+    assert "dcat:version" not in agent
+    (association,) = prov["prov:qualifiedAssociation"]
+    assert association["prov:hadPlan"] == {"@type": "prov:Plan", "dcat:version": "v1.0"}
+
+    # The embedded activity is named, so its own document can be followed.
+    assert prov["@id"] == f"http://testserver/activities/{activity.id}"
 
     # Verify parameters
     assert prov["prov:value"] == {"run_id": 99}
@@ -259,6 +266,7 @@ def test_jsonld_provenance_with_inputs(
     assert len(used) == 1
     assert used[0]["@type"] == "prov:Entity"
     assert str(raw.id) in used[0]["@id"]
+    assert used[0]["dct:title"] == "raw-input"
     usage = prov["prov:qualifiedUsage"]
     assert len(usage) == 1
     assert usage[0]["prov:hadRole"] == {"@id": FUEL_INPUT_ROLE}
@@ -318,6 +326,7 @@ def test_jsonld_provenance_with_instrument(
     ]
     assert len(instrument_usages) == 1
     assert str(diagnostic.id) in instrument_usages[0]["prov:entity"]["@id"]
+    assert instrument_usages[0]["prov:entity"]["dct:title"] == diagnostic.name
     # No agent: the acquisition is agent-less, so no executor association.
     assert "prov:wasAssociatedWith" not in prov
 

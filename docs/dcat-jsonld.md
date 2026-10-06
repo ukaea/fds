@@ -345,9 +345,9 @@ The response carries:
 
 | Term | Carries |
 | --- | --- |
-| `prov:wasGeneratedBy` | the producing Activity, embedded |
-| `prov:qualifiedUsage` | each entity the run used, with its role: an input dataset or an instrument |
-| `prov:qualifiedAssociation` | each agent, typed by its kind, with its role in the run |
+| `prov:wasGeneratedBy` | the producing Activity, embedded, with its own `@id` to follow |
+| `prov:qualifiedUsage` | each entity the run used, with its title and role: an input dataset or an instrument |
+| `prov:qualifiedAssociation` | each agent, typed by its kind, with its role in the run, and for the executor the version it ran as `prov:hadPlan` |
 | `prov:actedOnBehalfOf` | delegation between two of those agents |
 | `prov:wasDerivedFrom` | each upstream entity the dataset was derived from |
 | `prov:qualifiedDerivation` | the same, tied to the Activity that caused it, where there is one |
@@ -359,9 +359,14 @@ can resolve what a role means instead of pattern-matching a label:
 "prov:qualifiedAssociation": [{
   "@type": "prov:Association",
   "prov:agent": {"@id": "https://fds.example/sources/12"},
-  "prov:hadRole": {"@id": "fuel:executor"}
+  "prov:hadRole": {"@id": "fuel:executor"},
+  "prov:hadPlan": {"@type": "prov:Plan", "dcat:version": "v2.3.1"}
 }]
 ```
+
+The version belongs to the run, not to the agent: two runs of the same code at different versions
+share one agent and differ only in their plans. The plan has no address of its own; it is part of
+the run's description.
 
 A derived-from upstream is identified as far as it can be. A registered dataset resolves to its
 FDS address, a DOI or other persistent identifier to a resolvable URI, and an upstream that can
