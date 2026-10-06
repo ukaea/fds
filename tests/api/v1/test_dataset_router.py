@@ -458,6 +458,59 @@ def test_create_dataset_without_url(test_client: TestClient, admin_user_token: d
     assert "distributions" not in data
 
 
+def test_default_distribution_group_is_inlined(
+    test_client: TestClient, admin_user_token: dict
+):
+    response = test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={
+            "name": "equilibrium",
+            "url": "s3://bucket/30420.nc",
+            "group": "equilibrium",
+            "media_type": "application/x-netcdf",
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["url"] == "s3://bucket/30420.nc"
+    assert data["group"] == "equilibrium"
+    assert data["distributions"][0]["group"] == "equilibrium"
+
+
+def test_alternative_distribution_names_its_group(
+    test_client: TestClient, admin_user_token: dict
+):
+    """A NetCDF file holding a whole shot is an alternative to a per-group Zarr
+    store, and the default distribution's inlined fields stay the Zarr ones."""
+    created = test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={"name": "equilibrium", "url": "s3://bucket/30420.zarr/equilibrium"},
+    ).json()
+
+    response = test_client.post(
+        f"/v1/datasets/{created['id']}/distributions",
+        headers=admin_user_token,
+        json={
+            "url": "s3://bucket/30420.nc",
+            "group": "equilibrium",
+            "media_type": "application/x-netcdf",
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["group"] == "equilibrium"
+
+    data = test_client.get(
+        f"/v1/datasets/id/{created['id']}", headers=admin_user_token
+    ).json()
+    assert data["url"] == "s3://bucket/30420.zarr/equilibrium"
+    assert "group" not in data
+    by_url = {d["url"]: d for d in data["distributions"]}
+    assert by_url["s3://bucket/30420.nc"]["group"] == "equilibrium"
+    assert "group" not in by_url["s3://bucket/30420.zarr/equilibrium"]
+
+
 def test_create_dataset_without_level(test_client: TestClient, admin_user_token: dict):
     """Processing level is optional; when unset it is omitted from the response."""
     response = test_client.post(

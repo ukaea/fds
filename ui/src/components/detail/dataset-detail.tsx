@@ -476,6 +476,11 @@ print(df)`;
   }
 
   if (/netcdf|hdf/.test(mediaType) || /netcdf|hdf/.test(format)) {
+    // With s3fs's default 50 MB read-ahead, reading one group of a 397 MB
+    // file fetched 839 MB.
+    const open = dist.group
+      ? `fs.open("${url}", block_size=4 * 2**20, cache_type="blockcache")`
+      : `fs.open("${url}")`;
     return `# pip install xarray h5netcdf h5py s3fs
 import s3fs
 import xarray as xr
@@ -483,7 +488,7 @@ import xarray as xr
 ${options}
 
 fs = s3fs.S3FileSystem(**storage_options)
-ds = xr.open_dataset(fs.open("${url}"), engine="h5netcdf")
+ds = xr.open_dataset(${open}, engine="h5netcdf"${dist.group ? `, group="${dist.group}"` : ''})
 print(ds)`;
   }
 
@@ -1109,6 +1114,12 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                     <div className="space-y-2 text-xs">
                         <p className="text-muted-foreground font-medium uppercase tracking-wider">URI</p>
                         <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded">{selectedDist.url}</p>
+                        {selectedDist.group && (
+                            <>
+                                <p className="text-muted-foreground font-medium uppercase tracking-wider pt-1">Group</p>
+                                <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded">{selectedDist.group}</p>
+                            </>
+                        )}
                     </div>
                 )}
 

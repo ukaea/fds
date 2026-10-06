@@ -231,6 +231,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """Build the default distribution for a dataset's ``url``."""
         return Distribution(
             url=url,
+            group=obj_in.group,
             endpoint_url=obj_in.endpoint_url,
             region=obj_in.region,
             media_type=obj_in.media_type,
@@ -661,6 +662,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             dataset,
             update={
                 "url": default_dist.url if default_dist else None,
+                "group": default_dist.group if default_dist else None,
                 "media_type": default_dist.media_type if default_dist else None,
                 "format": default_dist.format if default_dist else None,
                 "distributions": [

@@ -137,6 +137,9 @@ export interface Dataset {
 export interface Distribution {
   id: number;
   url: string;
+  // The group inside the file at url that holds this dataset, when the file
+  // holds several datasets.
+  group?: string | null;
   endpoint_url?: string | null;
   region?: string | null;
   media_type?: string | null;

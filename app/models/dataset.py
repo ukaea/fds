@@ -361,6 +361,7 @@ class DatasetCreate(DatasetBase):
     # Default distribution fields — passed through to a Distribution row with
     # default_distribution=True on create.  Only created when url is supplied.
     url: str | None = None
+    group: str | None = None
     endpoint_url: str | None = None
     region: str | None = None
     media_type: str | None = None
@@ -372,7 +373,7 @@ class DatasetCreate(DatasetBase):
 class DatasetRead(DatasetBase, TimestampMixin):
     """Dataset response schema.
 
-    ``url``, ``media_type``, ``format``, and ``storage_options`` are
+    ``url``, ``group``, ``media_type``, ``format``, and ``storage_options`` are
     denormalised from the default distribution for convenience.
     ``distributions`` lists all distributions associated with the dataset,
     including the default one (identified by ``default_distribution=True``).
@@ -388,6 +389,7 @@ class DatasetRead(DatasetBase, TimestampMixin):
     effective_access_level: AccessLevel | None = None
     # Default distribution fields inlined for convenience (None when no distribution exists)
     url: str | None = None
+    group: str | None = None
     media_type: str | None = None
     format: str | None = None
     storage_options: StorageOptions | None = None

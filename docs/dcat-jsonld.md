@@ -148,12 +148,14 @@ catalogue of devices, embeds their nodes without their records.
 
 FDS follows the [W3C DCAT ontology](https://www.w3.org/TR/vocab-dcat/): a **`dcat:Dataset`** is the abstract metadata entity describing *what* the data is, while a **`dcat:Distribution`** is a concrete physical access path describing *how* to retrieve it.
 
-The standard JSON API returns a **denormalised convenience view** where the primary distribution's `url`, `media_type`, and `format` are inlined directly on the Dataset object. A Dataset can be registered without any distributions (metadata-first); distributions are added via `POST /datasets/{id}/distributions`. Multiple distributions are supported, for example the same data as HDF5 and CSV, provided all distributions are scientifically interchangeable.
+The standard JSON API returns a **denormalised convenience view** where the primary distribution's `url`, `group`, `media_type`, and `format` are inlined directly on the Dataset object. A Dataset can be registered without any distributions (metadata-first); distributions are added via `POST /datasets/{id}/distributions`. Multiple distributions are supported, for example the same data as HDF5 and CSV, provided all distributions are scientifically interchangeable.
 
 When you request `application/ld+json`, FDS re-separates these back into the correct DCAT structure. Each distribution emits `dcat:accessURL` (required by DCAT 3). The value depends on the URL scheme:
 
 - **Public HTTPS** (e.g. `https://s3.echo.stfc.ac.uk/…`): `dcat:accessURL` and `dcat:downloadURL` both point to the URL, which is directly accessible.
 - **Cloud storage** (`s3://`, `gs://`, `az://`): `dcat:accessURL` points to the FDS dataset endpoint, which is where clients obtain credentials. `dcat:downloadURL` carries the raw storage URI for use with a protocol-specific client (e.g. `xarray`, `fsspec`).
+
+A distribution's `group` is not published. DCAT has no term for a part of a file, so a distribution that is one group of a larger file appears in JSON-LD as the whole file. The JSON API carries the group.
 
 ```json
 {

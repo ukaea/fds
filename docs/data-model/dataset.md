@@ -8,6 +8,7 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 | --- | --- | --- | --- |
 | `name` | string | Yes | Short name, unique within its scope (e.g. `equilibrium`) |
 | `url` | string | No | Physical location (`s3://`, `gs://`, `az://`), taken from the primary Distribution and absent if none exists yet |
+| `group` | string | No | Group inside the file at `url` that holds the dataset, taken from the primary Distribution |
 | `media_type` | string | No | MIME type of the primary distribution (e.g. `application/x-zarr`) |
 | `format` | string | No | Format label (e.g. `NetCDF4`) |
 | `persistent_identifier` | string | No | A DOI or other persistent identifier registered for the dataset. See [Persistent identifiers](../dcat-jsonld.md#persistent-identifiers) |
@@ -189,6 +190,7 @@ A Distribution is a physical access path for a Dataset, describing *how* to retr
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `url` | string | Yes | Download or access URL (e.g. `s3://fds-data/shots/30421/equilibrium`) |
+| `group` | string | No | Group inside the file at `url` that holds the dataset, when the file holds several (see below) |
 | `media_type` | string | No | IANA media type (e.g. `application/x-zarr`, `application/x-hdf5`) |
 | `format` | string | No | Human-readable format label (e.g. `NetCDF4`, `HDF5`) |
 | `endpoint_url` | string | No | Storage endpoint, used for credential vending |
@@ -196,7 +198,7 @@ A Distribution is a physical access path for a Dataset, describing *how* to retr
 | `storage_options_type` | enum | No | Which consumer library `storage_options` is rendered for (see below) |
 | `access_level` | enum | No | Override access policy for this distribution |
 
-In most cases a Dataset will have exactly one Distribution, and you won't need to think about the distinction. The Dataset endpoints return the primary distribution's `url`, `media_type`, and `format` inlined directly on the Dataset response, so there is nothing extra to fetch.
+In most cases a Dataset will have exactly one Distribution, and you won't need to think about the distinction. The Dataset endpoints return the primary distribution's `url`, `group`, `media_type`, and `format` inlined directly on the Dataset response, so there is nothing extra to fetch.
 
 ### How the data is opened
 
@@ -222,3 +224,29 @@ An unset value is also the reason `include_storage_options=true` can come back w
 will not invent a shape for a distribution it cannot place.
 
 Multiple distributions are supported when the same underlying data is available in more than one form, for example as both Zarr and HDF5, or through multiple access endpoints. All distributions of a given Dataset must be scientifically interchangeable; different data belongs in a separate Dataset. Additional distributions can be registered via `POST /datasets/{id}/distributions`.
+
+### A file holding several datasets
+
+HDF5 and NetCDF files often hold several datasets as groups, for example one file per shot with a group for each IMAS IDS. Register each dataset's distribution with the file's `url` and the dataset's `group`:
+
+```json
+{
+  "url": "s3://fds-data/shots/30421.nc",
+  "group": "equilibrium",
+  "media_type": "application/x-netcdf",
+  "format": "NetCDF-4"
+}
+```
+
+The distribution is then the dataset's data and nothing more, so it can sit alongside a Zarr store of the same group as an interchangeable alternative. Leave `group` unset when `url` addresses the dataset on its own, as a Zarr group's URL does.
+
+Credentials are vended for the whole file, since object storage cannot grant access to part of one. A reader still fetches little more than the group if it reads in small blocks. With s3fs's default 50 MB read-ahead, reading one group can transfer more than the whole file.
+
+```python
+import s3fs
+import xarray as xr
+
+fs = s3fs.S3FileSystem(**storage_options)
+f = fs.open("s3://fds-data/shots/30421.nc", block_size=4 * 2**20, cache_type="blockcache")
+ds = xr.open_dataset(f, engine="h5netcdf", group="equilibrium")
+```

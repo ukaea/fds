@@ -19,6 +19,10 @@ class DistributionBase(SQLModel):
     Fields:
         url: The download or access URL for this distribution
             (``dcat:downloadURL``).
+        group: Path of the group inside the object at ``url`` that holds this
+            Dataset, for a file that holds several Datasets as groups, e.g.
+            ``"equilibrium"`` in a NetCDF file of a whole shot.  ``None`` when
+            ``url`` addresses the Dataset on its own.
         endpoint_url: Storage endpoint hosting the data.  Used by FDS to look
             up the matching provider config for credential vending.
         region: Storage region for this distribution.  When set, overrides the
@@ -50,6 +54,7 @@ class DistributionBase(SQLModel):
     """
 
     url: str
+    group: str | None = Field(default=None)
     endpoint_url: str | None = Field(default=None)
     region: str | None = Field(default=None)
     media_type: str | None = Field(default=None)
@@ -80,6 +85,7 @@ class DistributionRead(DistributionBase):
 
 class DistributionUpdate(SQLModel):
     url: str | None = None
+    group: str | None = None
     endpoint_url: str | None = None
     region: str | None = None
     media_type: str | None = None
