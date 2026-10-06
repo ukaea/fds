@@ -31,6 +31,7 @@ const NODE_DOT: Record<ShapeKind, string> = {
 };
 const EDGE_LABEL: Record<ProvEdgeKind, string> = {
   wasGeneratedBy: 'wasGeneratedBy',
+  wasDerivedFrom: 'wasDerivedFrom',
   used: 'used',
   wasAssociatedWith: 'wasAssociatedWith',
   actedOnBehalfOf: 'actedOnBehalfOf',
