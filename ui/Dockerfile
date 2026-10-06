@@ -24,6 +24,10 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 
+# The server runs on node alone. npm ships its own copies of packages that
+# scanners report, so leave it out of the image.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.
 # ENV NEXT_TELEMETRY_DISABLED 1
