@@ -247,6 +247,8 @@ import s3fs
 import xarray as xr
 
 fs = s3fs.S3FileSystem(**storage_options)
-f = fs.open("s3://fds-data/shots/30421.nc", block_size=4 * 2**20, cache_type="blockcache")
+f = fs.open(
+    "s3://fds-data/shots/30421.nc", block_size=4 * 2**20, cache_type="blockcache"
+)
 ds = xr.open_dataset(f, engine="h5netcdf", group="equilibrium")
 ```
