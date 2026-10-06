@@ -29,7 +29,7 @@ export function DescribedName({
       <span
         tabIndex={0}
         aria-describedby={id}
-        className={`${className} ${DESCRIBED} rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
+        className={`${className} ${DESCRIBED} rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary`}
       >
         {name}
       </span>

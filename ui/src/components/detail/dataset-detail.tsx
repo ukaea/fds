@@ -835,7 +835,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       {/* Code Snippet Modal */}
       {showCodeModal && selectedDist && selectedAccess && (
-        <div onClick={() => setShowCodeModal(false)} className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div onClick={() => setShowCodeModal(false)} className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
           <div onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-xl max-w-3xl w-full shadow-2xl relative overflow-hidden animate-fade-in">
               <div className="flex justify-between items-center bg-muted p-4 border-b border-border">
                   <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Activity className="w-5 h-5 text-primary"/> Open in Python</h3>
@@ -854,7 +854,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                               <>
                                   <button
                                       onClick={() => navigator.clipboard.writeText(snippet)}
-                                      className="absolute top-2 right-2 bg-muted hover:bg-muted text-xs text-foreground px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                      className="absolute top-2 right-2 bg-muted hover:bg-muted text-xs text-foreground px-3 py-1 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity"
                                   >Copy Snippet</button>
                                   <pre className="text-foreground text-sm font-mono whitespace-pre-wrap">{snippet}</pre>
                               </>
@@ -867,7 +867,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
       )}
 
       {showGraph && datasetData?.id && (
-        <div onClick={() => setShowGraph(false)} className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div onClick={() => setShowGraph(false)} className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
           <div onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-xl max-w-6xl w-full shadow-2xl relative overflow-hidden animate-fade-in">
               <div className="flex justify-between items-center bg-muted p-4 border-b border-border">
                   <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Activity className="w-5 h-5 text-primary"/> Provenance Graph</h3>
@@ -1010,7 +1010,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                                         role="radio"
                                         aria-checked={selected}
                                         onClick={() => setSelectedDistId(d.id)}
-                                        className={`w-full text-left px-3 py-2 rounded border text-sm flex items-center gap-2 transition-colors ${selected ? 'border-primary bg-card' : 'border-border hover:bg-card/60'}`}
+                                        className={`w-full text-left px-3 py-2 rounded-sm border text-sm flex items-center gap-2 transition-colors ${selected ? 'border-primary bg-card' : 'border-border hover:bg-card/60'}`}
                                     >
                                         <span className={`w-3 h-3 shrink-0 rounded-full border ${selected ? 'border-primary bg-primary' : 'border-muted-foreground'}`} />
                                         <span className="flex-1 min-w-0">
@@ -1020,10 +1020,10 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                                             )}
                                         </span>
                                         {d.default_distribution && (
-                                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-border rounded px-1">Default</span>
+                                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-border rounded-sm px-1">Default</span>
                                         )}
                                         {d.id === vizDist?.id && (
-                                            <span className="text-[10px] uppercase tracking-wider text-primary border border-primary/50 rounded px-1">Plotted</span>
+                                            <span className="text-[10px] uppercase tracking-wider text-primary border border-primary/50 rounded-sm px-1">Plotted</span>
                                         )}
                                     </button>
                                 );
@@ -1047,11 +1047,11 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                 {selectedDist && (
                     <div className="space-y-2 text-xs">
                         <p className="text-muted-foreground font-medium uppercase tracking-wider">URI</p>
-                        <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded">{selectedDist.url}</p>
+                        <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded-sm">{selectedDist.url}</p>
                         {selectedDist.group && (
                             <>
                                 <p className="text-muted-foreground font-medium uppercase tracking-wider pt-1">Group</p>
-                                <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded">{selectedDist.group}</p>
+                                <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded-sm">{selectedDist.group}</p>
                             </>
                         )}
                     </div>
@@ -1072,10 +1072,10 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                         <p className="text-muted-foreground text-sm mb-4 leading-relaxed">
                             This data is restricted. Sign in with an account that has access, and FDS issues you temporary credentials for reading it.
                         </p>
-                        {accessValues.error && <p className="text-destructive mb-4 text-sm bg-destructive/10 p-2 rounded border border-destructive/40">{accessValues.error}</p>}
+                        {accessValues.error && <p className="text-destructive mb-4 text-sm bg-destructive/10 p-2 rounded-sm border border-destructive/40">{accessValues.error}</p>}
                         <button
                             onClick={handleRequestAccess}
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-4 rounded w-full transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/25"
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-4 rounded-sm w-full transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/25"
                         >
                             <Unlock className="w-4 h-4" />
                             {status === "authenticated" ? "Get access" : "Sign in to access"}
@@ -1145,7 +1145,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                         {activityData.parameters && Object.keys(activityData.parameters).length > 0 && (
                             <div className="flex flex-col justify-start py-1">
                                 <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">Parameters</span>
-                                <pre className="text-xs text-foreground font-mono bg-background border border-border p-2 rounded overflow-x-auto">
+                                <pre className="text-xs text-foreground font-mono bg-background border border-border p-2 rounded-sm overflow-x-auto">
                                     {JSON.stringify(activityData.parameters, null, 2)}
                                 </pre>
                             </div>
@@ -1204,26 +1204,26 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                     <div className="h-full w-full opacity-30" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.2) 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
                 </div>
 
-                <div className="relative z-10 p-4 flex justify-between items-center border-b border-border bg-card/90 backdrop-blur">
+                <div className="relative z-10 p-4 flex justify-between items-center border-b border-border bg-card/90 backdrop-blur-sm">
                     <h3 className="font-mono text-sm text-foreground flex items-center gap-2 font-bold tracking-wider">
                         <Activity className="w-4 h-4" /> INTERACTIVE ZARR VISUALIZER
                     </h3>
                     <div className="flex gap-2">
                         {variables.length > 0 && (
-                            <span className="text-xs bg-muted border border-border px-2 py-1 rounded text-foreground">{variables.length} array variables</span>
+                            <span className="text-xs bg-muted border border-border px-2 py-1 rounded-sm text-foreground">{variables.length} array variables</span>
                         )}
                     </div>
                 </div>
 
                 <div className="flex-1 flex items-center justify-center relative z-10">
                     {!vizAccess ? (
-                        <div className="text-center p-8 bg-card/50 backdrop-blur border border-border rounded-lg max-w-md">
+                        <div className="text-center p-8 bg-card/50 backdrop-blur-sm border border-border rounded-lg max-w-md">
                             <Lock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                             <h4 className="text-lg font-bold text-foreground mb-2">Data Locked</h4>
                             <p className="text-muted-foreground text-sm mb-6">Sign in with an account that has access to plot this data in your browser.</p>
                             <button
                                 onClick={handleRequestAccess}
-                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2 px-6 rounded transition-colors flex items-center justify-center gap-2 mx-auto"
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2 px-6 rounded-sm transition-colors flex items-center justify-center gap-2 mx-auto"
                             >
                                 <Unlock className="w-4 h-4" />
                                 {status === "authenticated" ? "Get access" : "Sign in"}
@@ -1232,11 +1232,11 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                     ) : (
                         <div className="w-full h-full flex flex-col items-start justify-start p-0">
                             {/* Visualizer Toolbar */}
-                            <div className="w-full bg-card/80 border-b border-border p-4 flex gap-4 items-center backdrop-blur">
+                            <div className="w-full bg-card/80 border-b border-border p-4 flex gap-4 items-center backdrop-blur-sm">
                                 <span className="text-sm font-medium text-muted-foreground">Variable:</span>
                                 {variables.length > 0 ? (
                                     <select
-                                        className="bg-background border border-border text-foreground text-sm rounded focus:ring-primary focus:border-primary block p-2 shadow-inner min-w-[200px]"
+                                        className="bg-background border border-border text-foreground text-sm rounded-sm focus:ring-primary focus:border-primary block p-2 shadow-inner min-w-[200px]"
                                         value={selectedVar || ''}
                                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                                            onSelectVariable(e.target.value);
@@ -1251,7 +1251,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
 
                             <div className="flex-1 w-full p-6 relative flex items-center justify-center">
                                 {loadError ? (
-                                    <div className="flex flex-col items-center bg-card/50 p-6 rounded-lg backdrop-blur max-w-md text-center">
+                                    <div className="flex flex-col items-center bg-card/50 p-6 rounded-lg backdrop-blur-sm max-w-md text-center">
                                         <Lock className="w-8 h-8 text-destructive mb-4" />
                                         <p className="text-sm text-foreground font-medium">Could not read the data</p>
                                         <p className="text-xs text-muted-foreground mt-2 break-words">{loadError}</p>
@@ -1260,7 +1260,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                                         </p>
                                     </div>
                                 ) : loadingData || progress ? (
-                                    <div className="flex flex-col items-center bg-card/50 p-6 rounded-lg backdrop-blur min-w-[18rem]">
+                                    <div className="flex flex-col items-center bg-card/50 p-6 rounded-lg backdrop-blur-sm min-w-[18rem]">
                                         <Activity className="w-8 h-8 text-primary animate-spin mb-4" />
                                         <p className="text-sm text-foreground font-medium">
                                             {progress?.label ?? "Reading data"}
@@ -1270,7 +1270,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                                             <p className="text-xs text-muted-foreground mt-1">
                                                 streaming from <span className="font-mono">{progress.host}</span>
                                             </p>
-                                            <div className="w-full h-1 bg-muted rounded overflow-hidden mt-3">
+                                            <div className="w-full h-1 bg-muted rounded-sm overflow-hidden mt-3">
                                                 <div className="h-full w-1/3 bg-primary animate-indeterminate" />
                                             </div>
                                             <p className="text-[11px] text-muted-foreground mt-2 font-mono">
@@ -1284,7 +1284,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                                 ) : chunkData ? (
                                     <div className="w-full h-full flex flex-col items-center animate-fade-in relative z-10">
                                         {chunkData.sliders && chunkData.sliders.map((slider, i) => (
-                                            <div key={slider.name} className="w-full max-w-3xl bg-card border border-border p-3 rounded mb-2 flex gap-4 items-center shadow-lg">
+                                            <div key={slider.name} className="w-full max-w-3xl bg-card border border-border p-3 rounded-sm mb-2 flex gap-4 items-center shadow-lg">
                                                 <span className="text-xs font-bold text-muted-foreground min-w-[120px] uppercase tracking-wider">
                                                     {slider.name}:
                                                     <span className="text-foreground ml-2 font-mono text-sm">
@@ -1320,7 +1320,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                                                             <p className="text-4xl font-mono text-foreground">
                                                                 {Number.isFinite(chunkData.data[0]) ? chunkData.data[0] : "—"}
                                                             </p>
-                                                            <p className="text-xs text-muted-foreground mt-4 bg-card px-3 py-1 rounded font-mono">
+                                                            <p className="text-xs text-muted-foreground mt-4 bg-card px-3 py-1 rounded-sm font-mono">
                                                                 {chunkData.yL} (scalar)
                                                             </p>
                                                         </div>
@@ -1444,7 +1444,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                                                                     <line x1="0" y1={zeroY} x2="400" y2={zeroY} stroke="#334155" strokeWidth="1" strokeDasharray="4 4" />
                                                                 )}
                                                             </svg>
-                                                            <p className="text-xs text-muted-foreground mt-4 bg-card px-3 py-1 rounded-full border border-border shadow flex items-center gap-2 font-mono">
+                                                            <p className="text-xs text-muted-foreground mt-4 bg-card px-3 py-1 rounded-full border border-border shadow-sm flex items-center gap-2 font-mono">
                                                                 Plot: <span className="text-foreground font-bold">{chunkData.yL}</span> {chunkData.xL ? `vs ${chunkData.xL}` : ''} <span className="text-muted-foreground">({chunkData.shape[chunkData.xIdx !== undefined ? chunkData.xIdx : 0]} pts)</span>
                                                             </p>
                                                         </div>

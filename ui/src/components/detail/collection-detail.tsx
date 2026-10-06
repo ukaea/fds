@@ -145,7 +145,7 @@ export default function CollectionDetail({ id }: { id: string }) {
                     className="card p-4 hover:border-primary/50 transition-all group flex items-start justify-between"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="bg-muted p-2 rounded text-foreground">
+                      <div className="bg-muted p-2 rounded-sm text-foreground">
                         <Layers className="w-4 h-4" />
                       </div>
                       <div>
@@ -186,7 +186,7 @@ export default function CollectionDetail({ id }: { id: string }) {
                       className="card p-4 hover:border-primary/50 transition-all group flex items-start justify-between"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="bg-muted p-2 rounded text-foreground">
+                        <div className="bg-muted p-2 rounded-sm text-foreground">
                           <Database className="w-4 h-4" />
                         </div>
                         <div>
@@ -195,7 +195,7 @@ export default function CollectionDetail({ id }: { id: string }) {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-4">
-                        <span className="text-xs px-2 py-0.5 bg-muted rounded text-foreground flex items-center gap-1">
+                        <span className="text-xs px-2 py-0.5 bg-muted rounded-sm text-foreground flex items-center gap-1">
                           <FileCode className="w-3 h-3" />
                           {formatMediaType(ds.media_type)}
                         </span>
@@ -255,7 +255,7 @@ export default function CollectionDetail({ id }: { id: string }) {
                 {activity.ended_at && <Property label="Ended">{formatDate(activity.ended_at)}</Property>}
                 {activity.parameters && Object.keys(activity.parameters).length > 0 && (
                   <Property label="Parameters" last>
-                    <pre className="text-xs font-mono bg-background border border-border p-2 rounded overflow-x-auto">
+                    <pre className="text-xs font-mono bg-background border border-border p-2 rounded-sm overflow-x-auto">
                       {JSON.stringify(activity.parameters, null, 2)}
                     </pre>
                   </Property>

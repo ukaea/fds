@@ -186,7 +186,7 @@ function ValueSearch({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={`Search ${prop.name}\u2026`}
-            className="w-full px-2 py-1 text-xs bg-card border border-border rounded text-foreground placeholder-muted-foreground focus:outline-none focus:border-foreground/40"
+            className="w-full px-2 py-1 text-xs bg-card border border-border rounded-sm text-foreground placeholder-muted-foreground focus:outline-hidden focus:border-foreground/40"
           />
           <div className="mt-2 max-h-56 overflow-y-auto space-y-0.5">
             {isLoading && !data && (
@@ -201,7 +201,7 @@ function ValueSearch({
                   type="button"
                   onClick={() => toggle(entry.value)}
                   aria-pressed={active}
-                  className={`w-full flex items-baseline justify-between gap-3 text-left text-xs px-2 py-1 rounded transition-colors ${
+                  className={`w-full flex items-baseline justify-between gap-3 text-left text-xs px-2 py-1 rounded-sm transition-colors ${
                     active ? 'bg-foreground text-background' : 'hover:bg-muted'
                   }`}
                 >
@@ -339,13 +339,13 @@ function RangeInput({
         if (e.key === 'ArrowRight') nudge(which, 1);
       }}
       style={{ left: `${pct(value)}%` }}
-      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-foreground border-2 border-background shadow cursor-grab active:cursor-grabbing touch-none focus:outline-none focus:ring-2 focus:ring-primary"
+      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-foreground border-2 border-background shadow-sm cursor-grab active:cursor-grabbing touch-none focus:outline-hidden focus:ring-2 focus:ring-primary"
     />
   );
 
   const NUMBER_INPUT =
-    'w-24 px-2 py-0.5 text-xs bg-card border border-border rounded text-foreground ' +
-    'placeholder-muted-foreground focus:outline-none focus:border-foreground/40 ' +
+    'w-24 px-2 py-0.5 text-xs bg-card border border-border rounded-sm text-foreground ' +
+    'placeholder-muted-foreground focus:outline-hidden focus:border-foreground/40 ' +
     '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none ' +
     '[&::-webkit-inner-spin-button]:appearance-none';
 

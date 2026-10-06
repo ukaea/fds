@@ -168,7 +168,7 @@ export function ShotList({
             }}
             placeholder="Find a shot by ID"
             aria-label="Find a shot by ID"
-            className="w-full pl-9 pr-3 py-2 text-sm bg-card border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-foreground/40"
+            className="w-full pl-9 pr-3 py-2 text-sm bg-card border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-hidden focus:border-foreground/40"
           />
         </div>
         {notFound && (

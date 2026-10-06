@@ -10,7 +10,7 @@ import { DescribedName } from '@/components/described-name';
 function AnnotationRow({ property }: { property: ScientificProperty }) {
   const extent = extentSummary(property.extent);
   return (
-    <div className="bg-card border border-border rounded p-3">
+    <div className="bg-card border border-border rounded-sm p-3">
       <div className="flex items-baseline justify-between gap-2">
         <DescribedName
           name={property.name}

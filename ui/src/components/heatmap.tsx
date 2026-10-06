@@ -214,7 +214,7 @@ export function HeatmapCanvas({ data, width, height, x, y, value, title }: Heatm
         <div className="w-full flex-1 min-h-0 flex flex-col items-center p-2">
             <div ref={boxRef} className="relative w-full flex-1 min-h-[280px]">
                 {!hasData ? (
-                    <div className="absolute inset-0 m-auto max-w-[300px] h-[200px] border border-border border-dashed rounded flex items-center justify-center p-4">
+                    <div className="absolute inset-0 m-auto max-w-[300px] h-[200px] border border-border border-dashed rounded-sm flex items-center justify-center p-4">
                         <p className="text-xs text-muted-foreground text-center">
                             No data at this index.<br />Move the slider into the reconstruction window.
                         </p>
@@ -294,14 +294,14 @@ export function HeatmapCanvas({ data, width, height, x, y, value, title }: Heatm
                 )}
             </div>
             <div className="mt-2 flex items-center gap-2">
-                <p className="text-xs text-muted-foreground bg-card px-3 py-1 rounded inline-flex font-mono">
+                <p className="text-xs text-muted-foreground bg-card px-3 py-1 rounded-sm inline-flex font-mono">
                     Heatmap: {title}
                 </p>
                 <button
                     type="button"
                     aria-pressed={showContours}
                     onClick={() => setShowContours((on) => !on)}
-                    className={`text-xs font-mono px-3 py-1 rounded border transition-colors ${showContours ? 'border-primary text-foreground bg-primary/15' : 'border-border text-muted-foreground bg-card hover:text-foreground'}`}
+                    className={`text-xs font-mono px-3 py-1 rounded-sm border transition-colors ${showContours ? 'border-primary text-foreground bg-primary/15' : 'border-border text-muted-foreground bg-card hover:text-foreground'}`}
                 >
                     Contours
                 </button>

@@ -81,7 +81,7 @@ export default function DevicesPage() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g., mast, jet, iter"
-                className="w-full px-4 py-2 bg-card/50 border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-border transition-colors"
+                className="w-full px-4 py-2 bg-card/50 border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-hidden focus:border-border transition-colors"
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 Used in URLs and stored lower-cased.
@@ -97,7 +97,7 @@ export default function DevicesPage() {
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 placeholder="e.g., MAST Upgrade"
-                className="w-full px-4 py-2 bg-card/50 border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-border transition-colors"
+                className="w-full px-4 py-2 bg-card/50 border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-hidden focus:border-border transition-colors"
               />
             </div>
             <div>
@@ -110,7 +110,7 @@ export default function DevicesPage() {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Brief description of the device..."
                 rows={3}
-                className="w-full px-4 py-2 bg-card/50 border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-border transition-colors resize-none"
+                className="w-full px-4 py-2 bg-card/50 border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-hidden focus:border-border transition-colors resize-none"
               />
             </div>
             {formError && (
