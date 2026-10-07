@@ -6,10 +6,12 @@ from pydantic import TypeAdapter
 from app.models.storage_options import (
     FsspecS3StorageOptions,
     IcechunkS3StorageOptions,
+    StorageLocation,
     StorageOptions,
     StorageOptionsType,
     build_storage_options,
     derive_storage_options_type,
+    parse_storage_url,
     storage_backend,
 )
 
@@ -126,6 +128,31 @@ def test_build_icechunk_credentialed():
 )
 def test_storage_backend_from_scheme(url, backend):
     assert storage_backend(url) == backend
+
+
+@pytest.mark.parametrize(
+    ("url", "location"),
+    [
+        ("s3://bucket/shots/a.nc", StorageLocation("s3", "bucket", "shots/a.nc")),
+        ("gs://bucket/key", StorageLocation("gcs", "bucket", "key")),
+        ("gcs://bucket/key", StorageLocation("gcs", "bucket", "key")),
+        ("az://container/blob", StorageLocation("azure", "container", "blob")),
+        ("abfs://container/blob", StorageLocation("azure", "container", "blob")),
+        ("s3://bucket", StorageLocation("s3", "bucket", "")),
+        ("s3://bucket/", StorageLocation("s3", "bucket", "")),
+        # Legal in object keys, so not a fragment or a query.
+        ("s3://bucket/shots/a#1.nc", StorageLocation("s3", "bucket", "shots/a#1.nc")),
+        ("s3://bucket/shots/a?1.nc", StorageLocation("s3", "bucket", "shots/a?1.nc")),
+        # Only the leading scheme is stripped.
+        ("s3://bucket/copy/s3://x", StorageLocation("s3", "bucket", "copy/s3://x")),
+        ("s3://", None),
+        ("s3:bucket/key", None),
+        ("https://example.org/file.nc", None),
+        (None, None),
+    ],
+)
+def test_parse_storage_url(url, location):
+    assert parse_storage_url(url) == location
 
 
 def test_derive_storage_options_type():

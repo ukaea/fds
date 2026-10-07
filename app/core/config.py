@@ -54,9 +54,9 @@ class TrustedIdP(BaseModel):
 class S3StorageProvider(BaseModel):
     """Configuration for one S3-compatible storage endpoint.
 
-    ``endpoint_url`` is the client-accessible URL and acts as the lookup key
-    that matches ``Distribution.endpoint_url``.  ``None`` means standard AWS S3
-    (no custom endpoint).
+    ``endpoint_url`` is the client-accessible URL and, with ``type``, the
+    lookup key that matches ``Distribution.endpoint_url``.  ``None`` means
+    standard AWS S3 (no custom endpoint).
 
     ``sts_endpoint_url`` is the URL the FDS *server* uses for ``AssumeRole``
     calls.  It may differ from ``endpoint_url`` when internal and external URLs
@@ -154,6 +154,39 @@ class Config(BaseSettings):
     STORAGE_PROVIDERS: list[StorageProvider] = Field(
         default=[], validation_alias="FDS_STORAGE_PROVIDERS"
     )
+
+    @field_validator("STORAGE_PROVIDERS")
+    @classmethod
+    def validate_storage_providers(
+        cls, providers: list[StorageProvider]
+    ) -> list[StorageProvider]:
+        seen: set[tuple[str, str | None]] = set()
+        for provider in providers:
+            key = (provider.type, provider.endpoint_url)
+            if key in seen:
+                raise ValueError(
+                    "STORAGE_PROVIDERS contains a duplicate provider: "
+                    f"type '{provider.type}' at endpoint_url {provider.endpoint_url!r}"
+                )
+            seen.add(key)
+        return providers
+
+    def storage_provider(
+        self, backend: str, endpoint_url: str | None
+    ) -> StorageProvider | None:
+        """The provider configured for a backend at an endpoint, if any.
+
+        Both are needed: AWS S3, GCS and Azure all default to a null
+        ``endpoint_url``, so the endpoint alone cannot tell them apart.
+        """
+        return next(
+            (
+                provider
+                for provider in self.STORAGE_PROVIDERS
+                if provider.type == backend and provider.endpoint_url == endpoint_url
+            ),
+            None,
+        )
 
     @property
     def db_url(self) -> str:

@@ -931,14 +931,10 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
 
     @staticmethod
     def _region_for_endpoint(endpoint_url: str | None) -> str | None:
-        for pc in config.STORAGE_PROVIDERS:
-            if isinstance(pc, S3StorageProvider) and pc.endpoint_url == endpoint_url:
-                return pc.region
-        return None
+        pc = config.storage_provider("s3", endpoint_url)
+        return pc.region if isinstance(pc, S3StorageProvider) else None
 
     @staticmethod
     def _account_for_endpoint(endpoint_url: str | None) -> str | None:
-        for pc in config.STORAGE_PROVIDERS:
-            if isinstance(pc, AzureStorageProvider) and pc.endpoint_url == endpoint_url:
-                return pc.storage_account
-        return None
+        pc = config.storage_provider("azure", endpoint_url)
+        return pc.storage_account if isinstance(pc, AzureStorageProvider) else None

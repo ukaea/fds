@@ -1,6 +1,5 @@
 from collections import defaultdict
 from typing import NamedTuple
-from urllib.parse import urlparse
 
 import structlog
 from sqlmodel import Session, col, select
@@ -23,7 +22,11 @@ from app.models.file_access import (
 )
 from app.models.identity import AuthenticatedUser
 from app.models.policy import AccessLevel
-from app.models.storage_options import StorageOptionsType
+from app.models.storage_options import (
+    StorageBackend,
+    StorageOptionsType,
+    parse_storage_url,
+)
 from app.services.exceptions import ForbiddenError
 
 logger = structlog.get_logger(__name__)
@@ -74,11 +77,9 @@ class FileAccessService:
         session_name = f"fds-sess-{user.id[-8:]}"
         resource_map: dict[str, CredentialPayload] = {}
 
-        for (protocol, endpoint_url), urls in grouped.items():
-            if not urls:
-                continue
+        for (backend, endpoint_url), urls in grouped.items():
             resource_map.update(
-                self._mint_for_protocol(protocol, endpoint_url, urls, session_name)
+                self._mint_for_backend(backend, endpoint_url, urls, session_name)
             )
 
         if include_storage_options:
@@ -115,27 +116,28 @@ class FileAccessService:
 
     def _group_by_endpoint(
         self, resolved: list[ResolvedDistribution]
-    ) -> dict[tuple[str, str | None], list[str]]:
+    ) -> dict[tuple[StorageBackend, str | None], list[str]]:
         logger.debug("credentials.grouping_urls", url_count=len(resolved))
-        grouped: dict[tuple[str, str | None], list[str]] = defaultdict(list)
+        grouped: dict[tuple[StorageBackend, str | None], list[str]] = defaultdict(list)
         for entry in resolved:
-            parsed = urlparse(entry.url)
-            protocol = parsed.scheme
-            if protocol:
-                grouped[(protocol, entry.endpoint_url)].append(entry.url)
+            location = parse_storage_url(entry.url)
+            if location:
+                grouped[(location.backend, entry.endpoint_url)].append(entry.url)
         return grouped
 
-    def _mint_for_protocol(
+    def _mint_for_backend(
         self,
-        protocol: str,
+        backend: StorageBackend,
         endpoint_url: str | None,
         urls: list[str],
         session_name: str,
     ) -> dict[str, CredentialPayload]:
         result: dict[str, CredentialPayload] = {}
-        provider = get_provider_for_endpoint(endpoint_url)
+        provider = get_provider_for_endpoint(backend, endpoint_url)
         if provider is None:
-            logger.warning("credentials.no_provider", endpoint_url=endpoint_url)
+            logger.warning(
+                "credentials.no_provider", backend=backend, endpoint_url=endpoint_url
+            )
             return {}
 
         chunks = [
@@ -146,7 +148,7 @@ class FileAccessService:
         for chunk_index, chunk in enumerate(chunks):
             logger.info(
                 "credentials.vending",
-                protocol=protocol,
+                backend=backend,
                 endpoint_url=endpoint_url,
                 chunk_size=len(chunk),
                 chunk_index=chunk_index,
@@ -157,9 +159,9 @@ class FileAccessService:
             )
 
             for url in chunk:
-                bucket = urlparse(url).netloc
-                if bucket in creds:
-                    result[url] = creds[bucket]
+                location = parse_storage_url(url)
+                if location and location.bucket in creds:
+                    result[url] = creds[location.bucket]
 
         return result
 

@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Literal
+from typing import Literal, NamedTuple
 from urllib.parse import urlparse
 
 from pydantic import BaseModel
@@ -34,6 +34,27 @@ def storage_backend(url: str | None) -> StorageBackend | None:
     if not url:
         return None
     return _BACKEND_BY_SCHEME.get(urlparse(url).scheme)
+
+
+class StorageLocation(NamedTuple):
+    backend: StorageBackend
+    bucket: str
+    key: str
+
+
+def parse_storage_url(url: str | None) -> StorageLocation | None:
+    """Split an object-store URL into its backend, bucket and key.
+
+    ``None`` for anything that is not an object store, or names no bucket.
+    """
+    backend = storage_backend(url)
+    if not url or backend is None:
+        return None
+    # Not urlparse's path: it ends the key at "#" or "?", both legal in object keys.
+    bucket, _, key = url.partition("://")[2].partition("/")
+    if not bucket:
+        return None
+    return StorageLocation(backend, bucket, key)
 
 
 class FsspecS3StorageOptions(BaseModel):

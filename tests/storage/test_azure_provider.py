@@ -57,6 +57,15 @@ def test_generate_credentials_success(mock_azure_blobs):
     assert call_args_list[0].kwargs["user_delegation_key"] == mocks["key"]
 
 
+def test_urls_for_another_backend_are_skipped(mock_azure_blobs):
+    result = AzureCredentialProvider(PROVIDER_CONFIG).generate_credentials(
+        ["az://container/a", "s3://bucket/b"], "session"
+    )
+
+    assert set(result) == {"container"}
+    assert mock_azure_blobs["gen_sas"].call_count == 1
+
+
 def test_sas_generation_error(mock_azure_blobs):
     """Test error handling during SAS generation."""
     mocks = mock_azure_blobs

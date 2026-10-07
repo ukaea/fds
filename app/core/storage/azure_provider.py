@@ -4,6 +4,7 @@ from typing import Any
 
 from app.core.config import config
 from app.models.file_access import AzureCredentials
+from app.models.storage_options import parse_storage_url
 from app.services.exceptions import ConfigurationError
 
 DefaultAzureCredential: Any = None
@@ -55,8 +56,16 @@ class AzureCredentialProvider:
         self, allowed_prefixes: list[str], _session_name: str
     ) -> dict[str, AzureCredentials]:
         """
-        Generates a Map of Container -> SAS Token.
+        Generates a Map of Container -> SAS Token. URLs that are not Azure are skipped.
         """
+        containers = {
+            location.bucket
+            for location in map(parse_storage_url, allowed_prefixes)
+            if location and location.backend == "azure"
+        }
+        if not containers:
+            return {}
+
         _, _, container_sas_permissions, gen_container_sas = self._require_azure_sdk()
 
         storage_account = self._provider_config.storage_account
@@ -76,24 +85,7 @@ class AzureCredentialProvider:
         except Exception as e:  # noqa: BLE001 - SDK raises many types; all mean misconfiguration
             raise ConfigurationError(f"Failed to get Azure User Delegation Key: {e}")
 
-        # 2. Identify Unique Containers
-        containers = set()
-        for prefix in allowed_prefixes:
-            # Expected format: az://container/path or abfs://container/path
-            # We strictly handle 'az://' and 'abfs://' for now.
-            clean = prefix.replace("az://", "").replace("abfs://", "")
-            if clean == prefix:
-                # Scheme mismatch or raw path?
-                # If we want to be strict like GCS, we ignore/error on non-matching schemes.
-                # AccessService filters based on scheme map, so we should be safe assuming valid protocols passed in.
-                # But defensive check:
-                continue
-
-            parts = clean.split("/", 1)
-            container_name = parts[0]
-            containers.add(container_name)
-
-        # 3. Generate SAS for each container
+        # 2. Generate SAS for each container
         result = {}
         sas_expiry = now + timedelta(seconds=config.CREDENTIAL_TOKEN_DURATION)
         permissions = container_sas_permissions(read=True, list=True)

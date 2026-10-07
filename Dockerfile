@@ -3,12 +3,12 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 WORKDIR /fds
 COPY uv.lock pyproject.toml /fds/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev --extra s3 --extra otel
+    uv sync --frozen --no-install-project --no-dev --extra s3 --extra gcs --extra azure --extra otel
 COPY app /fds/app
 COPY alembic /fds/alembic
 COPY alembic.ini README.md /fds/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --extra s3 --extra otel
+    uv sync --frozen --no-dev --extra s3 --extra gcs --extra azure --extra otel
 
 FROM python:3.14-slim-bookworm
 WORKDIR /fds

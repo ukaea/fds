@@ -4,6 +4,7 @@ from google.auth import exceptions
 from google.auth.transport.requests import Request
 
 from app.models.file_access import GCSCredentials
+from app.models.storage_options import parse_storage_url
 from app.services.exceptions import ConfigurationError
 
 # Note: We import Request from google.auth.transport.requests
@@ -21,6 +22,15 @@ class GCSCredentialProvider:
     def generate_credentials(
         self, allowed_prefixes: list[str], _session_name: str
     ) -> dict[str, GCSCredentials]:
+        """Downscope a token to the buckets named. URLs that are not GCS are skipped."""
+        buckets = {
+            location.bucket
+            for location in map(parse_storage_url, allowed_prefixes)
+            if location and location.backend == "gcs"
+        }
+        if not buckets:
+            return {}
+
         # 1. Initialize Base Credentials
         try:
             # We explicitly create a Request object.
@@ -34,15 +44,7 @@ class GCSCredentialProvider:
 
         # 2. Define Access Boundary
         rules = []
-        buckets = set()
-
-        for prefix in allowed_prefixes:
-            # Expected format: gs://bucket/path or gcs://bucket/path
-            bucket_name = (
-                prefix.removeprefix("gs://").removeprefix("gcs://").split("/", 1)[0]
-            )
-            buckets.add(bucket_name)
-
+        for bucket_name in buckets:
             # Resource Format for Bucket: //storage.googleapis.com/projects/_/buckets/{bucket_name}
             resource = f"//storage.googleapis.com/projects/_/buckets/{bucket_name}"
 

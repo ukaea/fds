@@ -91,6 +91,15 @@ def test_credentials_are_vended_per_bucket():
         assert credentials.region == "us-east-1"
 
 
+def test_urls_for_another_backend_are_skipped():
+    with moto.mock_aws():
+        vended = provider().generate_credentials(
+            ["s3://alpha/a", "gs://beta/b"], "session-name"
+        )
+
+    assert set(vended) == {"alpha"}
+
+
 def test_one_token_covers_every_bucket_it_was_minted_for():
     """STS credentials are not bucket-scoped; the map is a convenience."""
     with moto.mock_aws():

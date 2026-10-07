@@ -4,6 +4,7 @@ from typing import Any
 
 from app.core.config import config
 from app.models.file_access import S3Credentials
+from app.models.storage_options import StorageLocation, parse_storage_url
 from app.services.exceptions import ConfigurationError
 
 boto3: Any = None
@@ -49,13 +50,27 @@ class S3CredentialProvider:
         """
         Assumes the configured STS role and returns temporary credentials.
         The policy is dynamically generated to allow access only to 'allowed_prefixes'.
+        URLs that are not S3 are skipped.
 
         Response format: Map of bucket -> credentials
         """
+        if "*" in allowed_prefixes:
+            raise ConfigurationError(
+                "Wildcard access '*' is not supported by S3Provider."
+            )
+
+        locations = [
+            location
+            for location in map(parse_storage_url, allowed_prefixes)
+            if location and location.backend == "s3"
+        ]
+        if not locations:
+            return {}
+
         role_arn = self._provider_config.sts_role_arn
 
         # 1. Construct Policy
-        policy_json = self._construct_policy(allowed_prefixes)
+        policy_json = self._construct_policy(locations)
 
         # 2. Assume Role
         try:
@@ -84,32 +99,12 @@ class S3CredentialProvider:
         # 4. Return Bucket-Keyed Credential Map
         # STS credentials are bucket-agnostic (one token works for all allowed buckets).
         # We return dict[bucket_name -> credentials] to match the interface used by GCS/Azure.
+        return {location.bucket: credential_object for location in locations}
 
-        if "*" in allowed_prefixes:
-            raise ConfigurationError(
-                "Wildcard access '*' is not supported by S3Provider."
-            )
-
-        buckets = set()
-        for prefix in allowed_prefixes:
-            # Extract bucket name from s3://bucket/path
-            bucket_name = prefix.replace("s3://", "").split("/")[0]
-            buckets.add(bucket_name)
-
-        # Map each bucket to the same credential object (STS tokens are global)
-        result = {}
-        for bucket_name in buckets:
-            result[bucket_name] = credential_object
-
-        return result
-
-    def _construct_policy(self, allowed_prefixes: list[str]) -> str:
+    def _construct_policy(self, locations: list[StorageLocation]) -> str:
         """
         Constructs a JSON IAM Policy string.
         """
-        if "*" in allowed_prefixes:
-            raise ConfigurationError("Wildcard policy generation not supported.")
-
         return json.dumps(
             {
                 "Version": "2012-10-17",
@@ -120,8 +115,8 @@ class S3CredentialProvider:
                         "Action": "s3:GetObject",
                         "Resource": [
                             arn
-                            for prefix in allowed_prefixes
-                            for arn in self._to_arns(prefix)
+                            for location in locations
+                            for arn in self._to_arns(location)
                         ],
                     },
                     {
@@ -130,15 +125,14 @@ class S3CredentialProvider:
                         "Action": "s3:ListBucket",
                         "Resource": list(
                             {
-                                f"arn:aws:s3:::{prefix.replace('s3://', '').split('/')[0]}"
-                                for prefix in allowed_prefixes
+                                f"arn:aws:s3:::{location.bucket}"
+                                for location in locations
                             }
                         ),
                         "Condition": {
                             "StringLike": {
                                 "s3:prefix": [
-                                    self._to_prefix(prefix)
-                                    for prefix in allowed_prefixes
+                                    self._to_prefix(location) for location in locations
                                 ]
                             }
                         },
@@ -148,8 +142,8 @@ class S3CredentialProvider:
             separators=(",", ":"),
         )
 
-    def _to_arns(self, data_url: str) -> list[str]:
-        clean = data_url.replace("s3://", "arn:aws:s3:::").rstrip("/")
+    def _to_arns(self, location: StorageLocation) -> list[str]:
+        clean = f"arn:aws:s3:::{location.bucket}/{location.key}".rstrip("/")
         if clean.endswith("*"):
             return [clean]
         # Grant both the exact-object ARN (NetCDF / blob file URLs) and the
@@ -157,8 +151,7 @@ class S3CredentialProvider:
         # access pattern determines which one matches.
         return [clean, f"{clean}/*"]
 
-    def _to_prefix(self, data_url: str) -> str:
-        parts = data_url.replace("s3://", "").split("/", 1)
-        if len(parts) > 1:
-            return f"{parts[1].rstrip('/')}/*"
+    def _to_prefix(self, location: StorageLocation) -> str:
+        if location.key:
+            return f"{location.key.rstrip('/')}/*"
         return "*"

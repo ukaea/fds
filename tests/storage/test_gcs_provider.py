@@ -70,6 +70,20 @@ def test_generate_credentials_success(mock_google_auth):
     mock_downscoped.Credentials.return_value.refresh.assert_called_once()
 
 
+def test_urls_for_another_backend_are_skipped(mock_google_auth):
+    _, mock_downscoped = mock_google_auth
+
+    result = GCSCredentialProvider(None).generate_credentials(
+        ["gs://my-bucket/a", "s3://other-bucket/b"], "session"
+    )
+
+    assert set(result) == {"my-bucket"}
+    rules = mock_downscoped.CredentialAccessBoundary.call_args.kwargs["rules"]
+    assert [r["availableResource"] for r in rules] == [
+        "//storage.googleapis.com/projects/_/buckets/my-bucket"
+    ]
+
+
 def test_missing_credentials_configuration(mocker):
     """Test proper error when GOOGLE_APPLICATION_CREDENTIALS is missing."""
     mock_default = mocker.patch("app.core.storage.gcs_provider.google.auth.default")
