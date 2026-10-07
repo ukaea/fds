@@ -126,6 +126,15 @@ FDS has to have that issuer's public keys. It gets them in one of three ways, pe
 Keys are cached for ten minutes however they are obtained, so replacing a file takes effect
 within that window.
 
+### Which scopes FDS accepts from an issuer
+
+Each issuer lists `allowed_scopes`, the scopes FDS accepts from its tokens, as shell-style
+patterns: `["mast:*", "openid"]`, or `["*"]` for every scope it issues. Any other scope in a
+token is dropped. An issuer with no `allowed_scopes` passes none through: its users are
+authenticated but carry no scopes, so they hold no role and cannot read anything a scope gates.
+Trusting another organisation's identity provider therefore brings in none of its scopes until
+you list the ones you accept. Listing `["*"]` for it would let it issue `fds-admin`.
+
 ### Issuing tokens without an identity provider
 
 `jwks_file` exists so that a deployment can be administered before, or without, a working
@@ -144,7 +153,7 @@ uv run scripts/mint-token.py mint --key dev/local-issuer.key --scope fds-admin -
 Point FDS at the public half and trust the issuer:
 
 ```bash
-FDS_TRUSTED_IDPS='[{"issuer":"urn:fds:local","jwks_file":"dev/local-issuer.jwks.json"}]'
+FDS_TRUSTED_IDPS='[{"issuer":"urn:fds:local","jwks_file":"dev/local-issuer.jwks.json","allowed_scopes":["*"]}]'
 FDS_OIDC_AUDIENCE=fds-client
 ```
 

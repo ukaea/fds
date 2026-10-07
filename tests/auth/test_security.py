@@ -155,6 +155,13 @@ def test_filter_scopes_match(mocker):
     assert "admin" not in filtered
 
 
+def test_filter_scopes_none_when_allowed_scopes_unset(mocker):
+    trusted = [TrustedIdP(issuer="https://trust.com")]
+    mocker.patch.object(config, "TRUSTED_IDPS", trusted)
+
+    assert _filter_scopes(["fds-admin", "mast:read"], "https://trust.com") == ()
+
+
 def test_filter_scopes_wildcard(mocker):
     # Setup Trusted IdP with wildcard
     trusted = [TrustedIdP(issuer="https://trust.com", allowed_scopes=["jet:*"])]

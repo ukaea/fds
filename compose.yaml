@@ -40,7 +40,7 @@ services:
       # the tests and any script sign tokens, and the development Keycloak realm
       # for when the UI is running. Keycloak's keys are fetched from inside the
       # container network, while the issuer stays the browser-facing URL.
-      - FDS_TRUSTED_IDPS=[{"issuer":"urn:fds:local","jwks_file":"/fds/dev/local-issuer.jwks.json"},{"issuer":"http://localhost:8080/realms/fds","jwks_uri":"http://idp:8080/realms/fds/protocol/openid-connect/certs","allowed_scopes":["*"]}]
+      - FDS_TRUSTED_IDPS=[{"issuer":"urn:fds:local","jwks_file":"/fds/dev/local-issuer.jwks.json","allowed_scopes":["*"]},{"issuer":"http://localhost:8080/realms/fds","jwks_uri":"http://idp:8080/realms/fds/protocol/openid-connect/certs","allowed_scopes":["*"]}]
       - FDS_OIDC_AUDIENCE=fds-client
       # The address the service is reached at, which is the UI: it serves the
       # identifier paths as landing pages and hands JSON-LD to anything asking
