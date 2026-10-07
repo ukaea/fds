@@ -37,9 +37,10 @@ class GCSCredentialProvider:
         buckets = set()
 
         for prefix in allowed_prefixes:
-            # Expected format: gs://bucket/path
-            parts = prefix.replace("gs://", "").split("/", 1)
-            bucket_name = parts[0]
+            # Expected format: gs://bucket/path or gcs://bucket/path
+            bucket_name = (
+                prefix.removeprefix("gs://").removeprefix("gcs://").split("/", 1)[0]
+            )
             buckets.add(bucket_name)
 
             # Resource Format for Bucket: //storage.googleapis.com/projects/_/buckets/{bucket_name}

@@ -1,8 +1,8 @@
 from enum import Enum
-from typing import Annotated, Literal
+from typing import Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class StorageOptionsType(str, Enum):
@@ -12,7 +12,28 @@ class StorageOptionsType(str, Enum):
     ICECHUNK_S3 = "icechunk_s3"
 
 
+StorageBackend = Literal["s3", "gcs", "azure"]
+
+_BACKEND_BY_SCHEME: dict[str, StorageBackend] = {
+    "s3": "s3",
+    "gs": "gcs",
+    "gcs": "gcs",
+    "az": "azure",
+    "abfs": "azure",
+}
+
 _AWS_HOSTS = ("amazonaws.com",)
+
+
+def storage_backend(url: str | None) -> StorageBackend | None:
+    """The object store a URL points at, read from its scheme.
+
+    ``None`` for anything that is not an object store, such as an HTTPS
+    download or an MDSplus reference.
+    """
+    if not url:
+        return None
+    return _BACKEND_BY_SCHEME.get(urlparse(url).scheme)
 
 
 class FsspecS3StorageOptions(BaseModel):
@@ -20,15 +41,8 @@ class FsspecS3StorageOptions(BaseModel):
 
     Splat-compatible with ``s3fs.S3FileSystem(**opts)`` and consumed directly
     by xarray, dask, zarr, pyarrow via their ``storage_options=`` parameter.
-
-    The ``type`` discriminator is excluded from serialised output so the dict
-    can be passed straight to ``s3fs.S3FileSystem`` / ``xr.open_dataset``
-    without further filtering.
     """
 
-    type: Literal[StorageOptionsType.FSSPEC_S3] = Field(
-        default=StorageOptionsType.FSSPEC_S3, exclude=True
-    )
     key: str | None = None
     secret: str | None = None
     token: str | None = None
@@ -39,13 +53,9 @@ class FsspecS3StorageOptions(BaseModel):
 class IcechunkS3StorageOptions(BaseModel):
     """icechunk ``s3_storage()`` shape for S3 / S3-compatible backends.
 
-    Splat-compatible with ``icechunk.s3_storage(**opts)``. The ``type``
-    discriminator is excluded from serialised output.
+    Splat-compatible with ``icechunk.s3_storage(**opts)``.
     """
 
-    type: Literal[StorageOptionsType.ICECHUNK_S3] = Field(
-        default=StorageOptionsType.ICECHUNK_S3, exclude=True
-    )
     bucket: str | None = None
     prefix: str | None = None
     region: str | None = None
@@ -58,10 +68,37 @@ class IcechunkS3StorageOptions(BaseModel):
     session_token: str | None = None
 
 
-StorageOptions = Annotated[
-    FsspecS3StorageOptions | IcechunkS3StorageOptions,
-    Field(discriminator="type"),
-]
+class FsspecAzureStorageOptions(BaseModel):
+    """adlfs storage options for Azure Blob Storage.
+
+    Splat-compatible with ``adlfs.AzureBlobFileSystem(**opts)``. An ``az://``
+    URL names the container but not the storage account, so ``account_name``
+    is needed even for anonymous access.
+    """
+
+    account_name: str | None = None
+    sas_token: str | None = None
+    anon: bool | None = None
+
+
+class FsspecGCSStorageOptions(BaseModel):
+    """gcsfs storage options for Google Cloud Storage.
+
+    Splat-compatible with ``gcsfs.GCSFileSystem(**opts)``. ``token`` is a
+    short-lived access token, or ``"anon"`` for a public bucket.
+    """
+
+    token: str
+
+
+# A plain union: every key is splatted into an opener, so the payload carries
+# no tag a discriminator could read, and the OpenAPI schema must not claim one.
+StorageOptions = (
+    FsspecS3StorageOptions
+    | IcechunkS3StorageOptions
+    | FsspecAzureStorageOptions
+    | FsspecGCSStorageOptions
+)
 
 
 def derive_storage_options_type(
@@ -69,17 +106,15 @@ def derive_storage_options_type(
 ) -> StorageOptionsType | None:
     """Pick the natural ``storage_options`` shape for a Distribution.
 
-    Returns ``None`` for distributions where automated storage_options doesn't
-    apply (HDF5 / CSV / blob downloads over HTTPS, MDSplus references, etc.) —
-    these are accessed via their URL directly, no SDK kwargs needed.
+    Only S3 offers a choice of library, so every other URL gets ``None``.
+    Azure and GCS still get ``storage_options``, in the one shape their
+    scheme implies; anything else is opened by its URL alone.
 
     For S3-scheme URLs:
         ``application/vnd.icechunk+zarr`` → :class:`StorageOptionsType.ICECHUNK_S3`
         anything else → :class:`StorageOptionsType.FSSPEC_S3`
     """
-    if not url:
-        return None
-    if urlparse(url).scheme != "s3":
+    if storage_backend(url) != "s3":
         return None
     if media_type and "icechunk" in media_type.lower():
         return StorageOptionsType.ICECHUNK_S3

@@ -355,9 +355,9 @@ to the endpoint rather than the credential, and that a hand-written mapping tend
 that is not AWS. Against a non-AWS store, a missing `force_path_style` is the usual cause of a
 connection that resolves but cannot find the bucket.
 
-Azure and GCS entries carry their one shape instead: `account_name` and `sas_token` for adlfs,
-`token` for gcsfs. A distribution whose `storage_options_type` is null is opened by its URL
-directly, so it gets a credential and no `storage_options`.
+Azure and GCS entries carry their one shape instead, picked by URL scheme: `account_name` and
+`sas_token` for adlfs, `token` for gcsfs. Any other distribution whose `storage_options_type` is
+null is opened by its URL directly, so it gets a credential and no `storage_options`.
 
 Two things stay yours to supply.
 

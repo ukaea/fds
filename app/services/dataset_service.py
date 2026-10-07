@@ -11,7 +11,7 @@ from app.auth.access_control import (
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_is_admin
-from app.core.config import S3StorageProvider, config
+from app.core.config import AzureStorageProvider, S3StorageProvider, config
 from app.core.context import ReadTier
 from app.core.naming import normalise_device_name
 from app.models.dataset import (
@@ -26,11 +26,7 @@ from app.models.dataset import (
 )
 from app.models.device import Device
 from app.models.distribution import Distribution, DistributionRead
-from app.models.file_access import (
-    CredentialRequest,
-    S3Credentials,
-    anonymous_storage_options,
-)
+from app.models.file_access import CredentialRequest, anonymous_storage_options
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.models.shot import Shot
@@ -881,11 +877,11 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         self, read_models: list[DatasetRead], user: AuthenticatedUser
     ) -> list[DatasetRead]:
         """
-        Batch-injects ``storage_options`` into DatasetRead models in the shape
-        declared by the default distribution's ``storage_options_type``
-        (``fsspec_s3`` or ``icechunk_s3``). Public datasets receive anonymous
-        options directly; non-public datasets go through credential vending via
-        FileAccessService.
+        Batch-injects opener-ready ``storage_options`` into DatasetRead models.
+
+        Public datasets receive anonymous options directly. Non-public datasets
+        go through credential vending via FileAccessService, rendered exactly
+        as the bulk credentials endpoint renders them.
         """
         if not read_models:
             return read_models
@@ -898,53 +894,31 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         ]
 
         for model in public:
-            if not model.url:
-                continue
             default_dist = self._default_distribution(model)
-            target_type = default_dist.storage_options_type if default_dist else None
-            if target_type is None:
-                # Distribution opted out of automated storage_options
-                # (e.g. plain HTTPS download, MDSplus reference, etc.).
+            if not model.url or default_dist is None:
                 continue
-            endpoint_url = default_dist.endpoint_url if default_dist else None
-            region = (
-                default_dist.region if default_dist and default_dist.region else None
-            ) or self._region_for_endpoint(endpoint_url)
-            opts = anonymous_storage_options(
-                model.url, endpoint_url, region, target_type
+            target_type = default_dist.storage_options_type
+            endpoint_url = default_dist.endpoint_url
+            model.storage_options = anonymous_storage_options(
+                model.url,
+                target_type,
+                endpoint_url=endpoint_url,
+                region=default_dist.region or self._region_for_endpoint(endpoint_url),
+                account_name=self._account_for_endpoint(endpoint_url),
             )
-            if opts is None:
+            if model.storage_options is None and target_type is not None:
                 logger.warning("storage_options.unavailable", url=model.url)
-            elif isinstance(opts, dict):
-                # Azure / GCS plain-dict shapes — not yet typed as StorageOptions.
-                # Skip injection rather than violate the field's declared type.
-                logger.warning("storage_options.untyped_scheme", url=model.url)
-            else:
-                model.storage_options = opts
 
         credentialed_urls = [m.url for m in non_public if m.url]
         if credentialed_urls:
             manifest = FileAccessService(self.session).generate_session_credentials(
                 user=user,
                 request=CredentialRequest(data_urls=credentialed_urls),
+                include_storage_options=True,
             )
             for model in non_public:
                 if model.url and (cred := manifest.resource_map.get(model.url)):
-                    default_dist = self._default_distribution(model)
-                    target_type = (
-                        default_dist.storage_options_type if default_dist else None
-                    )
-                    if target_type is None:
-                        continue
-                    region_override = (
-                        default_dist.region
-                        if default_dist and default_dist.region
-                        else None
-                    )
-                    if isinstance(cred, S3Credentials):
-                        model.storage_options = cred.to_storage_options(
-                            target_type, region=region_override
-                        )
+                    model.storage_options = cred.storage_options
 
         return read_models
 
@@ -960,4 +934,11 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         for pc in config.STORAGE_PROVIDERS:
             if isinstance(pc, S3StorageProvider) and pc.endpoint_url == endpoint_url:
                 return pc.region
+        return None
+
+    @staticmethod
+    def _account_for_endpoint(endpoint_url: str | None) -> str | None:
+        for pc in config.STORAGE_PROVIDERS:
+            if isinstance(pc, AzureStorageProvider) and pc.endpoint_url == endpoint_url:
+                return pc.storage_account
         return None

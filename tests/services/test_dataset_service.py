@@ -4,9 +4,15 @@ import pytest
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
+from app.core.config import AzureStorageProvider
 from app.models.dataset import DatasetCreate, DatasetScope, DatasetUpdate
 from app.models.device import DeviceCreate
-from app.models.file_access import CredentialManifest, S3Credentials
+from app.models.file_access import (
+    AzureCredentials,
+    CredentialManifest,
+    GCSCredentials,
+    S3Credentials,
+)
 from app.models.policy import AccessLevel
 from app.models.shot import ShotCreate
 from app.models.storage_options import (
@@ -590,6 +596,131 @@ def test_enrich_with_storage_options_s3(
     assert opts.key == "mock_key"
     assert opts.secret == "mock_secret"
     assert opts.token == "mock_token"
+
+
+@pytest.mark.parametrize(
+    ("url", "credential", "expected"),
+    [
+        (
+            "az://container/blob",
+            AzureCredentials(account_name="acct", sas_token="sas"),
+            {"account_name": "acct", "sas_token": "sas"},
+        ),
+        (
+            "gs://bucket/blob",
+            GCSCredentials(token="ya29.token"),
+            {"token": "ya29.token"},
+        ),
+    ],
+)
+def test_enrich_with_storage_options_azure_and_gcs(
+    url: str,
+    credential: AzureCredentials | GCSCredentials,
+    expected: dict,
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+    mocker,
+):
+    """Azure and GCS datasets get the storage_options the bulk path returns.
+
+    Their distributions have no ``storage_options_type``, which only chooses
+    between S3 libraries, so its absence must not read as an opt-out.
+    """
+    device_service.create(
+        DeviceCreate(name="enrich-cloud", type="Test"), user=admin_user
+    )
+    shot = shot_service.create(
+        ShotCreate(id="enrich-cloud", device_name="enrich-cloud"), user=admin_user
+    )
+    dataset_service.create(
+        DatasetCreate(
+            name="ds_cloud",
+            level=1,
+            url=url,
+            shot_id=shot.id,
+            device_name="enrich-cloud",
+        ),
+        user=admin_user,
+    )
+
+    mock_provider = mocker.MagicMock()
+    mock_provider.generate_credentials.return_value = {url.split("/")[2]: credential}
+    mocker.patch(
+        "app.services.file_access_service.get_provider_for_endpoint",
+        return_value=mock_provider,
+    )
+
+    models = dataset_service.get_datasets_for_shot(
+        shot.id, "enrich-cloud", user=admin_user
+    )
+    read_models = [dataset_service.to_read_model(m) for m in models]
+    enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
+
+    opts = enriched[0].storage_options
+    assert opts is not None
+    assert opts.model_dump(exclude_none=True) == expected
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("az://container/blob", {"account_name": "acct", "anon": True}),
+        ("gs://bucket/blob", {"token": "anon"}),
+    ],
+)
+def test_enrich_with_storage_options_public_azure_and_gcs(
+    url: str,
+    expected: dict,
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+    mocker,
+):
+    """Public Azure and GCS datasets get anonymous options without vending.
+
+    An ``az://`` URL names the container but not the storage account, so the
+    account comes from the Azure provider configured for the endpoint.
+    """
+    endpoint_url = "https://acct.blob.core.windows.net"
+    mocker.patch(
+        "app.services.dataset_service.config.STORAGE_PROVIDERS",
+        [AzureStorageProvider(endpoint_url=endpoint_url, storage_account="acct")],
+    )
+    mock_provider = mocker.patch(
+        "app.services.file_access_service.get_provider_for_endpoint"
+    )
+    device_service.create(
+        DeviceCreate(name="enrich-anon", type="Test"), user=admin_user
+    )
+    shot = shot_service.create(
+        ShotCreate(id="enrich-anon", device_name="enrich-anon"), user=admin_user
+    )
+    dataset_service.create(
+        DatasetCreate(
+            name="ds_public_cloud",
+            level=1,
+            url=url,
+            endpoint_url=endpoint_url,
+            shot_id=shot.id,
+            device_name="enrich-anon",
+            access_level=AccessLevel.PUBLIC,
+        ),
+        user=admin_user,
+    )
+
+    models = dataset_service.get_datasets_for_shot(
+        shot.id, "enrich-anon", user=admin_user
+    )
+    read_models = [dataset_service.to_read_model(m) for m in models]
+    enriched = dataset_service.enrich_with_storage_options(read_models, admin_user)
+
+    opts = enriched[0].storage_options
+    assert opts is not None
+    assert opts.model_dump(exclude_none=True) == expected
+    mock_provider.assert_not_called()
 
 
 def test_enrich_with_storage_options_unsupported_protocol(

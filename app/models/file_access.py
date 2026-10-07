@@ -1,10 +1,15 @@
 from datetime import datetime
-from typing import Any
-from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
-from .storage_options import StorageOptions, StorageOptionsType, build_storage_options
+from .storage_options import (
+    FsspecAzureStorageOptions,
+    FsspecGCSStorageOptions,
+    StorageOptions,
+    StorageOptionsType,
+    build_storage_options,
+    storage_backend,
+)
 
 
 class S3Credentials(BaseModel):
@@ -52,15 +57,14 @@ class AzureCredentials(BaseModel):
 
     account_name: str
     sas_token: str
-    storage_options: dict[str, Any] | None = None
+    storage_options: FsspecAzureStorageOptions | None = None
     """Opener-ready rendering of this credential, when the caller asks for it."""
 
-    def to_storage_options(self) -> dict[str, Any]:
+    def to_storage_options(self) -> FsspecAzureStorageOptions:
         """Convert SAS token into FSSpec kwargs for adlfs."""
-        return {
-            "account_name": self.account_name,
-            "sas_token": self.sas_token,
-        }
+        return FsspecAzureStorageOptions(
+            account_name=self.account_name, sas_token=self.sas_token
+        )
 
 
 class GCSCredentials(BaseModel):
@@ -70,14 +74,12 @@ class GCSCredentials(BaseModel):
 
     token: str
     expiry: str | None = None
-    storage_options: dict[str, Any] | None = None
+    storage_options: FsspecGCSStorageOptions | None = None
     """Opener-ready rendering of this credential, when the caller asks for it."""
 
-    def to_storage_options(self) -> dict[str, Any]:
+    def to_storage_options(self) -> FsspecGCSStorageOptions:
         """Convert Downscoped token into FSSpec kwargs for gcsfs."""
-        return {
-            "token": self.token,
-        }
+        return FsspecGCSStorageOptions(token=self.token)
 
 
 CredentialPayload = S3Credentials | AzureCredentials | GCSCredentials
@@ -107,29 +109,28 @@ class CredentialManifest(BaseModel):
 
 def anonymous_storage_options(
     data_url: str,
+    target_type: StorageOptionsType | None,
+    *,
     endpoint_url: str | None = None,
     region: str | None = None,
-    target_type: StorageOptionsType = StorageOptionsType.FSSPEC_S3,
-) -> StorageOptions | dict[str, Any] | None:
-    """Return storage options for anonymous/public access based on URL scheme.
+    account_name: str | None = None,
+) -> StorageOptions | None:
+    """Return storage options for anonymous access, by the URL's backend.
 
-    For S3 URLs, returns a shape-specific :class:`StorageOptions` (``fsspec_s3``
-    by default; pass ``target_type="icechunk_s3"`` for icechunk consumers).
-    For Azure / GCS, returns the legacy plain-dict shape (Azure inherits public
-    blob access from an empty dict; GCS uses the ``"anon"`` token convention).
-    Returns ``None`` for unsupported schemes.
+    S3 renders in ``target_type``'s shape, and a null ``target_type`` means the
+    distribution opted out. Azure and GCS have one shape each and ignore it.
+    Returns ``None`` when there is nothing to render.
     """
-
-    scheme = urlparse(data_url).scheme
-    if scheme == "s3":
+    backend = storage_backend(data_url)
+    if backend == "s3" and target_type is not None:
         return build_storage_options(
             target_type,
             endpoint_url=endpoint_url,
             region=region,
             anonymous=True,
         )
-    if scheme in ("az", "abfs"):
-        return {}
-    if scheme == "gs":
-        return {"token": "anon"}
+    if backend == "azure":
+        return FsspecAzureStorageOptions(account_name=account_name, anon=True)
+    if backend == "gcs":
+        return FsspecGCSStorageOptions(token="anon")
     return None

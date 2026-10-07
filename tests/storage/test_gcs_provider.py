@@ -39,7 +39,8 @@ def test_generate_credentials_success(mock_google_auth):
     mock_auth, mock_downscoped = mock_google_auth
 
     provider = GCSCredentialProvider(None)
-    prefixes = ["gs://my-bucket/data/file1", "gs://other-bucket/foo"]
+    # gcsfs accepts both schemes.
+    prefixes = ["gs://my-bucket/data/file1", "gcs://other-bucket/foo"]
     session_name = "test-session"
 
     result = provider.generate_credentials(prefixes, session_name)

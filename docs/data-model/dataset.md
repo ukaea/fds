@@ -215,13 +215,19 @@ library opens the data. `storage_options_type` says which library that is:
 mentions Icechunk is taken as `icechunk_s3`, any other `s3://` URL as `fsspec_s3`, and anything
 else is left unset.
 
+Azure and Google Cloud Storage leave it unset and still get `storage_options`, because each has
+one library and the URL scheme names it. `gs://` and `gcs://` get gcsfs options (`token`).
+`az://` and `abfs://` get adlfs options: `account_name` with `sas_token`, or with `anon` for public
+data. An Azure URL does not name its storage account, so for public data FDS takes it from the
+Azure provider configured for the distribution's `endpoint_url`.
+
 The inference is right for the common cases and wrong in one that matters: an Icechunk store
 registered under a generic media type such as `application/x-zarr` is taken for plain Zarr, so the
 credentials come back in the wrong shape for the opener you are about to use. Setting
 `storage_options_type` explicitly removes the guess.
 
-An unset value is also the reason `include_storage_options=true` can come back with nothing: FDS
-will not invent a shape for a distribution it cannot place.
+On any other URL, an unset value is also the reason `include_storage_options=true` can come back
+with nothing: FDS will not invent a shape for a distribution it cannot place.
 
 Multiple distributions are supported when the same underlying data is available in more than one form, for example as both Zarr and HDF5, or through multiple access endpoints. All distributions of a given Dataset must be scientifically interchangeable; different data belongs in a separate Dataset. Additional distributions can be registered via `POST /datasets/{id}/distributions`.
 

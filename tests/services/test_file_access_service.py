@@ -12,7 +12,11 @@ from app.models.file_access import AzureCredentials, CredentialRequest, S3Creden
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.models.shot import Shot
-from app.models.storage_options import StorageOptionsType
+from app.models.storage_options import (
+    FsspecS3StorageOptions,
+    IcechunkS3StorageOptions,
+    StorageOptionsType,
+)
 from app.services.exceptions import ForbiddenError
 from app.services.file_access_service import FileAccessService, ResolvedDistribution
 
@@ -486,8 +490,8 @@ def test_storage_options_are_per_url_not_shared(
     fsspec = manifest.resource_map["s3://bucket/as-fsspec"].storage_options
     icechunk = manifest.resource_map["s3://bucket/as-icechunk"].storage_options
     assert fsspec is not None and icechunk is not None
-    assert fsspec.type is StorageOptionsType.FSSPEC_S3
-    assert icechunk.type is StorageOptionsType.ICECHUNK_S3
+    assert isinstance(fsspec, FsspecS3StorageOptions)
+    assert isinstance(icechunk, IcechunkS3StorageOptions)
     # The provider's own object is untouched.
     assert shared.storage_options is None
 
@@ -561,4 +565,8 @@ def test_storage_options_azure_entry(session, access_service, mock_s3_provider):
     )
 
     entry = manifest.resource_map["az://container/blob"]
-    assert entry.storage_options == {"account_name": "acct", "sas_token": "sas"}
+    assert entry.storage_options is not None
+    assert entry.storage_options.model_dump(exclude_none=True) == {
+        "account_name": "acct",
+        "sas_token": "sas",
+    }

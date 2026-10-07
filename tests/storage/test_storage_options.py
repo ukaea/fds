@@ -1,9 +1,16 @@
+import json
+
+import pytest
+from pydantic import TypeAdapter
+
 from app.models.storage_options import (
     FsspecS3StorageOptions,
     IcechunkS3StorageOptions,
+    StorageOptions,
     StorageOptionsType,
     build_storage_options,
     derive_storage_options_type,
+    storage_backend,
 )
 
 
@@ -105,6 +112,22 @@ def test_build_icechunk_credentialed():
     assert opts.anonymous is None
 
 
+@pytest.mark.parametrize(
+    ("url", "backend"),
+    [
+        ("s3://bucket/key", "s3"),
+        ("gs://bucket/key", "gcs"),
+        ("gcs://bucket/key", "gcs"),
+        ("az://container/blob", "azure"),
+        ("abfs://container/blob", "azure"),
+        ("https://example.org/file.nc", None),
+        (None, None),
+    ],
+)
+def test_storage_backend_from_scheme(url, backend):
+    assert storage_backend(url) == backend
+
+
 def test_derive_storage_options_type():
     """For S3 URLs: icechunk media-type → icechunk_s3, else fsspec_s3.
     For non-S3 URLs (HTTPS download, MDSplus refs, etc.) and missing URLs: None.
@@ -129,20 +152,14 @@ def test_derive_storage_options_type():
     assert derive_storage_options_type(None, None) is None
 
 
-def test_serialised_excludes_type_discriminator():
-    """The ``type`` discriminator is metadata for the API contract — it must
-    not leak into serialised output, otherwise consumers can't splat directly
-    into ``s3fs.S3FileSystem(**opts)`` or ``icechunk.s3_storage(**opts)``.
-    """
-    fsspec_dump = build_storage_options(
-        StorageOptionsType.FSSPEC_S3, endpoint_url="http://x", anonymous=True
-    ).model_dump(exclude_none=True)
-    assert "type" not in fsspec_dump
+def test_schema_declares_no_discriminator():
+    """The published schema must not name a discriminator the payload lacks.
 
-    icechunk_dump = build_storage_options(
-        StorageOptionsType.ICECHUNK_S3, endpoint_url="http://x", anonymous=True
-    ).model_dump(exclude_none=True)
-    assert "type" not in icechunk_dump
+    Every key is splatted into an opener, so there is no tag to send, and a
+    client generated from the schema fails looking for one.
+    """
+    schema = TypeAdapter(StorageOptions).json_schema(mode="serialization")
+    assert "discriminator" not in json.dumps(schema)
 
 
 def test_serialised_drops_unset_keys():
