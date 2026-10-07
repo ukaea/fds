@@ -154,14 +154,9 @@ class FileAccessService:
                 chunk_index=chunk_index,
             )
 
-            creds = provider.generate_credentials(
-                chunk, f"{session_name}-{chunk_index}"
+            result.update(
+                provider.generate_credentials(chunk, f"{session_name}-{chunk_index}")
             )
-
-            for url in chunk:
-                location = parse_storage_url(url)
-                if location and location.bucket in creds:
-                    result[url] = creds[location.bucket]
 
         return result
 

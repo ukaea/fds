@@ -45,32 +45,32 @@ class S3CredentialProvider:
         return self._sts_client
 
     def generate_credentials(
-        self, allowed_prefixes: list[str], session_name: str
+        self, urls: list[str], session_name: str
     ) -> dict[str, S3Credentials]:
         """
         Assumes the configured STS role and returns temporary credentials.
-        The policy is dynamically generated to allow access only to 'allowed_prefixes'.
+        The policy is dynamically generated to allow access only to the URLs given.
         URLs that are not S3 are skipped.
 
-        Response format: Map of bucket -> credentials
+        Response format: Map of URL -> credentials
         """
-        if "*" in allowed_prefixes:
+        if "*" in urls:
             raise ConfigurationError(
                 "Wildcard access '*' is not supported by S3Provider."
             )
 
-        locations = [
-            location
-            for location in map(parse_storage_url, allowed_prefixes)
-            if location and location.backend == "s3"
-        ]
+        locations = {
+            url: location
+            for url in urls
+            if (location := parse_storage_url(url)) and location.backend == "s3"
+        }
         if not locations:
             return {}
 
         role_arn = self._provider_config.sts_role_arn
 
         # 1. Construct Policy
-        policy_json = self._construct_policy(locations)
+        policy_json = self._construct_policy(list(locations.values()))
 
         # 2. Assume Role
         try:
@@ -96,10 +96,9 @@ class S3CredentialProvider:
             region=self._provider_config.region,
         )
 
-        # 4. Return Bucket-Keyed Credential Map
+        # 4. Return URL-Keyed Credential Map
         # STS credentials are bucket-agnostic (one token works for all allowed buckets).
-        # We return dict[bucket_name -> credentials] to match the interface used by GCS/Azure.
-        return {location.bucket: credential_object for location in locations}
+        return dict.fromkeys(locations, credential_object)
 
     def _construct_policy(self, locations: list[StorageLocation]) -> str:
         """

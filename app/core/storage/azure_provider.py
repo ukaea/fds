@@ -53,22 +53,25 @@ class AzureCredentialProvider:
         )
 
     def generate_credentials(
-        self, allowed_prefixes: list[str], _session_name: str
+        self, urls: list[str], _session_name: str
     ) -> dict[str, AzureCredentials]:
         """
-        Generates a Map of Container -> SAS Token. URLs that are not Azure are skipped.
+        Generates a Map of URL -> SAS Token. URLs that are not Azure are skipped,
+        as are URLs naming another storage account: a SAS signed for this
+        account cannot read another.
         """
-        containers = {
-            location.bucket
-            for location in map(parse_storage_url, allowed_prefixes)
-            if location and location.backend == "azure"
+        storage_account = self._provider_config.storage_account
+        containers_by_url = {
+            url: location.bucket
+            for url in urls
+            if (location := parse_storage_url(url))
+            and location.backend == "azure"
+            and location.account in (None, storage_account)
         }
-        if not containers:
+        if not containers_by_url:
             return {}
 
         _, _, container_sas_permissions, gen_container_sas = self._require_azure_sdk()
-
-        storage_account = self._provider_config.storage_account
 
         # 1. Get User Delegation Key
         # We need this to sign the SAS tokens on behalf of the AD identity (App Registration)
@@ -86,11 +89,11 @@ class AzureCredentialProvider:
             raise ConfigurationError(f"Failed to get Azure User Delegation Key: {e}")
 
         # 2. Generate SAS for each container
-        result = {}
+        by_container = {}
         sas_expiry = now + timedelta(seconds=config.CREDENTIAL_TOKEN_DURATION)
         permissions = container_sas_permissions(read=True, list=True)
 
-        for container_name in containers:
+        for container_name in set(containers_by_url.values()):
             try:
                 sas_token = gen_container_sas(
                     account_name=storage_account,
@@ -100,19 +103,18 @@ class AzureCredentialProvider:
                     expiry=sas_expiry,
                     start=key_start,
                 )
-                result[container_name] = AzureCredentials(
+                by_container[container_name] = AzureCredentials(
                     account_name=storage_account,
                     sas_token=sas_token,
                 )
             except Exception as e:  # noqa: BLE001 - SDK raises many types; all mean misconfiguration
-                # Log? Warning?
-                # Failing one container shouldn't fail all?
-                # For now, raise configuration error as it implies fundamental issue
                 raise ConfigurationError(
                     f"Failed to generate SAS for {container_name}: {e}"
                 )
 
-        return result
+        return {
+            url: by_container[container] for url, container in containers_by_url.items()
+        }
 
     def _get_service_client(self):
         default_credential, blob_service_client, _, _ = self._require_azure_sdk()

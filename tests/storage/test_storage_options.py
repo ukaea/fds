@@ -122,6 +122,7 @@ def test_build_icechunk_credentialed():
         ("gcs://bucket/key", "gcs"),
         ("az://container/blob", "azure"),
         ("abfs://container/blob", "azure"),
+        ("abfss://container/blob", "azure"),
         ("https://example.org/file.nc", None),
         (None, None),
     ],
@@ -138,6 +139,17 @@ def test_storage_backend_from_scheme(url, backend):
         ("gcs://bucket/key", StorageLocation("gcs", "bucket", "key")),
         ("az://container/blob", StorageLocation("azure", "container", "blob")),
         ("abfs://container/blob", StorageLocation("azure", "container", "blob")),
+        ("abfss://container/blob", StorageLocation("azure", "container", "blob")),
+        # The account in the host, as adlfs reads it.
+        (
+            "abfs://container@acct.dfs.core.windows.net/blob",
+            StorageLocation("azure", "container", "blob", "acct"),
+        ),
+        (
+            "az://container@acct.blob.core.windows.net/blob",
+            StorageLocation("azure", "container", "blob", "acct"),
+        ),
+        ("abfs://@acct.dfs.core.windows.net/blob", None),
         ("s3://bucket", StorageLocation("s3", "bucket", "")),
         ("s3://bucket/", StorageLocation("s3", "bucket", "")),
         # Legal in object keys, so not a fragment or a query.

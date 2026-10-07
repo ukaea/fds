@@ -41,9 +41,8 @@ def test_generate_credentials_success(mock_azure_blobs):
 
     result = provider.generate_credentials(prefixes, "session")
 
-    assert "container1" in result
-    assert "container2" in result
-    assert result["container1"].sas_token == "sp=r&st=2026..."
+    assert set(result) == set(prefixes)
+    assert result["az://container1/path"].sas_token == "sp=r&st=2026..."
 
     mocks = mock_azure_blobs
     mocks["client"].get_user_delegation_key.assert_called_once()
@@ -62,7 +61,31 @@ def test_urls_for_another_backend_are_skipped(mock_azure_blobs):
         ["az://container/a", "s3://bucket/b"], "session"
     )
 
-    assert set(result) == {"container"}
+    assert set(result) == {"az://container/a"}
+    assert mock_azure_blobs["gen_sas"].call_count == 1
+
+
+def test_account_and_container_are_read_from_the_host(mock_azure_blobs):
+    url = "abfss://container@testaccount.dfs.core.windows.net/data"
+
+    result = AzureCredentialProvider(PROVIDER_CONFIG).generate_credentials(
+        [url], "session"
+    )
+
+    assert set(result) == {url}
+    assert mock_azure_blobs["gen_sas"].call_args.kwargs["container_name"] == "container"
+
+
+def test_urls_naming_another_account_are_skipped(mock_azure_blobs):
+    """Even when a container of the same name is signed for this account."""
+    ours = "abfs://container@testaccount.dfs.core.windows.net/a"
+    theirs = "abfs://container@otheraccount.dfs.core.windows.net/b"
+
+    result = AzureCredentialProvider(PROVIDER_CONFIG).generate_credentials(
+        [ours, theirs], "session"
+    )
+
+    assert set(result) == {ours}
     assert mock_azure_blobs["gen_sas"].call_count == 1
 
 

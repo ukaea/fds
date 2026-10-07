@@ -10,10 +10,13 @@ class CredentialProvider(Protocol):
     """
     Protocol for vending temporary storage credentials.
     Abstractions allow supporting AWS, Azure, GCP, etc.
+
+    Returns a credential for each URL the provider can serve, keyed by that
+    URL as given. A URL it cannot serve is left out.
     """
 
     def generate_credentials(
-        self, allowed_prefixes: list[str], session_name: str, /
+        self, urls: list[str], session_name: str, /
     ) -> Mapping[str, CredentialPayload]: ...
 
 

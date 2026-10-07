@@ -20,6 +20,7 @@ _BACKEND_BY_SCHEME: dict[str, StorageBackend] = {
     "gcs": "gcs",
     "az": "azure",
     "abfs": "azure",
+    "abfss": "azure",
 }
 
 _AWS_HOSTS = ("amazonaws.com",)
@@ -40,10 +41,15 @@ class StorageLocation(NamedTuple):
     backend: StorageBackend
     bucket: str
     key: str
+    account: str | None = None
+    """The Azure storage account, when the URL names one."""
 
 
 def parse_storage_url(url: str | None) -> StorageLocation | None:
     """Split an object-store URL into its backend, bucket and key.
+
+    An Azure URL can name its account in the host, as in
+    ``abfs://container@account.dfs.core.windows.net/path``.
 
     ``None`` for anything that is not an object store, or names no bucket.
     """
@@ -52,9 +58,13 @@ def parse_storage_url(url: str | None) -> StorageLocation | None:
         return None
     # Not urlparse's path: it ends the key at "#" or "?", both legal in object keys.
     bucket, _, key = url.partition("://")[2].partition("/")
+    account = None
+    if backend == "azure" and "@" in bucket:
+        bucket, _, host = bucket.partition("@")
+        account = host.partition(".")[0] or None
     if not bucket:
         return None
-    return StorageLocation(backend, bucket, key)
+    return StorageLocation(backend, bucket, key, account)
 
 
 class FsspecS3StorageOptions(BaseModel):
@@ -92,8 +102,8 @@ class IcechunkS3StorageOptions(BaseModel):
 class FsspecAzureStorageOptions(BaseModel):
     """adlfs storage options for Azure Blob Storage.
 
-    Splat-compatible with ``adlfs.AzureBlobFileSystem(**opts)``. An ``az://``
-    URL names the container but not the storage account, so ``account_name``
+    Splat-compatible with ``adlfs.AzureBlobFileSystem(**opts)``. Most Azure
+    URLs name the container but not the storage account, so ``account_name``
     is needed even for anonymous access.
     """
 

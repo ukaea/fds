@@ -20,16 +20,17 @@ class GCSCredentialProvider:
         self._provider_config = provider_config
 
     def generate_credentials(
-        self, allowed_prefixes: list[str], _session_name: str
+        self, urls: list[str], _session_name: str
     ) -> dict[str, GCSCredentials]:
         """Downscope a token to the buckets named. URLs that are not GCS are skipped."""
-        buckets = {
-            location.bucket
-            for location in map(parse_storage_url, allowed_prefixes)
-            if location and location.backend == "gcs"
+        locations = {
+            url: location
+            for url in urls
+            if (location := parse_storage_url(url)) and location.backend == "gcs"
         }
-        if not buckets:
+        if not locations:
             return {}
+        buckets = {location.bucket for location in locations.values()}
 
         # 1. Initialize Base Credentials
         try:
@@ -72,18 +73,14 @@ class GCSCredentialProvider:
             raise ConfigurationError(f"Failed to vend GCS credentials: {e}")
 
         # 5. Structure Response
-        result = {}
-
         token = downscoped_creds.token
         if not isinstance(token, str):
             raise ConfigurationError("Failed to vend GCS credentials: missing token")
 
-        for bucket_name in buckets:
-            result[bucket_name] = GCSCredentials(
-                token=token,
-                expiry=downscoped_creds.expiry.isoformat()
-                if downscoped_creds.expiry
-                else None,
-            )
-
-        return result
+        credentials = GCSCredentials(
+            token=token,
+            expiry=downscoped_creds.expiry.isoformat()
+            if downscoped_creds.expiry
+            else None,
+        )
+        return dict.fromkeys(locations, credentials)

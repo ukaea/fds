@@ -46,10 +46,9 @@ def test_generate_credentials_success(mock_google_auth):
     result = provider.generate_credentials(prefixes, session_name)
 
     # Verify return structure
-    assert "my-bucket" in result
-    assert "other-bucket" in result
-    assert result["my-bucket"].token == "mock-downscoped-token"
-    assert result["my-bucket"].expiry == "2026-01-01T12:00:00"
+    assert set(result) == set(prefixes)
+    assert result["gs://my-bucket/data/file1"].token == "mock-downscoped-token"
+    assert result["gs://my-bucket/data/file1"].expiry == "2026-01-01T12:00:00"
 
     # Verify Logic
     # 1. Base credentials fetched
@@ -77,7 +76,7 @@ def test_urls_for_another_backend_are_skipped(mock_google_auth):
         ["gs://my-bucket/a", "s3://other-bucket/b"], "session"
     )
 
-    assert set(result) == {"my-bucket"}
+    assert set(result) == {"gs://my-bucket/a"}
     rules = mock_downscoped.CredentialAccessBoundary.call_args.kwargs["rules"]
     assert [r["availableResource"] for r in rules] == [
         "//storage.googleapis.com/projects/_/buckets/my-bucket"

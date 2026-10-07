@@ -571,7 +571,7 @@ def test_enrich_with_storage_options_s3(
 
     mock_provider = mocker.MagicMock()
     mock_provider.generate_credentials.return_value = {
-        "b": S3Credentials(
+        "s3://b/k1": S3Credentials(
             access_key_id="mock_key",
             secret_access_key="mock_secret",
             session_token="mock_token",
@@ -646,7 +646,7 @@ def test_enrich_with_storage_options_azure_and_gcs(
     )
 
     mock_provider = mocker.MagicMock()
-    mock_provider.generate_credentials.return_value = {url.split("/")[2]: credential}
+    mock_provider.generate_credentials.return_value = {url: credential}
     mocker.patch(
         "app.services.file_access_service.get_provider_for_endpoint",
         return_value=mock_provider,
@@ -667,6 +667,10 @@ def test_enrich_with_storage_options_azure_and_gcs(
     ("url", "expected"),
     [
         ("az://container/blob", {"account_name": "acct", "anon": True}),
+        (
+            "abfs://container@other.dfs.core.windows.net/blob",
+            {"account_name": "other", "anon": True},
+        ),
         ("gs://bucket/blob", {"token": "anon"}),
     ],
 )
@@ -682,7 +686,8 @@ def test_enrich_with_storage_options_public_azure_and_gcs(
     """Public Azure and GCS datasets get anonymous options without vending.
 
     An ``az://`` URL names the container but not the storage account, so the
-    account comes from the Azure provider configured for the endpoint.
+    account comes from the Azure provider configured for the endpoint, unless
+    the URL names its own.
     """
     endpoint_url = "https://acct.blob.core.windows.net"
     mocker.patch(

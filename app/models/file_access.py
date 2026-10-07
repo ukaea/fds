@@ -8,6 +8,7 @@ from .storage_options import (
     StorageOptions,
     StorageOptionsType,
     build_storage_options,
+    parse_storage_url,
     storage_backend,
 )
 
@@ -119,6 +120,7 @@ def anonymous_storage_options(
 
     S3 renders in ``target_type``'s shape, and a null ``target_type`` means the
     distribution opted out. Azure and GCS have one shape each and ignore it.
+    ``account_name`` is used for an Azure URL that does not name its own.
     Returns ``None`` when there is nothing to render.
     """
     backend = storage_backend(data_url)
@@ -130,6 +132,10 @@ def anonymous_storage_options(
             anonymous=True,
         )
     if backend == "azure":
+        # adlfs refuses an account_name that differs from the one in the URL.
+        location = parse_storage_url(data_url)
+        if location and location.account:
+            account_name = location.account
         return FsspecAzureStorageOptions(account_name=account_name, anon=True)
     if backend == "gcs":
         return FsspecGCSStorageOptions(token="anon")

@@ -166,7 +166,9 @@ def test_polyglot_routing_s3(session, access_service, mock_credential_provider):
         session_token="t",
         expiration=datetime.fromisoformat("2099-01-01T00:00:00+00:00"),
     )
-    mock_credential_provider.generate_credentials.return_value = {"bucket": fake_cred}
+    mock_credential_provider.generate_credentials.return_value = {
+        "s3://bucket/ds1": fake_cred
+    }
 
     # 2. Call Service
     req = CredentialRequest(data_urls=["s3://bucket/ds1"])
@@ -196,7 +198,7 @@ def test_providers_sharing_an_endpoint_each_get_their_own_urls(
 
     def vend(credential):
         def generate(_provider, urls, _session_name):
-            return {url.split("/")[2]: credential for url in urls}
+            return dict.fromkeys(urls, credential)
 
         return generate
 
@@ -347,9 +349,9 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
         expiration=datetime.fromisoformat("2099-01-01T00:00:00+00:00"),
     )
     mock_provider = mocker.MagicMock()
-    mock_provider.generate_credentials.side_effect = lambda urls, name: {
-        "fds-data": fake_cred
-    }
+    mock_provider.generate_credentials.side_effect = lambda urls, name: dict.fromkeys(
+        urls, fake_cred
+    )
 
     # Replace the provider interaction
     mocker.patch(
@@ -414,7 +416,7 @@ def test_storage_options_absent_unless_asked(
         storage_options_type=StorageOptionsType.FSSPEC_S3,
     )
     mock_credential_provider.generate_credentials.return_value = {
-        "bucket": _fake_s3_credentials()
+        "s3://bucket/plain": _fake_s3_credentials()
     }
 
     manifest = access_service.generate_session_credentials(
@@ -436,7 +438,7 @@ def test_storage_options_fsspec_shape(
         storage_options_type=StorageOptionsType.FSSPEC_S3,
     )
     mock_credential_provider.generate_credentials.return_value = {
-        "bucket": _fake_s3_credentials(endpoint_url="https://s3.example.org")
+        "s3://bucket/zarr": _fake_s3_credentials(endpoint_url="https://s3.example.org")
     }
 
     manifest = access_service.generate_session_credentials(
@@ -476,7 +478,9 @@ def test_storage_options_icechunk_fills_endpoint_defaults(
         storage_options_type=StorageOptionsType.ICECHUNK_S3,
     )
     mock_credential_provider.generate_credentials.return_value = {
-        "bucket": _fake_s3_credentials(endpoint_url="http://s3.echo.example.ac.uk")
+        "s3://bucket/store": _fake_s3_credentials(
+            endpoint_url="http://s3.echo.example.ac.uk"
+        )
     }
 
     manifest = access_service.generate_session_credentials(
@@ -500,8 +504,8 @@ def test_storage_options_are_per_url_not_shared(
 ):
     """Two URLs on one credential render their own shapes.
 
-    The S3 provider returns a single credential object per bucket, so rendering
-    has to copy rather than mutate.
+    The S3 provider returns a single credential object for every URL, so
+    rendering has to copy rather than mutate.
     """
     user = AuthenticatedUser(id="user", scopes=())
     _public_dataset_with_distribution(
@@ -517,7 +521,9 @@ def test_storage_options_are_per_url_not_shared(
         storage_options_type=StorageOptionsType.ICECHUNK_S3,
     )
     shared = _fake_s3_credentials(endpoint_url="https://s3.example.org")
-    mock_credential_provider.generate_credentials.return_value = {"bucket": shared}
+    mock_credential_provider.generate_credentials.return_value = dict.fromkeys(
+        ["s3://bucket/as-fsspec", "s3://bucket/as-icechunk"], shared
+    )
 
     manifest = access_service.generate_session_credentials(
         user,
@@ -549,7 +555,7 @@ def test_storage_options_region_override_from_distribution(
         storage_options_type=StorageOptionsType.FSSPEC_S3,
     )
     mock_credential_provider.generate_credentials.return_value = {
-        "bucket": _fake_s3_credentials(
+        "s3://bucket/regional": _fake_s3_credentials(
             endpoint_url="https://s3.example.org", region="us-east-1"
         )
     }
@@ -574,7 +580,7 @@ def test_storage_options_skipped_when_distribution_opts_out(
         session, url="s3://bucket/opted-out", storage_options_type=None
     )
     mock_credential_provider.generate_credentials.return_value = {
-        "bucket": _fake_s3_credentials()
+        "s3://bucket/opted-out": _fake_s3_credentials()
     }
 
     manifest = access_service.generate_session_credentials(
@@ -595,7 +601,7 @@ def test_storage_options_azure_entry(session, access_service, mock_credential_pr
         session, url="az://container/blob", storage_options_type=None
     )
     mock_credential_provider.generate_credentials.return_value = {
-        "container": AzureCredentials(account_name="acct", sas_token="sas")
+        "az://container/blob": AzureCredentials(account_name="acct", sas_token="sas")
     }
 
     manifest = access_service.generate_session_credentials(

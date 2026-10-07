@@ -217,9 +217,10 @@ else is left unset.
 
 Azure and Google Cloud Storage leave it unset and still get `storage_options`, because each has
 one library and the URL scheme names it. `gs://` and `gcs://` get gcsfs options (`token`).
-`az://` and `abfs://` get adlfs options: `account_name` with `sas_token`, or with `anon` for public
-data. An Azure URL does not name its storage account, so for public data FDS takes it from the
-Azure provider configured for the distribution's `endpoint_url`.
+`az://`, `abfs://` and `abfss://` get adlfs options: `account_name` with `sas_token`, or with `anon`
+for public data. For public data FDS takes the storage account from the URL when it names one, as
+in `abfs://container@account.dfs.core.windows.net/path`, and otherwise from the Azure provider
+configured for the distribution's `endpoint_url`.
 
 The inference is right for the common cases and wrong in one that matters: an Icechunk store
 registered under a generic media type such as `application/x-zarr` is taken for plain Zarr, so the

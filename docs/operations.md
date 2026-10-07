@@ -150,10 +150,12 @@ a `type` and `endpoint_url`, since only the first could ever be chosen.
 | --- | --- | --- | --- |
 | `s3` | `s3://` | `endpoint_url` (what clients connect to, `null` for AWS), `sts_endpoint_url` (what FDS calls, if different), `region`, `sts_role_arn`, and optionally `sts_access_key_id` / `sts_secret_access_key` | The two keys if given, otherwise the standard AWS credential chain |
 | `gcs` | `gs://`, `gcs://` | `endpoint_url` (optional) | Google Application Default Credentials, such as a key file named by `GOOGLE_APPLICATION_CREDENTIALS` |
-| `azure` | `az://`, `abfs://` | `storage_account`, `endpoint_url` (optional) | Azure's default credential chain, such as environment variables or a managed identity |
+| `azure` | `az://`, `abfs://`, `abfss://` | `storage_account`, `endpoint_url` (optional) | Azure's default credential chain, such as environment variables or a managed identity |
 
 `type` is required in every entry, `s3` included. For `gcs` and `azure`, `endpoint_url` only
-matches distributions: FDS never calls it.
+matches distributions: FDS never calls it. An Azure URL that names its account, as in
+`abfs://container@account.dfs.core.windows.net/path`, gets credentials only when that account is
+the provider's `storage_account`.
 
 ```json
 [

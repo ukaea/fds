@@ -389,7 +389,7 @@ def test_get_datasets_with_storage_options(
     # Define Mock directly in the router test, ensuring STS assumes work
     mock_provider = mocker.MagicMock()
     mock_provider.generate_credentials.return_value = {
-        "opts": S3Credentials(
+        "s3://opts/1": S3Credentials(
             access_key_id="r_key",
             secret_access_key="r_sec",
             session_token="r_tok",

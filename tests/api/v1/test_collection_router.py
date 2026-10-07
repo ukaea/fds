@@ -434,7 +434,7 @@ def test_collection_include_storage_options(
 
     mock_provider = mocker.MagicMock()
     mock_provider.generate_credentials.return_value = {
-        "bucket": S3Credentials(
+        "s3://bucket/cred-ds": S3Credentials(
             access_key_id="c_key",
             secret_access_key="c_sec",
             session_token="c_tok",
