@@ -6,7 +6,7 @@ from sqlalchemy import ColumnElement, and_, cast, exists, false, or_, tuple_
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
-from sqlmodel.sql.expression import SelectOfScalar
+from sqlmodel.sql.expression import Select, SelectOfScalar
 
 from app.auth.access_control import (
     NO_PARENT,
@@ -16,6 +16,7 @@ from app.auth.access_control import (
     read_denial,
     resolve_policy,
 )
+from app.core.audit import resource_id
 from app.core.context import ReadTier, record_restricted_access, record_returned
 from app.models.collection import Collection
 from app.models.dataset import Dataset
@@ -136,12 +137,17 @@ def read_page[T: Listed](
         if policy.access_level == AccessLevel.RESTRICTED
     ]
     columns = _COLUMNS[model]
-    if restricted and rows and len(columns.key) == 1:
-        (key,) = columns.key
-        ids = [row.id for row in rows]
-        listed = session.exec(select(key).where(key.in_(ids), or_(*restricted))).all()
-        for row_id in listed:
-            record_restricted_access(columns.table, row_id, ReadTier.LISTED)
+    if restricted and rows:
+        keys = [
+            tuple(getattr(row, column.key) for column in columns.key) for row in rows
+        ]
+        listed = session.exec(
+            Select(*columns.key).where(tuple_(*columns.key).in_(keys), or_(*restricted))
+        ).all()
+        for row_key in listed:
+            record_restricted_access(
+                columns.table, resource_id(row_key), ReadTier.LISTED
+            )
     record_returned(len(rows))
     return rows
 

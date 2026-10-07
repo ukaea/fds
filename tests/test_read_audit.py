@@ -86,8 +86,9 @@ class TestListedTier:
         assert public.id not in recorded
         assert embargoed.id not in recorded
 
+    @pytest.mark.usefixtures("catalogue")
     def test_returned_counts_what_was_served(
-        self, test_client, admin_user_token, catalogue, log_lines
+        self, test_client, admin_user_token, log_lines
     ):
         """The only signal that would show an unbounded `limit` being abused."""
         test_client.get("/v1/datasets?limit=100", headers=admin_user_token)
@@ -111,13 +112,48 @@ class TestReadTier:
         assert "restricted_listed" not in line
 
 
+class TestShots:
+    """A shot's identity is its device and number, not a single integer."""
+
+    @pytest.fixture(autouse=True)
+    def shots(self, session: Session, admin_user: AuthenticatedUser):
+        DeviceService(session).create(
+            DeviceCreate(name="mast", access_level=AccessLevel.PUBLIC), admin_user
+        )
+        service = ShotService(session)
+        for shot_id, level in (
+            ("30420", AccessLevel.PUBLIC),
+            ("30421", AccessLevel.RESTRICTED),
+        ):
+            service.create(
+                ShotCreate(id=shot_id, device_name="mast", access_level=level),
+                admin_user,
+            )
+
+    def test_single_read_is_recorded(self, test_client, admin_user_token, log_lines):
+        response = test_client.get(
+            "/v1/devices/mast/shots/30421", headers=admin_user_token
+        )
+        assert response.status_code == 200
+
+        assert request_line(log_lines())["restricted_read"] == {"shot": ["mast/30421"]}
+
+    def test_listing_is_recorded(self, test_client, admin_user_token, log_lines):
+        response = test_client.get("/v1/devices/mast/shots", headers=admin_user_token)
+        assert response.status_code == 200
+
+        line = request_line(log_lines())
+        assert line["restricted_listed"] == {"shot": ["mast/30421"]}
+
+
 class TestNothingToRecord:
     def test_public_only_request_carries_no_arrays(
         self, test_client, catalogue, log_lines
     ):
         public, _, _ = catalogue
 
-        test_client.get(f"/v1/datasets/id/{public.id}")
+        response = test_client.get(f"/v1/datasets/id/{public.id}")
+        assert response.status_code == 200
 
         line = request_line(log_lines())
         assert "restricted_read" not in line

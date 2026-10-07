@@ -9,6 +9,8 @@ from app.models.identity import AuthenticatedUser
 # List endpoints accept an unbounded `limit`, so the arrays need their own cap.
 MAX_RECORDED_PER_TIER = 1000
 
+type ResourceId = int | str
+
 
 class ReadTier(StrEnum):
     """How closely a caller looked at a resource."""
@@ -22,7 +24,7 @@ class RequestContext:
     """Mutable state shared between the middleware and the code it wraps."""
 
     actor: AuthenticatedUser | None = None
-    restricted: dict[ReadTier, dict[str, set[int]]] = field(
+    restricted: dict[ReadTier, dict[str, set[ResourceId]]] = field(
         default_factory=lambda: {tier: {} for tier in ReadTier}
     )
     truncated: bool = False
@@ -71,7 +73,7 @@ def record_returned(count: int) -> None:
 
 
 def record_restricted_access(
-    resource_type: str, resource_id: int, tier: ReadTier
+    resource_type: str, resource_id: ResourceId, tier: ReadTier
 ) -> None:
     """Record that the caller was served a resource that is not public."""
     ctx = _request_context.get()
@@ -85,7 +87,7 @@ def record_restricted_access(
     by_type.setdefault(resource_type, set()).add(resource_id)
 
 
-def drain_restricted_access() -> dict[str, dict[str, list[int]]]:
+def drain_restricted_access() -> dict[str, dict[str, list[ResourceId]]]:
     """Return what was accessed, keyed for the audit line, and clear it."""
     ctx = _request_context.get()
     if ctx is None:
