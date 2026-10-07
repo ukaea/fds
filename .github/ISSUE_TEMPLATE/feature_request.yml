@@ -1,6 +1,6 @@
 name: Feature request
 description: Propose a capability FDS does not have yet.
-labels: ["enhancement"]
+type: Feature
 body:
   - type: textarea
     id: problem
