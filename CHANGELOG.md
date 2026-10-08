@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.0.7](https://github.com/ukaea/fds/compare/v0.0.6...v0.0.7) (2026-10-08)
+
+
+### Features
+
+* Accept Entra ID app roles as scopes ([7ff7bcd](https://github.com/ukaea/fds/commit/7ff7bcd206648302ef4acdacf01ddb7144def18d))
+
+
+### Bug Fixes
+
+* Accept no scopes from an issuer that lists none ([#152](https://github.com/ukaea/fds/issues/152)) ([d6c6aeb](https://github.com/ukaea/fds/commit/d6c6aeb4147e4300e7b38edd41fb7f5dda74d27e))
+* Check read access on a collection's activity ([d0f8e88](https://github.com/ukaea/fds/commit/d0f8e883b49fe8ea2a1d05a0ffb76ec2e7405b8b))
+* Choose the storage provider by URL scheme as well as endpoint ([#167](https://github.com/ukaea/fds/issues/167)) ([9aaa5e4](https://github.com/ukaea/fds/commit/9aaa5e4cf3937243823c2d8f652f4b295de92c07))
+* Drop the per-distribution access level ([aa0d2be](https://github.com/ukaea/fds/commit/aa0d2be5817c110ca2edc696ce9fa93ad294c272))
+* Leave npm out of the UI runtime image ([#143](https://github.com/ukaea/fds/issues/143)) ([b19b9a4](https://github.com/ukaea/fds/commit/b19b9a4033b7aeccd2c77e4bcb00d9852ff8d1f5))
+* Let CodeQL parse the base service ([#140](https://github.com/ukaea/fds/issues/140)) ([767cd1d](https://github.com/ukaea/fds/commit/767cd1dfed5e90cf8ef39e6e66f47869c9667d69))
+* Name activity link removals in the audit log ([#173](https://github.com/ukaea/fds/issues/173)) ([4f6e7f3](https://github.com/ukaea/fds/commit/4f6e7f37d7f20aabada917467580bf81aa94dc94))
+* Record restricted shot reads in the audit trail ([#159](https://github.com/ukaea/fds/issues/159)) ([fe159a6](https://github.com/ukaea/fds/commit/fe159a65cb29228eae43f8aacb1694dda7a128ee))
+* Return Azure and GCS storage options for single datasets ([#166](https://github.com/ukaea/fds/issues/166)) ([6b2a64d](https://github.com/ukaea/fds/commit/6b2a64d03006d5bb009ece2329f352397e3aa416))
+* Upgrade Alpine packages in the UI image ([#180](https://github.com/ukaea/fds/issues/180)) ([69b03ef](https://github.com/ukaea/fds/commit/69b03efabd3c4ac11edb26d17cbe91f25c94a2bd))
+* Vend Azure credentials for abfss:// and account-named URLs ([#168](https://github.com/ukaea/fds/issues/168)) ([9b4aa61](https://github.com/ukaea/fds/commit/9b4aa615515040061a846da4fa2b86729c045a02))
+
 ## [0.0.6](https://github.com/ukaea/fds/compare/v0.0.5...v0.0.6) (2026-10-06)
 
 
