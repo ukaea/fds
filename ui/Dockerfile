@@ -1,5 +1,7 @@
 
 FROM node:26-alpine AS base
+# Alpine publishes fixes before the Node image is rebuilt on them.
+RUN apk upgrade --no-cache
 
 # Install dependencies only when needed
 FROM base AS deps
