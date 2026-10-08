@@ -196,7 +196,8 @@ A Distribution is a physical access path for a Dataset, describing *how* to retr
 | `endpoint_url` | string | No | Storage endpoint, used for credential vending |
 | `region` | string | No | Storage region, used for credential vending |
 | `storage_options_type` | enum | No | Which consumer library `storage_options` is rendered for (see below) |
-| `access_level` | enum | No | Override access policy for this distribution |
+
+A Distribution has no access policy of its own: FDS applies the Dataset's to every distribution, for both metadata and credentials. Some copies may be harder to reach than that level suggests, such as a proprietary-format copy behind a site firewall or a data-access layer alongside an open-format copy in public storage. That restriction belongs to the infrastructure, not to FDS, so register at least one distribution that is as available as the Dataset's level says.
 
 In most cases a Dataset will have exactly one Distribution, and you won't need to think about the distinction. The Dataset endpoints return the primary distribution's `url`, `group`, `media_type`, and `format` inlined directly on the Dataset response, so there is nothing extra to fetch.
 

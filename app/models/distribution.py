@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING
 
 from sqlmodel import Field, Relationship, SQLModel
 
-from .policy import AccessLevel
 from .storage_options import StorageOptions, StorageOptionsType
 
 if TYPE_CHECKING:
@@ -37,9 +36,6 @@ class DistributionBase(SQLModel):
             Use this for display and discovery; it is not required to be an
             IANA media type.  Both fields may be populated simultaneously —
             ``media_type`` for interoperability, ``format`` for readability.
-        access_level: Override access policy for this distribution.  Useful
-            when the same data is available at different access tiers (e.g. a
-            public summary endpoint and a restricted raw-file endpoint).
         default_distribution: When ``True``, this distribution's ``url``,
             ``media_type``, and ``format`` are inlined into the parent Dataset
             response.  Exactly one distribution per Dataset should carry this
@@ -59,7 +55,6 @@ class DistributionBase(SQLModel):
     region: str | None = Field(default=None)
     media_type: str | None = Field(default=None)
     format: str | None = Field(default=None)
-    access_level: AccessLevel | None = Field(default=None)
     default_distribution: bool = Field(default=False)
     storage_options_type: StorageOptionsType | None = Field(default=None)
 
@@ -90,6 +85,5 @@ class DistributionUpdate(SQLModel):
     region: str | None = None
     media_type: str | None = None
     format: str | None = None
-    access_level: AccessLevel | None = None
     default_distribution: bool | None = None
     storage_options_type: StorageOptionsType | None = None

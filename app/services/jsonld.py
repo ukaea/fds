@@ -649,8 +649,6 @@ def map_dataset_to_dcat(
                 node["dcat:mediaType"] = dist.media_type
             if dist.format:
                 node["dct:format"] = dist.format
-            if dist.access_level:
-                node["dct:accessRights"] = dist.access_level.value
             dist_nodes.append(node)
         data["dcat:distribution"] = dist_nodes
         # Convenience shorthand: downloadURL of the default distribution (HTTP/S only)
