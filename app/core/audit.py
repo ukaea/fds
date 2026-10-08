@@ -34,9 +34,13 @@ ACTIONS: dict[tuple[str, str], str] = {
     ("datasetderivation", "insert"): "dataset.add_derivation",
     ("datasetderivation", "delete"): "dataset.remove_derivation",
     ("activityinput", "insert"): "activity.add_input",
+    ("activityinput", "delete"): "activity.remove_input",
     ("activityinstrument", "insert"): "activity.add_instrument",
+    ("activityinstrument", "delete"): "activity.remove_instrument",
     ("activityagent", "insert"): "activity.add_agent",
+    ("activityagent", "delete"): "activity.remove_agent",
     ("activitydelegation", "insert"): "activity.add_delegation",
+    ("activitydelegation", "delete"): "activity.remove_delegation",
 }
 
 _PENDING = "fds_audit_pending"
