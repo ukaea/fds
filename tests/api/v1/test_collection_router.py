@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
+from app.models.activity import ActivityCreate
 from app.models.collection import CollectionCreate
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
@@ -11,11 +12,14 @@ from app.models.file_access import S3Credentials
 from app.models.policy import AccessLevel
 from app.models.scientific_metadata import ScientificProperty
 from app.models.shot import ShotCreate
+from app.models.source import SourceCreate, SourceKind
 from app.services import collection_service as collection_service_module
+from app.services.activity_service import ActivityService
 from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
+from app.services.source_service import SourceService
 from tests.conftest import resource
 
 admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
@@ -420,6 +424,57 @@ def test_collection_activity_not_found_when_no_activity(
         f"/v1/collections/{col_id}/activity", headers=admin_user_token
     )
     assert response.status_code == 404
+
+
+def _make_restricted_collection_with_activity(session: Session) -> int:
+    source = SourceService(session).create(
+        SourceCreate(name="col-run-code", kind=SourceKind.SOFTWARE), user=admin_user
+    )
+    assert source.id is not None
+    activity = ActivityService(session).create(
+        ActivityCreate(source_id=source.id, parameters={"confidential": "run"}),
+        user=admin_user,
+    )
+    col = CollectionService(session).create(
+        CollectionCreate(
+            name="secret-col",
+            access_level=AccessLevel.RESTRICTED,
+            activity_id=activity.id,
+        ),
+        user=admin_user,
+    )
+    assert col.id is not None
+    session.commit()
+    return col.id
+
+
+def test_restricted_collection_activity_is_not_public(
+    test_client: TestClient, session: Session
+):
+    """The activity sub-resource answers 403, like the collection itself."""
+    col_id = _make_restricted_collection_with_activity(session)
+
+    response = test_client.get(f"/v1/collections/{col_id}/activity")
+    assert response.status_code == 403, response.text
+    assert "confidential" not in response.text
+
+
+def test_restricted_collection_activity_read_is_audited(
+    test_client: TestClient, session: Session, admin_user_token: dict, log_lines
+):
+    col_id = _make_restricted_collection_with_activity(session)
+    log_lines()
+
+    response = test_client.get(
+        f"/v1/collections/{col_id}/activity", headers=admin_user_token
+    )
+    assert response.status_code == 200, response.text
+    (line,) = [
+        entry
+        for entry in log_lines()
+        if entry.get("logger") == "fds.audit" and entry["event"] == "request"
+    ]
+    assert line["restricted_read"] == {"collection": [col_id]}
 
 
 def test_collection_include_storage_options(

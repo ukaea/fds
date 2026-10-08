@@ -458,18 +458,13 @@ def remove_child_collection(
 def read_collection_activity(
     *,
     collection_id: int,
-    collection_service: CollectionServiceDep,
     activity_service: ActivityServiceDep,
+    user: CurrentUserDep,
 ) -> ActivityRead:
     """Retrieve the Activity (provenance run) that produced this Collection.
 
     Returns 404 if the Collection has no associated activity.
     """
-    collection = collection_service.get(collection_id)
-    if not collection:
-        raise ResourceNotFoundError(f"Collection {collection_id} not found")
-    if not collection.activity_id:
-        raise ResourceNotFoundError(
-            f"Collection {collection_id} has no associated activity"
-        )
-    return ActivityRead.model_validate(activity_service.get(collection.activity_id))
+    return ActivityRead.model_validate(
+        activity_service.get_for_collection(collection_id, user)
+    )

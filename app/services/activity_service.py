@@ -17,6 +17,7 @@ from app.models.dataset import Dataset
 from app.models.identity import AuthenticatedUser
 from app.models.source import Source, SourceKind
 from app.services.base_service import BaseService
+from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
 from app.services.exceptions import FDSValidationError, ResourceNotFoundError
 from app.services.source_service import SourceService
@@ -232,6 +233,23 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
                 f"Dataset {dataset_id} has no associated activity"
             )
         return self._require_activity(dataset.activity_id)
+
+    def get_for_collection(
+        self, collection_id: int, user: AuthenticatedUser
+    ) -> Activity:
+        """Retrieve the Activity that produced the given Collection.
+
+        The collection counterpart of ``get_for_dataset``, with the read check
+        ahead of the "no associated activity" 404 for the same reason.
+        """
+        collection = CollectionService(self.session).get_readable_or_raise(
+            collection_id, user
+        )
+        if not collection.activity_id:
+            raise ResourceNotFoundError(
+                f"Collection {collection_id} has no associated activity"
+            )
+        return self._require_activity(collection.activity_id)
 
     def add_input(
         self, *, activity_id: int, dataset_id: int, user: AuthenticatedUser
