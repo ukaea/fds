@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.8](https://github.com/ukaea/fds/compare/v0.0.7...v0.0.8) (2026-10-09)
+
+
+### Features
+
+* Let a distribution declare the schema it conforms to ([#189](https://github.com/ukaea/fds/issues/189)) ([8838b7f](https://github.com/ukaea/fds/commit/8838b7fa6a469c56fb2646ddf11082be31531b9f))
+
+
+### Performance Improvements
+
+* Build list responses in a fixed number of queries ([#193](https://github.com/ukaea/fds/issues/193)) ([bdbff60](https://github.com/ukaea/fds/commit/bdbff60b8d093ff275e2c39b92ad069191937937))
+
 ## [0.0.7](https://github.com/ukaea/fds/compare/v0.0.6...v0.0.7) (2026-10-08)
 
 
