@@ -2,10 +2,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import ColumnElement, and_, cast, exists, false, or_, tuple_
+from sqlalchemy import ColumnElement
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import aliased
-from sqlmodel import Session, col, select
+from sqlmodel import Session, and_, cast, col, exists, false, or_, select, tuple_
 from sqlmodel.sql.expression import Select, SelectOfScalar
 
 from app.auth.access_control import (

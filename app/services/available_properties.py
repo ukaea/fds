@@ -1,9 +1,19 @@
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import ColumnElement, Numeric, cast, distinct, inspect, true, tuple_
-from sqlalchemy.sql.expression import func
-from sqlmodel import Session, SQLModel, select
+from sqlalchemy import ColumnElement
+from sqlmodel import (
+    Numeric,
+    Session,
+    SQLModel,
+    cast,
+    distinct,
+    func,
+    inspect,
+    select,
+    true,
+    tuple_,
+)
 
 from app.models.available_properties import AvailableProperties, AvailableProperty
 from app.models.scientific_metadata import MetadataKind
