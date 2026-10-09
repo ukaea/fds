@@ -106,3 +106,49 @@ def test_listing_issues_the_same_statements_whatever_the_page_size(
         assert len(test_client.get(url, params={**params, "limit": 4}).json()) == 4
 
     assert len(large) == len(small)
+
+
+def test_reading_annotations_issues_the_same_statements_whatever_their_number(
+    test_client: TestClient, session: Session, admin_user: AuthenticatedUser
+):
+    DeviceService(session).create(
+        DeviceCreate(name="MAST", type="Tokamak", access_level=AccessLevel.PUBLIC),
+        admin_user,
+    )
+    ShotService(session).create(ShotCreate(id="1", device_name="MAST"), admin_user)
+    datasets = DatasetService(session)
+    subjects = []
+    for count in (1, 5):
+        subject = datasets.create(
+            DatasetCreate(
+                name=f"camera{count}", level=1, device_name="MAST", shot_id="1"
+            ),
+            admin_user,
+        )
+        for n in range(count):
+            datasets.create(
+                DatasetCreate(
+                    name=f"mask{count}-{n}",
+                    level=1,
+                    device_name="MAST",
+                    shot_id="1",
+                    annotates="ufo",
+                    subject_dataset_id=subject.id,
+                ),
+                admin_user,
+            )
+        subjects.append(subject.id)
+    session.commit()
+    session.expunge_all()
+
+    issued = []
+    for subject_id, count in zip(subjects, (1, 5), strict=True):
+        with statements(session) as read:
+            response = test_client.get(
+                f"/v1/datasets/id/{subject_id}", params={"include_annotations": True}
+            )
+        assert len(response.json()["annotations"]) == count
+        issued.append(len(read))
+        session.expunge_all()
+
+    assert issued[0] == issued[1]

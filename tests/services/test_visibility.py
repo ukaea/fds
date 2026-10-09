@@ -1,17 +1,22 @@
-from sqlmodel import Session
+import pytest
+from sqlmodel import Session, select
 
+from app.auth.access_control import check_read
+from app.core.context import ReadTier, drain_restricted_access, request_context
 from app.models.activity import ActivityCreate, ActivityType
-from app.models.collection import CollectionCreate
-from app.models.dataset import DatasetCreate
-from app.models.device import DeviceCreate
+from app.models.collection import Collection, CollectionCreate
+from app.models.dataset import Dataset, DatasetCreate
+from app.models.device import Device, DeviceCreate
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
-from app.models.shot import ShotCreate
+from app.models.shot import Shot, ShotCreate
 from app.services.activity_service import ActivityService
 from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
+from app.services.exceptions import ForbiddenError
 from app.services.shot_service import ShotService
+from app.services.visibility import Listed, readable_only
 
 TEAM = AuthenticatedUser(id="member", scopes=("dev_team",))
 PUBLIC = AccessLevel.PUBLIC
@@ -268,3 +273,92 @@ def test_global_admin_reads_every_record(session: Session, admin_user):
     service.check_read_access(team_only, admin_user)
 
     assert listed == ids
+
+
+IDP_A = "https://idp-a.example.com"
+IDP_B = "https://idp-b.example.com"
+
+
+@pytest.mark.usefixtures("two_idp_config")
+@pytest.mark.parametrize(
+    "user",
+    [
+        ANONYMOUS_USER,
+        AuthenticatedUser(id="a", scopes=("a:read",), issuer=IDP_A),
+        AuthenticatedUser(id="b", issuer=IDP_B),
+        AuthenticatedUser(id="operator", scopes=("shot-operator:d",), issuer=IDP_A),
+        AuthenticatedUser(id="d-admin", scopes=("d_admin",), issuer=IDP_A),
+        AuthenticatedUser(id="admin", scopes=("fds-admin",)),
+    ],
+    ids=["anonymous", "a-reader", "idp-b", "d-operator", "d-admin", "admin"],
+)
+def test_readable_only_filters_as_check_read_does(
+    session: Session, admin_user: AuthenticatedUser, user: AuthenticatedUser
+):
+    """Resolving a list's policies together must keep and audit exactly the
+    records a ``check_read`` on each would."""
+    devices = DeviceService(session)
+    devices.create(
+        DeviceCreate(name="A", access_level=RESTRICTED, required_scopes=["a:read"]),
+        admin_user,
+    )
+    devices.create(
+        DeviceCreate(name="B", access_level=RESTRICTED, allowed_idps=[IDP_B]),
+        admin_user,
+    )
+    devices.create(DeviceCreate(name="C", access_level=PUBLIC), admin_user)
+    devices.create(DeviceCreate(name="D"), admin_user)
+    shots = ShotService(session)
+    for shot in (
+        ShotCreate(id="1", device_name="A"),
+        ShotCreate(id="2", device_name="A", access_level=PUBLIC),
+        ShotCreate(
+            id="1", device_name="B", access_level=RESTRICTED, required_scopes=[]
+        ),
+        ShotCreate(
+            id="1", device_name="C", access_level=RESTRICTED, required_scopes=["c"]
+        ),
+        ShotCreate(id="1", device_name="D", access_level=AccessLevel.EMBARGOED),
+        ShotCreate(id="2", device_name="D"),
+    ):
+        shots.create(shot, admin_user)
+    datasets = DatasetService(session)
+    for dataset in (
+        DatasetCreate(name="a1", device_name="A", shot_id="1"),
+        DatasetCreate(name="a2", device_name="A", shot_id="2"),
+        # Level from itself, scopes from its device past a shot that sets none.
+        DatasetCreate(
+            name="a2-restricted", device_name="A", shot_id="2", access_level=RESTRICTED
+        ),
+        DatasetCreate(name="b1", device_name="B", shot_id="1"),
+        DatasetCreate(name="c1", device_name="C", shot_id="1"),
+        DatasetCreate(name="d1", device_name="D", shot_id="1"),
+        DatasetCreate(name="d2", device_name="D", shot_id="2"),
+        DatasetCreate(name="d", device_name="D"),
+        DatasetCreate(name="global"),
+    ):
+        datasets.create(dataset, admin_user)
+    collections = CollectionService(session)
+    collections.create(
+        CollectionCreate(name="on-shot", device_name="A", shot_id="1"), admin_user
+    )
+    collections.create(CollectionCreate(name="on-device", device_name="D"), admin_user)
+    records: list[Listed] = [
+        *session.exec(select(Device)).all(),
+        *session.exec(select(Shot)).all(),
+        *session.exec(select(Dataset)).all(),
+        *session.exec(select(Collection)).all(),
+    ]
+
+    with request_context():
+        expected = []
+        for record in records:
+            try:
+                check_read(record, session, user, ReadTier.LISTED)
+            except ForbiddenError:
+                continue
+            expected.append(record)
+        expected_audit = drain_restricted_access()
+
+        assert readable_only(session, records, user) == expected
+        assert drain_restricted_access() == expected_audit

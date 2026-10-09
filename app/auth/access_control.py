@@ -208,7 +208,20 @@ def check_read(
     tier: ReadTier = ReadTier.READ,
 ) -> None:
     """Enforce read access to ``obj``, and record it when it is restricted."""
-    policy = get_effective_policy(obj, session)
+    check_read_with_policy(obj, get_effective_policy(obj, session), user, tier)
+
+
+def check_read_with_policy(
+    obj: Policied,
+    policy: EffectivePolicy,
+    user: AuthenticatedUser,
+    tier: ReadTier,
+) -> None:
+    """``check_read`` for a caller that has already resolved ``obj``'s policy.
+
+    Resolving a list's policies together and checking each record with this is
+    how a list avoids a policy lookup per record.
+    """
     denial = read_denial(
         type(obj),
         policy,
