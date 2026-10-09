@@ -1,7 +1,11 @@
 import pytest
 from sqlmodel import Session, select
 
-from app.auth.access_control import get_effective_policy, resolve_policy
+from app.auth.access_control import (
+    get_effective_policies,
+    get_effective_policy,
+    resolve_policy,
+)
 from app.auth.security import AuthenticatedUser
 from app.models.dataset import DatasetCreate
 from app.models.device import Device, DeviceCreate
@@ -172,3 +176,47 @@ def test_resolve_policy_agrees_with_get_effective_policy(
         shot.allowed_idps,
         get_effective_policy(device, session),
     ) == get_effective_policy(shot, session)
+
+
+def test_get_effective_policies_resolves_each_record_from_its_own_parents(
+    session: Session, admin_user: AuthenticatedUser
+) -> None:
+    """A batch must give each record the policy it would get on its own.
+
+    Both devices have a shot "1", so a shot found by id alone would hand one
+    device's datasets the other's policy. The first dataset takes its
+    access_level from its shot and its required_scopes from its device.
+    """
+    for name, embargoed_shot in (("A", True), ("B", False)):
+        DeviceService(session).create(
+            DeviceCreate(
+                name=name,
+                type="Tokamak",
+                access_level=AccessLevel.RESTRICTED,
+                required_scopes=[f"{name}:read"],
+            ),
+            admin_user,
+        )
+        ShotService(session).create(
+            ShotCreate(
+                id="1",
+                device_name=name,
+                access_level=AccessLevel.EMBARGOED if embargoed_shot else None,
+            ),
+            admin_user,
+        )
+    datasets = [
+        DatasetService(session).create(
+            DatasetCreate(name="d", level=1, device_name=device, shot_id=shot),
+            admin_user,
+        )
+        for device, shot in (("A", "1"), ("B", "1"), ("A", None))
+    ]
+
+    policies = get_effective_policies(datasets, session)
+
+    assert [(p.access_level, p.required_scopes) for p in policies] == [
+        (AccessLevel.EMBARGOED, ["A:read"]),
+        (AccessLevel.RESTRICTED, ["B:read"]),
+        (AccessLevel.RESTRICTED, ["A:read"]),
+    ]

@@ -88,15 +88,12 @@ def read_shots(
         id_prefix=id_prefix,
     )
 
-    return [
-        shot_service.to_read_model(
-            shot,
-            include_device=include_device,
-            include_annotations=include_annotations,
-            user=user,
-        )
-        for shot in shots
-    ]
+    return shot_service.to_read_models(
+        shots,
+        include_device=include_device,
+        include_annotations=include_annotations,
+        user=user,
+    )
 
 
 # Declared before /shots/{shot_id}: the paths have the same shape, so the other

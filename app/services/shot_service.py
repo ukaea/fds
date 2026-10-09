@@ -2,13 +2,12 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import distinct, func, true, tuple_
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, distinct, func, select, true, tuple_
 
 from app.auth.access_control import (
     check_read,
-    get_effective_access_level,
+    get_effective_policies,
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_shot_operator
@@ -441,27 +440,55 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         include_annotations: bool = False,
         user: AuthenticatedUser = ANONYMOUS_USER,
     ) -> "ShotRead":
+        """``to_read_models`` for a single shot."""
+        return self.to_read_models(
+            [shot],
+            include_device=include_device,
+            include_annotations=include_annotations,
+            user=user,
+        )[0]
+
+    def to_read_models(
+        self,
+        shots: Sequence[Shot],
+        include_device: bool = False,
+        include_annotations: bool = False,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+    ) -> list[ShotRead]:
         """
-        Converts a Shot ORM object to a ShotRead DTO, optionally including the full device object.
-        Centralises the presentation logic for shots. When ``include_annotations``
-        is set, resolves the shot's shot-frame and device-frame properties,
-        frame-scoped, so no dataset-frame properties leak in.
+        Converts Shot ORM objects to ShotRead DTOs, optionally including the full device object.
+        Centralises the presentation logic for shots. The shots' policies, and
+        devices when included, are each resolved in one go. When
+        ``include_annotations`` is set, resolves each shot's shot-frame and
+        device-frame properties, frame-scoped, so no dataset-frame properties
+        leak in.
         """
-        read_model = ShotRead.model_validate(shot)
-        read_model.effective_access_level = get_effective_access_level(
-            shot, self.session
-        )
-        if not include_device:
-            read_model.device = None
-        if include_annotations:
-            dataset_service = DatasetService(self.session)
-            annotations = readable_only(
-                self.session, AnnotationService(self.session).for_shot(shot), user
+        policies = get_effective_policies(shots, self.session)
+        devices: dict[str, Device] = {}
+        if include_device:
+            names = {shot.device_name for shot in shots}
+            statement = select(Device).where(col(Device.name).in_(names))
+            devices = {d.name: d for d in self.session.exec(statement)}
+        read_models = []
+        for shot, policy in zip(shots, policies, strict=True):
+            read_model = ShotRead.model_validate(
+                shot,
+                update={
+                    # Set here, as validation would otherwise load shot.device,
+                    # a query per shot.
+                    "device": devices.get(shot.device_name),
+                    "effective_access_level": policy.access_level,
+                },
             )
-            read_model.annotations = [
-                dataset_service.to_read_model(annotation) for annotation in annotations
-            ] or None
-        return read_model
+            if include_annotations:
+                annotations = readable_only(
+                    self.session, AnnotationService(self.session).for_shot(shot), user
+                )
+                read_model.annotations = (
+                    DatasetService(self.session).to_read_models(annotations) or None
+                )
+            read_models.append(read_model)
+        return read_models
 
     def to_dcat(
         self,
