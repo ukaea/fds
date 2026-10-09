@@ -1,8 +1,7 @@
 from typing import cast
 
-from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, func, select
 
 from app.auth.access_control import (
     check_read,

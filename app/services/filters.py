@@ -1,18 +1,9 @@
 from typing import Any
 
-from sqlalchemy import (
-    ColumnElement,
-    Numeric,
-    and_,
-    case,
-    cast,
-    literal,
-    literal_column,
-    or_,
-)
+from sqlalchemy import ColumnElement
 from sqlalchemy import select as sa_select
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.sql.expression import func
+from sqlmodel import Numeric, and_, case, cast, func, literal, literal_column, or_
 
 from app.models.policy import AccessLevel
 from app.services.exceptions import FDSValidationError
