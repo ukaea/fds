@@ -9,6 +9,7 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 | `name` | string | Yes | Short name, unique within its scope (e.g. `equilibrium`) |
 | `url` | string | No | Physical location (`s3://`, `gs://`, `az://`), taken from the primary Distribution and absent if none exists yet |
 | `group` | string | No | Group inside the file at `url` that holds the dataset, taken from the primary Distribution |
+| `conforms_to` | string | No | Schema the primary distribution follows, taken from the primary Distribution |
 | `media_type` | string | No | MIME type of the primary distribution (e.g. `application/x-zarr`) |
 | `format` | string | No | Format label (e.g. `NetCDF4`) |
 | `persistent_identifier` | string | No | A DOI or other persistent identifier registered for the dataset. See [Persistent identifiers](../dcat-jsonld.md#persistent-identifiers) |
@@ -191,6 +192,7 @@ A Distribution is a physical access path for a Dataset, describing *how* to retr
 | --- | --- | --- | --- |
 | `url` | string | Yes | Download or access URL (e.g. `s3://fds-data/shots/30421/equilibrium`) |
 | `group` | string | No | Group inside the file at `url` that holds the dataset, when the file holds several (see below) |
+| `conforms_to` | string | No | http or https URL of the schema this copy follows, such as an IMAS Data Dictionary version (see below) |
 | `media_type` | string | No | IANA media type (e.g. `application/x-zarr`, `application/x-hdf5`) |
 | `format` | string | No | Human-readable format label (e.g. `NetCDF4`, `HDF5`) |
 | `endpoint_url` | string | No | Storage endpoint, used for credential vending |
@@ -199,7 +201,7 @@ A Distribution is a physical access path for a Dataset, describing *how* to retr
 
 A Distribution has no access policy of its own: FDS applies the Dataset's to every distribution, for both metadata and credentials. Some copies may be harder to reach than that level suggests, such as a proprietary-format copy behind a site firewall or a data-access layer alongside an open-format copy in public storage. That restriction belongs to the infrastructure, not to FDS, so register at least one distribution that is as available as the Dataset's level says.
 
-In most cases a Dataset will have exactly one Distribution, and you won't need to think about the distinction. The Dataset endpoints return the primary distribution's `url`, `group`, `media_type`, and `format` inlined directly on the Dataset response, so there is nothing extra to fetch.
+In most cases a Dataset will have exactly one Distribution, and you won't need to think about the distinction. The Dataset endpoints return the primary distribution's `url`, `group`, `conforms_to`, `media_type`, and `format` inlined directly on the Dataset response, so there is nothing extra to fetch.
 
 ### How the data is opened
 
@@ -231,7 +233,7 @@ credentials come back in the wrong shape for the opener you are about to use. Se
 On any other URL, an unset value is also the reason `include_storage_options=true` can come back
 with nothing: FDS will not invent a shape for a distribution it cannot place.
 
-Multiple distributions are supported when the same underlying data is available in more than one form, for example as both Zarr and HDF5, or through multiple access endpoints. All distributions of a given Dataset must be scientifically interchangeable; different data belongs in a separate Dataset. Additional distributions can be registered via `POST /datasets/{id}/distributions`.
+Multiple distributions are supported when the same data is available in more than one form: as both Zarr and HDF5, through several access endpoints, or written against different versions of a schema. All distributions of a Dataset carry the same information, and data that differs belongs in a separate Dataset. Additional distributions can be registered via `POST /datasets/{id}/distributions`.
 
 ### A file holding several datasets
 
@@ -260,3 +262,59 @@ f = fs.open(
 )
 ds = xr.open_dataset(f, engine="h5netcdf", group="equilibrium")
 ```
+
+### The same data in another schema
+
+Some data is written against a schema that changes over time. IMAS data follows a version of the Data Dictionary, and versions rename and remove fields. Version 4.0.0 also changed the sign convention from COCOS 11 to COCOS 17, so `psi`, `ip` and other quantities have opposite signs in a DD 3 copy and a DD 4 copy of the same IDS.
+
+Give each distribution a `conforms_to` naming the schema it follows. Copies in different schemas can then be distributions of one Dataset, which is cited, found and linked to its provenance once.
+
+When you have another form of a dataset, decide how to register it:
+
+| The other form | Register it as |
+| --- | --- |
+| Holds the same information in a different schema | Another distribution, with its own `conforms_to` |
+| Lost information in conversion | A new Dataset, with `derived_from` naming the original |
+
+**Naming the schema.** Name an IMAS Data Dictionary version by its Git tag, with the full version number:
+
+```text
+https://github.com/iterorganization/IMAS-Data-Dictionary/tree/4.0.0
+```
+
+Use exactly this form, so that consumers can compare the values of different datasets. COCOS follows from the version and is not recorded separately. Name any other schema by an http or https URL, such as the address of its documentation. FDS rejects anything else, such as `DD4` or `imas-dd:4.0.0`, but does not check that the schema exists or that the data follows it.
+
+**Registering both copies.** Register the dataset with its DD 3 copy:
+
+```json
+{
+  "name": "equilibrium",
+  "url": "s3://fds-data/shots/30421/dd3/equilibrium",
+  "media_type": "application/x-zarr",
+  "conforms_to": "https://github.com/iterorganization/IMAS-Data-Dictionary/tree/3.42.0"
+}
+```
+
+Then add the DD 4 copy with `POST /datasets/{id}/distributions`:
+
+```json
+{
+  "url": "s3://fds-data/shots/30421/dd4/equilibrium",
+  "media_type": "application/x-zarr",
+  "conforms_to": "https://github.com/iterorganization/IMAS-Data-Dictionary/tree/4.0.0"
+}
+```
+
+**Producing a copy.** IMAS-Python converts an IDS between versions with `imas.convert_ids`, including the COCOS sign changes:
+
+```python
+import imas
+
+with imas.DBEntry("imas:hdf5?path=30421-dd3", "r") as entry:
+    eq = entry.get("equilibrium", autoconvert=False)
+eq_dd4 = imas.convert_ids(eq, "4.0.0")
+```
+
+It logs any data it cannot carry across, such as a field the new version removed. If it reports any for your data, the copy has lost information: register it as a new Dataset, not a distribution.
+
+**Reading a copy.** Check `conforms_to` before comparing values from two distributions, or before passing a copy to code written for one version. IMAS-Python does not convert between major versions when reading: a plain `get` of DD 3 data raises an error under DD 4. Choose the distribution in the version you need, or convert it with `imas.convert_ids`.

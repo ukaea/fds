@@ -228,6 +228,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         return Distribution(
             url=url,
             group=obj_in.group,
+            conforms_to=obj_in.conforms_to,
             endpoint_url=obj_in.endpoint_url,
             region=obj_in.region,
             media_type=obj_in.media_type,
@@ -659,6 +660,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             update={
                 "url": default_dist.url if default_dist else None,
                 "group": default_dist.group if default_dist else None,
+                "conforms_to": default_dist.conforms_to if default_dist else None,
                 "media_type": default_dist.media_type if default_dist else None,
                 "format": default_dist.format if default_dist else None,
                 "distributions": [

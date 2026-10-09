@@ -649,6 +649,8 @@ def map_dataset_to_dcat(
                 node["dcat:mediaType"] = dist.media_type
             if dist.format:
                 node["dct:format"] = dist.format
+            if dist.conforms_to:
+                node["dct:conformsTo"] = {"@id": dist.conforms_to}
             dist_nodes.append(node)
         data["dcat:distribution"] = dist_nodes
         # Convenience shorthand: downloadURL of the default distribution (HTTP/S only)

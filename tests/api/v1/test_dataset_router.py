@@ -511,6 +511,93 @@ def test_alternative_distribution_names_its_group(
     assert "group" not in by_url["s3://bucket/30420.zarr/equilibrium"]
 
 
+DD3 = "https://github.com/iterorganization/IMAS-Data-Dictionary/tree/3.42.0"
+DD4 = "https://github.com/iterorganization/IMAS-Data-Dictionary/tree/4.0.0"
+
+
+def test_distributions_declare_their_schema(
+    test_client: TestClient, admin_user_token: dict
+):
+    """One IDS in two Data Dictionary versions is one dataset with a
+    distribution in each, and the dataset inlines the default's schema."""
+    created = test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={
+            "name": "equilibrium",
+            "url": "s3://bucket/dd3/equilibrium",
+            "conforms_to": DD3,
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["conforms_to"] == DD3
+    dataset_id = created.json()["id"]
+
+    response = test_client.post(
+        f"/v1/datasets/{dataset_id}/distributions",
+        headers=admin_user_token,
+        json={"url": "s3://bucket/dd4/equilibrium", "conforms_to": DD4},
+    )
+    assert response.status_code == 201
+    assert response.json()["conforms_to"] == DD4
+
+    data = test_client.get(
+        f"/v1/datasets/id/{dataset_id}", headers=admin_user_token
+    ).json()
+    assert data["conforms_to"] == DD3
+    assert {d["url"]: d["conforms_to"] for d in data["distributions"]} == {
+        "s3://bucket/dd3/equilibrium": DD3,
+        "s3://bucket/dd4/equilibrium": DD4,
+    }
+
+    ld = resource(
+        test_client.get(
+            f"/v1/datasets/id/{dataset_id}",
+            headers={**admin_user_token, "Accept": "application/ld+json"},
+        ).json()
+    )
+    assert {
+        d["dcat:downloadURL"]: d["dct:conformsTo"] for d in ld["dcat:distribution"]
+    } == {
+        "s3://bucket/dd3/equilibrium": {"@id": DD3},
+        "s3://bucket/dd4/equilibrium": {"@id": DD4},
+    }
+
+
+def test_conforms_to_must_be_an_http_url(
+    test_client: TestClient, admin_user_token: dict
+):
+    response = test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={"name": "equilibrium", "url": "s3://bucket/eq", "conforms_to": "DD4"},
+    )
+    assert response.status_code == 422
+    assert "http or https URL" in response.text
+
+    dataset_id = test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={"name": "equilibrium", "url": "s3://bucket/eq"},
+    ).json()["id"]
+    response = test_client.post(
+        f"/v1/datasets/{dataset_id}/distributions",
+        headers=admin_user_token,
+        json={"url": "s3://bucket/eq.nc", "conforms_to": "imas-dd:4.0.0"},
+    )
+    assert response.status_code == 422
+
+    distribution_id = test_client.get(
+        f"/v1/datasets/id/{dataset_id}", headers=admin_user_token
+    ).json()["distributions"][0]["id"]
+    response = test_client.patch(
+        f"/v1/distributions/{distribution_id}",
+        headers=admin_user_token,
+        json={"conforms_to": "IMAS DD 4"},
+    )
+    assert response.status_code == 422
+
+
 def test_create_dataset_without_level(test_client: TestClient, admin_user_token: dict):
     """Processing level is optional; when unset it is omitted from the response."""
     response = test_client.post(

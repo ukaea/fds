@@ -1,5 +1,7 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
+from urllib.parse import urlsplit
 
+from pydantic import AfterValidator
 from sqlmodel import Field, Relationship, SQLModel
 
 from .storage_options import StorageOptions, StorageOptionsType
@@ -8,12 +10,27 @@ if TYPE_CHECKING:
     from .dataset import Dataset
 
 
+def _http_url(value: str) -> str:
+    parts = urlsplit(value)
+    has_space = any(c.isspace() for c in value)
+    if parts.scheme not in ("http", "https") or not parts.hostname or has_space:
+        raise ValueError(
+            "conforms_to must be an http or https URL naming a schema, such as "
+            "https://github.com/iterorganization/IMAS-Data-Dictionary/tree/4.0.0"
+        )
+    return value
+
+
+SchemaURI = Annotated[str, AfterValidator(_http_url)]
+
+
 class DistributionBase(SQLModel):
     """A physical access path for a Dataset (maps to ``dcat:Distribution``).
 
-    All distributions of the same dataset must be scientifically interchangeable:
-    they represent the same data in different serialisations or behind different
-    access controls.  Quantitatively different data belongs in a separate Dataset.
+    All distributions of the same dataset carry the same information: the same
+    data in different serialisations, at different access paths, or in different
+    schemas that each declares in ``conforms_to``.  Data that differs belongs in
+    a separate Dataset.
 
     Fields:
         url: The download or access URL for this distribution
@@ -22,6 +39,11 @@ class DistributionBase(SQLModel):
             Dataset, for a file that holds several Datasets as groups, e.g.
             ``"equilibrium"`` in a NetCDF file of a whole shot.  ``None`` when
             ``url`` addresses the Dataset on its own.
+        conforms_to: http or https URL naming the schema this copy follows
+            (``dct:conformsTo``), e.g. an IMAS Data Dictionary version as
+            ``https://github.com/iterorganization/IMAS-Data-Dictionary/tree/4.0.0``.
+            Distributions in different schemas carry the same information, but a
+            reader must honour this to get the same values from each.
         endpoint_url: Storage endpoint hosting the data.  Used by FDS to look
             up the matching provider config for credential vending.
         region: Storage region for this distribution.  When set, overrides the
@@ -51,6 +73,7 @@ class DistributionBase(SQLModel):
 
     url: str
     group: str | None = Field(default=None)
+    conforms_to: SchemaURI | None = Field(default=None)
     endpoint_url: str | None = Field(default=None)
     region: str | None = Field(default=None)
     media_type: str | None = Field(default=None)
@@ -81,6 +104,7 @@ class DistributionRead(DistributionBase):
 class DistributionUpdate(SQLModel):
     url: str | None = None
     group: str | None = None
+    conforms_to: SchemaURI | None = None
     endpoint_url: str | None = None
     region: str | None = None
     media_type: str | None = None

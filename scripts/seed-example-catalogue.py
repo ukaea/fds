@@ -59,6 +59,7 @@ MAST_U_IDS_GROUPS = [
 # metadata and nothing reads their bytes, so the URLs name a reserved example
 # domain rather than a store somebody might expect to reach.
 FIXTURE_ENDPOINT = "https://s3.example.org"
+IMAS_DD = "https://github.com/iterorganization/IMAS-Data-Dictionary/tree/"
 
 # Shots 30420 and 30421 are real MAST data, already published openly by STFC.
 # FDS registers them where they are rather than copying them in, which is what a
@@ -621,6 +622,7 @@ def register_mast_upgrade_50001(client: httpx.Client, base_url: str) -> None:
 
     The L-mode counterpart to 50000: same equilibrium dataset name, no ELM annotation, so a
     annotation filter over MAST-U equilibrium datasets returns 50000 and not this one.
+    Its datasets follow IMAS DD 4.0.0, and the equilibrium also has a DD 3.42.0 copy.
     """
     existing = client.get(f"{base_url}/devices/mastu/shots/50001/collections/analysed")
     if existing.status_code == 200:
@@ -654,6 +656,7 @@ def register_mast_upgrade_50001(client: httpx.Client, base_url: str) -> None:
                 "endpoint_url": FIXTURE_ENDPOINT,
                 "media_type": "application/vnd.icechunk+zarr",
                 "format": "icechunk",
+                "conforms_to": f"{IMAS_DD}4.0.0",
                 "access_level": "public",
             },
         )
@@ -661,6 +664,18 @@ def register_mast_upgrade_50001(client: httpx.Client, base_url: str) -> None:
         client.post(
             f"{base_url}/collections/{collection_id}/datasets/{ds.json()['id']}"
         )
+        if ids_name == "equilibrium":
+            client.post(
+                f"{base_url}/datasets/{ds.json()['id']}/distributions",
+                json={
+                    "url": "s3://fds-data/shots/50001/dd3.nc",
+                    "group": "equilibrium",
+                    "endpoint_url": FIXTURE_ENDPOINT,
+                    "media_type": "application/x-netcdf",
+                    "format": "NetCDF-4",
+                    "conforms_to": f"{IMAS_DD}3.42.0",
+                },
+            ).raise_for_status()
 
 
 def register_jintrac_collection(

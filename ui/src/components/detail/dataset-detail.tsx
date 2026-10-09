@@ -30,6 +30,13 @@ function distributionLabel(d: Distribution): string {
   return d.format || d.media_type || 'Unknown format';
 }
 
+const IMAS_DD_TAG = /^https:\/\/github\.com\/iterorganization\/IMAS-Data-Dictionary\/tree\/(.+)$/;
+
+function schemaLabel(uri: string): string {
+  const dd = uri.match(IMAS_DD_TAG);
+  return dd ? `IMAS DD ${dd[1]}` : uri;
+}
+
 function Property({ label, children, last = false }: { label: string; children: ReactNode; last?: boolean }) {
   return (
     <div className={`flex flex-col justify-start py-1 ${last ? '' : 'border-b border-border pb-2'}`}>
@@ -1018,6 +1025,9 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                                             {d.format && d.media_type && (
                                                 <span className="block text-xs text-muted-foreground font-mono truncate">{d.media_type}</span>
                                             )}
+                                            {d.conforms_to && (
+                                                <span className="block text-xs text-muted-foreground truncate">{schemaLabel(d.conforms_to)}</span>
+                                            )}
                                         </span>
                                         {d.default_distribution && (
                                             <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-border rounded-sm px-1">Default</span>
@@ -1052,6 +1062,20 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                             <>
                                 <p className="text-muted-foreground font-medium uppercase tracking-wider pt-1">Group</p>
                                 <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded-sm">{selectedDist.group}</p>
+                            </>
+                        )}
+                        {selectedDist.conforms_to && (
+                            <>
+                                <p className="text-muted-foreground font-medium uppercase tracking-wider pt-1">Schema</p>
+                                <p className="break-all text-foreground bg-card border border-border p-2 rounded-sm">
+                                    {isHttp(selectedDist.conforms_to) ? (
+                                        <a href={selectedDist.conforms_to} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-foreground">
+                                            {schemaLabel(selectedDist.conforms_to)}
+                                        </a>
+                                    ) : (
+                                        schemaLabel(selectedDist.conforms_to)
+                                    )}
+                                </p>
                             </>
                         )}
                     </div>
