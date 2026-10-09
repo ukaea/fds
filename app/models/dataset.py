@@ -17,6 +17,7 @@ from sqlmodel import (
 from app.core.timeutils import UTCDatetime
 
 from .coverage import Coverage
+from .distribution import SchemaURI
 from .mixins import (
     DescriptiveMixin,
     IssuedMixin,
@@ -362,6 +363,7 @@ class DatasetCreate(DatasetBase):
     # default_distribution=True on create.  Only created when url is supplied.
     url: str | None = None
     group: str | None = None
+    conforms_to: SchemaURI | None = None
     endpoint_url: str | None = None
     region: str | None = None
     media_type: str | None = None
@@ -373,8 +375,9 @@ class DatasetCreate(DatasetBase):
 class DatasetRead(DatasetBase, TimestampMixin):
     """Dataset response schema.
 
-    ``url``, ``group``, ``media_type``, ``format``, and ``storage_options`` are
-    denormalised from the default distribution for convenience.
+    ``url``, ``group``, ``conforms_to``, ``media_type``, ``format``, and
+    ``storage_options`` are denormalised from the default distribution for
+    convenience.
     ``distributions`` lists all distributions associated with the dataset,
     including the default one (identified by ``default_distribution=True``).
     In JSON-LD responses these fields are re-separated into proper
@@ -390,6 +393,7 @@ class DatasetRead(DatasetBase, TimestampMixin):
     # Default distribution fields inlined for convenience (None when no distribution exists)
     url: str | None = None
     group: str | None = None
+    conforms_to: str | None = None
     media_type: str | None = None
     format: str | None = None
     storage_options: StorageOptions | None = None

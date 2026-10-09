@@ -132,14 +132,17 @@ export interface Dataset {
   distributions?: Distribution[] | null;
 }
 
-// One copy of a dataset's data. Copies are interchangeable: the same data in
-// another format or another store.
+// One copy of a dataset's data. Copies carry the same information: the same
+// data in another format, another store or another schema.
 export interface Distribution {
   id: number;
   url: string;
   // The group inside the file at url that holds this dataset, when the file
   // holds several datasets.
   group?: string | null;
+  // URI of the schema this copy follows, such as an IMAS Data Dictionary
+  // version. Values can differ between copies in different schemas.
+  conforms_to?: string | null;
   endpoint_url?: string | null;
   region?: string | null;
   media_type?: string | null;
