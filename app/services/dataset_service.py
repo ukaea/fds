@@ -1,3 +1,4 @@
+from collections import defaultdict
 from collections.abc import Sequence
 from typing import Any
 
@@ -7,7 +8,7 @@ from sqlmodel import Session, col, select
 
 from app.auth.access_control import (
     check_read,
-    get_effective_access_level,
+    get_effective_policies,
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_is_admin
@@ -643,19 +644,25 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         include_calibration: bool = False,
         include_annotations: bool = False,
     ) -> DatasetRead:
-        """
-        Converts a Dataset ORM object to a DatasetRead DTO, including the effective access level.
-        The default distribution's fields are inlined; other distributions appear in `formats`.
-        Optionally enriches it with temporary storage credentials if permitted.
-        When ``include_geometry`` / ``include_calibration`` is set, resolves the
-        signal's ``geometry_references`` / ``calibration_references`` to their
-        applicable versions.
-        """
-        default_dist = next(
-            (d for d in dataset.distributions if d.default_distribution), None
-        )
+        """``to_read_models`` for a single dataset."""
+        return self.to_read_models(
+            [dataset],
+            include_storage_options=include_storage_options,
+            user=user,
+            include_geometry=include_geometry,
+            include_calibration=include_calibration,
+            include_annotations=include_annotations,
+        )[0]
 
-        read_model = DatasetRead.model_validate(
+    def _read_model(
+        self,
+        dataset: Dataset,
+        distributions: list[Distribution],
+        access_level: AccessLevel,
+    ) -> DatasetRead:
+        """``dataset`` as a DatasetRead, its default distribution's fields inlined."""
+        default_dist = next((d for d in distributions if d.default_distribution), None)
+        return DatasetRead.model_validate(
             dataset,
             update={
                 "url": default_dist.url if default_dist else None,
@@ -664,35 +671,12 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 "media_type": default_dist.media_type if default_dist else None,
                 "format": default_dist.format if default_dist else None,
                 "distributions": [
-                    DistributionRead.model_validate(d) for d in dataset.distributions
+                    DistributionRead.model_validate(d) for d in distributions
                 ]
                 or None,
+                "effective_access_level": access_level,
             },
         )
-        read_model.effective_access_level = get_effective_access_level(
-            dataset, self.session
-        )
-        if include_storage_options and user:
-            read_model = self.enrich_with_storage_options([read_model], user)[0]
-        if include_geometry:
-            read_model.geometry = self._resolve_reference_read_models(
-                dataset,
-                GEOMETRY,
-                include_storage_options=include_storage_options,
-                user=user,
-            )
-        if include_calibration:
-            read_model.calibration = self._resolve_reference_read_models(
-                dataset,
-                CALIBRATION,
-                include_storage_options=include_storage_options,
-                user=user,
-            )
-        if include_annotations:
-            read_model.annotations = self._resolve_annotation_read_models(
-                dataset, include_storage_options=include_storage_options, user=user
-            )
-        return read_model
 
     def to_dcat(
         self,
@@ -736,14 +720,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             AnnotationService(self.session).for_dataset(dataset),
             user or ANONYMOUS_USER,
         )
-        models = [
-            self.to_read_model(
-                prop,
-                include_storage_options=include_storage_options,
-                user=user,
-            )
-            for prop in properties
-        ]
+        models = self.to_read_models(
+            properties, include_storage_options=include_storage_options, user=user
+        )
         return models or None
 
     def _resolve_reference_read_models(
@@ -846,10 +825,19 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         include_annotations: bool = False,
     ) -> list[DatasetRead]:
         """
-        Batch converts ORM objects to DatasetRead DTOs, efficiently applying batch enrichment
-        for temporary storage credentials to avoid N+1 IAM calls.
+        Converts Dataset ORM objects to DatasetRead DTOs, including the effective
+        access level. The default distribution's fields are inlined, and every
+        distribution is listed. Distributions, policies and storage credentials
+        are each resolved for all the datasets at once. ``include_geometry`` /
+        ``include_calibration`` resolve each dataset's ``geometry_references`` /
+        ``calibration_references`` to their applicable versions.
         """
-        models = [self.to_read_model(d) for d in datasets]
+        distributions = self._distributions_of(datasets)
+        policies = get_effective_policies(datasets, self.session)
+        models = [
+            self._read_model(dataset, distributions[dataset.id], policy.access_level)
+            for dataset, policy in zip(datasets, policies, strict=True)
+        ]
         if include_storage_options and user:
             models = self.enrich_with_storage_options(models, user)
         if include_geometry:
@@ -874,6 +862,21 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                     source, include_storage_options=include_storage_options, user=user
                 )
         return models
+
+    def _distributions_of(
+        self, datasets: Sequence[Dataset]
+    ) -> defaultdict[int | None, list[Distribution]]:
+        """The distributions of ``datasets`` by dataset id, in one query."""
+        by_dataset: defaultdict[int | None, list[Distribution]] = defaultdict(list)
+        ids = [d.id for d in datasets]
+        if ids:
+            for distribution in self.session.exec(
+                select(Distribution)
+                .where(col(Distribution.dataset_id).in_(ids))
+                .order_by(col(Distribution.id))
+            ):
+                by_dataset[distribution.dataset_id].append(distribution)
+        return by_dataset
 
     def enrich_with_storage_options(
         self, read_models: list[DatasetRead], user: AuthenticatedUser

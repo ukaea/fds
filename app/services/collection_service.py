@@ -7,6 +7,7 @@ from sqlmodel import Session, col, select
 from app.auth.access_control import (
     check_read,
     get_effective_access_level,
+    get_effective_policies,
     validate_policy_fields,
 )
 from app.auth.permissions import check_device_admin, check_is_admin
@@ -512,18 +513,17 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         self, collections: Sequence[Collection]
     ) -> list[CollectionRead]:
         """``CollectionRead`` DTOs without their members, as listed inside a parent."""
+        policies = get_effective_policies(collections, self.session)
         return [
             CollectionRead.model_validate(
                 c,
                 update={
-                    "effective_access_level": get_effective_access_level(
-                        c, self.session
-                    ),
+                    "effective_access_level": policy.access_level,
                     "datasets": None,
                     "child_collections": None,
                 },
             )
-            for c in collections
+            for c, policy in zip(collections, policies, strict=True)
         ]
 
     def get_member_datasets(

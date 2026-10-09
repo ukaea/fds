@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select, tuple_
 
 from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
 from app.core.audit import record_restricted_read
@@ -47,27 +47,58 @@ Policied = Collection | Dataset | Shot | Device
 _POLICY_FIELDS = ("access_level", "required_scopes", "allowed_idps")
 
 
-def policy_chain(obj: Policied, session: Session) -> list[Policied]:
+def _parents(
+    records: Sequence[Policied], session: Session
+) -> tuple[dict[tuple[str, str], Shot], dict[str, Device]]:
+    """The shots and devices ``records`` inherit policy from, a query each."""
+    # A record that sets every policy field inherits nothing, so there is no
+    # chain worth loading.
+    inheriting = [
+        r for r in records if any(getattr(r, f, None) is None for f in _POLICY_FIELDS)
+    ]
+    shot_keys = {
+        (r.device_name, r.shot_id)
+        for r in inheriting
+        if isinstance(r, (Dataset, Collection)) and r.shot_id and r.device_name
+    }
+    names = {name for r in inheriting if (name := getattr(r, "device_name", None))}
+
+    shots = (
+        session.exec(
+            select(Shot).where(
+                tuple_(col(Shot.device_name), col(Shot.id)).in_(shot_keys)
+            )
+        ).all()
+        if shot_keys
+        else []
+    )
+    devices = (
+        session.exec(select(Device).where(col(Device.name).in_(names))).all()
+        if names
+        else []
+    )
+    return {(s.device_name, s.id): s for s in shots}, {d.name: d for d in devices}
+
+
+def _chain(
+    obj: Policied, shots: dict[tuple[str, str], Shot], devices: dict[str, Device]
+) -> list[Policied]:
     """``obj`` and the objects it inherits policy from, nearest first.
 
     Collection/Dataset → Shot → Device. A Collection or Dataset not attached to
     a shot inherits from its device directly, and a Device inherits from nothing
     because it has no ``device_name`` of its own.
-
-    Walked once and returned as a list, because all three policy fields resolve
-    over the same chain and loading it per field is where this used to spend its
-    queries.
     """
     chain: list[Policied] = [obj]
 
     if isinstance(obj, (Dataset, Collection)) and obj.shot_id and obj.device_name:
-        shot = session.get(Shot, (obj.device_name, obj.shot_id))
+        shot = shots.get((obj.device_name, obj.shot_id))
         if shot:
             chain.append(shot)
 
     device_name = getattr(obj, "device_name", None)
     if device_name:
-        device = session.exec(select(Device).where(Device.name == device_name)).first()
+        device = devices.get(device_name)
         if device:
             chain.append(device)
 
@@ -100,18 +131,23 @@ def _policy_from(sources: Sequence[Any]) -> EffectivePolicy:
     )
 
 
-def get_effective_policy(obj: Policied, session: Session) -> EffectivePolicy:
-    """The policy that applies to ``obj``, after inheritance.
+def get_effective_policies(
+    records: Sequence[Policied], session: Session
+) -> list[EffectivePolicy]:
+    """The policy that applies to each of ``records``, after inheritance.
 
     Specific overrides general: the nearest explicitly-set value for each field
     wins, and an unset ``access_level`` anywhere in the chain falls back to
-    ``DEFAULT_ACCESS_LEVEL``.
+    ``DEFAULT_ACCESS_LEVEL``. However many records there are, the shots and
+    devices they inherit from load in a query each.
     """
-    # A record that sets every policy field inherits nothing, so there is no
-    # chain worth loading.
-    if all(getattr(obj, field, None) is not None for field in _POLICY_FIELDS):
-        return _policy_from([obj])
-    return _policy_from(policy_chain(obj, session))
+    shots, devices = _parents(records, session)
+    return [_policy_from(_chain(r, shots, devices)) for r in records]
+
+
+def get_effective_policy(obj: Policied, session: Session) -> EffectivePolicy:
+    """The policy that applies to ``obj``, after inheritance."""
+    return get_effective_policies([obj], session)[0]
 
 
 def get_effective_access_level(obj: Policied, session: Session) -> AccessLevel:
