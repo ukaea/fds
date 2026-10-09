@@ -11,7 +11,8 @@ from sqlmodel.sql.expression import Select, SelectOfScalar
 from app.auth.access_control import (
     NO_PARENT,
     EffectivePolicy,
-    check_read,
+    check_read_with_policy,
+    get_effective_policies,
     get_effective_policy,
     read_denial,
     resolve_policy,
@@ -156,10 +157,11 @@ def readable_only[T: Listed](
     session: Session, records: Sequence[T], user: AuthenticatedUser
 ) -> list[T]:
     """The ``records`` ``user`` may read, for a short list resolved in Python."""
+    policies = get_effective_policies(records, session)
     result = []
-    for record in records:
+    for record, policy in zip(records, policies, strict=True):
         try:
-            check_read(record, session, user, ReadTier.LISTED)
+            check_read_with_policy(record, policy, user, ReadTier.LISTED)
         except ForbiddenError:
             continue
         result.append(record)
