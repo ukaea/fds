@@ -1,8 +1,30 @@
+from datetime import date
+
 from sqlmodel import JSON, Field, SQLModel
 
 from app.core.timeutils import UTCDatetime, utcnow
 
 from .scientific_metadata import ScientificProperty
+
+
+class PersistentIdentifierMixin(SQLModel):
+    """A globally persistent identifier registered for the record elsewhere.
+
+    A DOI, Handle, PIDINST, ROR, ORCID or Software Heritage ID: whatever scheme
+    the record's owners registered it under. FDS stores it and does not mint it.
+    Either an absolute URI or a compact form such as ``doi:10.1234/abc``.
+    """
+
+    persistent_identifier: str | None = Field(default=None)
+
+
+class IssuedMixin(SQLModel):
+    """When the data was formally published: the date a citation gives.
+
+    Not ``created_at``, which is when FDS listed the record.
+    """
+
+    issued: date | None = Field(default=None)
 
 
 class TimestampMixin(SQLModel):

@@ -1,3 +1,4 @@
+from datetime import date
 from enum import Enum
 from typing import TYPE_CHECKING, Self
 
@@ -16,7 +17,14 @@ from sqlmodel import (
 from app.core.timeutils import UTCDatetime
 
 from .coverage import Coverage
-from .mixins import DescriptiveMixin, ScientificMetadataMixin, TimestampMixin
+from .distribution import SchemaURI
+from .mixins import (
+    DescriptiveMixin,
+    IssuedMixin,
+    PersistentIdentifierMixin,
+    ScientificMetadataMixin,
+    TimestampMixin,
+)
 from .policy import AccessLevel
 from .scientific_metadata import ScientificProperty
 from .storage_options import StorageOptions, StorageOptionsType
@@ -41,7 +49,13 @@ class DatasetScope(str, Enum):
     SHOT = "shot"
 
 
-class DatasetBase(DescriptiveMixin, ScientificMetadataMixin, SQLModel):
+class DatasetBase(
+    DescriptiveMixin,
+    ScientificMetadataMixin,
+    PersistentIdentifierMixin,
+    IssuedMixin,
+    SQLModel,
+):
     """Core metadata for a dataset (maps to ``dcat:Dataset``).
 
     A Dataset is a metadata container describing *what* the data is.  The
@@ -348,6 +362,8 @@ class DatasetCreate(DatasetBase):
     # Default distribution fields — passed through to a Distribution row with
     # default_distribution=True on create.  Only created when url is supplied.
     url: str | None = None
+    group: str | None = None
+    conforms_to: SchemaURI | None = None
     endpoint_url: str | None = None
     region: str | None = None
     media_type: str | None = None
@@ -359,8 +375,9 @@ class DatasetCreate(DatasetBase):
 class DatasetRead(DatasetBase, TimestampMixin):
     """Dataset response schema.
 
-    ``url``, ``media_type``, ``format``, and ``storage_options`` are
-    denormalised from the default distribution for convenience.
+    ``url``, ``group``, ``conforms_to``, ``media_type``, ``format``, and
+    ``storage_options`` are denormalised from the default distribution for
+    convenience.
     ``distributions`` lists all distributions associated with the dataset,
     including the default one (identified by ``default_distribution=True``).
     In JSON-LD responses these fields are re-separated into proper
@@ -375,6 +392,8 @@ class DatasetRead(DatasetBase, TimestampMixin):
     effective_access_level: AccessLevel | None = None
     # Default distribution fields inlined for convenience (None when no distribution exists)
     url: str | None = None
+    group: str | None = None
+    conforms_to: str | None = None
     media_type: str | None = None
     format: str | None = None
     storage_options: StorageOptions | None = None
@@ -387,6 +406,8 @@ class DatasetRead(DatasetBase, TimestampMixin):
 
 class DatasetUpdate(SQLModel):
     name: str | None = None
+    persistent_identifier: str | None = None
+    issued: date | None = None
     level: int | None = None
     quality_flag: str | None = None
     temporal_start: UTCDatetime | None = None

@@ -1,3 +1,4 @@
+from datetime import date
 from typing import TYPE_CHECKING
 
 from sqlmodel import (
@@ -10,7 +11,13 @@ from sqlmodel import (
     UniqueConstraint,
 )
 
-from .mixins import DescriptiveMixin, ScientificMetadataMixin, TimestampMixin
+from .mixins import (
+    DescriptiveMixin,
+    IssuedMixin,
+    PersistentIdentifierMixin,
+    ScientificMetadataMixin,
+    TimestampMixin,
+)
 from .policy import AccessLevel
 from .scientific_metadata import ScientificProperty
 
@@ -58,7 +65,13 @@ class CollectionMemberRead(SQLModel):
     child_id: int
 
 
-class CollectionBase(DescriptiveMixin, ScientificMetadataMixin, SQLModel):
+class CollectionBase(
+    DescriptiveMixin,
+    ScientificMetadataMixin,
+    PersistentIdentifierMixin,
+    IssuedMixin,
+    SQLModel,
+):
     """Core metadata for a Collection (maps to ``dcat:Catalog``).
 
     A Collection is an independently citable grouping of Datasets and/or other
@@ -163,7 +176,7 @@ class Collection(CollectionBase, TimestampMixin, table=True):
     datasets: list["Dataset"] = Relationship(link_model=CollectionDataset)
     # Child Collections are NOT declared as a SQLModel Relationship here because
     # SQLModel cannot automatically resolve self-referential M2M join columns.
-    # Use CollectionService._get_child_collections() instead.
+    # Use CollectionService.get_child_collections() instead.
 
 
 class CollectionCreate(CollectionBase):
@@ -205,6 +218,8 @@ class CollectionUpdate(SQLModel):
     """
 
     name: str | None = None
+    persistent_identifier: str | None = None
+    issued: date | None = None
     device_name: str | None = None
     shot_id: str | None = None
     activity_id: int | None = None

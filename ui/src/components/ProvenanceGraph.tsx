@@ -31,6 +31,7 @@ const NODE_DOT: Record<ShapeKind, string> = {
 };
 const EDGE_LABEL: Record<ProvEdgeKind, string> = {
   wasGeneratedBy: 'wasGeneratedBy',
+  wasDerivedFrom: 'wasDerivedFrom',
   used: 'used',
   wasAssociatedWith: 'wasAssociatedWith',
   actedOnBehalfOf: 'actedOnBehalfOf',
@@ -87,8 +88,10 @@ function toDot(graph: ProvGraph, showAll: boolean): string {
   // ranksep is modest because each edge carries an inline label node, which
   // adds an intermediate rank of its own.
   L.push('  rankdir=BT; bgcolor="transparent"; nodesep=0.4; ranksep=0.3;');
-  L.push('  node [fontname="Helvetica,Arial,sans-serif", fontsize=11, penwidth=1.4];');
-  L.push('  edge [fontname="Helvetica,Arial,sans-serif", color="#8a8a8a", arrowsize=0.7];');
+  // A single font Graphviz knows: given a list it does not recognise, it sizes
+  // shapes for Times, and the wider Helvetica the browser draws spills out.
+  L.push('  node [fontname="Helvetica", fontsize=11, penwidth=1.4];');
+  L.push('  edge [fontname="Helvetica", color="#8a8a8a", arrowsize=0.7];');
 
   for (const n of graph.nodes) {
     L.push(`  "${n.id}" [${NODE_DOT[SHAPE_OF[n.kind]]}, label=${nodeLabel(n.label, n.sub)}];`);
@@ -297,7 +300,7 @@ export default function ProvenanceGraph({ datasetId, collection }: ProvenanceGra
             setTip(null);
             setShowAll((v) => !v);
           }}
-          className="absolute right-3 top-3 rounded-md border border-border bg-white px-2.5 py-1 text-xs text-foreground shadow-sm hover:bg-muted"
+          className="absolute right-3 top-3 rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-xs text-neutral-800 shadow-xs hover:bg-neutral-100"
         >
           {showAll ? 'Hide all details' : 'Show all details'}
         </button>

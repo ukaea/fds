@@ -1,9 +1,18 @@
+import json
+
+import pytest
+from pydantic import TypeAdapter
+
 from app.models.storage_options import (
     FsspecS3StorageOptions,
     IcechunkS3StorageOptions,
+    StorageLocation,
+    StorageOptions,
     StorageOptionsType,
     build_storage_options,
     derive_storage_options_type,
+    parse_storage_url,
+    storage_backend,
 )
 
 
@@ -77,6 +86,17 @@ def test_build_icechunk_anonymous_aws():
     assert opts.force_path_style is None
 
 
+def test_lookalike_aws_host_is_not_aws():
+    """Only amazonaws.com and its subdomains count as AWS, not a host ending in it."""
+    opts = build_storage_options(
+        StorageOptionsType.ICECHUNK_S3,
+        endpoint_url="https://s3.notamazonaws.com",
+        anonymous=True,
+    )
+    assert isinstance(opts, IcechunkS3StorageOptions)
+    assert opts.force_path_style is True
+
+
 def test_build_icechunk_credentialed():
     opts = build_storage_options(
         StorageOptionsType.ICECHUNK_S3,
@@ -92,6 +112,59 @@ def test_build_icechunk_credentialed():
     assert opts.session_token == "ST"
     assert opts.region == "eu-west-2"
     assert opts.anonymous is None
+
+
+@pytest.mark.parametrize(
+    ("url", "backend"),
+    [
+        ("s3://bucket/key", "s3"),
+        ("gs://bucket/key", "gcs"),
+        ("gcs://bucket/key", "gcs"),
+        ("az://container/blob", "azure"),
+        ("abfs://container/blob", "azure"),
+        ("abfss://container/blob", "azure"),
+        ("https://example.org/file.nc", None),
+        (None, None),
+    ],
+)
+def test_storage_backend_from_scheme(url, backend):
+    assert storage_backend(url) == backend
+
+
+@pytest.mark.parametrize(
+    ("url", "location"),
+    [
+        ("s3://bucket/shots/a.nc", StorageLocation("s3", "bucket", "shots/a.nc")),
+        ("gs://bucket/key", StorageLocation("gcs", "bucket", "key")),
+        ("gcs://bucket/key", StorageLocation("gcs", "bucket", "key")),
+        ("az://container/blob", StorageLocation("azure", "container", "blob")),
+        ("abfs://container/blob", StorageLocation("azure", "container", "blob")),
+        ("abfss://container/blob", StorageLocation("azure", "container", "blob")),
+        # The account in the host, as adlfs reads it.
+        (
+            "abfs://container@acct.dfs.core.windows.net/blob",
+            StorageLocation("azure", "container", "blob", "acct"),
+        ),
+        (
+            "az://container@acct.blob.core.windows.net/blob",
+            StorageLocation("azure", "container", "blob", "acct"),
+        ),
+        ("abfs://@acct.dfs.core.windows.net/blob", None),
+        ("s3://bucket", StorageLocation("s3", "bucket", "")),
+        ("s3://bucket/", StorageLocation("s3", "bucket", "")),
+        # Legal in object keys, so not a fragment or a query.
+        ("s3://bucket/shots/a#1.nc", StorageLocation("s3", "bucket", "shots/a#1.nc")),
+        ("s3://bucket/shots/a?1.nc", StorageLocation("s3", "bucket", "shots/a?1.nc")),
+        # Only the leading scheme is stripped.
+        ("s3://bucket/copy/s3://x", StorageLocation("s3", "bucket", "copy/s3://x")),
+        ("s3://", None),
+        ("s3:bucket/key", None),
+        ("https://example.org/file.nc", None),
+        (None, None),
+    ],
+)
+def test_parse_storage_url(url, location):
+    assert parse_storage_url(url) == location
 
 
 def test_derive_storage_options_type():
@@ -118,20 +191,14 @@ def test_derive_storage_options_type():
     assert derive_storage_options_type(None, None) is None
 
 
-def test_serialised_excludes_type_discriminator():
-    """The ``type`` discriminator is metadata for the API contract — it must
-    not leak into serialised output, otherwise consumers can't splat directly
-    into ``s3fs.S3FileSystem(**opts)`` or ``icechunk.s3_storage(**opts)``.
-    """
-    fsspec_dump = build_storage_options(
-        StorageOptionsType.FSSPEC_S3, endpoint_url="http://x", anonymous=True
-    ).model_dump(exclude_none=True)
-    assert "type" not in fsspec_dump
+def test_schema_declares_no_discriminator():
+    """The published schema must not name a discriminator the payload lacks.
 
-    icechunk_dump = build_storage_options(
-        StorageOptionsType.ICECHUNK_S3, endpoint_url="http://x", anonymous=True
-    ).model_dump(exclude_none=True)
-    assert "type" not in icechunk_dump
+    Every key is splatted into an opener, so there is no tag to send, and a
+    client generated from the schema fails looking for one.
+    """
+    schema = TypeAdapter(StorageOptions).json_schema(mode="serialization")
+    assert "discriminator" not in json.dumps(schema)
 
 
 def test_serialised_drops_unset_keys():

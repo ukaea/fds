@@ -4,16 +4,22 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
+from app.models.activity import ActivityCreate
 from app.models.collection import CollectionCreate
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
 from app.models.file_access import S3Credentials
+from app.models.policy import AccessLevel
 from app.models.scientific_metadata import ScientificProperty
 from app.models.shot import ShotCreate
+from app.models.source import SourceCreate, SourceKind
+from app.services import collection_service as collection_service_module
+from app.services.activity_service import ActivityService
 from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
+from app.services.source_service import SourceService
 from tests.conftest import resource
 
 admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
@@ -422,6 +428,57 @@ def test_collection_activity_not_found_when_no_activity(
     assert response.status_code == 404
 
 
+def _make_restricted_collection_with_activity(session: Session) -> int:
+    source = SourceService(session).create(
+        SourceCreate(name="col-run-code", kind=SourceKind.SOFTWARE), user=admin_user
+    )
+    assert source.id is not None
+    activity = ActivityService(session).create(
+        ActivityCreate(source_id=source.id, parameters={"confidential": "run"}),
+        user=admin_user,
+    )
+    col = CollectionService(session).create(
+        CollectionCreate(
+            name="secret-col",
+            access_level=AccessLevel.RESTRICTED,
+            activity_id=activity.id,
+        ),
+        user=admin_user,
+    )
+    assert col.id is not None
+    session.commit()
+    return col.id
+
+
+def test_restricted_collection_activity_is_not_public(
+    test_client: TestClient, session: Session
+):
+    """The activity sub-resource answers 403, like the collection itself."""
+    col_id = _make_restricted_collection_with_activity(session)
+
+    response = test_client.get(f"/v1/collections/{col_id}/activity")
+    assert response.status_code == 403, response.text
+    assert "confidential" not in response.text
+
+
+def test_restricted_collection_activity_read_is_audited(
+    test_client: TestClient, session: Session, admin_user_token: dict, log_lines
+):
+    col_id = _make_restricted_collection_with_activity(session)
+    log_lines()
+
+    response = test_client.get(
+        f"/v1/collections/{col_id}/activity", headers=admin_user_token
+    )
+    assert response.status_code == 200, response.text
+    (line,) = [
+        entry
+        for entry in log_lines()
+        if entry.get("logger") == "fds.audit" and entry["event"] == "request"
+    ]
+    assert line["restricted_read"] == {"collection": [col_id]}
+
+
 def test_collection_include_storage_options(
     test_client: TestClient, session: Session, admin_user_token: dict, mocker
 ):
@@ -434,7 +491,7 @@ def test_collection_include_storage_options(
 
     mock_provider = mocker.MagicMock()
     mock_provider.generate_credentials.return_value = {
-        "bucket": S3Credentials(
+        "s3://bucket/cred-ds": S3Credentials(
             access_key_id="c_key",
             secret_access_key="c_sec",
             session_token="c_tok",
@@ -491,3 +548,130 @@ def test_collection_jsonld_carries_scientific_metadata(
     assert [p["schema:name"] for p in props] == ["confinement_mode", "plasma_current"]
     assert props[0]["@type"] == "schema:PropertyValue"
     assert props[1]["schema:unitText"] == "MA"
+
+
+def _public_collection_with_members(
+    session: Session,
+) -> tuple[int, list[int], list[int]]:
+    """A public collection holding three public datasets and three child collections."""
+    DeviceService(session).create(
+        DeviceCreate(name="DEV", type="Tokamak", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    service = CollectionService(session)
+    parent = service.create(
+        CollectionCreate(name="parent", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    assert parent.id is not None
+    datasets = [_make_dataset(session, f"ds{i}") for i in range(3)]
+    children = []
+    for i in range(3):
+        child = service.create(
+            CollectionCreate(name=f"child{i}", access_level=AccessLevel.PUBLIC),
+            user=admin_user,
+        )
+        assert child.id is not None
+        children.append(child.id)
+    for ds in datasets:
+        service.add_dataset(parent.id, ds, admin_user)
+    for child in children:
+        service.add_child_collection(parent.id, child, admin_user)
+    return parent.id, datasets, children
+
+
+def test_collection_datasets_paged_by_id(test_client: TestClient, session: Session):
+    parent, datasets, _ = _public_collection_with_members(session)
+
+    first = test_client.get(f"/v1/collections/{parent}/datasets?limit=2")
+    rest = test_client.get(f"/v1/collections/{parent}/datasets?offset=2&limit=2")
+
+    assert first.status_code == 200
+    assert [d["id"] for d in first.json()] == datasets[:2]
+    assert [d["id"] for d in rest.json()] == datasets[2:]
+
+
+def test_child_collections_paged_by_id_without_their_members(
+    test_client: TestClient, session: Session
+):
+    parent, _, children = _public_collection_with_members(session)
+    CollectionService(session).add_dataset(
+        children[0], _make_dataset(session, "nested"), admin_user
+    )
+
+    first = test_client.get(f"/v1/collections/{parent}/collections?limit=2")
+    rest = test_client.get(f"/v1/collections/{parent}/collections?offset=2&limit=2")
+
+    assert first.status_code == 200
+    assert [c["id"] for c in first.json()] == children[:2]
+    assert [c["id"] for c in rest.json()] == children[2:]
+    assert "datasets" not in first.json()[0]
+
+
+def test_collection_members_of_missing_collection_return_404(test_client: TestClient):
+    assert test_client.get("/v1/collections/999999/datasets").status_code == 404
+    assert test_client.get("/v1/collections/999999/collections").status_code == 404
+
+
+def test_collection_read_inlines_only_the_first_page_of_members(
+    test_client: TestClient, session: Session, monkeypatch
+):
+    monkeypatch.setattr(collection_service_module, "INLINE_MEMBERS", 2)
+    parent, datasets, children = _public_collection_with_members(session)
+
+    read = test_client.get(f"/v1/collections/id/{parent}").json()
+    ld = resource(
+        test_client.get(
+            f"/v1/collections/id/{parent}", headers={"accept": "application/ld+json"}
+        ).json()
+    )
+
+    assert [d["id"] for d in read["datasets"]] == datasets[:2]
+    assert [c["id"] for c in read["child_collections"]] == children[:2]
+    assert len(ld["dcat:dataset"]) == 2
+    assert len(ld["dcat:catalog"]) == 2
+
+
+def test_collection_members_listed_only_where_readable(
+    test_client: TestClient, session: Session
+):
+    parent, datasets, children = _public_collection_with_members(session)
+    service = CollectionService(session)
+    team_ds = DatasetService(session).create(
+        DatasetCreate(
+            name="team-notes",
+            url="s3://bucket/team-notes",
+            device_name="DEV",
+            access_level=AccessLevel.RESTRICTED,
+            required_scopes=["dev_team"],
+        ),
+        user=admin_user,
+    )
+    team_col = service.create(
+        CollectionCreate(
+            name="team-col",
+            access_level=AccessLevel.RESTRICTED,
+            required_scopes=["dev_team"],
+        ),
+        user=admin_user,
+    )
+    assert team_ds.id is not None and team_col.id is not None
+    service.add_dataset(parent, team_ds.id, admin_user)
+    service.add_child_collection(parent, team_col.id, admin_user)
+
+    read = test_client.get(f"/v1/collections/id/{parent}").json()
+    ld = resource(
+        test_client.get(
+            f"/v1/collections/id/{parent}", headers={"accept": "application/ld+json"}
+        ).json()
+    )
+    paged_ds = test_client.get(f"/v1/collections/{parent}/datasets").json()
+    paged_cols = test_client.get(f"/v1/collections/{parent}/collections").json()
+
+    assert [d["id"] for d in read["datasets"]] == datasets
+    assert [c["id"] for c in read["child_collections"]] == children
+    assert [d["id"] for d in paged_ds] == datasets
+    assert [c["id"] for c in paged_cols] == children
+    members = {m["@id"] for m in ld["prov:hadMember"]}
+    assert not any(m.endswith(f"/datasets/{team_ds.id}") for m in members)
+    assert not any(m.endswith(f"/collections/{team_col.id}") for m in members)

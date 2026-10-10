@@ -6,6 +6,8 @@ A named, citable group of Datasets.
 | --- | --- | --- | --- |
 | `name` | string | Yes | Short name, unique within its scope (e.g. `analysed-data`, `jintrac-30420-56`) |
 | `title` | string | No | Human-readable title |
+| `persistent_identifier` | string | No | A DOI or other persistent identifier registered for the collection. See [Persistent identifiers](../dcat-jsonld.md#persistent-identifiers) |
+| `issued` | date | No | When the collection was formally published, the date a citation gives (`dct:issued`). Not when FDS listed it |
 | `access_level` | enum | No | Effective access level (inherited if not set) |
 | `root_url` | string | No | Access root for all physical data in this collection (`dcat:accessURL`) |
 | `activity_id` | integer | No | FK to the Activity that produced this collection |
@@ -118,3 +120,16 @@ Create a Collection, then add its member Datasets by id, one bodyless `POST` per
       });
     }
     ```
+
+## Reading members
+
+A collection read inlines its first 100 member Datasets as `datasets` and its first 100 child Collections as `child_collections`, ordered by id. Children are listed without their own members.
+
+A larger collection is read in pages:
+
+```http
+GET /v1/collections/{id}/datasets?offset=100&limit=100
+GET /v1/collections/{id}/collections?offset=100&limit=100
+```
+
+Both are ordered by id and take at most 1000 per page. A page shorter than `limit` is the last.

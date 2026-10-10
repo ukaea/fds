@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { fetcher, API_BASE } from '@/lib/api';
+import { fetcher, API_BASE, FetchError } from '@/lib/api';
 import { Dataset, Collection, Activity, Source, Shot } from '@/lib/types';
 import { useDeviceLabel } from '@/lib/use-device-label';
 import { Database, ChevronRight, Layers, MapPin, SlidersHorizontal, Highlighter } from 'lucide-react';
@@ -11,6 +11,7 @@ import { availableProperties, propertyQuery, withQuery } from '@/lib/properties'
 import { dedupeById } from '@/components/resolved-ref';
 import { PropertyFilter } from '@/components/property-filter';
 import { JsonLdPanel } from '@/components/jsonld-panel';
+import { SidePanelLayout } from '@/components/side-panel-layout';
 import { DatasetCard } from '@/components/dataset-card';
 import { DatasetResults } from '@/components/dataset-results';
 import { PropertyBadges, ScientificMetadata } from '@/components/properties';
@@ -84,6 +85,13 @@ function CollectionSection({
   );
 }
 
+function shotErrorMessage(error: unknown, deviceLabel: string): string {
+  const status = error instanceof FetchError ? error.status : undefined;
+  if (status === 404) return `There is no shot with this ID on ${deviceLabel}.`;
+  if (status === 403) return 'This shot is restricted. Sign in with an account that has access to it.';
+  return 'Something went wrong loading this shot. Try again in a moment.';
+}
+
 export default function ShotDetail({
   deviceName,
   shotId,
@@ -95,7 +103,7 @@ export default function ShotDetail({
 
   // The shot itself carries its annotations (inline scientific_metadata) and, with
   // include_annotations, the annotation datasets expressed in its own frame.
-  const { data: shot } = useSWR<Shot>(
+  const { data: shot, error: shotError } = useSWR<Shot>(
     deviceName && shotId
       ? `${API_BASE}/devices/${deviceName}/shots/${shotId}?include_annotations=true`
       : null,
@@ -145,6 +153,39 @@ export default function ShotDetail({
     (a, b) => (a.calibration_stage ?? 0) - (b.calibration_stage ?? 0)
   );
 
+  // Without this a shot that cannot be read renders as one with no data. A
+  // restricted shot can still hold datasets the caller may read, so those stay;
+  // the shot's own metadata, annotations included, does not.
+  if (shotError) {
+    const restricted = shotError instanceof FetchError && shotError.status === 403;
+    const readable = restricted ? (datasets?.filter((ds) => !ds.annotates) ?? []) : [];
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold text-foreground mb-2">Shot #{shotId}</h1>
+        <p className="text-muted-foreground mb-4">{shotErrorMessage(shotError, deviceLabel)}</p>
+        <Link href={`/devices/${deviceName}`} className="text-primary hover:underline">
+          Back to {deviceLabel}
+        </Link>
+        {readable.length > 0 && (
+          <div className="mt-10">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-muted p-2 rounded-lg text-foreground">
+                <Database className="w-5 h-5" />
+              </div>
+              <h2 className="text-xl font-semibold text-foreground">Available Datasets</h2>
+              <span className="text-sm text-muted-foreground">({readable.length})</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {readable.map((dataset) => (
+                <DatasetCard key={dataset.id ?? dataset.name} dataset={dataset} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
@@ -164,117 +205,121 @@ export default function ShotDetail({
         )}
       </div>
 
-      {/* Annotations on the shot record itself — metadata, not a dataset, so
-          it sits with the shot rather than with the data resolved for it. */}
-      <ScientificMetadata properties={shot?.scientific_metadata} className="mb-10" />
+      <SidePanelLayout
+        side={
+          <>
+            {/* Annotations on the shot record itself — metadata, not a dataset,
+                so it sits with the shot rather than with the data resolved for it. */}
+            <ScientificMetadata properties={shot?.scientific_metadata} className="mb-6" />
 
-      {isLoading && (
-        <div className="card p-6 text-center text-muted-foreground">Loading datasets…</div>
-      )}
-      {error && (
-        <div className="card p-6 text-center text-destructive">Failed to load datasets.</div>
-      )}
-
-      {/* Annotations carried by this shot's datasets, describing the data itself
-          rather than the plasma. Absent on most shots, in which case this and the
-          filtered view below never appear. */}
-      <PropertyFilter
-        label="Filter datasets by annotation"
-        properties={availableProperties(datasets)}
-        selected={propertyTokens}
-        onChange={setPropertyTokens}
-      />
-
-      {/* Filtering answers with one flat list. The collections below group every
-          dataset they hold, so a filtered count against them would not add up. */}
-      {propertyTokens.length > 0 && (
-        <div className="mb-10">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="bg-muted p-2 rounded-lg text-foreground">
-              <Database className="w-5 h-5" />
-            </div>
-            <h2 className="text-xl font-semibold text-foreground">Matching Datasets</h2>
-            <span className="text-sm text-muted-foreground">
-              ({matchingDatasets?.length ?? 0} of {datasets?.length ?? 0})
-            </span>
-          </div>
-          {matchingLoading && !matchingDatasets ? (
-            <div className="card p-6 text-center text-muted-foreground">Loading datasets…</div>
-          ) : (
-            <DatasetResults
-              datasets={matchingDatasets}
-              emptyMessage="No datasets in this shot carry every selected annotation."
+            {/* Annotations carried by this shot's datasets, describing the data
+                itself rather than the plasma. Absent on most shots, in which case
+                this and the filtered view never appear. */}
+            <PropertyFilter
+              label="Filter datasets by annotation"
+              properties={availableProperties(datasets)}
+              selected={propertyTokens}
+              onChange={setPropertyTokens}
             />
-          )}
-        </div>
-      )}
 
-      {/* One section per collection */}
-      {propertyTokens.length === 0 &&
-        collections?.map((collection) => (
-          <CollectionSection
-            key={collection.id}
-            collection={collection}
-            sourcesById={sourcesById}
-          />
-        ))}
+            <JsonLdPanel url={`${API_BASE}/devices/${deviceName}/shots/${shotId}`} />
+          </>
+        }
+      >
+        {isLoading && (
+          <div className="card p-6 text-center text-muted-foreground">Loading datasets…</div>
+        )}
+        {error && (
+          <div className="card p-6 text-center text-destructive">Failed to load datasets.</div>
+        )}
 
-      {/* Datasets not in any collection */}
-      {propertyTokens.length === 0 && uncollectedDatasets.length > 0 && (
-        <div>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="bg-muted p-2 rounded-lg text-foreground">
-              <Database className="w-5 h-5" />
+        {/* Filtering answers with one flat list. The collections below group every
+            dataset they hold, so a filtered count against them would not add up. */}
+        {propertyTokens.length > 0 && (
+          <div className="mb-10">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-muted p-2 rounded-lg text-foreground">
+                <Database className="w-5 h-5" />
+              </div>
+              <h2 className="text-xl font-semibold text-foreground">Matching Datasets</h2>
+              <span className="text-sm text-muted-foreground">
+                ({matchingDatasets?.length ?? 0} of {datasets?.length ?? 0})
+              </span>
             </div>
-            <h2 className="text-xl font-semibold text-foreground">Other Datasets</h2>
-            <span className="text-sm text-muted-foreground">({uncollectedDatasets.length})</span>
+            {matchingLoading && !matchingDatasets ? (
+              <div className="card p-6 text-center text-muted-foreground">Loading datasets…</div>
+            ) : (
+              <DatasetResults
+                datasets={matchingDatasets}
+                emptyMessage="No datasets in this shot carry every selected annotation."
+              />
+            )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {uncollectedDatasets.map((dataset) => (
-              <DatasetCard key={dataset.id ?? dataset.name} dataset={dataset} />
-            ))}
-          </div>
-        </div>
-      )}
+        )}
 
-      {/* Datasets resolved for this shot: the reference versions its data reads
-          against, and the annotation datasets localising them. */}
-      {(resolvedGeometry.length > 0 || resolvedCalibration.length > 0 || (shot?.annotations?.length ?? 0) > 0) && (
-        <div className="mt-10">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="bg-muted p-2 rounded-lg text-foreground">
-              <Database className="w-5 h-5" />
+        {/* One section per collection */}
+        {propertyTokens.length === 0 &&
+          collections?.map((collection) => (
+            <CollectionSection
+              key={collection.id}
+              collection={collection}
+              sourcesById={sourcesById}
+            />
+          ))}
+
+        {/* Datasets not in any collection */}
+        {propertyTokens.length === 0 && uncollectedDatasets.length > 0 && (
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-muted p-2 rounded-lg text-foreground">
+                <Database className="w-5 h-5" />
+              </div>
+              <h2 className="text-xl font-semibold text-foreground">Other Datasets</h2>
+              <span className="text-sm text-muted-foreground">({uncollectedDatasets.length})</span>
             </div>
-            <h2 className="text-xl font-semibold text-foreground">Related Data</h2>
-            <span className="text-sm text-muted-foreground">resolved for this shot</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {uncollectedDatasets.map((dataset) => (
+                <DatasetCard key={dataset.id ?? dataset.name} dataset={dataset} />
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <RelatedGroup icon={MapPin} label="Geometry" datasets={resolvedGeometry} />
-            <RelatedGroup
-              icon={SlidersHorizontal}
-              label="Calibration"
-              hint="— applied in order"
-              datasets={resolvedCalibration}
-            />
-            <RelatedGroup
-              icon={Highlighter}
-              label="Annotations"
-              hint="— on this shot's axes"
-              datasets={shot?.annotations}
-            />
+        )}
+
+        {/* Datasets resolved for this shot: the reference versions its data reads
+            against, and the annotation datasets localising them. */}
+        {(resolvedGeometry.length > 0 || resolvedCalibration.length > 0 || (shot?.annotations?.length ?? 0) > 0) && (
+          <div className="mt-10">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-muted p-2 rounded-lg text-foreground">
+                <Database className="w-5 h-5" />
+              </div>
+              <h2 className="text-xl font-semibold text-foreground">Related Data</h2>
+              <span className="text-sm text-muted-foreground">resolved for this shot</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <RelatedGroup icon={MapPin} label="Geometry" datasets={resolvedGeometry} />
+              <RelatedGroup
+                icon={SlidersHorizontal}
+                label="Calibration"
+                hint="— applied in order"
+                datasets={resolvedCalibration}
+              />
+              <RelatedGroup
+                icon={Highlighter}
+                label="Annotations"
+                hint="— on this shot's axes"
+                datasets={shot?.annotations}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {!isLoading && !error && datasets?.length === 0 && (
-        <div className="py-12 text-center text-muted-foreground border border-dashed border-border rounded-lg">
-          No datasets found for this shot.
-        </div>
-      )}
-
-      <div className="mt-10">
-        <JsonLdPanel url={`${API_BASE}/devices/${deviceName}/shots/${shotId}`} />
-      </div>
+        {!isLoading && !error && datasets?.length === 0 && (
+          <div className="py-12 text-center text-muted-foreground border border-dashed border-border rounded-lg">
+            No datasets found for this shot.
+          </div>
+        )}
+      </SidePanelLayout>
     </div>
   );
 }

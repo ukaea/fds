@@ -70,7 +70,7 @@ def test_credentials_include_storage_options(
 
     mock_provider = mocker.MagicMock()
     mock_provider.generate_credentials.return_value = {
-        "bulk": S3Credentials(
+        "s3://bulk/7/bulk1": S3Credentials(
             access_key_id="b_key",
             secret_access_key="b_sec",
             session_token="b_tok",

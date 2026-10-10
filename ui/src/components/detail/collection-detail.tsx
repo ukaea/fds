@@ -1,14 +1,18 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Collection, Activity } from '@/lib/types';
+import { Collection, Activity, Dataset } from '@/lib/types';
+import { usePagedList } from '@/lib/use-paged-list';
+import { LoadMore } from '@/components/load-more';
 import ProvenanceGraph from '@/components/ProvenanceGraph';
 import { ScientificMetadata } from '@/components/properties';
 import { useDeviceLabel } from '@/lib/use-device-label';
-import { Layers, Database, FileCode, ChevronRight, Activity as ActivityIcon, Clock, ExternalLink } from 'lucide-react';
+import { Layers, Database, FileCode, ChevronRight, Activity as ActivityIcon } from 'lucide-react';
 import { JsonLdPanel } from '@/components/jsonld-panel';
+import { CollapsibleSection } from '@/components/collapsible-section';
 
 function formatMediaType(mediaType?: string): string {
   if (!mediaType) return 'Zarr';
@@ -16,6 +20,17 @@ function formatMediaType(mediaType?: string): string {
   if (mediaType.includes('netcdf') || mediaType.includes('netCDF')) return 'NetCDF';
   if (mediaType.includes('hdf')) return 'HDF5';
   return mediaType.split('/').pop() || mediaType;
+}
+
+const PAGE_SIZE = 100;
+
+function Property({ label, last, children }: { label: string; last?: boolean; children: ReactNode }) {
+  return (
+    <div className={`flex flex-col justify-start py-1 ${last ? '' : 'border-b border-border pb-2'}`}>
+      <span className="text-muted-foreground uppercase text-xs font-bold tracking-wider mb-1">{label}</span>
+      <span className="text-foreground">{children}</span>
+    </div>
+  );
 }
 
 function formatDate(iso?: string): string {
@@ -36,6 +51,15 @@ export default function CollectionDetail({ id }: { id: string }) {
   const deviceLabel = useDeviceLabel(deviceName);
   const shotId = collection?.shot_id ?? undefined;
   const collectionName = collection?.name;
+
+  const children = usePagedList<Collection>(
+    collection?.id != null ? `${API_BASE}/collections/${collection.id}/collections` : null,
+    PAGE_SIZE
+  );
+  const members = usePagedList<Dataset>(
+    collection?.id != null ? `${API_BASE}/collections/${collection.id}/datasets` : null,
+    PAGE_SIZE
+  );
 
   const { data: activity } = useSWR<Activity>(
     collection?.id != null && collection.activity_id != null
@@ -99,147 +123,161 @@ export default function CollectionDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Member datasets */}
-        <div className="lg:col-span-2">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="bg-muted p-2 rounded-lg text-foreground">
-              <Database className="w-5 h-5" />
-            </div>
-            <h2 className="text-lg font-semibold text-foreground">Member Datasets</h2>
-            <span className="text-sm text-muted-foreground">({collection.datasets?.length ?? 0})</span>
-          </div>
 
-          {collection.datasets && collection.datasets.length > 0 ? (
-            <div className="space-y-3">
-              {collection.datasets.map((ds) => (
-                <Link
-                  key={ds.name}
-                  href={`/datasets/${ds.id}`}
-                  className="card p-4 hover:border-primary/50 transition-all group flex items-start justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="bg-muted p-2 rounded text-foreground">
-                      <Database className="w-4 h-4" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-8">
+          {!!children.items?.length && (
+            <section>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-muted p-2 rounded-lg text-foreground">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <h2 className="text-lg font-semibold text-foreground">Member Collections</h2>
+                {children.done && (
+                  <span className="text-sm text-muted-foreground">({children.items.length})</span>
+                )}
+              </div>
+              <div className="space-y-3">
+                {children.items.map((child) => (
+                  <Link
+                    key={child.id}
+                    href={`/collections/${child.id}`}
+                    className="card p-4 hover:border-primary/50 transition-all group flex items-start justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="bg-muted p-2 rounded-sm text-foreground">
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                          {child.title || child.name}
+                        </p>
+                        {child.title && (
+                          <p className="text-xs text-muted-foreground font-mono mt-0.5">{child.name}</p>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-foreground group-hover:text-primary transition-colors">{ds.name}</p>
-                      <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate max-w-sm">{ds.url}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-4">
-                    <span className="text-xs px-2 py-0.5 bg-muted rounded text-foreground flex items-center gap-1">
-                      <FileCode className="w-3 h-3" />
-                      {formatMediaType(ds.media_type)}
-                    </span>
-                    <ChevronRight className="text-muted-foreground group-hover:text-primary transition-colors" />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="card p-8 text-center text-muted-foreground">No datasets in this collection.</div>
+                    <ChevronRight className="text-muted-foreground group-hover:text-primary transition-colors shrink-0 ml-4" />
+                  </Link>
+                ))}
+              </div>
+              <LoadMore onLoad={children.loadMore} loading={children.loadingMore} done={children.done} />
+            </section>
+          )}
+
+          {(!!members.items?.length || !children.items?.length) && (
+            <section>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-muted p-2 rounded-lg text-foreground">
+                  <Database className="w-5 h-5" />
+                </div>
+                <h2 className="text-lg font-semibold text-foreground">Member Datasets</h2>
+                {members.done && (
+                  <span className="text-sm text-muted-foreground">({members.items?.length ?? 0})</span>
+                )}
+              </div>
+
+              {members.items?.length ? (
+                <div className="space-y-3">
+                  {members.items.map((ds) => (
+                    <Link
+                      key={ds.id}
+                      href={`/datasets/${ds.id}`}
+                      className="card p-4 hover:border-primary/50 transition-all group flex items-start justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="bg-muted p-2 rounded-sm text-foreground">
+                          <Database className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-foreground group-hover:text-primary transition-colors">{ds.name}</p>
+                          <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate max-w-sm">{ds.url}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-4">
+                        <span className="text-xs px-2 py-0.5 bg-muted rounded-sm text-foreground flex items-center gap-1">
+                          <FileCode className="w-3 h-3" />
+                          {formatMediaType(ds.media_type)}
+                        </span>
+                        <ChevronRight className="text-muted-foreground group-hover:text-primary transition-colors" />
+                      </div>
+                    </Link>
+                  ))}
+                  <LoadMore onLoad={members.loadMore} loading={members.loadingMore} done={members.done} />
+                </div>
+              ) : members.isLoading || children.isLoading ? (
+                <div className="card p-8 text-center text-muted-foreground">Loading members…</div>
+              ) : (
+                <div className="card p-8 text-center text-muted-foreground">No datasets in this collection.</div>
+              )}
+            </section>
           )}
         </div>
 
-        {/* Provenance sidebar */}
-        <div className="space-y-4">
-          <ScientificMetadata properties={collection.scientific_metadata} />
-
-          <div className="card p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <ActivityIcon className="w-4 h-4 text-foreground" />
-              <h3 className="text-sm font-semibold text-foreground">Provenance</h3>
+        <div className="space-y-6">
+          <div className="card p-6 bg-card/60 shadow-xl border-border">
+            <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground">Collection Properties</h3>
+            <div className="space-y-3 text-sm">
+              <Property label="Created At">
+                {collection.created_at
+                  ? new Date(collection.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+                  : 'Unknown'}
+              </Property>
+              <Property label="Scope">
+                {shotId ? `${deviceLabel} / Shot ${shotId}` : deviceName ? deviceLabel : 'Global'}
+              </Property>
+              {collection.root_url && (
+                <Property label="Root URL">
+                  <span className="font-mono break-all">{collection.root_url}</span>
+                </Property>
+              )}
+              <Property label="Access Level" last>
+                <span className="capitalize">{collection.effective_access_level || collection.access_level || 'Unknown'}</span>
+              </Property>
             </div>
+          </div>
 
+          <ScientificMetadata properties={collection.scientific_metadata} className="bg-card/60 shadow-xl border-border" />
+
+          <div className="card p-6 bg-card/60 shadow-xl border-border">
+            <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground flex items-center gap-2">
+              <ActivityIcon className="w-5 h-5 text-muted-foreground" /> Provenance
+            </h3>
             {activity ? (
               <div className="space-y-3 text-sm">
-                <div>
-                  <p className="text-muted-foreground text-xs mb-1">Activity type</p>
-                  <p className="text-foreground font-mono">{activity.activity_type || '—'}</p>
-                </div>
+                {activity.activity_type && <Property label="Activity Type">{activity.activity_type}</Property>}
                 {activity.source_version && (
-                  <div>
-                    <p className="text-muted-foreground text-xs mb-1">Source version</p>
-                    <p className="text-foreground font-mono">{activity.source_version}</p>
-                  </div>
+                  <Property label="Source Version">
+                    <span className="font-mono">{activity.source_version}</span>
+                  </Property>
                 )}
-                {activity.started_at && (
-                  <div>
-                    <p className="text-muted-foreground text-xs mb-1">Started</p>
-                    <p className="text-foreground flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-muted-foreground" />
-                      {formatDate(activity.started_at)}
-                    </p>
-                  </div>
-                )}
-                {activity.ended_at && (
-                  <div>
-                    <p className="text-muted-foreground text-xs mb-1">Ended</p>
-                    <p className="text-foreground flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-muted-foreground" />
-                      {formatDate(activity.ended_at)}
-                    </p>
-                  </div>
-                )}
+                {activity.started_at && <Property label="Started">{formatDate(activity.started_at)}</Property>}
+                {activity.ended_at && <Property label="Ended">{formatDate(activity.ended_at)}</Property>}
                 {activity.parameters && Object.keys(activity.parameters).length > 0 && (
-                  <div>
-                    <p className="text-muted-foreground text-xs mb-1">Parameters</p>
-                    <pre className="text-xs text-foreground bg-card/50 rounded p-2 overflow-x-auto">
+                  <Property label="Parameters" last>
+                    <pre className="text-xs font-mono bg-background border border-border p-2 rounded-sm overflow-x-auto">
                       {JSON.stringify(activity.parameters, null, 2)}
                     </pre>
-                  </div>
+                  </Property>
                 )}
               </div>
             ) : collection.activity_id ? (
               <p className="text-muted-foreground text-sm">Loading provenance…</p>
             ) : (
-              <p className="text-muted-foreground text-sm">No provenance recorded.</p>
+              <div className="text-center py-4 bg-card/30 rounded-lg border border-dashed border-border">
+                <p className="text-xs text-muted-foreground">No activity is recorded for this collection.</p>
+              </div>
             )}
-          </div>
-
-          {/* JSON-LD link */}
-          <div className="card p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <ExternalLink className="w-4 h-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold text-foreground">Semantic Metadata</h3>
-            </div>
-            <p className="text-xs text-muted-foreground mb-3">
-              This collection is serialisable as a <code className="text-foreground">dcat:Catalog</code> with full PROV-O provenance.
-            </p>
-            <a
-              href={`/api/v1/collections/id/${id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-              onClick={(e) => {
-                // Modify Accept header isn't possible via plain <a>, so just link to the endpoint
-                e.preventDefault();
-                window.open(
-                  `/api/v1/collections/id/${id}`,
-                  '_blank'
-                );
-              }}
+            <CollapsibleSection
+              label="Provenance graph"
+              className="mt-4 -mx-4 border-t border-border"
             >
-              View raw JSON <ExternalLink className="w-3 h-3" />
-            </a>
+              <ProvenanceGraph collection={collection} />
+            </CollapsibleSection>
           </div>
-        </div>
-      </div>
 
-      {(collection.datasets?.length ?? 0) > 0 ||
-      (collection.child_collections?.length ?? 0) > 0 ||
-      collection.activity_id != null ? (
-        <div className="card p-6 mt-8 bg-card/60 shadow-xl border-border">
-          <h3 className="text-lg font-bold mb-4 border-b border-border pb-2 text-foreground flex items-center gap-2">
-            <ActivityIcon className="w-5 h-5 text-muted-foreground" /> Provenance Graph
-          </h3>
-          <ProvenanceGraph collection={collection} />
+          <JsonLdPanel url={`${API_BASE}/collections/id/${id}`} />
         </div>
-      ) : null}
-
-      <div className="mt-10">
-        <JsonLdPanel url={`${API_BASE}/collections/id/${id}`} />
       </div>
     </div>
   );

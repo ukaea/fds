@@ -2,7 +2,14 @@ from collections.abc import Sequence
 
 from fastapi import APIRouter, status
 
-from app.api.deps import CollectionServiceDep, CurrentUserDep, SourceServiceDep
+from app.api.deps import (
+    DEFAULT_PAGE_SIZE,
+    CollectionServiceDep,
+    CurrentUserDep,
+    Limit,
+    Offset,
+    SourceServiceDep,
+)
 from app.models.collection import CollectionRead
 from app.models.source import SourceCreate, SourceRead, SourceUpdate
 from app.services.exceptions import ResourceNotFoundError
@@ -26,7 +33,9 @@ def create_source(
 
 @router.get("/", response_model=list[SourceRead])
 def read_sources(
-    source_service: SourceServiceDep, offset: int = 0, limit: int = 100
+    source_service: SourceServiceDep,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> Sequence[SourceRead]:
     """
     Retrieve all sources.
@@ -40,8 +49,8 @@ def read_collections_for_source(
     name: str,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> Sequence[CollectionRead]:
     """
     Return all Collections whose linked Activity was produced by the named Source.
@@ -49,7 +58,7 @@ def read_collections_for_source(
     collections = collection_service.get_for_source(
         source_name=name, user=user, offset=offset, limit=limit
     )
-    return [collection_service.to_read_model(c) for c in collections]
+    return collection_service.to_read_models(collections, user=user)
 
 
 @router.get("/id/{id}", response_model=SourceRead)
@@ -74,7 +83,7 @@ def read_source_by_name(name: str, source_service: SourceServiceDep) -> SourceRe
     return source_service.to_read_model(source)
 
 
-@router.put("/{id}", response_model=SourceRead)
+@router.patch("/{id}", response_model=SourceRead)
 def update_source(
     *,
     id: int,

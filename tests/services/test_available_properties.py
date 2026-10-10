@@ -158,6 +158,32 @@ def test_unit_is_carried_through(session: Session) -> None:
     )
 
 
+def test_a_description_is_reported_only_when_every_record_agrees(
+    session: Session, admin_user: AuthenticatedUser
+) -> None:
+    """What a name means belongs beside its filter, where nobody has opened a record."""
+    props(
+        session,
+        admin_user,
+        [
+            ScientificProperty(
+                name="campaign",
+                value=f"M{i % 3}",
+                description="Campaign the shot ran in.",
+            )
+            for i in range(30)
+        ]
+        + [
+            ScientificProperty(name="heating", value="Ohmic", description=text)
+            for text in ("Beams used.", "Heating used.")
+        ],
+    )
+    properties = ShotService(session).available_properties(MAST)
+
+    assert prop(properties, "campaign").description == "Campaign the shot ran in."
+    assert prop(properties, "heating").description is None
+
+
 @pytest.mark.usefixtures("catalogue")
 def test_enumerable_names_sort_first_then_by_distinct_then_name(
     session: Session,

@@ -17,7 +17,7 @@ you sign tokens yourself:
         writes dev/local-issuer.key (keep this private) and
         dev/local-issuer.jwks.json (give this to FDS)
 
-    FDS_TRUSTED_IDPS='[{"issuer":"urn:fds:local","jwks_file":"dev/local-issuer.jwks.json"}]'
+    FDS_TRUSTED_IDPS='[{"issuer":"urn:fds:local","jwks_file":"dev/local-issuer.jwks.json","allowed_scopes":["*"]}]'
 
     uv run scripts/mint-token.py mint --key dev/local-issuer.key
         prints a token; add --scope, --subject, --minutes as needed

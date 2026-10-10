@@ -2,15 +2,19 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select, tuple_
 
+from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
+from app.core.audit import record_restricted_read
 from app.core.config import config
+from app.core.context import ReadTier
 from app.models.collection import Collection
 from app.models.dataset import Dataset
 from app.models.device import Device
+from app.models.identity import AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.models.shot import Shot
-from app.services.exceptions import FDSValidationError
+from app.services.exceptions import FDSValidationError, ForbiddenError
 
 DEFAULT_ACCESS_LEVEL = AccessLevel.RESTRICTED
 
@@ -43,27 +47,58 @@ Policied = Collection | Dataset | Shot | Device
 _POLICY_FIELDS = ("access_level", "required_scopes", "allowed_idps")
 
 
-def policy_chain(obj: Policied, session: Session) -> list[Policied]:
+def _parents(
+    records: Sequence[Policied], session: Session
+) -> tuple[dict[tuple[str, str], Shot], dict[str, Device]]:
+    """The shots and devices ``records`` inherit policy from, a query each."""
+    # A record that sets every policy field inherits nothing, so there is no
+    # chain worth loading.
+    inheriting = [
+        r for r in records if any(getattr(r, f, None) is None for f in _POLICY_FIELDS)
+    ]
+    shot_keys = {
+        (r.device_name, r.shot_id)
+        for r in inheriting
+        if isinstance(r, (Dataset, Collection)) and r.shot_id and r.device_name
+    }
+    names = {name for r in inheriting if (name := getattr(r, "device_name", None))}
+
+    shots = (
+        session.exec(
+            select(Shot).where(
+                tuple_(col(Shot.device_name), col(Shot.id)).in_(shot_keys)
+            )
+        ).all()
+        if shot_keys
+        else []
+    )
+    devices = (
+        session.exec(select(Device).where(col(Device.name).in_(names))).all()
+        if names
+        else []
+    )
+    return {(s.device_name, s.id): s for s in shots}, {d.name: d for d in devices}
+
+
+def _chain(
+    obj: Policied, shots: dict[tuple[str, str], Shot], devices: dict[str, Device]
+) -> list[Policied]:
     """``obj`` and the objects it inherits policy from, nearest first.
 
     Collection/Dataset → Shot → Device. A Collection or Dataset not attached to
     a shot inherits from its device directly, and a Device inherits from nothing
     because it has no ``device_name`` of its own.
-
-    Walked once and returned as a list, because all three policy fields resolve
-    over the same chain and loading it per field is where this used to spend its
-    queries.
     """
     chain: list[Policied] = [obj]
 
     if isinstance(obj, (Dataset, Collection)) and obj.shot_id and obj.device_name:
-        shot = session.get(Shot, (obj.device_name, obj.shot_id))
+        shot = shots.get((obj.device_name, obj.shot_id))
         if shot:
             chain.append(shot)
 
     device_name = getattr(obj, "device_name", None)
     if device_name:
-        device = session.exec(select(Device).where(Device.name == device_name)).first()
+        device = devices.get(device_name)
         if device:
             chain.append(device)
 
@@ -96,23 +131,94 @@ def _policy_from(sources: Sequence[Any]) -> EffectivePolicy:
     )
 
 
-def get_effective_policy(obj: Policied, session: Session) -> EffectivePolicy:
-    """The policy that applies to ``obj``, after inheritance.
+def get_effective_policies(
+    records: Sequence[Policied], session: Session
+) -> list[EffectivePolicy]:
+    """The policy that applies to each of ``records``, after inheritance.
 
     Specific overrides general: the nearest explicitly-set value for each field
     wins, and an unset ``access_level`` anywhere in the chain falls back to
-    ``DEFAULT_ACCESS_LEVEL``.
+    ``DEFAULT_ACCESS_LEVEL``. However many records there are, the shots and
+    devices they inherit from load in a query each.
     """
-    # A record that sets every policy field inherits nothing, so there is no
-    # chain worth loading.
-    if all(getattr(obj, field, None) is not None for field in _POLICY_FIELDS):
-        return _policy_from([obj])
-    return _policy_from(policy_chain(obj, session))
+    shots, devices = _parents(records, session)
+    return [_policy_from(_chain(r, shots, devices)) for r in records]
+
+
+def get_effective_policy(obj: Policied, session: Session) -> EffectivePolicy:
+    """The policy that applies to ``obj``, after inheritance."""
+    return get_effective_policies([obj], session)[0]
 
 
 def get_effective_access_level(obj: Policied, session: Session) -> AccessLevel:
     """The effective access level for ``obj``, for callers wanting only that."""
     return get_effective_policy(obj, session).access_level
+
+
+# A policy with nothing above it, so every unset field falls to the default.
+NO_PARENT = EffectivePolicy(
+    access_level=DEFAULT_ACCESS_LEVEL, required_scopes=None, allowed_idps=None
+)
+
+
+def read_denial(
+    kind: type[Policied],
+    policy: EffectivePolicy,
+    user: AuthenticatedUser,
+    device_name: str | None,
+    in_shot: bool,
+) -> str | None:
+    """Why ``user`` may not read a ``kind`` record's metadata, or ``None`` if they may.
+
+    Credentials for the record's data are decided separately, at vending.
+    """
+    if "fds-admin" in user.scopes:
+        return None
+    if policy.access_level in (AccessLevel.PUBLIC, AccessLevel.EMBARGOED):
+        return None
+    if user.is_anonymous:
+        return "Authentication required for this resource"
+    if policy.allowed_idps is not None and user.issuer not in policy.allowed_idps:
+        return (
+            "Access denied: your identity provider is not permitted for this resource"
+        )
+    if policy.required_scopes is not None:
+        for scope in policy.required_scopes:
+            if scope not in user.scopes:
+                return f"Not authorized, requires scope: {scope}"
+        return None
+    if kind in (Device, Shot):
+        return None
+    try:
+        if device_name is None:
+            check_is_admin(user)
+        elif kind is Dataset and in_shot:
+            check_shot_operator(user, device_name)
+        else:
+            check_device_admin(user, device_name)
+    except ForbiddenError as denied:
+        return str(denied)
+    return None
+
+
+def check_read(
+    obj: Policied,
+    session: Session,
+    user: AuthenticatedUser,
+    tier: ReadTier = ReadTier.READ,
+) -> None:
+    """Enforce read access to ``obj``, and record it when it is restricted."""
+    policy = get_effective_policy(obj, session)
+    denial = read_denial(
+        type(obj),
+        policy,
+        user,
+        getattr(obj, "device_name", None),
+        bool(getattr(obj, "shot_id", None)),
+    )
+    if denial:
+        raise ForbiddenError(denial)
+    record_restricted_read(obj, policy.access_level, tier)
 
 
 @dataclass

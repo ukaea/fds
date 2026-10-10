@@ -365,11 +365,11 @@ def test_add_and_remove_dataset(
     assert col.id is not None
 
     collection_service.add_dataset(col.id, ds.id, admin_user)
-    read = collection_service.to_read_model(col)
+    read = collection_service.to_read_model(col, user=admin_user)
     assert any(d.id == ds.id for d in (read.datasets or []))
 
     collection_service.remove_dataset(col.id, ds.id, admin_user)
-    read_after = collection_service.to_read_model(col)
+    read_after = collection_service.to_read_model(col, user=admin_user)
     assert not any(d.id == ds.id for d in (read_after.datasets or []))
 
 
@@ -429,8 +429,8 @@ def test_dataset_belongs_to_multiple_collections(
     collection_service.add_dataset(col_a.id, ds.id, admin_user)
     collection_service.add_dataset(col_b.id, ds.id, admin_user)
 
-    read_a = collection_service.to_read_model(col_a)
-    read_b = collection_service.to_read_model(col_b)
+    read_a = collection_service.to_read_model(col_a, user=admin_user)
+    read_b = collection_service.to_read_model(col_b, user=admin_user)
     assert any(d.id == ds.id for d in (read_a.datasets or []))
     assert any(d.id == ds.id for d in (read_b.datasets or []))
 
@@ -445,11 +445,11 @@ def test_add_and_remove_child_collection(
     assert child.id is not None
 
     collection_service.add_child_collection(parent.id, child.id, admin_user)
-    read = collection_service.to_read_model(parent)
+    read = collection_service.to_read_model(parent, user=admin_user)
     assert any(c.id == child.id for c in (read.child_collections or []))
 
     collection_service.remove_child_collection(parent.id, child.id, admin_user)
-    read_after = collection_service.to_read_model(parent)
+    read_after = collection_service.to_read_model(parent, user=admin_user)
     assert not any(c.id == child.id for c in (read_after.child_collections or []))
 
 
@@ -501,7 +501,7 @@ def test_child_collections_not_recursive_in_read_model(
     collection_service.add_child_collection(grandparent.id, parent.id, admin_user)
     collection_service.add_child_collection(parent.id, child.id, admin_user)
 
-    read = collection_service.to_read_model(grandparent)
+    read = collection_service.to_read_model(grandparent, user=admin_user)
     assert read.child_collections is not None
     assert len(read.child_collections) == 1
     # The parent is inlined but its own children are not recursed into
@@ -522,7 +522,7 @@ def test_to_read_model_effective_access_level(
         CollectionCreate(name="col", device_name="PUB"),
         admin_user,
     )
-    read = collection_service.to_read_model(col)
+    read = collection_service.to_read_model(col, user=admin_user)
     assert read.effective_access_level == AccessLevel.PUBLIC
 
 
@@ -531,6 +531,6 @@ def test_to_read_model_empty_collection(
 ):
     """A Collection with no members serialises with datasets=None and child_collections=None."""
     col = collection_service.create(CollectionCreate(name="empty"), admin_user)
-    read = collection_service.to_read_model(col)
+    read = collection_service.to_read_model(col, user=admin_user)
     assert read.datasets is None
     assert read.child_collections is None

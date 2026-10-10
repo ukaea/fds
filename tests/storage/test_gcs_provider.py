@@ -39,16 +39,16 @@ def test_generate_credentials_success(mock_google_auth):
     mock_auth, mock_downscoped = mock_google_auth
 
     provider = GCSCredentialProvider(None)
-    prefixes = ["gs://my-bucket/data/file1", "gs://other-bucket/foo"]
+    # gcsfs accepts both schemes.
+    prefixes = ["gs://my-bucket/data/file1", "gcs://other-bucket/foo"]
     session_name = "test-session"
 
     result = provider.generate_credentials(prefixes, session_name)
 
     # Verify return structure
-    assert "my-bucket" in result
-    assert "other-bucket" in result
-    assert result["my-bucket"].token == "mock-downscoped-token"
-    assert result["my-bucket"].expiry == "2026-01-01T12:00:00"
+    assert set(result) == set(prefixes)
+    assert result["gs://my-bucket/data/file1"].token == "mock-downscoped-token"
+    assert result["gs://my-bucket/data/file1"].expiry == "2026-01-01T12:00:00"
 
     # Verify Logic
     # 1. Base credentials fetched
@@ -67,6 +67,20 @@ def test_generate_credentials_success(mock_google_auth):
 
     # 3. Refresh called
     mock_downscoped.Credentials.return_value.refresh.assert_called_once()
+
+
+def test_urls_for_another_backend_are_skipped(mock_google_auth):
+    _, mock_downscoped = mock_google_auth
+
+    result = GCSCredentialProvider(None).generate_credentials(
+        ["gs://my-bucket/a", "s3://other-bucket/b"], "session"
+    )
+
+    assert set(result) == {"gs://my-bucket/a"}
+    rules = mock_downscoped.CredentialAccessBoundary.call_args.kwargs["rules"]
+    assert [r["availableResource"] for r in rules] == [
+        "//storage.googleapis.com/projects/_/buckets/my-bucket"
+    ]
 
 
 def test_missing_credentials_configuration(mocker):

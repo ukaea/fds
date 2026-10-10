@@ -3,15 +3,23 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
-import { fetcher, API_BASE } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { Calendar, ChevronRight, Search } from 'lucide-react';
+import { fetcher, API_BASE, FetchError } from '@/lib/api';
 import { AvailableProperties, Shot } from '@/lib/types';
 import { propertyQuery, withQuery } from '@/lib/properties';
+import { usePagedList } from '@/lib/use-paged-list';
 import { PropertyFilter } from '@/components/property-filter';
+import { SidePanelLayout } from '@/components/side-panel-layout';
+import { LoadMore } from '@/components/load-more';
 import { PropertyBadges } from '@/components/properties';
 import { ClientDate } from '@/components/client-date';
 
 const PAGE_SIZE = 100;
+
+function shotUrl(deviceName: string, shotId: string): string {
+  return `${API_BASE}/devices/${deviceName}/shots/${encodeURIComponent(shotId)}`;
+}
 
 export function shotsUrl(deviceName: string): string {
   return `${API_BASE}/devices/${deviceName}/shots/`;
@@ -56,23 +64,36 @@ function rangeQuery(ranges: Record<string, Range>): string {
  * 5,300-shot device's properties cannot be inferred from the hundred shots a
  * page happens to hold, and its shot count is not the length of that page.
  */
-export function ShotList({ deviceName }: { deviceName: string }) {
-  const [propertyTokens, selectProperties] = useState<string[]>([]);
-  const [ranges, boundRanges] = useState<Record<string, Range>>({});
-  const [page, setPage] = useState(0);
+export function ShotList({
+  deviceName,
+  aside,
+}: {
+  deviceName: string;
+  // Shown under the filters, e.g. the device's JSON-LD.
+  aside?: React.ReactNode;
+}) {
+  const [propertyTokens, setPropertyTokens] = useState<string[]>([]);
+  const [ranges, setRanges] = useState<Record<string, Range>>({});
+  const [idPrefix, setIdPrefix] = useState('');
+  const [notFound, setNotFound] = useState<string | null>(null);
+  const router = useRouter();
 
-  // Narrowing the filter can leave the current page past the end of the
-  // results, so changing it returns to the first. Done here rather than in an
-  // effect: an effect would set state after the render that caused it, which
-  // costs a second render for every keystroke on a filter.
-  const setPropertyTokens = (next: string[]) => {
-    selectProperties(next);
-    setPage(0);
-  };
-  const setRanges = (next: Record<string, Range>) => {
-    boundRanges(next);
-    setPage(0);
-  };
+  // Enter goes straight to the shot typed. Only a missing shot keeps you here,
+  // so a typo reports itself beside the box; the shot page explains the rest.
+  async function goToShot(e: React.FormEvent) {
+    e.preventDefault();
+    const shotId = idPrefix.trim();
+    if (!shotId) return;
+    try {
+      await fetcher(shotUrl(deviceName, shotId));
+    } catch (err) {
+      if (err instanceof FetchError && err.status === 404) {
+        setNotFound(shotId);
+        return;
+      }
+    }
+    router.push(`/devices/${deviceName}/shots/${encodeURIComponent(shotId)}`);
+  }
 
   // Unfiltered: the chips are the control you are using, so they must not
   // rearrange themselves as you narrow. Shared as an SWR key with DeviceDetail
@@ -87,6 +108,7 @@ export function ShotList({ deviceName }: { deviceName: string }) {
   const filterQuery = [
     propertyQuery('property', propertyTokens),
     rangeQuery(ranges),
+    idPrefix.trim() ? `id_prefix=${encodeURIComponent(idPrefix.trim())}` : '',
   ].filter(Boolean);
 
   const { data: matching } = useSWR<AvailableProperties>(
@@ -97,45 +119,70 @@ export function ShotList({ deviceName }: { deviceName: string }) {
     { keepPreviousData: true }
   );
 
-  // keepPreviousData holds the current rows in place while the next page or
-  // filter loads, so the list settles rather than blanking on every click.
-  const { data: shots, error, isLoading } = useSWR<Shot[]>(
-    deviceName
-      ? withQuery(
-          shotsUrl(deviceName),
-          ...filterQuery,
-          `offset=${page * PAGE_SIZE}`,
-          `limit=${PAGE_SIZE}`
-        )
-      : null,
-    fetcher,
-    { keepPreviousData: true }
+  const {
+    items: shots,
+    error,
+    isLoading,
+    done,
+    loadingMore,
+    loadMore,
+  } = usePagedList<Shot>(
+    deviceName ? withQuery(shotsUrl(deviceName), ...filterQuery) : null,
+    PAGE_SIZE
   );
 
   const total = properties?.total ?? 0;
   const matched = filterQuery.length > 0 ? matching?.total ?? 0 : total;
-  const pages = Math.max(1, Math.ceil(matched / PAGE_SIZE));
 
   return (
-    <div>
-      {/* Outside the loading branch below: the chips are the control you are
-          using, so they must not vanish while the result of a click arrives. */}
-      <PropertyFilter
-        label="Filter by scientific metadata"
-        properties={properties?.properties ?? []}
-        selected={propertyTokens}
-        onChange={setPropertyTokens}
-        ranges={ranges}
-        onRangesChange={setRanges}
-        valuesUrl={shotPropertyValuesUrl(deviceName)}
-      />
+    <SidePanelLayout
+      side={
+        (!!properties?.properties.length || aside) && (
+          <>
+            {/* Outside the loading branch below: the chips are the control you
+                are using, so they must not vanish while a click's result arrives. */}
+            {!!properties?.properties.length && (
+              <PropertyFilter
+                properties={properties.properties}
+                selected={propertyTokens}
+                onChange={setPropertyTokens}
+                ranges={ranges}
+                onRangesChange={setRanges}
+                valuesUrl={shotPropertyValuesUrl(deviceName)}
+              />
+            )}
+            {aside}
+          </>
+        )
+      }
+    >
+      <form onSubmit={goToShot} className="mb-4">
+        <div className="relative w-full md:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            type="search"
+            value={idPrefix}
+            onChange={(e) => {
+              setIdPrefix(e.target.value);
+              setNotFound(null);
+            }}
+            placeholder="Find a shot by ID"
+            aria-label="Find a shot by ID"
+            className="w-full pl-9 pr-3 py-2 text-sm bg-card border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-hidden focus:border-foreground/40"
+          />
+        </div>
+        {notFound && (
+          <p role="alert" className="text-sm text-destructive mt-2">
+            No shot {notFound} on this device.
+          </p>
+        )}
+      </form>
 
       {total > 0 && (
         <p className="text-sm text-muted-foreground mb-4">
           {filterQuery.length > 0
             ? `${matched} of ${total} shot${total !== 1 ? 's' : ''}`
             : `${total} shot${total !== 1 ? 's' : ''}`}
-          {pages > 1 && `, page ${page + 1} of ${pages}`}
         </p>
       )}
 
@@ -167,7 +214,7 @@ export function ShotList({ deviceName }: { deviceName: string }) {
                 <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
                   <div className="flex items-center gap-1">
                     <Calendar className="w-4 h-4" />
-                    <ClientDate timestamp={shot.timestamp} />
+                    <ClientDate timestamp={shot.shot_at} />
                   </div>
                 </div>
                 <div className="mt-3">
@@ -188,31 +235,9 @@ export function ShotList({ deviceName }: { deviceName: string }) {
         )}
       </div>
 
-      {pages > 1 && (
-        <div className="flex items-center justify-center gap-4 mt-6">
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            disabled={page === 0}
-            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:hover:text-muted-foreground transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Previous
-          </button>
-          <span className="text-sm text-muted-foreground tabular-nums">
-            {page + 1} / {pages}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(pages - 1, p + 1))}
-            disabled={page >= pages - 1}
-            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:hover:text-muted-foreground transition-colors"
-          >
-            Next
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
+      {shots && shots.length > 0 && (
+        <LoadMore onLoad={loadMore} loading={loadingMore} done={done} />
       )}
-    </div>
+    </SidePanelLayout>
   );
 }

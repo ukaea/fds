@@ -9,6 +9,7 @@ A Source is not one kind of thing in the provenance graph. Its `kind` decides wh
 | `name` | string | Yes | Unique identifier for the source (e.g. `efit`, `jintrac`) |
 | `description` | string | No | Extended description of the code or diagnostic |
 | `kind` | enum | Yes | `software`, `instrument`, `person`, or `organization`. See below |
+| `persistent_identifier` | string | No | ORCID for a person, ROR for an organisation, PIDINST for an instrument, a DOI or Software Heritage ID for software. See [Persistent identifiers](../dcat-jsonld.md#persistent-identifiers) |
 | `device_name` | string | No | Optionally scope the source to a device; global if omitted |
 
 ## Kinds

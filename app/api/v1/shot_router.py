@@ -3,7 +3,14 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
-from app.api.deps import BaseURLDep, CurrentUserDep, ShotServiceDep
+from app.api.deps import (
+    DEFAULT_PAGE_SIZE,
+    BaseURLDep,
+    CurrentUserDep,
+    Limit,
+    Offset,
+    ShotServiceDep,
+)
 from app.models.available_properties import AvailableProperties, PropertyValues
 from app.models.shot import (
     ShotCreate,
@@ -45,13 +52,14 @@ def read_shots(
     device_name: str,
     shot_service: ShotServiceDep,
     user: CurrentUserDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
     include_device: bool = False,
     include_annotations: bool = False,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
     property_min: Annotated[list[str] | None, Query()] = None,
     property_max: Annotated[list[str] | None, Query()] = None,
+    id_prefix: str | None = None,
 ) -> list[ShotRead]:
     """
     Retrieve all shots for a specific device.
@@ -65,6 +73,9 @@ def read_shots(
     `property_min` and `property_max` bound a numeric value, as
     `plasma_current_max:700000`. Values that are not numbers are skipped rather
     than matched.
+
+    `id_prefix` keeps the shots whose ID starts with it, so `304` finds
+    30400 to 30499.
     """
     shots = shot_service.get_multi_by_device_name(
         device_name=device_name,
@@ -74,14 +85,15 @@ def read_shots(
         properties=properties,
         minimums=property_min,
         maximums=property_max,
+        id_prefix=id_prefix,
     )
 
-    return [
-        shot_service.to_read_model(
-            shot, include_device=include_device, include_annotations=include_annotations
-        )
-        for shot in shots
-    ]
+    return shot_service.to_read_models(
+        shots,
+        include_device=include_device,
+        include_annotations=include_annotations,
+        user=user,
+    )
 
 
 # Declared before /shots/{shot_id}: the paths have the same shape, so the other
@@ -101,6 +113,7 @@ def read_shot_properties(
     property_min: Annotated[list[str] | None, Query()] = None,
     property_max: Annotated[list[str] | None, Query()] = None,
     max_values: int = DEFAULT_MAX_VALUES,
+    id_prefix: str | None = None,
 ) -> AvailableProperties:
     """
     The properties this device's shots carry, for building a filter.
@@ -111,7 +124,7 @@ def read_shot_properties(
     a measurement or free text: filter on the name's presence, not on a value.
 
     `property` takes the same forms as the listing and narrows the scope, so
-    `total` is the number of matching shots.
+    `total` is the number of matching shots. So does `id_prefix`.
     """
     return shot_service.available_properties(
         device_name=device_name,
@@ -120,6 +133,7 @@ def read_shot_properties(
         minimums=property_min,
         maximums=property_max,
         max_values=max_values,
+        id_prefix=id_prefix,
     )
 
 
@@ -180,15 +194,16 @@ def read_shot(
                 shot,
                 base,
                 include_annotations=include_annotations,
+                user=user,
             ),
             media_type="application/ld+json",
         )
     return shot_service.to_read_model(
-        shot, include_device=True, include_annotations=include_annotations
+        shot, include_device=True, include_annotations=include_annotations, user=user
     )
 
 
-@router.put(
+@router.patch(
     "/devices/{device_name}/shots/{shot_id}",
     response_model=ShotRead,
     response_model_exclude_none=True,

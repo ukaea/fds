@@ -2,9 +2,12 @@ from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import (
+    DEFAULT_PAGE_SIZE,
     BaseURLDep,
     CurrentUserDep,
     DeviceServiceDep,
+    Limit,
+    Offset,
     SourceServiceDep,
 )
 from app.models.device import DeviceCreate, DeviceRead, DeviceUpdate
@@ -33,8 +36,8 @@ def read_devices(
     *,
     device_service: DeviceServiceDep,
     user: CurrentUserDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> list[DeviceRead]:
     """
     Retrieve all devices.
@@ -67,7 +70,7 @@ def read_device(
     return device_service.to_read_model(device)
 
 
-@router.put("/{device_name}", response_model=DeviceRead)
+@router.patch("/{device_name}", response_model=DeviceRead)
 def update_device(
     *,
     device_service: DeviceServiceDep,
@@ -124,8 +127,8 @@ def read_sources_for_device(
     *,
     device_name: str,
     source_service: SourceServiceDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> list[SourceRead]:
     """
     Retrieve sources associated with a specific device.

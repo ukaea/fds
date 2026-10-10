@@ -364,3 +364,27 @@ def test_values_path_does_not_bind_as_a_shot_id(test_client: TestClient):
         == 200
     )
     assert test_client.get(f"/v1/devices/{MAST}/shots/30421").status_code == 200
+
+
+def test_shots_filtered_by_id_prefix(test_client: TestClient):
+    """Use case: typing the start of a shot ID to find it."""
+    resp = test_client.get(f"/v1/devices/{MAST}/shots", params={"id_prefix": "30421"})
+
+    assert resp.status_code == 200
+    assert [s["id"] for s in resp.json()] == ["30421"]
+
+
+def test_id_prefix_is_not_a_like_pattern(test_client: TestClient):
+    resp = test_client.get(f"/v1/devices/{MAST}/shots", params={"id_prefix": "3042_"})
+
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+def test_properties_count_the_shots_an_id_prefix_matches(test_client: TestClient):
+    resp = test_client.get(
+        f"/v1/devices/{MAST}/shots/properties", params={"id_prefix": "30421"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1

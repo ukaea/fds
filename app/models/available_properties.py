@@ -16,8 +16,10 @@ class AvailableProperty(SQLModel):
     list" rather than "none".
 
     ``unit`` is reported only when every record in scope agrees on one, because
-    a name recorded in both A and kA has no single unit. ``min``/``max`` are set
-    for quantities. ``dimension`` is set when the property carries an extent,
+    a name recorded in both A and kA has no single unit. ``description`` follows
+    the same rule, so the meaning of a name can sit beside its filter.
+    ``min``/``max`` are set for quantities. ``dimension`` is set when the
+    property carries an extent,
     marking it an annotation: a statement about a region of the data rather than
     about the record as a whole.
     """
@@ -27,6 +29,7 @@ class AvailableProperty(SQLModel):
     distinct: int
     kind: MetadataKind
     unit: str | None = None
+    description: str | None = None
     dimension: str | None = None
     min: float | None = None
     max: float | None = None

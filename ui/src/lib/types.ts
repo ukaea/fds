@@ -8,7 +8,6 @@ export interface Device {
 export interface Shot {
   device_name: string;
   id: string; // Changed from shot_id: number to match backend ShotRead model
-  timestamp?: string;
   shot_at?: string;
   // Wall-clock instant of the shot's relative t=0. Provider-declared; never used
   // to convert an annotation's coordinates into another frame.
@@ -57,6 +56,7 @@ export interface AvailableProperty {
   distinct: number;
   kind: MetadataKind;
   unit?: string | null;
+  description?: string | null;
   dimension?: string | null;
   min?: number | null;
   max?: number | null;
@@ -95,6 +95,18 @@ export interface Dataset {
   description?: string;
   license?: string;
   media_type?: string;
+  creator?: string | null;
+  version?: string | null;
+  // Comma-separated, as stored.
+  keywords?: string | null;
+  temporal_start?: string | null;
+  temporal_end?: string | null;
+  quality_flag?: string | null;
+  // Registered elsewhere (a DOI, say), as an absolute URI or compact form.
+  persistent_identifier?: string | null;
+  // When the data was formally published, as a date. Not created_at, which is
+  // when FDS listed it.
+  issued?: string | null;
   access_level?: string;
   effective_access_level?: string;
   activity_id?: number;
@@ -115,19 +127,28 @@ export interface Dataset {
   // Resolved annotations, populated by ?include_annotations. Frame-scoped: a
   // dataset resolves only the annotations whose subject it is.
   annotations?: Dataset[];
-  // Populated by ?include_storage_options. For public data FDS fills this in
-  // without any credential exchange, which is how a dataset held in someone
-  // else's public store is opened.
-  storage_options?: StorageOptions;
+  // Every copy of the data, the default among them. url and media_type above
+  // are the default's, inlined.
+  distributions?: Distribution[] | null;
 }
 
-// fsspec/s3fs-shaped options, splat-compatible with s3fs.S3FileSystem(**opts).
-export interface StorageOptions {
-  key?: string | null;
-  secret?: string | null;
-  token?: string | null;
-  anon?: boolean | null;
-  client_kwargs?: { endpoint_url?: string; region_name?: string } | null;
+// One copy of a dataset's data. Copies carry the same information: the same
+// data in another format, another store or another schema.
+export interface Distribution {
+  id: number;
+  url: string;
+  // The group inside the file at url that holds this dataset, when the file
+  // holds several datasets.
+  group?: string | null;
+  // URI of the schema this copy follows, such as an IMAS Data Dictionary
+  // version. Values can differ between copies in different schemas.
+  conforms_to?: string | null;
+  endpoint_url?: string | null;
+  region?: string | null;
+  media_type?: string | null;
+  format?: string | null;
+  default_distribution: boolean;
+  storage_options_type?: 'fsspec_s3' | 'icechunk_s3' | null;
 }
 
 export interface Coverage {
@@ -146,6 +167,8 @@ export interface Collection {
   access_level?: string;
   effective_access_level?: string;
   activity_id?: number | null;
+  root_url?: string | null;
+  created_at?: string;
   scientific_metadata?: ScientificProperty[];
   datasets?: Dataset[];
   child_collections?: Collection[];

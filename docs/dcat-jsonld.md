@@ -41,6 +41,38 @@ one in the name would give the same dataset a second identifier every time the A
 versioned endpoints above are addresses for clients to read and write through; they are never
 published as identifiers.
 
+### Persistent identifiers
+
+A record can also carry an identifier registered for it elsewhere, in `persistent_identifier`:
+a DOI for a dataset, collection or shot, an instrument identifier (PIDINST) for a device or
+diagnostic, ORCID for a person, ROR for an organisation. FDS stores it; registering it is up
+to the record's owners.
+
+Give it as an absolute URI or in compact form: `doi:`, `hdl:` and `swh:` are expanded to their
+resolvers. It is published as `adms:identifier`, while `dct:identifier` stays FDS's own:
+
+```json
+{
+  "@id": "https://example.org/datasets/13",
+  "identifier": "13",
+  "adms:identifier": {
+    "@type": "adms:Identifier",
+    "skos:notation": {"@value": "https://doi.org/10.5072/example", "@type": "xsd:anyURI"}
+  }
+}
+```
+
+A value in any other form is published exactly as given and is not turned into a link.
+
+A dataset, collection or shot can also record when it was formally published, in `issued`.
+That is the date a citation gives, published as the resource's own `dct:issued`
+(`{"@value": "2024-03-01", "@type": "xsd:date"}`). It is distinct from the catalogue record's
+`issued`, which is when FDS listed the resource.
+
+When a dataset or collection was generated is not a field of its own: it is when the activity
+that produced it ended. The JSON-LD states it on the resource as `prov:generatedAtTime`, taken
+from that activity's `ended_at`, and omits it when there is no activity or it has no end.
+
 ### Where identifiers point
 
 An identifier names the **service**, not its API. A deployment typically answers on two addresses:
@@ -116,12 +148,16 @@ catalogue of devices, embeds their nodes without their records.
 
 FDS follows the [W3C DCAT ontology](https://www.w3.org/TR/vocab-dcat/): a **`dcat:Dataset`** is the abstract metadata entity describing *what* the data is, while a **`dcat:Distribution`** is a concrete physical access path describing *how* to retrieve it.
 
-The standard JSON API returns a **denormalised convenience view** where the primary distribution's `url`, `media_type`, and `format` are inlined directly on the Dataset object. A Dataset can be registered without any distributions (metadata-first); distributions are added via `POST /datasets/{id}/distributions`. Multiple distributions are supported, for example the same data as HDF5 and CSV, provided all distributions are scientifically interchangeable.
+The standard JSON API returns a **denormalised convenience view** where the primary distribution's `url`, `group`, `conforms_to`, `media_type`, and `format` are inlined directly on the Dataset object. A Dataset can be registered without any distributions (metadata-first); distributions are added via `POST /datasets/{id}/distributions`. Multiple distributions are supported, for example the same data as HDF5 and CSV, provided all of them carry the same information.
 
 When you request `application/ld+json`, FDS re-separates these back into the correct DCAT structure. Each distribution emits `dcat:accessURL` (required by DCAT 3). The value depends on the URL scheme:
 
 - **Public HTTPS** (e.g. `https://s3.echo.stfc.ac.uk/…`): `dcat:accessURL` and `dcat:downloadURL` both point to the URL, which is directly accessible.
 - **Cloud storage** (`s3://`, `gs://`, `az://`): `dcat:accessURL` points to the FDS dataset endpoint, which is where clients obtain credentials. `dcat:downloadURL` carries the raw storage URI for use with a protocol-specific client (e.g. `xarray`, `fsspec`).
+
+A distribution's `conforms_to` is published as `dct:conformsTo`, naming the schema the copy follows. Two distributions of one Dataset can follow different schemas, such as two versions of the IMAS Data Dictionary.
+
+A distribution's `group` is not published. DCAT has no term for a part of a file, so a distribution that is one group of a larger file appears in JSON-LD as the whole file. The JSON API carries the group.
 
 ```json
 {
@@ -313,9 +349,9 @@ The response carries:
 
 | Term | Carries |
 | --- | --- |
-| `prov:wasGeneratedBy` | the producing Activity, embedded |
-| `prov:qualifiedUsage` | each entity the run used, with its role: an input dataset or an instrument |
-| `prov:qualifiedAssociation` | each agent, typed by its kind, with its role in the run |
+| `prov:wasGeneratedBy` | the producing Activity, embedded, with its own `@id` to follow |
+| `prov:qualifiedUsage` | each entity the run used, with its title and role: an input dataset or an instrument |
+| `prov:qualifiedAssociation` | each agent, typed by its kind, with its role in the run, and for the executor the version it ran as `prov:hadPlan` |
 | `prov:actedOnBehalfOf` | delegation between two of those agents |
 | `prov:wasDerivedFrom` | each upstream entity the dataset was derived from |
 | `prov:qualifiedDerivation` | the same, tied to the Activity that caused it, where there is one |
@@ -327,9 +363,14 @@ can resolve what a role means instead of pattern-matching a label:
 "prov:qualifiedAssociation": [{
   "@type": "prov:Association",
   "prov:agent": {"@id": "https://fds.example/sources/12"},
-  "prov:hadRole": {"@id": "fuel:executor"}
+  "prov:hadRole": {"@id": "fuel:executor"},
+  "prov:hadPlan": {"@type": "prov:Plan", "dcat:version": "v2.3.1"}
 }]
 ```
+
+The version belongs to the run, not to the agent: two runs of the same code at different versions
+share one agent and differ only in their plans. The plan has no address of its own; it is part of
+the run's description.
 
 A derived-from upstream is identified as far as it can be. A registered dataset resolves to its
 FDS address, a DOI or other persistent identifier to a resolvable URI, and an upstream that can
@@ -350,6 +391,8 @@ See [Provenance](provenance.md) for the model behind these terms.
 | `dqv` | `http://www.w3.org/ns/dqv#` | Data quality annotations (`dqv:hasQualityAnnotation`) |
 | `foaf` | `http://xmlns.com/foaf/0.1/` | `foaf:primaryTopic`, linking a catalogue record to the resource it describes |
 | `oa` | `http://www.w3.org/ns/oa#` | Web Annotation, used by `dqv:QualityAnnotation` (`oa:motivatedBy`, `oa:hasBody`) |
+| `adms` | `http://www.w3.org/ns/adms#` | `adms:identifier`, a persistent identifier registered elsewhere |
+| `skos` | `http://www.w3.org/2004/02/skos/core#` | `skos:notation`, the value of that identifier |
 | `fuel` | `https://w3id.org/fuel/ns#` | Fusion Energy Lexicon, the role concepts used by `prov:hadRole` and `dcat:hadRole` |
 
 ## Ontology mapping summary
@@ -369,6 +412,9 @@ See [Provenance](provenance.md) for the model behind these terms.
 | "dataset produced by" | `prov:wasGeneratedBy` | PROV-O |
 | "activity used input / instrument" | `prov:used` + `prov:qualifiedUsage` (`prov:hadRole`) | PROV-O |
 | "activity associated with agent" | `prov:wasAssociatedWith` + `prov:qualifiedAssociation` (`prov:hadRole`) | PROV-O |
+| `persistent_identifier` | `adms:identifier` → `adms:Identifier` | ADMS, DCAT-AP |
+| `issued` (publication date) | `dct:issued` on the resource | Dublin Core, DCAT 3 |
+| producing Activity's `ended_at` | `prov:generatedAtTime` on the resource | PROV-O |
 | `publisher` | `dct:publisher` | Dublin Core |
 | `creator` | `dct:creator` | Dublin Core |
 | `shot_at` / `shot_end` / `shot_duration` | `dct:temporal` → `dct:PeriodOfTime` | Dublin Core / DCAT 3 |

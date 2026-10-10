@@ -7,6 +7,7 @@ Represents a physical machine or facility.
 | `name` | string | Yes | Short, unique name (e.g. `mast`, `mastu`). Stored lower-cased, so `/devices/MAST` and `/devices/mast` resolve the same device |
 | `title` | string | No | Display name, e.g. `MAST Upgrade` for the device named `mastu`. Clients show this in preference to `name` |
 | `description` | string | No | Extended description |
+| `persistent_identifier` | string | No | An instrument identifier (PIDINST) registered for the device. See [Persistent identifiers](../dcat-jsonld.md#persistent-identifiers) |
 | `type` | string | No | Machine type (`tokamak`, `stellarator`, …) |
 | `publisher` | string | No | Institution making the device catalog available (`dct:publisher`) |
 | `creator` | string | No | Person or team responsible for the device (`dct:creator`) |

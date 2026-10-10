@@ -10,6 +10,8 @@ A single plasma discharge on a Device.
 | `shot_end` | datetime | No | When the discharge ended |
 | `shot_duration` | float | No | Discharge duration in seconds; must equal `shot_end − shot_at` when both are set |
 | `t0_at` | datetime | No | Wall-clock instant of the shot's relative time base zero (`t=0`), e.g. plasma breakdown; may differ from `shot_at`. Provider-declared and optional; FDS stores it but never applies it to convert event times or assume datasets share a time base |
+| `persistent_identifier` | string | No | A DOI or other persistent identifier registered for the shot. See [Persistent identifiers](../dcat-jsonld.md#persistent-identifiers) |
+| `issued` | date | No | When the shot was formally published, the date a citation gives (`dct:issued`). Not when FDS listed it |
 | `description` | string | No | Extended description |
 | `publisher` | string | No | Institution making the data available (`dct:publisher`) |
 | `creator` | string | No | Person or team who conducted the experiment (`dct:creator`) |

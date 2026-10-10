@@ -8,8 +8,12 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 | --- | --- | --- | --- |
 | `name` | string | Yes | Short name, unique within its scope (e.g. `equilibrium`) |
 | `url` | string | No | Physical location (`s3://`, `gs://`, `az://`), taken from the primary Distribution and absent if none exists yet |
+| `group` | string | No | Group inside the file at `url` that holds the dataset, taken from the primary Distribution |
+| `conforms_to` | string | No | Schema the primary distribution follows, taken from the primary Distribution |
 | `media_type` | string | No | MIME type of the primary distribution (e.g. `application/x-zarr`) |
 | `format` | string | No | Format label (e.g. `NetCDF4`) |
+| `persistent_identifier` | string | No | A DOI or other persistent identifier registered for the dataset. See [Persistent identifiers](../dcat-jsonld.md#persistent-identifiers) |
+| `issued` | date | No | When the dataset was formally published, the date a citation gives (`dct:issued`). Not when FDS listed it |
 | `level` | integer | No | Numeric processing level. No controlled vocabulary, so set it only where the producer has a meaning for it |
 | `quality_flag` | string | No | Free-form quality annotation (e.g. `good`, `suspect`), no controlled vocabulary |
 | `access_level` | enum | No | `public`, `embargoed`, or `restricted` |
@@ -165,7 +169,7 @@ curl "$API/devices/mast/datasets?scope=device"   # general device-level Datasets
 
 A device-level `Dataset` describes the machine rather than a single experiment. Geometry and calibration data are examples of this.
 
-Listings are paged with `offset` and `limit` (default 100) and returned in a stable order, so paging through a device covers it exactly once. A page can contain fewer than `limit` entries when some datasets are not readable by the caller; an empty page does not mean the end of the results.
+Listings are paged with `offset` and `limit` (default 100, at most 1000) and returned in a stable order, so paging through a device covers it exactly once. Pages hold only datasets the caller can read, so a page shorter than `limit` is the last.
 
 A `Dataset` can also link to **reference geometry**. A `Dataset` declares the geometry it needs via `geometry_references`, or a `Device`-level `Dataset` *provides* geometry via `geometry_roles` and `applies_to`. The same machinery carries **reference calibration**: a `Dataset` names the calibration it needs via `calibration_references`, and a `Device`-level `Dataset` provides it via `calibration_roles`, `calibration_stage`, and `applies_to`. Unlike geometry, calibration can resolve to an ordered chain of stages. See [Reference Datasets](reference-datasets.md).
 
@@ -187,14 +191,17 @@ A Distribution is a physical access path for a Dataset, describing *how* to retr
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `url` | string | Yes | Download or access URL (e.g. `s3://fds-data/shots/30421/equilibrium`) |
+| `group` | string | No | Group inside the file at `url` that holds the dataset, when the file holds several (see below) |
+| `conforms_to` | string | No | http or https URL of the schema this copy follows, such as an IMAS Data Dictionary version (see below) |
 | `media_type` | string | No | IANA media type (e.g. `application/x-zarr`, `application/x-hdf5`) |
 | `format` | string | No | Human-readable format label (e.g. `NetCDF4`, `HDF5`) |
 | `endpoint_url` | string | No | Storage endpoint, used for credential vending |
 | `region` | string | No | Storage region, used for credential vending |
 | `storage_options_type` | enum | No | Which consumer library `storage_options` is rendered for (see below) |
-| `access_level` | enum | No | Override access policy for this distribution |
 
-In most cases a Dataset will have exactly one Distribution, and you won't need to think about the distinction. The Dataset endpoints return the primary distribution's `url`, `media_type`, and `format` inlined directly on the Dataset response, so there is nothing extra to fetch.
+A Distribution has no access policy of its own: FDS applies the Dataset's to every distribution, for both metadata and credentials. Some copies may be harder to reach than that level suggests, such as a proprietary-format copy behind a site firewall or a data-access layer alongside an open-format copy in public storage. That restriction belongs to the infrastructure, not to FDS, so register at least one distribution that is as available as the Dataset's level says.
+
+In most cases a Dataset will have exactly one Distribution, and you won't need to think about the distinction. The Dataset endpoints return the primary distribution's `url`, `group`, `conforms_to`, `media_type`, and `format` inlined directly on the Dataset response, so there is nothing extra to fetch.
 
 ### How the data is opened
 
@@ -211,12 +218,103 @@ library opens the data. `storage_options_type` says which library that is:
 mentions Icechunk is taken as `icechunk_s3`, any other `s3://` URL as `fsspec_s3`, and anything
 else is left unset.
 
+Azure and Google Cloud Storage leave it unset and still get `storage_options`, because each has
+one library and the URL scheme names it. `gs://` and `gcs://` get gcsfs options (`token`).
+`az://`, `abfs://` and `abfss://` get adlfs options: `account_name` with `sas_token`, or with `anon`
+for public data. For public data FDS takes the storage account from the URL when it names one, as
+in `abfs://container@account.dfs.core.windows.net/path`, and otherwise from the Azure provider
+configured for the distribution's `endpoint_url`.
+
 The inference is right for the common cases and wrong in one that matters: an Icechunk store
 registered under a generic media type such as `application/x-zarr` is taken for plain Zarr, so the
 credentials come back in the wrong shape for the opener you are about to use. Setting
 `storage_options_type` explicitly removes the guess.
 
-An unset value is also the reason `include_storage_options=true` can come back with nothing: FDS
-will not invent a shape for a distribution it cannot place.
+On any other URL, an unset value is also the reason `include_storage_options=true` can come back
+with nothing: FDS will not invent a shape for a distribution it cannot place.
 
-Multiple distributions are supported when the same underlying data is available in more than one form, for example as both Zarr and HDF5, or through multiple access endpoints. All distributions of a given Dataset must be scientifically interchangeable; different data belongs in a separate Dataset. Additional distributions can be registered via `POST /datasets/{id}/distributions`.
+Multiple distributions are supported when the same data is available in more than one form: as both Zarr and HDF5, through several access endpoints, or written against different versions of a schema. All distributions of a Dataset carry the same information, and data that differs belongs in a separate Dataset. Additional distributions can be registered via `POST /datasets/{id}/distributions`.
+
+### A file holding several datasets
+
+HDF5 and NetCDF files often hold several datasets as groups, for example one file per shot with a group for each IMAS IDS. Register each dataset's distribution with the file's `url` and the dataset's `group`:
+
+```json
+{
+  "url": "s3://fds-data/shots/30421.nc",
+  "group": "equilibrium",
+  "media_type": "application/x-netcdf",
+  "format": "NetCDF-4"
+}
+```
+
+The distribution is then the dataset's data and nothing more, so it can sit alongside a Zarr store of the same group as an interchangeable alternative. Leave `group` unset when `url` addresses the dataset on its own, as a Zarr group's URL does.
+
+Credentials are vended for the whole file, since object storage cannot grant access to part of one. A reader still fetches little more than the group if it reads in small blocks. With s3fs's default 50 MB read-ahead, reading one group can transfer more than the whole file.
+
+```python
+import s3fs
+import xarray as xr
+
+fs = s3fs.S3FileSystem(**storage_options)
+f = fs.open(
+    "s3://fds-data/shots/30421.nc", block_size=4 * 2**20, cache_type="blockcache"
+)
+ds = xr.open_dataset(f, engine="h5netcdf", group="equilibrium")
+```
+
+### The same data in another schema
+
+Some data is written against a schema that changes over time. IMAS data follows a version of the Data Dictionary, and versions rename and remove fields. Version 4.0.0 also changed the sign convention from COCOS 11 to COCOS 17, so `psi`, `ip` and other quantities have opposite signs in a DD 3 copy and a DD 4 copy of the same IDS.
+
+Give each distribution a `conforms_to` naming the schema it follows. Copies in different schemas can then be distributions of one Dataset, which is cited, found and linked to its provenance once.
+
+When you have another form of a dataset, decide how to register it:
+
+| The other form | Register it as |
+| --- | --- |
+| Holds the same information in a different schema | Another distribution, with its own `conforms_to` |
+| Lost information in conversion | A new Dataset, with `derived_from` naming the original |
+
+**Naming the schema.** Name an IMAS Data Dictionary version by its Git tag, with the full version number:
+
+```text
+https://github.com/iterorganization/IMAS-Data-Dictionary/tree/4.0.0
+```
+
+Use exactly this form, so that consumers can compare the values of different datasets. COCOS follows from the version and is not recorded separately. Name any other schema by an http or https URL, such as the address of its documentation. FDS rejects anything else, such as `DD4` or `imas-dd:4.0.0`, but does not check that the schema exists or that the data follows it.
+
+**Registering both copies.** Register the dataset with its DD 3 copy:
+
+```json
+{
+  "name": "equilibrium",
+  "url": "s3://fds-data/shots/30421/dd3/equilibrium",
+  "media_type": "application/x-zarr",
+  "conforms_to": "https://github.com/iterorganization/IMAS-Data-Dictionary/tree/3.42.0"
+}
+```
+
+Then add the DD 4 copy with `POST /datasets/{id}/distributions`:
+
+```json
+{
+  "url": "s3://fds-data/shots/30421/dd4/equilibrium",
+  "media_type": "application/x-zarr",
+  "conforms_to": "https://github.com/iterorganization/IMAS-Data-Dictionary/tree/4.0.0"
+}
+```
+
+**Producing a copy.** IMAS-Python converts an IDS between versions with `imas.convert_ids`, including the COCOS sign changes:
+
+```python
+import imas
+
+with imas.DBEntry("imas:hdf5?path=30421-dd3", "r") as entry:
+    eq = entry.get("equilibrium", autoconvert=False)
+eq_dd4 = imas.convert_ids(eq, "4.0.0")
+```
+
+It logs any data it cannot carry across, such as a field the new version removed. If it reports any for your data, the copy has lost information: register it as a new Dataset, not a distribution.
+
+**Reading a copy.** Check `conforms_to` before comparing values from two distributions, or before passing a copy to code written for one version. IMAS-Python does not convert between major versions when reading: a plain `get` of DD 3 data raises an error under DD 4. Choose the distribution in the version you need, or convert it with `imas.convert_ids`.

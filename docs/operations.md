@@ -137,8 +137,37 @@ defaults.
 
 | Setting | Effect |
 | --- | --- |
-| `FDS_STORAGE_PROVIDERS` | JSON list of object stores FDS can vend credentials for. For S3-compatible stores: `endpoint_url` (what clients connect to), `sts_endpoint_url` (what FDS calls, if different), `region`, `sts_role_arn`, and optionally `sts_access_key_id` / `sts_secret_access_key`; without the last two, the standard AWS credential chain applies. |
+| `FDS_STORAGE_PROVIDERS` | JSON list of object stores FDS can vend credentials for. Empty (the default) vends none. See [Storage providers](#storage-providers). |
 | `FDS_CREDENTIAL_TOKEN_DURATION` | Lifetime in seconds of vended credentials. Default `3600`. |
+
+#### Storage providers
+
+Each entry describes one store. A distribution gets credentials from the entry whose `type` matches
+its URL's scheme and whose `endpoint_url` equals its own. FDS refuses to start if two entries share
+a `type` and `endpoint_url`, since only the first could ever be chosen.
+
+| `type` | Schemes | Fields | Credentials FDS signs with |
+| --- | --- | --- | --- |
+| `s3` | `s3://` | `endpoint_url` (what clients connect to, `null` for AWS), `sts_endpoint_url` (what FDS calls, if different), `region`, `sts_role_arn`, and optionally `sts_access_key_id` / `sts_secret_access_key` | The two keys if given, otherwise the standard AWS credential chain |
+| `gcs` | `gs://`, `gcs://` | `endpoint_url` (optional) | Google Application Default Credentials, such as a key file named by `GOOGLE_APPLICATION_CREDENTIALS` |
+| `azure` | `az://`, `abfs://`, `abfss://` | `storage_account`, `endpoint_url` (optional) | Azure's default credential chain, such as environment variables or a managed identity |
+
+`type` is required in every entry, `s3` included. For `gcs` and `azure`, `endpoint_url` only
+matches distributions: FDS never calls it. An Azure URL that names its account, as in
+`abfs://container@account.dfs.core.windows.net/path`, gets credentials only when that account is
+the provider's `storage_account`.
+
+```json
+[
+  {
+    "type": "s3",
+    "endpoint_url": "https://s3.echo.stfc.ac.uk",
+    "region": "us-east-1",
+    "sts_role_arn": "arn:aws:iam::123456789012:role/fds"
+  },
+  {"type": "gcs", "endpoint_url": null}
+]
+```
 
 ### Serving
 

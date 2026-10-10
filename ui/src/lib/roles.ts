@@ -45,25 +45,16 @@ export function getUserRole(scopes: string[] | undefined): UserRole {
 export function getRoleColor(role: UserRole): string {
   switch (role) {
     case 'Admin':
-      return 'text-destructive font-bold'; // Distinctive Red for Admin
+      return 'text-brand-text font-bold';
     case 'Device Admin':
-      return 'text-foreground font-semibold';
+      return 'text-primary font-semibold';
     case 'Shot Operator':
-      return 'text-muted-foreground';
+      return 'text-primary';
     case 'Viewer':
-      return 'text-muted-foreground';
+      return 'text-primary';
   }
 }
 
 export function getRoleBgColor(role: UserRole): string {
-  switch (role) {
-    case 'Admin':
-      return 'bg-muted';
-    case 'Device Admin':
-      return 'bg-muted';
-    case 'Shot Operator':
-      return 'bg-muted';
-    case 'Viewer':
-      return 'bg-muted';
-  }
+  return role === 'Admin' ? 'bg-brand/15' : 'bg-muted';
 }

@@ -4,6 +4,7 @@ from google.auth import exceptions
 from google.auth.transport.requests import Request
 
 from app.models.file_access import GCSCredentials
+from app.models.storage_options import parse_storage_url
 from app.services.exceptions import ConfigurationError
 
 # Note: We import Request from google.auth.transport.requests
@@ -19,8 +20,18 @@ class GCSCredentialProvider:
         self._provider_config = provider_config
 
     def generate_credentials(
-        self, allowed_prefixes: list[str], _session_name: str
+        self, urls: list[str], _session_name: str
     ) -> dict[str, GCSCredentials]:
+        """Downscope a token to the buckets named. URLs that are not GCS are skipped."""
+        locations = {
+            url: location
+            for url in urls
+            if (location := parse_storage_url(url)) and location.backend == "gcs"
+        }
+        if not locations:
+            return {}
+        buckets = {location.bucket for location in locations.values()}
+
         # 1. Initialize Base Credentials
         try:
             # We explicitly create a Request object.
@@ -34,14 +45,7 @@ class GCSCredentialProvider:
 
         # 2. Define Access Boundary
         rules = []
-        buckets = set()
-
-        for prefix in allowed_prefixes:
-            # Expected format: gs://bucket/path
-            parts = prefix.replace("gs://", "").split("/", 1)
-            bucket_name = parts[0]
-            buckets.add(bucket_name)
-
+        for bucket_name in buckets:
             # Resource Format for Bucket: //storage.googleapis.com/projects/_/buckets/{bucket_name}
             resource = f"//storage.googleapis.com/projects/_/buckets/{bucket_name}"
 
@@ -69,18 +73,14 @@ class GCSCredentialProvider:
             raise ConfigurationError(f"Failed to vend GCS credentials: {e}")
 
         # 5. Structure Response
-        result = {}
-
         token = downscoped_creds.token
         if not isinstance(token, str):
             raise ConfigurationError("Failed to vend GCS credentials: missing token")
 
-        for bucket_name in buckets:
-            result[bucket_name] = GCSCredentials(
-                token=token,
-                expiry=downscoped_creds.expiry.isoformat()
-                if downscoped_creds.expiry
-                else None,
-            )
-
-        return result
+        credentials = GCSCredentials(
+            token=token,
+            expiry=downscoped_creds.expiry.isoformat()
+            if downscoped_creds.expiry
+            else None,
+        )
+        return dict.fromkeys(locations, credentials)

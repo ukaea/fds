@@ -5,7 +5,8 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
 import { AvailableProperty, PropertyValues } from '@/lib/types';
-import { propertyToken, formatQuantity } from '@/lib/properties';
+import { propertyToken } from '@/lib/properties';
+import { DESCRIBED, DescribedName } from '@/components/described-name';
 
 const PILL = 'text-xs px-2.5 py-1 rounded-full border transition-colors';
 const IDLE = 'bg-card text-muted-foreground border-border hover:text-foreground hover:border-foreground/40';
@@ -31,6 +32,12 @@ function Pill({
       {label}
     </button>
   );
+}
+
+const NAME = 'text-xs text-foreground font-medium';
+
+function PropertyName({ prop }: { prop: AvailableProperty }) {
+  return <DescribedName name={prop.name} description={prop.description} className={NAME} />;
 }
 
 /**
@@ -139,7 +146,14 @@ function ValueSearch({
         ) : (
           <ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground" />
         )}
-        <span className="text-xs text-foreground font-medium">{prop.name}</span>
+        {/* A native title: the popover would be clipped by this box's
+            overflow-hidden, and a focusable name cannot sit inside a button. */}
+        <span
+          title={prop.description ?? undefined}
+          className={`${NAME} ${prop.description ? DESCRIBED : ''}`}
+        >
+          {prop.name}
+        </span>
         {chosen.length > 0 && (
           <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-foreground text-background">
             {chosen.length}
@@ -172,7 +186,7 @@ function ValueSearch({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={`Search ${prop.name}\u2026`}
-            className="w-full px-2 py-1 text-xs bg-card border border-border rounded text-foreground placeholder-muted-foreground focus:outline-none focus:border-foreground/40"
+            className="w-full px-2 py-1 text-xs bg-card border border-border rounded-sm text-foreground placeholder-muted-foreground focus:outline-hidden focus:border-foreground/40"
           />
           <div className="mt-2 max-h-56 overflow-y-auto space-y-0.5">
             {isLoading && !data && (
@@ -187,7 +201,7 @@ function ValueSearch({
                   type="button"
                   onClick={() => toggle(entry.value)}
                   aria-pressed={active}
-                  className={`w-full flex items-baseline justify-between gap-3 text-left text-xs px-2 py-1 rounded transition-colors ${
+                  className={`w-full flex items-baseline justify-between gap-3 text-left text-xs px-2 py-1 rounded-sm transition-colors ${
                     active ? 'bg-foreground text-background' : 'hover:bg-muted'
                   }`}
                 >
@@ -325,24 +339,20 @@ function RangeInput({
         if (e.key === 'ArrowRight') nudge(which, 1);
       }}
       style={{ left: `${pct(value)}%` }}
-      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-foreground border-2 border-background shadow cursor-grab active:cursor-grabbing touch-none focus:outline-none focus:ring-2 focus:ring-primary"
+      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-foreground border-2 border-background shadow-sm cursor-grab active:cursor-grabbing touch-none focus:outline-hidden focus:ring-2 focus:ring-primary"
     />
   );
 
   const NUMBER_INPUT =
-    'w-24 px-2 py-0.5 text-xs bg-card border border-border rounded text-foreground ' +
-    'placeholder-muted-foreground focus:outline-none focus:border-foreground/40 ' +
+    'w-24 px-2 py-0.5 text-xs bg-card border border-border rounded-sm text-foreground ' +
+    'placeholder-muted-foreground focus:outline-hidden focus:border-foreground/40 ' +
     '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none ' +
     '[&::-webkit-inner-spin-button]:appearance-none';
 
   return (
     <div className="max-w-xs">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-xs text-foreground font-medium">{prop.name}</span>
-        <span className="text-[11px] text-muted-foreground font-mono">
-          {formatQuantity(low, prop.unit)} to {formatQuantity(high, prop.unit)}
-        </span>
-      </div>
+      {/* No separate range text: the empty inputs show it as placeholders. */}
+      <PropertyName prop={prop} />
 
       <div
         ref={track}
@@ -364,7 +374,7 @@ function RangeInput({
         <input
           type="number"
           value={range.min ?? ''}
-          placeholder={String(Number(low.toPrecision(6)))}
+          placeholder={String(Number(low.toPrecision(10)))}
           onChange={(e) => onChange({ ...range, min: parse(e.target.value) })}
           className={NUMBER_INPUT}
         />
@@ -372,7 +382,7 @@ function RangeInput({
         <input
           type="number"
           value={range.max ?? ''}
-          placeholder={String(Number(high.toPrecision(6)))}
+          placeholder={String(Number(high.toPrecision(10)))}
           onChange={(e) => onChange({ ...range, max: parse(e.target.value) })}
           className={NUMBER_INPUT}
         />
@@ -408,8 +418,10 @@ function TermRow({
 
   if (isBoolean(prop)) {
     return (
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-xs text-foreground font-medium">{prop.name}</span>
+      <div className="space-y-1.5">
+        <div>
+          <PropertyName prop={prop} />
+        </div>
         <TriState name={prop.name} selected={selected} onChange={onChange} />
       </div>
     );
@@ -429,19 +441,23 @@ function TermRow({
   // The name is a heading, not a control: clicking a property rather than a
   // value of it was the thing nobody could explain.
   return (
-    <div className="flex items-baseline gap-2 flex-wrap">
-      <span className="text-xs text-foreground font-medium shrink-0">{prop.name}</span>
-      {prop.values.map((value) => {
-        const token = propertyToken(prop.name, value);
-        return (
-          <Pill
-            key={value}
-            label={prop.unit ? `${value} ${prop.unit}` : value}
-            active={selected.includes(token)}
-            onClick={() => toggle(token)}
-          />
-        );
-      })}
+    <div className="space-y-1.5">
+      <div>
+        <PropertyName prop={prop} />
+      </div>
+      <div className="flex items-baseline gap-2 flex-wrap">
+        {prop.values.map((value) => {
+          const token = propertyToken(prop.name, value);
+          return (
+            <Pill
+              key={value}
+              label={prop.unit ? `${value} ${prop.unit}` : value}
+              active={selected.includes(token)}
+              onClick={() => toggle(token)}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -454,7 +470,8 @@ function TermRow({
  * data and carries a dimension; a term is drawn from a vocabulary and is picked
  * from; a quantity is a magnitude and is bounded. Prose never appears: it
  * describes one record rather than classifying it, which is what made the old
- * presence row a dumping ground.
+ * presence row a dumping ground. Only annotations carry a heading: chips and
+ * range controls already show which of the other two a property is.
  *
  * Values of one property OR together and different properties AND, which is
  * what the server does with repeated parameters and what selecting two chips in
@@ -469,7 +486,8 @@ export function PropertyFilter({
   onRangesChange,
   valuesUrl,
 }: {
-  label: string;
+  // Only needed where two panels sit together and must be told apart.
+  label?: string;
   properties: AvailableProperty[];
   selected: string[];
   onChange: (selected: string[]) => void;
@@ -504,20 +522,26 @@ export function PropertyFilter({
     </div>
   );
 
+  const clearButton = hasFilters && (
+    <button
+      type="button"
+      onClick={clear}
+      className={`text-xs text-muted-foreground hover:text-foreground transition-colors ${
+        label ? '' : 'absolute top-4 right-4'
+      }`}
+    >
+      Clear
+    </button>
+  );
+
   return (
-    <div className="card p-6 mb-6 space-y-10">
-      <div className="flex items-baseline justify-between gap-4">
-        <p className={HEADING}>{label}</p>
-        {hasFilters && (
-          <button
-            type="button"
-            onClick={clear}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Clear
-          </button>
-        )}
-      </div>
+    <div className="card relative p-6 mb-6 space-y-10">
+      {label && (
+        <div className="flex items-baseline justify-between gap-4">
+          <p className={HEADING}>{label}</p>
+          {clearButton}
+        </div>
+      )}
 
       {annotations.length > 0 &&
         section(
@@ -540,8 +564,7 @@ export function PropertyFilter({
 
       {terms.length > 0 && (
         <div>
-          <p className={HEADING}>Terms</p>
-          <div className="mt-3.5 space-y-3">
+          <div className="space-y-3">
             {terms
               .filter((f) => f.values)
               .map((prop) => (
@@ -574,10 +597,10 @@ export function PropertyFilter({
 
       {quantities.length > 0 && onRangesChange && (
         <div>
-          <p className={HEADING}>Quantities</p>
-          {/* Across the width rather than down it: three stacked controls left a
-              tall thin column beside an empty panel. */}
-          <div className="mt-3.5 grid gap-x-12 gap-y-8 sm:grid-cols-2 xl:grid-cols-3">
+          {/* As many columns as the panel has room for: one in the side column,
+              several across a full-width page, where a single stacked column
+              left a tall thin strip beside empty space. */}
+          <div className="grid gap-x-12 gap-y-8 grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
             {quantities.map((prop) => (
               <RangeInput
                 key={prop.name}
@@ -589,6 +612,10 @@ export function PropertyFilter({
           </div>
         </div>
       )}
+
+      {/* Last, so its arrival does not add space-y margin above the first
+          section: it is positioned out of the flow anyway. */}
+      {!label && clearButton}
     </div>
   );
 }

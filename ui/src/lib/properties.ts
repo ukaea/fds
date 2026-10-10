@@ -28,14 +28,16 @@ function formatCoordinate(value: number): string {
   return String(Number(value.toPrecision(4)));
 }
 
-// "time 0.20 → 0.45 s" for a span, "time 0.606 s" for a point. The dimension is
-// always shown: the axis is what makes the numbers meaningful.
+// "0.20 → 0.45 s" for a span, "0.606 s" for a point. The axis name is left to
+// the unit and the property's own name and description, and shown only when
+// there is no unit: "channel 3 → 7" says something, "3 → 7" does not.
 export function extentSummary(extent?: Extent | null): string | null {
   if (!extent) return null;
   const unit = extent.unit ? ` ${extent.unit}` : '';
+  const axis = extent.unit ? '' : `${extent.dimension} `;
   const start = formatCoordinate(extent.start);
-  if (extent.end == null) return `${extent.dimension} ${start}${unit}`;
-  return `${extent.dimension} ${start} → ${formatCoordinate(extent.end)}${unit}`;
+  if (extent.end == null) return `${axis}${start}${unit}`;
+  return `${axis}${start} → ${formatCoordinate(extent.end)}${unit}`;
 }
 
 // scientific_metadata values are any JSON type, so render them without assuming.
@@ -76,23 +78,6 @@ export const MAX_INLINE_VALUES = 20;
 // vocabulary. Mirrors the server so both sources of properties agree.
 const PROSE_RATIO = 0.5;
 const RATIO_FLOOR = 20;
-
-// Render a magnitude with its unit. Large values get thousands separators
-// rather than an exponent: a plasma current reads as 1,418,442 A on the axis
-// and in the input beside it, where 1.42e+6 reads as neither. Only genuinely
-// tiny values fall back to an exponent, where separators would not help.
-export function formatQuantity(value: number, unit?: string | null): string {
-  const magnitude = Math.abs(value);
-  let text: string;
-  if (magnitude > 0 && magnitude < 0.001) {
-    text = value.toExponential(2);
-  } else if (magnitude >= 1000) {
-    text = Math.round(value).toLocaleString('en-GB');
-  } else {
-    text = String(Number(value.toPrecision(4)));
-  }
-  return unit ? `${text} ${unit}` : text;
-}
 
 function inferKind(distinct: number, records: number, numeric: boolean): MetadataKind {
   const repeats = records >= RATIO_FLOOR && distinct / records < PROSE_RATIO;

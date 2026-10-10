@@ -46,7 +46,7 @@ jobs:
 
       # Reads .python-version, so the pinned interpreter is the one CI uses.
       - name: Install dependencies
-        run: uv sync --all-extras --frozen
+        run: uv sync --all-extras --locked
 
       - name: Lint
         run: uv run ruff check --output-format=github .
@@ -117,7 +117,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install dependencies
-        run: uv sync --all-extras --frozen
+        run: uv sync --all-extras --locked
 
       # The stack trusts this key, and the suite signs its tokens with it, so no
       # identity provider has to run.

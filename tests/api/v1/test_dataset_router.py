@@ -278,6 +278,48 @@ def test_update_dataset(
     assert response.json()["level"] == 5
 
 
+def test_persistent_identifier_round_trips(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={"name": "cited", "url": "url"},
+    )
+    dataset = session.exec(select(Dataset).where(Dataset.name == "cited")).one()
+
+    response = test_client.patch(
+        f"/v1/datasets/{dataset.id}",
+        headers=admin_user_token,
+        json={"persistent_identifier": "doi:10.5072/fds.1"},
+    )
+    assert response.status_code == 200
+
+    read = test_client.get(f"/v1/datasets/id/{dataset.id}").json()
+    assert read["persistent_identifier"] == "doi:10.5072/fds.1"
+
+
+def test_issued_round_trips(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={"name": "published", "url": "url"},
+    )
+    dataset = session.exec(select(Dataset).where(Dataset.name == "published")).one()
+
+    response = test_client.patch(
+        f"/v1/datasets/{dataset.id}",
+        headers=admin_user_token,
+        json={"issued": "2024-03-01"},
+    )
+    assert response.status_code == 200
+
+    read = test_client.get(f"/v1/datasets/id/{dataset.id}").json()
+    assert read["issued"] == "2024-03-01"
+
+
 def test_delete_dataset(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
@@ -347,7 +389,7 @@ def test_get_datasets_with_storage_options(
     # Define Mock directly in the router test, ensuring STS assumes work
     mock_provider = mocker.MagicMock()
     mock_provider.generate_credentials.return_value = {
-        "opts": S3Credentials(
+        "s3://opts/1": S3Credentials(
             access_key_id="r_key",
             secret_access_key="r_sec",
             session_token="r_tok",
@@ -414,6 +456,146 @@ def test_create_dataset_without_url(test_client: TestClient, admin_user_token: d
     assert data["name"] == "metadata_only"
     assert "url" not in data
     assert "distributions" not in data
+
+
+def test_default_distribution_group_is_inlined(
+    test_client: TestClient, admin_user_token: dict
+):
+    response = test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={
+            "name": "equilibrium",
+            "url": "s3://bucket/30420.nc",
+            "group": "equilibrium",
+            "media_type": "application/x-netcdf",
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["url"] == "s3://bucket/30420.nc"
+    assert data["group"] == "equilibrium"
+    assert data["distributions"][0]["group"] == "equilibrium"
+
+
+def test_alternative_distribution_names_its_group(
+    test_client: TestClient, admin_user_token: dict
+):
+    """A NetCDF file holding a whole shot is an alternative to a per-group Zarr
+    store, and the default distribution's inlined fields stay the Zarr ones."""
+    created = test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={"name": "equilibrium", "url": "s3://bucket/30420.zarr/equilibrium"},
+    ).json()
+
+    response = test_client.post(
+        f"/v1/datasets/{created['id']}/distributions",
+        headers=admin_user_token,
+        json={
+            "url": "s3://bucket/30420.nc",
+            "group": "equilibrium",
+            "media_type": "application/x-netcdf",
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["group"] == "equilibrium"
+
+    data = test_client.get(
+        f"/v1/datasets/id/{created['id']}", headers=admin_user_token
+    ).json()
+    assert data["url"] == "s3://bucket/30420.zarr/equilibrium"
+    assert "group" not in data
+    by_url = {d["url"]: d for d in data["distributions"]}
+    assert by_url["s3://bucket/30420.nc"]["group"] == "equilibrium"
+    assert "group" not in by_url["s3://bucket/30420.zarr/equilibrium"]
+
+
+DD3 = "https://github.com/iterorganization/IMAS-Data-Dictionary/tree/3.42.0"
+DD4 = "https://github.com/iterorganization/IMAS-Data-Dictionary/tree/4.0.0"
+
+
+def test_distributions_declare_their_schema(
+    test_client: TestClient, admin_user_token: dict
+):
+    """One IDS in two Data Dictionary versions is one dataset with a
+    distribution in each, and the dataset inlines the default's schema."""
+    created = test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={
+            "name": "equilibrium",
+            "url": "s3://bucket/dd3/equilibrium",
+            "conforms_to": DD3,
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["conforms_to"] == DD3
+    dataset_id = created.json()["id"]
+
+    response = test_client.post(
+        f"/v1/datasets/{dataset_id}/distributions",
+        headers=admin_user_token,
+        json={"url": "s3://bucket/dd4/equilibrium", "conforms_to": DD4},
+    )
+    assert response.status_code == 201
+    assert response.json()["conforms_to"] == DD4
+
+    data = test_client.get(
+        f"/v1/datasets/id/{dataset_id}", headers=admin_user_token
+    ).json()
+    assert data["conforms_to"] == DD3
+    assert {d["url"]: d["conforms_to"] for d in data["distributions"]} == {
+        "s3://bucket/dd3/equilibrium": DD3,
+        "s3://bucket/dd4/equilibrium": DD4,
+    }
+
+    ld = resource(
+        test_client.get(
+            f"/v1/datasets/id/{dataset_id}",
+            headers={**admin_user_token, "Accept": "application/ld+json"},
+        ).json()
+    )
+    assert {
+        d["dcat:downloadURL"]: d["dct:conformsTo"] for d in ld["dcat:distribution"]
+    } == {
+        "s3://bucket/dd3/equilibrium": {"@id": DD3},
+        "s3://bucket/dd4/equilibrium": {"@id": DD4},
+    }
+
+
+def test_conforms_to_must_be_an_http_url(
+    test_client: TestClient, admin_user_token: dict
+):
+    response = test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={"name": "equilibrium", "url": "s3://bucket/eq", "conforms_to": "DD4"},
+    )
+    assert response.status_code == 422
+    assert "http or https URL" in response.text
+
+    dataset_id = test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={"name": "equilibrium", "url": "s3://bucket/eq"},
+    ).json()["id"]
+    response = test_client.post(
+        f"/v1/datasets/{dataset_id}/distributions",
+        headers=admin_user_token,
+        json={"url": "s3://bucket/eq.nc", "conforms_to": "imas-dd:4.0.0"},
+    )
+    assert response.status_code == 422
+
+    distribution_id = test_client.get(
+        f"/v1/datasets/id/{dataset_id}", headers=admin_user_token
+    ).json()["distributions"][0]["id"]
+    response = test_client.patch(
+        f"/v1/distributions/{distribution_id}",
+        headers=admin_user_token,
+        json={"conforms_to": "IMAS DD 4"},
+    )
+    assert response.status_code == 422
 
 
 def test_create_dataset_without_level(test_client: TestClient, admin_user_token: dict):

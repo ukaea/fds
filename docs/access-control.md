@@ -126,6 +126,15 @@ FDS has to have that issuer's public keys. It gets them in one of three ways, pe
 Keys are cached for ten minutes however they are obtained, so replacing a file takes effect
 within that window.
 
+### Which scopes FDS accepts from an issuer
+
+Each issuer lists `allowed_scopes`, the scopes FDS accepts from its tokens, as shell-style
+patterns: `["mast:*", "openid"]`, or `["*"]` for every scope it issues. Any other scope in a
+token is dropped. An issuer with no `allowed_scopes` passes none through: its users are
+authenticated but carry no scopes, so they hold no role and cannot read anything a scope gates.
+Trusting another organisation's identity provider therefore brings in none of its scopes until
+you list the ones you accept. Listing `["*"]` for it would let it issue `fds-admin`.
+
 ### Issuing tokens without an identity provider
 
 `jwks_file` exists so that a deployment can be administered before, or without, a working
@@ -144,7 +153,7 @@ uv run scripts/mint-token.py mint --key dev/local-issuer.key --scope fds-admin -
 Point FDS at the public half and trust the issuer:
 
 ```bash
-FDS_TRUSTED_IDPS='[{"issuer":"urn:fds:local","jwks_file":"dev/local-issuer.jwks.json"}]'
+FDS_TRUSTED_IDPS='[{"issuer":"urn:fds:local","jwks_file":"dev/local-issuer.jwks.json","allowed_scopes":["*"]}]'
 FDS_OIDC_AUDIENCE=fds-client
 ```
 
@@ -228,9 +237,10 @@ ds = xr.open_dataset(
 )
 ```
 
-Vending needs a configured provider (`FDS_STORAGE_PROVIDERS`) whose `endpoint_url` matches the
-dataset's distribution. The local stack configures none, so these requests show the shape of the
-exchange without returning credentials for a real store.
+Vending needs a configured provider (`FDS_STORAGE_PROVIDERS`) whose `type` matches the scheme of
+the distribution's URL and whose `endpoint_url` matches the distribution's. The local stack
+configures none, so these requests show the shape of the exchange without returning credentials for
+a real store.
 
 ## Bulk access: the Credential Manifest
 
@@ -346,9 +356,9 @@ to the endpoint rather than the credential, and that a hand-written mapping tend
 that is not AWS. Against a non-AWS store, a missing `force_path_style` is the usual cause of a
 connection that resolves but cannot find the bucket.
 
-Azure and GCS entries carry their one shape instead: `account_name` and `sas_token` for adlfs,
-`token` for gcsfs. A distribution whose `storage_options_type` is null is opened by its URL
-directly, so it gets a credential and no `storage_options`.
+Azure and GCS entries carry their one shape instead, picked by URL scheme: `account_name` and
+`sas_token` for adlfs, `token` for gcsfs. Any other distribution whose `storage_options_type` is
+null is opened by its URL directly, so it gets a credential and no `storage_options`.
 
 Two things stay yours to supply.
 
@@ -359,8 +369,8 @@ IceChunk store that holds the Distribution as a group.
 **A fresh manifest when `expiration` passes.** It is the credential's lifetime, not a hint. A
 worker holding a manifest across a long job has to request a new one rather than retry on failure.
 
-As with the single-dataset path, vending needs a configured provider whose `endpoint_url` matches
-the distribution, and the local stack configures none. These examples show the shape of the
+As with the single-dataset path, vending needs a configured provider whose `type` and
+`endpoint_url` match the distribution, and the local stack configures none. These examples show the shape of the
 exchange rather than something that runs against `compose.yaml` as shipped.
 
 ## What FDS does NOT do

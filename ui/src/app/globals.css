@@ -1,74 +1,98 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../tailwind.config.js";
 
+/* Tailwind 4 changed two defaults; keep the version 3 ones. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* The palette follows data-theme on <html>, which a script in <head> resolves
+   from the reader's choice or, by default, the system setting. */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
-  /* Monochrome palette (light) */
+  /* Neutral palette with a faint navy cast; primary is the brand navy (#0B2545) */
   --background: 0 0% 100%;
-  --foreground: 0 0% 9%;
+  --foreground: 213 30% 10%;
 
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 9%;
+  --card-foreground: 213 30% 10%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 9%;
+  --popover-foreground: 213 30% 10%;
 
-  --primary: 0 0% 9%;
+  --primary: 213 72% 16%;
   --primary-foreground: 0 0% 98%;
 
-  --secondary: 0 0% 96%;
-  --secondary-foreground: 0 0% 9%;
+  --secondary: 213 20% 96%;
+  --secondary-foreground: 213 30% 10%;
 
-  --muted: 0 0% 96%;
-  --muted-foreground: 0 0% 40%;
+  --muted: 213 20% 96%;
+  --muted-foreground: 213 10% 40%;
 
-  --accent: 0 0% 93%;
-  --accent-foreground: 0 0% 9%;
+  --accent: 213 20% 93%;
+  --accent-foreground: 213 30% 10%;
 
   --destructive: 0 70% 42%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 0 0% 89%;
-  --input: 0 0% 89%;
-  --ring: 0 0% 9%;
+  --border: 213 18% 89%;
+  --input: 213 18% 89%;
+  --ring: 213 72% 16%;
+
+  /* Brand orange (#F2643B), kept to small accents. It is under 4.5:1 on white, so
+     orange text takes a darker shade in light mode. */
+  --brand-accent: 13 88% 59%;
+  --brand-accent-text: 13 80% 46%;
 
   --radius: 0.5rem;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Monochrome palette (dark) */
-    --background: 0 0% 7%;
-    --foreground: 0 0% 98%;
+:root[data-theme='dark'] {
+  color-scheme: dark;
 
-    --card: 0 0% 10%;
-    --card-foreground: 0 0% 98%;
+  /* Navy-tinted dark palette */
+  --background: 213 40% 7%;
+  --foreground: 213 20% 97%;
 
-    --popover: 0 0% 10%;
-    --popover-foreground: 0 0% 98%;
+  --card: 213 32% 10%;
+  --card-foreground: 213 20% 97%;
 
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
+  --popover: 213 32% 10%;
+  --popover-foreground: 213 20% 97%;
 
-    --secondary: 0 0% 16%;
-    --secondary-foreground: 0 0% 98%;
+  --primary: 213 20% 97%;
+  --primary-foreground: 213 72% 16%;
 
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 64%;
+  --secondary: 213 22% 16%;
+  --secondary-foreground: 213 20% 97%;
 
-    --accent: 0 0% 18%;
-    --accent-foreground: 0 0% 98%;
+  --muted: 213 22% 15%;
+  --muted-foreground: 213 10% 64%;
 
-    --destructive: 0 63% 46%;
-    --destructive-foreground: 0 0% 98%;
+  --accent: 213 22% 18%;
+  --accent-foreground: 213 20% 97%;
 
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
-    --ring: 0 0% 83%;
-  }
+  --destructive: 0 63% 46%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 213 22% 18%;
+  --input: 213 22% 18%;
+  --ring: 213 15% 83%;
+
+  --brand-accent-text: var(--brand-accent);
 }
 
 body {
@@ -80,15 +104,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Provenance graph (Graphviz SVG): render its text in the site font, not
-   Graphviz's built-in Helvetica. A CSS rule overrides the SVG font-family
-   presentation attribute, so the graph matches the rest of the page. */
+/* Provenance graph (Graphviz SVG): its shapes are sized for Helvetica, so draw
+   the text in Helvetica or Arial, which has the same widths. */
 .prov-graph svg text {
-  font-family: inherit;
+  font-family: Helvetica, Arial, sans-serif;
 }
 
-/* Neutral, theme-aware sticky header */
+/* Theme-aware sticky header. The orange rule along its top edge echoes the
+   band across the logo mark. */
 .glass {
+  border-top: 2px solid hsl(var(--brand-accent));
   background-color: hsl(var(--background) / 0.85);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -114,6 +139,12 @@ body {
   margin: 0 auto;
   padding: 0 2rem;
 }
+
+/* The logo comes in a navy and a reversed (white) version; show the one that
+   reads against the current theme. */
+.logo-reversed { display: none; }
+:root[data-theme='dark'] .logo-default { display: none; }
+:root[data-theme='dark'] .logo-reversed { display: block; }
 
 /* Animations */
 @keyframes fadeIn {

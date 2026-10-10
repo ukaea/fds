@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
-from .mixins import DescriptiveMixin, TimestampMixin
+from .mixins import DescriptiveMixin, PersistentIdentifierMixin, TimestampMixin
 from .policy import AccessLevel
 
 if TYPE_CHECKING:
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from .source import Source
 
 
-class DeviceBase(DescriptiveMixin, SQLModel):
+class DeviceBase(DescriptiveMixin, PersistentIdentifierMixin, SQLModel):
     name: str = Field(index=True, unique=True)
     type: str | None = Field(default=None, index=True)
     began_operations: str | None = None
@@ -59,6 +59,7 @@ class DeviceRead(DeviceBase, TimestampMixin):
 
 class DeviceUpdate(SQLModel):
     name: str | None = None
+    persistent_identifier: str | None = None
     type: str | None = None
     began_operations: str | None = None
     status: str | None = None

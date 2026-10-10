@@ -1,6 +1,7 @@
 import pytest
 from sqlmodel import Session
 
+from app.core.audit import ACTIONS
 from app.core.context import request_context, set_actor
 from app.models.collection import CollectionCreate
 from app.models.dataset import DatasetCreate
@@ -80,6 +81,20 @@ class TestMutationsAreRecorded:
         CollectionService(session).add_dataset(collection.id, dataset.id, admin_user)
 
         assert audit_lines(log_lines(), "collection.add_dataset")
+
+    @pytest.mark.parametrize(
+        ("table", "action"),
+        [
+            ("activityinput", "activity.remove_input"),
+            ("activityinstrument", "activity.remove_instrument"),
+            ("activityagent", "activity.remove_agent"),
+            ("activitydelegation", "activity.remove_delegation"),
+        ],
+    )
+    def test_activity_link_deletes_are_named_for_their_operation(
+        self, table: str, action: str
+    ):
+        assert ACTIONS[(table, "delete")] == action
 
 
 class TestPolicyChanges:

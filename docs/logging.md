@@ -122,6 +122,9 @@ A request finished, naming anything restricted it touched:
  "trace_id": "9360d49cd07c6578aa9e7d3bc5d53a2a", "timestamp": "..."}
 ```
 
+Items are grouped by type and named by their id. A shot has no id of its own, so it is named by
+its device and shot number: `"shot": ["mast/30420"]`.
+
 The web server said something, formatted exactly like our own lines:
 
 ```json

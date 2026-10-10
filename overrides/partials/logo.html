@@ -1,0 +1,6 @@
+{#
+  The theme takes a single logo; this shows the navy mark or its reversed version to
+  suit the colour scheme. The theme hides #only-light and #only-dark images itself.
+#}
+<img src="{{ config.theme.logo | url }}#only-light" alt="{{ config.site_name }}">
+<img src="{{ 'assets/fds-mark-reversed.svg' | url }}#only-dark" alt="{{ config.site_name }}">

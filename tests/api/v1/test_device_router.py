@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
@@ -33,7 +34,7 @@ def test_update_device(
         DeviceCreate(name="Initial", type="Test", access_level=AccessLevel.PUBLIC),
         user=admin_user,
     )
-    response = test_client.put(
+    response = test_client.patch(
         f"/v1/devices/{device.name}",
         headers=admin_user_token,
         json={"name": "Updated Name"},
@@ -216,3 +217,12 @@ def test_read_devices_filters_restricted_for_anonymous(
     names = [device["name"] for device in response.json()]
     assert "public device" in names
     assert "private device" not in names
+
+
+@pytest.mark.parametrize("query", ["offset=-1", "limit=0", "limit=-1", "limit=1001"])
+def test_list_rejects_paging_out_of_range(test_client: TestClient, query: str):
+    assert test_client.get(f"/v1/devices/?{query}").status_code == 422
+
+
+def test_list_accepts_the_largest_page(test_client: TestClient):
+    assert test_client.get("/v1/devices/?limit=1000").status_code == 200

@@ -53,7 +53,7 @@ export function DatasetCard({
   const content = (
     <>
       <div className="flex items-start gap-3">
-        <div className="bg-muted p-2 rounded text-foreground">
+        <div className="bg-muted p-2 rounded-sm text-foreground">
           <Database className="w-5 h-5" />
         </div>
         <div className="min-w-0">

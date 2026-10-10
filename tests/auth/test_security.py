@@ -120,6 +120,21 @@ def test_extract_scopes_empty():
     assert _extract_scopes({"iss": "https://test-idp.com"}) == []
 
 
+def test_extract_scopes_merges_entra_roles():
+    claims: TokenClaims = {
+        "iss": "https://test-idp.com",
+        "scp": "read fds-admin",
+        "roles": ["fds-admin", "mast_admin"],
+    }
+    assert _extract_scopes(claims) == ["read", "fds-admin", "mast_admin"]
+
+
+def test_extract_scopes_roles_only():
+    """Entra ID app-only tokens carry `roles` and no `scp`."""
+    claims: TokenClaims = {"iss": "https://test-idp.com", "roles": ["fds-admin"]}
+    assert _extract_scopes(claims) == ["fds-admin"]
+
+
 def test_hash_user_id():
     # Expected: SHA256("issuer|sub")
     issuer = "https://idp.com"
@@ -153,6 +168,13 @@ def test_filter_scopes_match(mocker):
     assert "read" in filtered
     assert "write" in filtered
     assert "admin" not in filtered
+
+
+def test_filter_scopes_none_when_allowed_scopes_unset(mocker):
+    trusted = [TrustedIdP(issuer="https://trust.com")]
+    mocker.patch.object(config, "TRUSTED_IDPS", trusted)
+
+    assert _filter_scopes(["fds-admin", "mast:read"], "https://trust.com") == ()
 
 
 def test_filter_scopes_wildcard(mocker):

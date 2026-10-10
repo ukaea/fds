@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 from sqlmodel import Session
 
+from app.auth.security import AuthenticatedUser
 from app.models.coverage import Coverage
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
@@ -35,6 +36,40 @@ def _dataset_service(session: Session) -> DatasetService:
     return DatasetService(session)
 
 
+def _make_public_dataset(
+    dataset_service: DatasetService,
+    admin: AuthenticatedUser,
+    name: str,
+    level: int = 2,
+    **fields,
+):
+    return dataset_service.create(
+        DatasetCreate(
+            name=name,
+            level=level,
+            device_name="DEV",
+            access_level=AccessLevel.PUBLIC,
+            **fields,
+        ),
+        user=admin,
+    )
+
+
+def _make_team_dataset(
+    dataset_service: DatasetService, admin: AuthenticatedUser, name: str, **fields
+):
+    return dataset_service.create(
+        DatasetCreate(
+            name=name,
+            device_name="DEV",
+            access_level=AccessLevel.RESTRICTED,
+            required_scopes=["dev_team"],
+            **fields,
+        ),
+        user=admin,
+    )
+
+
 @pytest.fixture(name="scene")
 def _scene(device_service, shot_service, dataset_service, admin_user):
     """A device, a shot, a signal dataset, and one annotation per frame."""
@@ -44,29 +79,28 @@ def _scene(device_service, shot_service, dataset_service, admin_user):
     )
     shot_service.create(ShotCreate(id="500", device_name="DEV"), user=admin_user)
 
-    def make(name: str, level: int = 2, **fields):
-        return dataset_service.create(
-            DatasetCreate(
-                name=name,
-                level=level,
-                device_name="DEV",
-                access_level=AccessLevel.PUBLIC,
-                **fields,
-            ),
-            user=admin_user,
-        )
-
-    signal = make("camera", shot_id="100", level=1)
+    signal = _make_public_dataset(
+        dataset_service, admin_user, "camera", shot_id="100", level=1
+    )
     return {
         "signal": signal,
         # dataset frame: subject is a specific dataset (lives in the shot too)
-        "dataset_frame": make(
-            "ufo-mask", shot_id="100", annotates="ufo", subject_dataset_id=signal.id
+        "dataset_frame": _make_public_dataset(
+            dataset_service,
+            admin_user,
+            "ufo-mask",
+            shot_id="100",
+            annotates="ufo",
+            subject_dataset_id=signal.id,
         ),
         # shot frame: belongs to the shot, no dataset subject
-        "shot_frame": make("elm-times", shot_id="100", annotates="elm"),
+        "shot_frame": _make_public_dataset(
+            dataset_service, admin_user, "elm-times", shot_id="100", annotates="elm"
+        ),
         # device frame: device-level, coverage includes shot 100
-        "device_frame": make(
+        "device_frame": _make_public_dataset(
+            dataset_service,
+            admin_user,
             "deadregion",
             annotates="deadregion",
             applies_to=Coverage(shots=["100"]),
@@ -136,3 +170,38 @@ def test_shot_jsonld_emits_annotation_qualified_relations(shot_service, scene):
     # shot-frame (elm-times) + device-frame (deadregion)
     assert len(relations) == 2
     assert all(r["dcat:hadRole"]["@id"] == "fuel:annotation" for r in relations)
+
+
+def test_annotations_resolved_only_where_readable(
+    dataset_service, shot_service, scene, admin_user
+):
+    _make_team_dataset(
+        dataset_service,
+        admin_user,
+        "ufo-review",
+        shot_id="100",
+        annotates="ufo",
+        subject_dataset_id=scene["signal"].id,
+    )
+    _make_team_dataset(
+        dataset_service, admin_user, "elm-review", shot_id="100", annotates="elm"
+    )
+    shot = shot_service.get(("DEV", "100"))
+
+    dataset_read = dataset_service.to_read_model(
+        scene["signal"], include_annotations=True
+    )
+    shot_read = shot_service.to_read_model(shot, include_annotations=True)
+    shot_doc = resource(
+        shot_service.to_dcat(shot, "http://testserver", include_annotations=True)
+    )
+
+    assert [a.name for a in dataset_read.annotations or []] == ["ufo-mask"]
+    assert {a.name for a in shot_read.annotations or []} == {"elm-times", "deadregion"}
+    assert len(shot_doc["dcat:qualifiedRelation"]) == 2
+    team_read = shot_service.to_read_model(
+        shot,
+        include_annotations=True,
+        user=AuthenticatedUser(id="member", scopes=("dev_team",)),
+    )
+    assert "elm-review" in {a.name for a in team_read.annotations or []}

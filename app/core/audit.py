@@ -8,7 +8,12 @@ from sqlalchemy.orm import class_mapper
 from sqlalchemy.orm.attributes import instance_state
 from sqlmodel import SQLModel
 
-from app.core.context import ReadTier, get_actor, record_restricted_access
+from app.core.context import (
+    ReadTier,
+    ResourceId,
+    get_actor,
+    record_restricted_access,
+)
 from app.models.policy import AccessLevel
 
 logger = structlog.get_logger("fds.audit")
@@ -29,9 +34,13 @@ ACTIONS: dict[tuple[str, str], str] = {
     ("datasetderivation", "insert"): "dataset.add_derivation",
     ("datasetderivation", "delete"): "dataset.remove_derivation",
     ("activityinput", "insert"): "activity.add_input",
+    ("activityinput", "delete"): "activity.remove_input",
     ("activityinstrument", "insert"): "activity.add_instrument",
+    ("activityinstrument", "delete"): "activity.remove_instrument",
     ("activityagent", "insert"): "activity.add_agent",
+    ("activityagent", "delete"): "activity.remove_agent",
     ("activitydelegation", "insert"): "activity.add_delegation",
+    ("activitydelegation", "delete"): "activity.remove_delegation",
 }
 
 _PENDING = "fds_audit_pending"
@@ -132,10 +141,13 @@ def record_restricted_read(
 ) -> None:
     if access_level != AccessLevel.RESTRICTED:
         return
-    identity = _identity(obj)
-    resource_id = next(iter(identity.values()), None)
-    if isinstance(resource_id, int):
-        record_restricted_access(str(type(obj).__tablename__), resource_id, tier)
+    key = class_mapper(type(obj)).primary_key_from_instance(obj)
+    record_restricted_access(str(type(obj).__tablename__), resource_id(key), tier)
+
+
+def resource_id(key: Sequence[ResourceId]) -> ResourceId:
+    """A primary key as the read audit names it: ``42``, or ``mast/30420`` for a shot."""
+    return key[0] if len(key) == 1 else "/".join(str(part) for part in key)
 
 
 def record_data_access(

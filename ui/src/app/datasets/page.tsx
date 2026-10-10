@@ -62,7 +62,7 @@ export default function DatasetsPage() {
             placeholder="Search devices or datasets..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-card/50 border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-border transition-colors"
+            className="w-full pl-10 pr-4 py-2 bg-card/50 border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-hidden focus:border-border transition-colors"
           />
         </div>
         <div className="flex gap-2">
@@ -202,12 +202,6 @@ export default function DatasetsPage() {
                               {device.description || 'No description available'}
                             </p>
                           </div>
-                        </Link>
-                        <Link
-                          href={`/devices/${device.name}/shots`}
-                          className="px-4 py-2 bg-muted hover:bg-accent text-foreground text-sm rounded-lg transition-colors"
-                        >
-                          View Shots
                         </Link>
                       </div>
                     </div>

@@ -17,9 +17,11 @@ from app.models.dataset import Dataset
 from app.models.identity import AuthenticatedUser
 from app.models.source import Source, SourceKind
 from app.services.base_service import BaseService
+from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
 from app.services.exceptions import FDSValidationError, ResourceNotFoundError
 from app.services.source_service import SourceService
+from app.services.visibility import read_page
 
 
 class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
@@ -232,6 +234,23 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
             )
         return self._require_activity(dataset.activity_id)
 
+    def get_for_collection(
+        self, collection_id: int, user: AuthenticatedUser
+    ) -> Activity:
+        """Retrieve the Activity that produced the given Collection.
+
+        The collection counterpart of ``get_for_dataset``, with the read check
+        ahead of the "no associated activity" 404 for the same reason.
+        """
+        collection = CollectionService(self.session).get_readable_or_raise(
+            collection_id, user
+        )
+        if not collection.activity_id:
+            raise ResourceNotFoundError(
+                f"Collection {collection_id} has no associated activity"
+            )
+        return self._require_activity(collection.activity_id)
+
     def add_input(
         self, *, activity_id: int, dataset_id: int, user: AuthenticatedUser
     ) -> ActivityInput:
@@ -263,7 +282,11 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         return True
 
     def get_inputs(
-        self, activity_id: int, offset: int = 0, limit: int = 100
+        self,
+        activity_id: int,
+        user: AuthenticatedUser,
+        offset: int = 0,
+        limit: int = 100,
     ) -> Sequence[Dataset]:
         """List the datasets an Activity used as inputs."""
         self._require_activity(activity_id)
@@ -271,10 +294,11 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
             select(Dataset)
             .join(ActivityInput, col(ActivityInput.dataset_id) == col(Dataset.id))
             .where(ActivityInput.activity_id == activity_id)
-            .offset(offset)
-            .limit(limit)
+            .order_by(col(Dataset.id))
         )
-        return self.session.exec(statement).all()
+        return read_page(
+            self.session, Dataset, statement, user, offset=offset, limit=limit
+        )
 
     def add_instrument(
         self, *, activity_id: int, source_id: int, user: AuthenticatedUser

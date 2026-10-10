@@ -74,13 +74,13 @@ def provider(**overrides: Any) -> S3CredentialProvider:
     return S3CredentialProvider(S3StorageProvider(**settings))
 
 
-def test_credentials_are_vended_per_bucket():
+def test_credentials_are_vended_per_url():
     with moto.mock_aws():
         vended = provider().generate_credentials(
             ["s3://alpha/shots/1", "s3://beta/shots/2"], "session-name"
         )
 
-    assert set(vended) == {"alpha", "beta"}
+    assert set(vended) == {"s3://alpha/shots/1", "s3://beta/shots/2"}
     for credentials in vended.values():
         assert credentials.access_key_id
         assert credentials.secret_access_key
@@ -91,6 +91,15 @@ def test_credentials_are_vended_per_bucket():
         assert credentials.region == "us-east-1"
 
 
+def test_urls_for_another_backend_are_skipped():
+    with moto.mock_aws():
+        vended = provider().generate_credentials(
+            ["s3://alpha/a", "gs://beta/b"], "session-name"
+        )
+
+    assert set(vended) == {"s3://alpha/a"}
+
+
 def test_one_token_covers_every_bucket_it_was_minted_for():
     """STS credentials are not bucket-scoped; the map is a convenience."""
     with moto.mock_aws():
@@ -98,7 +107,7 @@ def test_one_token_covers_every_bucket_it_was_minted_for():
             ["s3://alpha/a", "s3://beta/b"], "session-name"
         )
 
-    assert vended["alpha"].session_token == vended["beta"].session_token
+    assert vended["s3://alpha/a"].session_token == vended["s3://beta/b"].session_token
 
 
 def test_configured_keys_are_used_when_given():
@@ -108,7 +117,7 @@ def test_configured_keys_are_used_when_given():
             sts_access_key_id="AKIAFDS", sts_secret_access_key="secret"
         ).generate_credentials(["s3://alpha/a"], "session-name")
 
-    assert vended["alpha"].session_token
+    assert vended["s3://alpha/a"].session_token
 
 
 def test_a_refused_assume_role_is_reported_as_configuration():

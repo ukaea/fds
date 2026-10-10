@@ -1,3 +1,6 @@
+<img src="assets/fds-lockup.svg#only-light" alt="" width="200">
+<img src="assets/fds-lockup-reversed.svg#only-dark" alt="" width="200">
+
 # Fusion Data Service
 
 The **Fusion Data Service (FDS)** is a metadata catalog and access broker for fusion experiment data. It provides scalable, FAIR-compliant discovery and authenticated data access, aligned with fusion community standards (IMAS/DCAT).

@@ -3,9 +3,12 @@ from collections.abc import Sequence
 from fastapi import APIRouter, status
 
 from app.api.deps import (
+    DEFAULT_PAGE_SIZE,
     ActivityServiceDep,
     CurrentUserDep,
     DatasetServiceDep,
+    Limit,
+    Offset,
     SourceServiceDep,
 )
 from app.models.activity import (
@@ -60,7 +63,7 @@ def read_activity(
     return ActivityRead.model_validate(activity)
 
 
-@router.put("/{activity_id}", response_model=ActivityRead)
+@router.patch("/{activity_id}", response_model=ActivityRead)
 def update_activity(
     *,
     activity_id: int,
@@ -112,11 +115,14 @@ def list_activity_inputs(
     activity_id: int,
     activity_service: ActivityServiceDep,
     dataset_service: DatasetServiceDep,
-    offset: int = 0,
-    limit: int = 100,
+    user: CurrentUserDep,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> list[DatasetRead]:
     """List the datasets an Activity used as inputs."""
-    datasets = activity_service.get_inputs(activity_id, offset=offset, limit=limit)
+    datasets = activity_service.get_inputs(
+        activity_id, user, offset=offset, limit=limit
+    )
     return dataset_service.to_read_models(list(datasets))
 
 
@@ -160,8 +166,8 @@ def list_activity_instruments(
     activity_id: int,
     activity_service: ActivityServiceDep,
     source_service: SourceServiceDep,
-    offset: int = 0,
-    limit: int = 100,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> list[SourceRead]:
     """List the instruments an Activity used."""
     instruments = activity_service.get_instruments(

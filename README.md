@@ -29,7 +29,7 @@ The Fusion Data Service (FDS) is a platform designed to provide scalable, FAIR-c
 
 ## Documentation
 
-Published at **<https://ukaea.github.io/fds/>**, covering the data model, access control, provenance, and the DCAT / JSON-LD semantic projection. Built with [Zensical](https://zensical.org/) from the `docs/` directory and deployed by GitHub Actions on every push to `main`, so it does not depend on anyone running a local stack.
+Published at **<https://ukaea.github.io/fds/>**, covering the data model, access control, provenance, and the DCAT / JSON-LD semantic projection. Built with [Zensical](https://zensical.org/) from the `docs/` directory and deployed by GitHub Actions on every release, so it does not depend on anyone running a local stack.
 
 To preview changes locally before opening a pull request:
 
@@ -78,6 +78,10 @@ docker compose --profile idp up -d --build   # adds Keycloak on :8080
 Keycloak is `admin`/`admin`; its realm users are `admin`, `user` and `mast_admin`, all with
 password `password`.
 
+If you are developing your own UI, run it on `http://localhost:3001` and it can sit beside the
+reference UI against the same stack: the realm accepts logins from either port. A UI running in a
+container reaches FDS and Keycloak by joining the stack's network, `fds-dev_default`.
+
 To work on FDS itself, start the database alone and run FDS from your checkout with reload:
 
 ```bash
@@ -87,7 +91,7 @@ FDS_DB_PASSWORD=fds uv run uvicorn app.main:app --reload
 ```
 
 > **Podman on macOS:** if `podman compose up` hangs, `scripts/podman-up.sh` works around it
-> (add `--ui` for Keycloak and the UI). Docker users do not need it.
+> (add `--idp` for Keycloak). Docker users do not need it.
 
 To see request traces and browse them in Grafana, add the observability overlay:
 

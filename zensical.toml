@@ -32,21 +32,31 @@ nav = [
 [project.theme]
 features = ["content.tabs.link", "navigation.footer", "navigation.indexes"]
 custom_dir = "overrides"
+# The header shows the navy mark or its reversed version to suit the colour scheme
+# (overrides/partials/logo.html).
+logo = "assets/fds-mark.svg"
+favicon = "assets/fds-favicon.svg"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme)"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/sun-moon"
 toggle.name = "Switch to light mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: light)"
 scheme = "default"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: dark)"
 scheme = "slate"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to system preference"
 
