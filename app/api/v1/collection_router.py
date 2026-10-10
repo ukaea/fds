@@ -14,7 +14,15 @@ from app.api.deps import (
     Offset,
 )
 from app.models.activity import ActivityRead
-from app.models.collection import CollectionCreate, CollectionRead, CollectionUpdate
+from app.models.collection import (
+    CollectionCreate,
+    CollectionDataset,
+    CollectionDatasetRead,
+    CollectionMember,
+    CollectionMemberRead,
+    CollectionRead,
+    CollectionUpdate,
+)
 from app.models.dataset import DatasetRead
 from app.services.exceptions import ResourceNotFoundError
 
@@ -380,7 +388,8 @@ def read_child_collections(
 
 @router.post(
     "/collections/{collection_id}/datasets/{dataset_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=CollectionDatasetRead,
+    status_code=status.HTTP_201_CREATED,
 )
 def add_dataset_to_collection(
     *,
@@ -388,13 +397,13 @@ def add_dataset_to_collection(
     dataset_id: int,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
-) -> None:
+) -> CollectionDataset:
     """Add a Dataset as a member of a Collection.
 
     A Dataset can belong to multiple Collections simultaneously. The Dataset's
     own URI is unaffected by this operation.
     """
-    collection_service.add_dataset(collection_id, dataset_id, user)
+    return collection_service.add_dataset(collection_id, dataset_id, user)
 
 
 @router.delete(
@@ -417,7 +426,8 @@ def remove_dataset_from_collection(
 
 @router.post(
     "/collections/{parent_id}/collections/{child_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=CollectionMemberRead,
+    status_code=status.HTTP_201_CREATED,
 )
 def add_child_collection(
     *,
@@ -425,12 +435,12 @@ def add_child_collection(
     child_id: int,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
-) -> None:
+) -> CollectionMember:
     """Nest a child Collection inside a parent Collection (``dcat:catalog``).
 
     Both Collections must already exist. The child's own URI is unaffected.
     """
-    collection_service.add_child_collection(parent_id, child_id, user)
+    return collection_service.add_child_collection(parent_id, child_id, user)
 
 
 @router.delete(
