@@ -336,7 +336,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
 
     def add_dataset(
         self, collection_id: int, dataset_id: int, user: AuthenticatedUser
-    ) -> None:
+    ) -> CollectionDataset:
         """Add a Dataset to a Collection as a member (``dcat:dataset``).
 
         Enforces write authorization on the Collection's scope. Raises
@@ -359,10 +359,12 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 f"Dataset {dataset_id} is already a member of Collection {collection_id}"
             )
 
-        self.session.add(
-            CollectionDataset(collection_id=collection_id, dataset_id=dataset_id)
+        membership = CollectionDataset(
+            collection_id=collection_id, dataset_id=dataset_id
         )
+        self.session.add(membership)
         self.session.commit()
+        return membership
 
     def remove_dataset(
         self, collection_id: int, dataset_id: int, user: AuthenticatedUser
@@ -389,7 +391,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
 
     def add_child_collection(
         self, parent_id: int, child_id: int, user: AuthenticatedUser
-    ) -> None:
+    ) -> CollectionMember:
         """Nest a child Collection inside a parent Collection (``dcat:catalog``).
 
         Enforces write authorization on the parent Collection's scope. Raises
@@ -416,8 +418,10 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 f"Collection {child_id} is already a child of Collection {parent_id}"
             )
 
-        self.session.add(CollectionMember(parent_id=parent_id, child_id=child_id))
+        membership = CollectionMember(parent_id=parent_id, child_id=child_id)
+        self.session.add(membership)
         self.session.commit()
+        return membership
 
     def remove_child_collection(
         self, parent_id: int, child_id: int, user: AuthenticatedUser
