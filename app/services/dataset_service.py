@@ -1,10 +1,11 @@
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, select, tuple_
 
 from app.auth.access_control import (
     check_read,
@@ -54,6 +55,42 @@ from app.services.reference_service import (
 from app.services.visibility import read_page, readable_clause, readable_only
 
 logger = structlog.get_logger(__name__)
+
+
+@dataclass
+class _Reference:
+    """A resolved reference version, and the references it resolves in turn by
+    kind name."""
+
+    version: Dataset
+    nested: dict[str, list["_Reference"]] = field(default_factory=dict)
+
+
+@dataclass
+class _Pending:
+    """Versions that references of a kind resolve to at ``shot``, awaiting an
+    access check before joining ``into``. ``ancestors`` are the versions above
+    them, whose references are not followed again."""
+
+    into: dict[str, list[_Reference]]
+    kind_name: str
+    versions: list[Dataset]
+    shot: Shot
+    ancestors: frozenset[int | None]
+
+
+def _assemble(
+    references: list[_Reference], models: dict[int | None, DatasetRead]
+) -> list[DatasetRead]:
+    """``references`` as read models, each a copy since a version can sit at
+    several places in the tree with different nested references."""
+    assembled = []
+    for reference in references:
+        model = models[reference.version.id].model_copy()
+        for kind_name, nested in reference.nested.items():
+            setattr(model, kind_name, _assemble(nested, models))
+        assembled.append(model)
+    return assembled
 
 
 class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
@@ -706,114 +743,148 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             annotations=enriched.annotations if include_annotations else None,
         )
 
-    def _resolve_annotation_read_models(
+    def readable_read_models(
         self,
-        dataset: Dataset,
+        groups: Sequence[Sequence[Dataset]],
+        user: AuthenticatedUser | None,
         include_storage_options: bool = False,
-        user: AuthenticatedUser | None = None,
-    ) -> list[DatasetRead] | None:
-        """
-        Dataset properties as read models, or ``None``.
-        """
-        properties = readable_only(
-            self.session,
-            AnnotationService(self.session).for_dataset(dataset),
-            user or ANONYMOUS_USER,
-        )
-        models = self.to_read_models(
-            properties, include_storage_options=include_storage_options, user=user
-        )
-        return models or None
-
-    def _resolve_reference_read_models(
-        self,
-        dataset: Dataset,
-        kind: ReferenceKind,
-        include_storage_options: bool = False,
-        user: AuthenticatedUser | None = None,
-        shot: Shot | None = None,
-        visited: set[int] | None = None,
-    ) -> list[DatasetRead] | None:
-        """Resolve ``dataset``'s references of ``kind`` to deduped read models, or
-        ``None`` if it declares none or has no resolvable shot.
-
-        Resolution is anchored to ``shot``. At the top level ``shot`` is ``None``
-        and taken from ``dataset``'s own shot; a nested reference *version* (a
-        device-level dataset with no shot of its own) is resolved at the *same*
-        anchoring shot, so calibrated geometry — a geometry version that itself
-        carries ``calibration_references`` — resolves at the original signal's
-        shot. ``visited`` carries the ancestor version ids to break cycles.
-        """
-        references = getattr(dataset, kind.references_attr)
-        if not references:
-            return None
-        if shot is None:
-            if not dataset.shot_id:
-                return None
-            shot = self.session.exec(
-                select(Shot).where(
-                    Shot.device_name == dataset.device_name,
-                    Shot.id == dataset.shot_id,
-                )
-            ).first()
-            if shot is None:
-                return None
-        service = ReferenceService(self.session, kind)
-        if kind.order_attr is not None:
-            # Ordered kind: each role resolves to a stage-ordered chain.
-            chains = service.resolve_chain(shot, references)
-            ordered = [version for role in references for version in chains[role]]
-        else:
-            resolved = service.resolve(shot, references)
-            ordered = [resolved[role] for role in references]
+    ) -> list[list[DatasetRead]]:
+        """Each group's datasets that ``user`` may read, as read models, in order.
+        A dataset in several groups is checked and built once."""
+        distinct = {dataset.id: dataset for group in groups for dataset in group}
         readable = readable_only(
-            self.session,
-            [v for v in ordered if v is not None],
-            user or ANONYMOUS_USER,
+            self.session, list(distinct.values()), user or ANONYMOUS_USER
         )
-        seen: set[int] = set()
-        models: list[DatasetRead] = []
-        for version in readable:
-            if version is None or version.id is None or version.id in seen:
-                continue
-            seen.add(version.id)
-            models.append(
-                self._reference_version_read_model(
-                    version, shot, include_storage_options, user, visited or set()
-                )
-            )
-        return models or None
+        built = self.to_read_models(
+            readable, include_storage_options=include_storage_options, user=user
+        )
+        models = {d.id: model for d, model in zip(readable, built, strict=True)}
+        return [[models[d.id] for d in group if d.id in models] for group in groups]
 
-    def _reference_version_read_model(
+    def _reference_read_models(
         self,
-        version: Dataset,
-        shot: Shot,
+        datasets: Sequence[Dataset],
+        kinds: Sequence[ReferenceKind],
         include_storage_options: bool,
         user: AuthenticatedUser | None,
-        visited: set[int],
-    ) -> DatasetRead:
-        """Read model for a resolved reference ``version``, recursively resolving
-        its own reference kinds at the same anchoring ``shot`` (calibrated
-        geometry). ``visited`` (the ancestor version ids) breaks reference cycles:
-        a version already on the path is emitted but not descended into."""
-        model = self.to_read_model(
-            version, include_storage_options=include_storage_options, user=user
+    ) -> list[dict[str, list[DatasetRead] | None]]:
+        """Each dataset's references of ``kinds`` as deduped read models by kind
+        name; ``None`` where it declares none or has no resolvable shot.
+
+        Resolution is anchored to the dataset's own shot. A resolved version's
+        own references (calibrated geometry: a geometry version carrying
+        ``calibration_references``) resolve at that same shot, unless the version
+        is one of its own ancestors, which breaks cycles. The whole page resolves
+        together, and every version is built in one ``to_read_models`` call.
+        """
+        shots = self._shots_with_references(datasets, kinds)
+        services = {
+            kind.name: ReferenceService(self.session, kind) for kind in REFERENCE_KINDS
+        }
+        for service in services.values():
+            service.load({shot.device_name for shot in shots.values()})
+
+        roots: list[dict[str, list[_Reference]]] = [{} for _ in datasets]
+        pending = [
+            _Pending(root, kind.name, versions, shot, frozenset())
+            for dataset, root in zip(datasets, roots, strict=True)
+            if (shot := shots.get((dataset.device_name, dataset.shot_id))) is not None
+            for kind in kinds
+            if (versions := services[kind.name].resolve_references(dataset, shot))
+        ]
+        served = self._follow_references(pending, services, user)
+        built = self.to_read_models(
+            list(served.values()),
+            include_storage_options=include_storage_options,
+            user=user,
         )
-        if version.id is None or version.id in visited:
-            return model
-        next_visited = visited | {version.id}
-        for nested_kind in REFERENCE_KINDS:
-            nested = self._resolve_reference_read_models(
-                version,
-                nested_kind,
-                include_storage_options=include_storage_options,
-                user=user,
-                shot=shot,
-                visited=next_visited,
-            )
-            if nested is not None:
-                setattr(model, nested_kind.name, nested)
-        return model
+        models = dict(zip(served, built, strict=True))
+        return [
+            {
+                kind.name: _assemble(root[kind.name], models)
+                if kind.name in root
+                else None
+                for kind in kinds
+            }
+            for root in roots
+        ]
+
+    def _shots_with_references(
+        self, datasets: Sequence[Dataset], kinds: Sequence[ReferenceKind]
+    ) -> dict[tuple[str | None, str | None], Shot]:
+        """The shots of the ``datasets`` that declare references of ``kinds``, by
+        device and id, in one query."""
+        keys = {
+            (dataset.device_name, dataset.shot_id)
+            for dataset in datasets
+            if dataset.shot_id
+            and any(getattr(dataset, kind.references_attr) for kind in kinds)
+        }
+        if not keys:
+            return {}
+        statement = select(Shot).where(tuple_(Shot.device_name, Shot.id).in_(keys))
+        return {
+            (shot.device_name, shot.id): shot for shot in self.session.exec(statement)
+        }
+
+    def _follow_references(
+        self,
+        pending: list[_Pending],
+        services: dict[str, ReferenceService],
+        user: AuthenticatedUser | None,
+    ) -> dict[int | None, Dataset]:
+        """Place each pending version ``user`` may read, then follow its own
+        references, until none are left; the versions placed, by id.
+
+        Each level of nesting is checked for access in one batch, so only
+        versions reached through readable ones are checked.
+        """
+        checked: set[int | None] = set()
+        readable: set[int | None] = set()
+        served: dict[int | None, Dataset] = {}
+        while pending:
+            unchecked = {
+                version.id: version
+                for each in pending
+                for version in each.versions
+                if version.id not in checked
+            }
+            checked |= unchecked.keys()
+            readable |= {
+                version.id
+                for version in readable_only(
+                    self.session, list(unchecked.values()), user or ANONYMOUS_USER
+                )
+            }
+            following: list[_Pending] = []
+            for each in pending:
+                kept = {v.id: v for v in each.versions if v.id in readable}
+                if not kept:
+                    continue
+                served |= kept
+                references = [_Reference(version) for version in kept.values()]
+                each.into[each.kind_name] = references
+                for reference in references:
+                    if reference.version.id in each.ancestors:
+                        continue
+                    ancestors = each.ancestors | {reference.version.id}
+                    for kind in REFERENCE_KINDS:
+                        service = services[kind.name]
+                        versions = service.resolve_references(
+                            reference.version, each.shot
+                        )
+                        if versions:
+                            following.append(
+                                _Pending(
+                                    reference.nested,
+                                    kind.name,
+                                    versions,
+                                    each.shot,
+                                    ancestors,
+                                )
+                            )
+            pending = following
+        return served
 
     def to_read_models(
         self,
@@ -827,9 +898,10 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         Converts Dataset ORM objects to DatasetRead DTOs, including the effective
         access level. The default distribution's fields are inlined, and every
-        distribution is listed. Distributions, policies and storage credentials
-        are each resolved for all the datasets at once. ``include_geometry`` /
-        ``include_calibration`` resolve each dataset's ``geometry_references`` /
+        distribution is listed. Distributions, policies and storage credentials,
+        and references and annotations when included, are each resolved for all
+        the datasets at once. ``include_geometry`` / ``include_calibration``
+        resolve each dataset's ``geometry_references`` /
         ``calibration_references`` to their applicable versions.
         """
         distributions = self._distributions_of(datasets)
@@ -840,27 +912,29 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         ]
         if include_storage_options and user:
             models = self.enrich_with_storage_options(models, user)
-        if include_geometry:
-            for source, model in zip(datasets, models):
-                model.geometry = self._resolve_reference_read_models(
-                    source,
-                    GEOMETRY,
-                    include_storage_options=include_storage_options,
-                    user=user,
-                )
-        if include_calibration:
-            for source, model in zip(datasets, models):
-                model.calibration = self._resolve_reference_read_models(
-                    source,
-                    CALIBRATION,
-                    include_storage_options=include_storage_options,
-                    user=user,
-                )
+        kinds = [
+            kind
+            for kind, included in (
+                (GEOMETRY, include_geometry),
+                (CALIBRATION, include_calibration),
+            )
+            if included
+        ]
+        if kinds:
+            references = self._reference_read_models(
+                datasets, kinds, include_storage_options, user
+            )
+            for model, resolved in zip(models, references, strict=True):
+                for kind in kinds:
+                    setattr(model, kind.name, resolved[kind.name])
         if include_annotations:
-            for source, model in zip(datasets, models):
-                model.annotations = self._resolve_annotation_read_models(
-                    source, include_storage_options=include_storage_options, user=user
-                )
+            annotations = self.readable_read_models(
+                AnnotationService(self.session).for_datasets(datasets),
+                user,
+                include_storage_options=include_storage_options,
+            )
+            for model, resolved in zip(models, annotations, strict=True):
+                model.annotations = resolved or None
         return models
 
     def _distributions_of(

@@ -12,6 +12,7 @@ from app.models.shot import ShotCreate
 from app.services.device_service import DeviceService
 from app.services.exceptions import ConflictError, FDSValidationError
 from app.services.shot_service import ShotService
+from tests.conftest import statements
 
 pytestmark = pytest.mark.usefixtures("device")
 
@@ -276,6 +277,29 @@ def test_harmless_shot_at_edit_allowed(make_version, update_shot):
     make_version("explicit", ["pos"], Coverage(shots=["300"]))
     updated = update_shot("300", shot_at=datetime(2011, 1, 1))
     assert updated.shot_at == datetime(2011, 1, 1, tzinfo=UTC)
+
+
+def test_validation_issues_the_same_statements_whatever_the_number_of_versions(
+    make_version, update_shot, session
+):
+    make_version("explicit", ["pos"], Coverage(shots=["100", "150"]))
+    creating, editing = [], []
+    for name, start, end, year in (
+        ("v1", "200", "201", 2011),
+        ("v2", "300", "300", 2012),
+    ):
+        coverage = Coverage(shot_ranges=[ShotRange(from_shot=start, to_shot=end)])
+        session.expunge_all()
+        with statements(session) as issued:
+            make_version(name, ["pos"], coverage)
+        creating.append(len(issued))
+        session.expunge_all()
+        with statements(session) as issued:
+            update_shot("undated", shot_at=datetime(year, 1, 1))
+        editing.append(len(issued))
+
+    assert creating[0] == creating[1]
+    assert editing[0] == editing[1]
 
 
 def test_delete_explicit_member_rejected(make_version, delete_shot):

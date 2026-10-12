@@ -1,7 +1,8 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlmodel import Session, select
+from sqlmodel import Session, select, tuple_
 
 from app.core.timeutils import as_utc
 from app.models.coverage import Coverage
@@ -14,6 +15,16 @@ def as_coverage(applies_to: object) -> Coverage:
     if applies_to is None:
         return Coverage()
     return Coverage.model_validate(applies_to)
+
+
+def _endpoints(coverage: Coverage) -> list[str]:
+    """The shot ids bounding ``coverage``'s shot ranges."""
+    return [
+        endpoint
+        for shot_range in coverage.shot_ranges
+        for endpoint in (shot_range.from_shot, shot_range.to_shot)
+        if endpoint is not None
+    ]
 
 
 @dataclass(frozen=True)
@@ -67,6 +78,60 @@ class CoverageMatcher:
 
     def __init__(self, session: Session) -> None:
         self.session = session
+        self._loaded: dict[tuple[str | None, str], Shot | None] = {}
+
+    def load(self, versions: Iterable[Dataset]) -> None:
+        """Look up, in one query, the shots bounding ``versions``' shot ranges,
+        so ``covers`` issues no queries for them. Listings use this.
+
+        ``covers`` matches an explicit shot by id, never by time, so explicit
+        shots are not loaded: a coverage can list many, and ``covers`` would
+        never read them. The versions may belong to different devices, as on a
+        page of shots.
+        """
+        self._load(
+            {
+                (version.device_name, endpoint)
+                for version in versions
+                for endpoint in _endpoints(as_coverage(version.applies_to))
+            }
+        )
+
+    def load_for_overlap(
+        self, device_name: str | None, coverages: Iterable[Coverage]
+    ) -> None:
+        """Look up, in one query, every shot ``coverages`` name on
+        ``device_name``, so validating a write issues no queries for them.
+
+        ``overlaps`` places explicit shots on the timeline by their ``shot_at``,
+        so unlike ``load`` this includes explicit shots as well as range
+        endpoints. It takes coverages rather than versions because the coverage
+        being validated comes from the request, not from a stored version, and
+        validation is always within one device.
+        """
+        self._load(
+            {
+                (device_name, shot_id)
+                for coverage in coverages
+                for shot_id in [*coverage.shots, *_endpoints(coverage)]
+            }
+        )
+
+    def _load(self, keys: set[tuple[str | None, str]]) -> None:
+        if not keys:
+            return
+        self._loaded |= dict.fromkeys(keys)
+        statement = select(Shot).where(tuple_(Shot.device_name, Shot.id).in_(keys))
+        for shot in self.session.exec(statement):
+            self._loaded[shot.device_name, shot.id] = shot
+
+    def shot(self, device_name: str | None, shot_id: str) -> Shot | None:
+        """The shot ``shot_id`` of ``device_name``, if it exists."""
+        if (device_name, shot_id) in self._loaded:
+            return self._loaded[device_name, shot_id]
+        return self.session.exec(
+            select(Shot).where(Shot.device_name == device_name, Shot.id == shot_id)
+        ).first()
 
     def covers_version(self, version: Dataset, shot: Shot) -> bool:
         """Whether ``version``'s ``applies_to`` includes ``shot``."""
@@ -102,9 +167,7 @@ class CoverageMatcher:
         return False
 
     def _shot_at(self, device_name: str | None, shot_id: str) -> datetime | None:
-        shot = self.session.exec(
-            select(Shot).where(Shot.device_name == device_name, Shot.id == shot_id)
-        ).first()
+        shot = self.shot(device_name, shot_id)
         return as_utc(shot.shot_at) if shot else None
 
     def _range_segments(

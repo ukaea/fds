@@ -2,12 +2,14 @@ import io
 import json
 import logging
 import os
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 from alembic.config import Config as AlembicConfig
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 from sqlmodel import Session, create_engine
 
 from alembic import command
@@ -267,3 +269,23 @@ def record(document: dict) -> dict:
     return next(
         node for node in document["@graph"] if node["@type"] == "dcat:CatalogRecord"
     )
+
+
+@contextmanager
+def statements(session: Session) -> Iterator[list[str]]:
+    """The SQL statements ``session`` issues inside the block.
+
+    Savepoints are left out: they are this suite's rollback, not the request's.
+    """
+    issued: list[str] = []
+
+    def collect(conn, cursor, statement, *args):
+        if not statement.startswith(("SAVEPOINT", "RELEASE SAVEPOINT")):
+            issued.append(statement)
+
+    bind = session.get_bind()
+    event.listen(bind, "before_cursor_execute", collect)
+    try:
+        yield issued
+    finally:
+        event.remove(bind, "before_cursor_execute", collect)

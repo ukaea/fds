@@ -39,7 +39,7 @@ from app.services.filters import (
 )
 from app.services.jsonld import map_shot_to_dcat
 from app.services.reference_service import REFERENCE_KINDS, ReferenceService
-from app.services.visibility import read_page, readable_clause, readable_only
+from app.services.visibility import read_page, readable_clause
 
 # Tolerance (seconds) when checking an explicit shot_duration against the
 # shot_at/shot_end interval, so a whole-second duration is not rejected against a
@@ -458,7 +458,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         """
         Converts Shot ORM objects to ShotRead DTOs, optionally including the full device object.
         Centralises the presentation logic for shots. The shots' policies, and
-        devices when included, are each resolved in one go. When
+        their devices and annotations when included, are each resolved in one go. When
         ``include_annotations`` is set, resolves each shot's shot-frame and
         device-frame properties, frame-scoped, so no dataset-frame properties
         leak in.
@@ -469,8 +469,17 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
             names = {shot.device_name for shot in shots}
             statement = select(Device).where(col(Device.name).in_(names))
             devices = {d.name: d for d in self.session.exec(statement)}
+        annotations = (
+            DatasetService(self.session).readable_read_models(
+                AnnotationService(self.session).for_shots(shots), user
+            )
+            if include_annotations
+            else [[] for _ in shots]
+        )
         read_models = []
-        for shot, policy in zip(shots, policies, strict=True):
+        for shot, policy, shot_annotations in zip(
+            shots, policies, annotations, strict=True
+        ):
             read_model = ShotRead.model_validate(
                 shot,
                 update={
@@ -480,13 +489,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
                     "effective_access_level": policy.access_level,
                 },
             )
-            if include_annotations:
-                annotations = readable_only(
-                    self.session, AnnotationService(self.session).for_shot(shot), user
-                )
-                read_model.annotations = (
-                    DatasetService(self.session).to_read_models(annotations) or None
-                )
+            read_model.annotations = shot_annotations or None
             read_models.append(read_model)
         return read_models
 

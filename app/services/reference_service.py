@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from sqlmodel import Session, col, select
@@ -47,6 +48,24 @@ class ReferenceService:
         self.session = session
         self.kind = kind
         self.coverage = CoverageMatcher(session)
+        self._loaded: dict[str | None, list[Dataset]] = {}
+        self._to_load: set[str] = set()
+
+    def load(self, device_names: Iterable[str]) -> None:
+        """Have the first resolution on any of ``device_names`` look up the
+        versions of them all, and their range endpoints, in one query each."""
+        self._to_load |= set(device_names) - self._loaded.keys()
+
+    def _load_versions(self) -> None:
+        names, self._to_load = self._to_load, set()
+        statement = select(Dataset).where(
+            col(Dataset.device_name).in_(names), col(Dataset.shot_id).is_(None)
+        )
+        versions = [v for v in self.session.exec(statement).all() if self._roles(v)]
+        self._loaded |= {name: [] for name in names}
+        for version in versions:
+            self._loaded[version.device_name].append(version)
+        self.coverage.load(versions)
 
     def _roles(self, dataset: Dataset) -> list[str]:
         return getattr(dataset, self.kind.roles_attr) or []
@@ -100,6 +119,21 @@ class ReferenceService:
         versions = self._scope_versions(shot.device_name)
         return {role: self._covering(versions, role, shot) for role in roles}
 
+    def resolve_references(self, dataset: Dataset, shot: Shot) -> list[Dataset]:
+        """The versions ``dataset``'s references of this kind resolve to at
+        ``shot``, in reference order; for an ordered kind, each role's whole
+        chain."""
+        references = getattr(dataset, self.kind.references_attr)
+        if not references:
+            return []
+        if self.kind.order_attr is not None:
+            chains = self.resolve_chain(shot, references)
+            return [version for role in references for version in chains[role]]
+        resolved = self.resolve(shot, references)
+        return [
+            version for role in references if (version := resolved[role]) is not None
+        ]
+
     def validate_new_version(
         self,
         device_name: str | None,
@@ -135,13 +169,16 @@ class ReferenceService:
         if not roles:
             return
         coverage = as_coverage(applies_to)
-        self._check_reference_integrity(device_name, coverage)
-
         existing = [
             version
             for version in self._scope_versions(device_name)
             if version.id != exclude_id
         ]
+        self.coverage.load_for_overlap(
+            device_name, [coverage, *(as_coverage(v.applies_to) for v in existing)]
+        )
+        self._check_reference_integrity(device_name, coverage)
+
         for role in roles:
             for other in existing:
                 if role not in self._roles(other):
@@ -160,6 +197,9 @@ class ReferenceService:
     def validate_device_coverage(self, device_name: str) -> None:
         """Re-check integrity and per-role non-overlap across a device's versions."""
         versions = self._scope_versions(device_name)
+        self.coverage.load_for_overlap(
+            device_name, [as_coverage(version.applies_to) for version in versions]
+        )
         for version in versions:
             self._check_reference_integrity(
                 device_name, as_coverage(version.applies_to)
@@ -206,6 +246,10 @@ class ReferenceService:
         carry this kind's roles; empty for a ``None`` device."""
         if device_name is None:
             return []
+        if device_name in self._to_load:
+            self._load_versions()
+        if device_name in self._loaded:
+            return self._loaded[device_name]
         statement = select(Dataset).where(
             Dataset.device_name == device_name,
             col(Dataset.shot_id).is_(None),
@@ -223,11 +267,7 @@ class ReferenceService:
             for endpoint in (shot_range.from_shot, shot_range.to_shot):
                 if endpoint is None:
                     continue
-                shot = self.session.exec(
-                    select(Shot).where(
-                        Shot.device_name == device_name, Shot.id == endpoint
-                    )
-                ).first()
+                shot = self.coverage.shot(device_name, endpoint)
                 if shot is None:
                     raise FDSValidationError(
                         f"{self.kind.name.capitalize()} range endpoint shot "

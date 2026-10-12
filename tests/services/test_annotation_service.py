@@ -1,12 +1,12 @@
 """Annotation-dataset resolution, frame-scoped."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
-from app.models.coverage import Coverage
+from app.models.coverage import Coverage, ShotRange
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
 from app.models.policy import AccessLevel
@@ -109,13 +109,14 @@ def _scene(device_service, shot_service, dataset_service, admin_user):
 
 
 def test_dataset_frame_resolves_on_its_dataset(dataset_service, scene, session):
-    annotations = AnnotationService(session).for_dataset(scene["signal"])
+    [annotations] = AnnotationService(session).for_datasets([scene["signal"]])
     assert [a.name for a in annotations] == ["ufo-mask"]
 
 
 def test_shot_frame_and_device_frame_resolve_on_the_shot(shot_service, scene, session):
     shot = shot_service.get(("DEV", "100"))
-    names = {a.name for a in AnnotationService(session).for_shot(shot)}
+    [annotations] = AnnotationService(session).for_shots([shot])
+    names = {a.name for a in annotations}
     assert names == {"elm-times", "deadregion"}
     # No cross-surfacing: the dataset-frame annotation does not leak into shot frame.
     assert "ufo-mask" not in names
@@ -124,7 +125,7 @@ def test_shot_frame_and_device_frame_resolve_on_the_shot(shot_service, scene, se
 def test_device_frame_coverage_excludes_uncovered_shot(shot_service, scene, session):
     shot = shot_service.get(("DEV", "500"))
     # 500 is not covered by the dead-region and has no shot-frame annotation.
-    assert AnnotationService(session).for_shot(shot) == []
+    assert AnnotationService(session).for_shots([shot]) == [[]]
 
 
 def test_include_annotations_on_dataset_read(dataset_service, scene):
@@ -139,6 +140,31 @@ def test_include_annotations_on_shot_read(shot_service, scene):
     )
     assert read.annotations is not None
     assert {a.name for a in read.annotations} == {"elm-times", "deadregion"}
+
+
+def test_device_frame_annotation_resolves_on_every_shot_it_covers(
+    dataset_service, shot_service, scene, admin_user
+):
+    shot_service.create(
+        ShotCreate(id="101", device_name="DEV", shot_at=_SHOT_AT + timedelta(hours=1)),
+        user=admin_user,
+    )
+    _make_public_dataset(
+        dataset_service,
+        admin_user,
+        "coil-fault",
+        annotates="fault",
+        applies_to=Coverage(shot_ranges=[ShotRange(from_shot="100", to_shot="101")]),
+    )
+    shots = [shot_service.get(("DEV", shot_id)) for shot_id in ("100", "101", "500")]
+
+    reads = shot_service.to_read_models(shots, include_annotations=True)
+
+    assert [{a.name for a in read.annotations or []} for read in reads] == [
+        {"elm-times", "deadregion", "coil-fault"},
+        {"coil-fault"},
+        set(),
+    ]
 
 
 def test_no_annotations_resolved_by_default(dataset_service, shot_service, scene):

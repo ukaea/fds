@@ -132,6 +132,53 @@ def test_calibrated_geometry_resolves_at_anchor_shot(datasets, admin_user):
     assert [c.id for c in model.geometry[0].calibration] == [cal.id]
 
 
+def test_datasets_resolved_together_each_resolve_at_their_own_shot(
+    datasets, admin_user
+):
+    # One geometry version covers both signals' shots, but its calibration
+    # differs per shot, so the version must carry each signal's own.
+    cals = [
+        _create(
+            datasets,
+            admin_user,
+            name=f"cal{shot}",
+            level=0,
+            calibration_roles=["gain"],
+            calibration_stage=1,
+            applies_to=Coverage(shots=[shot]),
+            url=f"s3://cal/{shot}.nc",
+        )
+        for shot in ("150", "200")
+    ]
+    geom = _create(
+        datasets,
+        admin_user,
+        name="geom",
+        level=0,
+        geometry_roles=["pos"],
+        calibration_references=["gain"],
+        applies_to=Coverage(shot_ranges=[ShotRange(from_shot="150", to_shot="200")]),
+        url="s3://geom/pos.nc",
+    )
+    signals = [
+        _create(
+            datasets,
+            admin_user,
+            name=f"Te{shot}",
+            level=2,
+            shot_id=shot,
+            geometry_references=["pos"],
+            url=f"s3://sig/{shot}.zarr",
+        )
+        for shot in ("150", "200")
+    ]
+
+    models = datasets.to_read_models(signals, include_geometry=True, user=admin_user)
+
+    assert [m.geometry[0].id for m in models] == [geom.id, geom.id]
+    assert [m.geometry[0].calibration[0].id for m in models] == [c.id for c in cals]
+
+
 def test_reference_cycle_terminates(datasets, admin_user):
     # geom references calibration 'cal'; cal (providing 'cal') references geometry
     # 'pos' back to geom. Resolution must terminate via the cycle guard, emitting
