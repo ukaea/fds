@@ -7,7 +7,8 @@ RUN apk upgrade --no-cache
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci
+# Dependabot tracks advisories; npm's audit summary would only repeat them.
+RUN npm ci --no-audit
 
 # Rebuild the source code only when needed
 FROM base AS builder

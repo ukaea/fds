@@ -90,8 +90,9 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
+      # Dependabot tracks advisories; npm's audit summary would only repeat them.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit
 
       # Neither of these ran anywhere until now, which is how the lint script
       # came to be broken for a whole major version of TypeScript without
