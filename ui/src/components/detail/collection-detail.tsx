@@ -86,6 +86,8 @@ export default function CollectionDetail({ id }: { id: string }) {
     <div className="container mx-auto px-4 py-8">
       {/* Breadcrumb */}
       <div className="flex items-center text-sm text-muted-foreground mb-6 flex-wrap gap-1">
+        <Link href="/collections" className="hover:text-primary transition-colors">Collections</Link>
+        <ChevronRight className="w-4 h-4" />
         {deviceName && (
           <>
             <Link href={`/devices/${deviceName}`} className="hover:text-primary transition-colors">{deviceLabel}</Link>
@@ -95,9 +97,9 @@ export default function CollectionDetail({ id }: { id: string }) {
         {deviceName && shotId && (
           <>
             <Link href={`/devices/${deviceName}/shots/${shotId}`} className="hover:text-primary transition-colors">Shot #{shotId}</Link>
+            <ChevronRight className="w-4 h-4" />
           </>
         )}
-        <ChevronRight className="w-4 h-4" />
         <span className="text-foreground font-medium">{collectionName}</span>
       </div>
 
