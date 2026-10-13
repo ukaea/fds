@@ -27,6 +27,7 @@ from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.scope import CatalogueScope, DeviceScope
+from app.services.activity_service import ActivityService
 from app.services.available_properties import (
     DEFAULT_MAX_VALUES,
     available_properties,
@@ -607,12 +608,20 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             for read in self.to_summary_read_models(list(unique_children.values()))
         }
         policies = get_effective_policies(collections, self.session)
+        runs = ActivityService(self.session).get_summaries(
+            c.activity_id for c in collections
+        )
 
         return [
             CollectionRead.model_validate(
                 collection,
                 update={
                     "effective_access_level": policy.access_level,
+                    "activity": (
+                        runs.get(collection.activity_id)
+                        if collection.activity_id
+                        else None
+                    ),
                     "datasets": [
                         member_reads[d.id] for d in members.get(collection.id, [])
                     ]
@@ -644,11 +653,15 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
     ) -> list[CollectionRead]:
         """``CollectionRead`` DTOs without their members, as listed inside a parent."""
         policies = get_effective_policies(collections, self.session)
+        runs = ActivityService(self.session).get_summaries(
+            c.activity_id for c in collections
+        )
         return [
             CollectionRead.model_validate(
                 c,
                 update={
                     "effective_access_level": policy.access_level,
+                    "activity": runs.get(c.activity_id) if c.activity_id else None,
                     "datasets": None,
                     "child_collections": None,
                 },

@@ -16,7 +16,7 @@ from app.auth.permissions import check_device_admin, check_is_admin
 from app.core.config import AzureStorageProvider, S3StorageProvider, config
 from app.core.context import ReadTier
 from app.core.naming import normalise_device_name
-from app.models.activity import Activity, ActivityType
+from app.models.activity import Activity, ActivitySummary, ActivityType
 from app.models.dataset import (
     Dataset,
     DatasetCreate,
@@ -34,6 +34,7 @@ from app.models.policy import AccessLevel
 from app.models.scope import CatalogueScope, DeviceScope
 from app.models.shot import Shot
 from app.models.storage_options import derive_storage_options_type
+from app.services.activity_service import ActivityService
 from app.services.annotation_service import AnnotationService
 from app.services.base_service import BaseService
 from app.services.exceptions import (
@@ -747,8 +748,13 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         dataset: Dataset,
         distributions: list[Distribution],
         access_level: AccessLevel,
+        run: ActivitySummary | None,
     ) -> DatasetRead:
-        """``dataset`` as a DatasetRead, its default distribution's fields inlined."""
+        """``dataset`` as a DatasetRead, its default distribution's fields inlined.
+
+        ``run`` is passed in rather than read from ``dataset``, whose ``activity``
+        is the ORM relationship: reading it would load each row's run separately.
+        """
         default_dist = next((d for d in distributions if d.default_distribution), None)
         return DatasetRead.model_validate(
             dataset,
@@ -763,6 +769,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 ]
                 or None,
                 "effective_access_level": access_level,
+                "activity": run,
             },
         )
 
@@ -948,17 +955,26 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     ) -> list[DatasetRead]:
         """
         Converts Dataset ORM objects to DatasetRead DTOs, including the effective
-        access level. The default distribution's fields are inlined, and every
-        distribution is listed. Distributions, policies and storage credentials,
-        and references and annotations when included, are each resolved for all
-        the datasets at once. ``include_geometry`` / ``include_calibration``
-        resolve each dataset's ``geometry_references`` /
+        access level. The default distribution's fields are inlined, every
+        distribution is listed, and each read includes a summary of the run that
+        generated its dataset. Distributions, policies, runs and storage
+        credentials, and references and annotations when included, are each
+        resolved for all the datasets at once. ``include_geometry`` /
+        ``include_calibration`` resolve each dataset's ``geometry_references`` /
         ``calibration_references`` to their applicable versions.
         """
         distributions = self._distributions_of(datasets)
         policies = get_effective_policies(datasets, self.session)
+        runs = ActivityService(self.session).get_summaries(
+            d.activity_id for d in datasets
+        )
         models = [
-            self._read_model(dataset, distributions[dataset.id], policy.access_level)
+            self._read_model(
+                dataset,
+                distributions[dataset.id],
+                policy.access_level,
+                runs.get(dataset.activity_id) if dataset.activity_id else None,
+            )
             for dataset, policy in zip(datasets, policies, strict=True)
         ]
         if include_storage_options and user:

@@ -29,6 +29,15 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 
 ### Recording a dataset's provenance
 
+A dataset read includes `activity`, a short summary of the run its `activity_id` names: the type of run, and the name and version of the source that carried it out. A list can use it to show which datasets were measured and which were simulated, without a request per dataset:
+
+```json
+"activity_id": 8,
+"activity": {"activity_type": "simulation", "source": "jintrac", "source_version": "v220922"}
+```
+
+`activity` is read-only, and absent when the dataset has no `activity_id`. The full run is at `GET /v1/activities/{activity_id}`.
+
 `activity_id` says which run produced a dataset. `derived_from` says which data it was built from, and the two are independent: a run may consume several inputs while any one output depends on only some of them. FDS never guesses that link, so a derivation is only ever recorded because someone asserted it.
 
 The upstream does not have to be registered in FDS. Identify it however you can, falling back to a free-text label and/or description only

@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
 from sqlmodel import Session, col, or_, select
 
@@ -10,6 +10,7 @@ from app.models.activity import (
     ActivityDelegation,
     ActivityInput,
     ActivityInstrument,
+    ActivitySummary,
     ActivityUpdate,
     AgentRole,
 )
@@ -214,6 +215,32 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         check_is_admin(user)
         self._require_activity(id)
         return self.delete_unchecked(id)
+
+    def get_summaries(
+        self, activity_ids: Iterable[int | None]
+    ) -> dict[int, ActivitySummary]:
+        """Summaries of the runs ``activity_ids`` name, by id, read in one query.
+
+        Callers pass only the ids of records the user may read, so a summary
+        appears only where its record does.
+        """
+        ids = {i for i in activity_ids if i is not None}
+        if not ids:
+            return {}
+        rows = self.session.exec(
+            select(Activity, Source.name)
+            .outerjoin(Source, col(Source.id) == col(Activity.source_id))
+            .where(col(Activity.id).in_(ids))
+        ).all()
+        return {
+            activity.id: ActivitySummary(
+                activity_type=activity.activity_type,
+                source=source,
+                source_version=activity.source_version,
+            )
+            for activity, source in rows
+            if activity.id is not None
+        }
 
     def add_input(
         self, *, activity_id: int, dataset_id: int, user: AuthenticatedUser

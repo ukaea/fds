@@ -425,6 +425,49 @@ def test_filtering_by_run_leaves_out_datasets_the_caller_cannot_read(
     assert [ds["name"] for ds in response.json()] == ["open_profiles"]
 
 
+def test_dataset_read_includes_a_summary_of_its_run(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    DeviceService(session).create(
+        DeviceCreate(name="TCV", type="Tokamak"), user=admin_user
+    )
+    jintrac = SourceService(session).create(
+        SourceCreate(name="jintrac", kind=SourceKind.SOFTWARE), user=admin_user
+    )
+    run = ActivityService(session).create(
+        ActivityCreate(
+            activity_type=ActivityType.SIMULATION,
+            source_id=jintrac.id,
+            source_version="v220922",
+        ),
+        user=admin_user,
+    )
+    datasets = DatasetService(session)
+    datasets.create(
+        DatasetCreate(
+            name="core_profiles", level=2, device_name="TCV", activity_id=run.id
+        ),
+        user=admin_user,
+    )
+    datasets.create(
+        DatasetCreate(name="coil_geometry", level=1, device_name="TCV"),
+        user=admin_user,
+    )
+    session.commit()
+
+    response = test_client.get("/v1/devices/TCV/datasets/", headers=admin_user_token)
+    assert response.status_code == 200
+    runs = {ds["name"]: ds.get("activity") for ds in response.json()}
+    assert runs == {
+        "core_profiles": {
+            "activity_type": "simulation",
+            "source": "jintrac",
+            "source_version": "v220922",
+        },
+        "coil_geometry": None,
+    }
+
+
 def test_read_global_dataset_by_name(test_client: TestClient, admin_user_token: dict):
     test_client.post(
         "/v1/datasets/",

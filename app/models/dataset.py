@@ -29,7 +29,7 @@ from .scientific_metadata import ScientificProperty
 from .storage_options import StorageOptions, StorageOptionsType
 
 if TYPE_CHECKING:
-    from .activity import Activity
+    from .activity import Activity, ActivitySummary
     from .distribution import Distribution, DistributionRead
     from .shot import Shot
 
@@ -372,6 +372,7 @@ class DatasetRead(DatasetBase, TimestampMixin):
     id: int
     shot_id: str | None = None
     activity_id: int | None = None
+    activity: "ActivitySummary | None" = None
     subject_dataset_id: int | None = None
     origin: str | None = None
     effective_access_level: AccessLevel | None = None

@@ -468,6 +468,48 @@ def test_collection_property_summary_of_an_unknown_device_is_a_404(
     assert response.status_code == 404
 
 
+def test_collection_read_includes_a_summary_of_its_run(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _make_device(session)
+    jintrac = SourceService(session).create(
+        SourceCreate(name="jintrac", kind=SourceKind.SOFTWARE), user=admin_user
+    )
+    run = ActivityService(session).create(
+        ActivityCreate(
+            activity_type=ActivityType.SIMULATION,
+            source_id=jintrac.id,
+            source_version="v220922",
+        ),
+        user=admin_user,
+    )
+    bundle = _make_collection(session, "jintrac-run", device="DEV", activity_id=run.id)
+    output = DatasetService(session).create(
+        DatasetCreate(
+            name="core_profiles", level=2, device_name="DEV", activity_id=run.id
+        ),
+        user=admin_user,
+    )
+    assert output.id is not None
+    curated = _make_collection(session, "curated", device="DEV")
+    collections = CollectionService(session)
+    collections.add_dataset(bundle, output.id, admin_user)
+    collections.add_child_collection(curated, bundle, admin_user)
+    summary = {
+        "activity_type": "simulation",
+        "source": "jintrac",
+        "source_version": "v220922",
+    }
+
+    response = test_client.get("/v1/devices/DEV/collections", headers=admin_user_token)
+    assert response.status_code == 200
+    by_name = {c["name"]: c for c in response.json()}
+    assert by_name["jintrac-run"]["activity"] == summary
+    assert by_name["jintrac-run"]["datasets"][0]["activity"] == summary
+    assert "activity" not in by_name["curated"]
+    assert by_name["curated"]["child_collections"][0]["activity"] == summary
+
+
 def test_read_device_collection_by_name(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):

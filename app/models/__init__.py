@@ -6,6 +6,7 @@ from .activity import (
     ActivityInput,
     ActivityInstrument,
     ActivityRead,
+    ActivitySummary,
     ActivityType,
     ActivityUpdate,
 )
@@ -64,6 +65,7 @@ __all__ = [
     "ActivityInput",
     "ActivityInstrument",
     "ActivityRead",
+    "ActivitySummary",
     "ActivityType",
     "ActivityUpdate",
     "AvailableProperties",

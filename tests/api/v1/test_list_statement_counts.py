@@ -6,26 +6,31 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
+from app.models.activity import ActivityCreate, ActivityType
 from app.models.collection import CollectionCreate
 from app.models.coverage import Coverage, ShotRange
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
 from app.models.policy import AccessLevel
 from app.models.shot import ShotCreate
+from app.models.source import SourceCreate, SourceKind
+from app.services.activity_service import ActivityService
 from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
+from app.services.source_service import SourceService
 from tests.conftest import statements
 
 
 @pytest.fixture
 def catalogue(session: Session, admin_user: AuthenticatedUser) -> int:
     """A public device with 4 shots of 3 datasets each, and a collection
-    holding a collection for each shot. Each shot and dataset has an annotation
-    of its own, and two device-level annotations cover shot ranges. Every
-    dataset references a calibrated geometry. Returns the parent collection's
-    id."""
+    holding a collection for each shot. Each shot's datasets and collection come
+    from a run of their own, so every row includes a different run. Each shot and
+    dataset has an annotation of its own, and two device-level annotations cover
+    shot ranges. Every dataset references a calibrated geometry. Returns the
+    parent collection's id."""
     DeviceService(session).create(
         DeviceCreate(name="MAST", type="Tokamak", access_level=AccessLevel.PUBLIC),
         admin_user,
@@ -36,6 +41,9 @@ def catalogue(session: Session, admin_user: AuthenticatedUser) -> int:
     )
     parent_id = parent.id
     assert parent_id is not None
+    code = SourceService(session).create(
+        SourceCreate(name="code", kind=SourceKind.SOFTWARE), admin_user
+    )
     subjects = []
     for shot in range(4):
         ShotService(session).create(
@@ -56,6 +64,14 @@ def catalogue(session: Session, admin_user: AuthenticatedUser) -> int:
             ),
             admin_user,
         )
+        run = ActivityService(session).create(
+            ActivityCreate(
+                activity_type=ActivityType.SIMULATION,
+                source_id=code.id,
+                source_version=f"v{shot}",
+            ),
+            admin_user,
+        )
         for n in range(3):
             dataset = DatasetService(session).create(
                 DatasetCreate(
@@ -66,12 +82,18 @@ def catalogue(session: Session, admin_user: AuthenticatedUser) -> int:
                     url=f"s3://bucket/{shot}/{n}.zarr",
                     geometry_references=["coils"],
                     calibration_references=["gain"],
+                    activity_id=run.id,
                 ),
                 admin_user,
             )
             subjects.append(dataset)
         child = collections.create(
-            CollectionCreate(name=f"run{shot}", device_name="MAST", shot_id=str(shot)),
+            CollectionCreate(
+                name=f"run{shot}",
+                device_name="MAST",
+                shot_id=str(shot),
+                activity_id=run.id,
+            ),
             admin_user,
         )
         assert child.id is not None

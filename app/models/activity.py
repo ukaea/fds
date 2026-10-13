@@ -184,6 +184,18 @@ class ActivityRead(ActivityBase):
     id: int
 
 
+class ActivitySummary(SQLModel):
+    """A short summary of the run a record names in its ``activity_id``.
+
+    Dataset and collection reads include it, so a list can say what produced each
+    row without a request per row. The full run is read by ``activity_id``.
+    """
+
+    activity_type: ActivityType | None = None
+    source: str | None = None
+    source_version: str | None = None
+
+
 class ActivityInputRead(SQLModel):
     """An input-dataset link on an Activity (``prov:used``, role ``input``)."""
 

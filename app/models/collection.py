@@ -22,7 +22,7 @@ from .policy import AccessLevel
 from .scientific_metadata import ScientificProperty
 
 if TYPE_CHECKING:
-    from .activity import Activity
+    from .activity import Activity, ActivitySummary
     from .dataset import Dataset, DatasetRead
     from .shot import Shot
 
@@ -203,6 +203,7 @@ class CollectionRead(CollectionBase, TimestampMixin):
     id: int
     shot_id: str | None = None
     activity_id: int | None = None
+    activity: "ActivitySummary | None" = None
     origin: str | None = None
     effective_access_level: AccessLevel | None = None
     datasets: list["DatasetRead"] | None = None
