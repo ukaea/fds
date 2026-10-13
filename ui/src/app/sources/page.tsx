@@ -3,31 +3,41 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { Activity, Search, Server, Globe, ChevronRight } from 'lucide-react';
+import { Activity, ChevronRight, Cpu, Gauge, Search, Users } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Source } from '@/lib/types';
+
+// Sources grouped by what they are, since that is what a reader is looking for:
+// the codes that produced simulations and analyses, or the instruments that
+// measured. Whether a source is tied to a device is shown on its card.
+const GROUPS: { key: Group; title: string; icon: typeof Cpu; empty: string }[] = [
+  { key: 'software', title: 'Codes', icon: Cpu, empty: 'No codes match.' },
+  { key: 'instrument', title: 'Instruments', icon: Gauge, empty: 'No instruments match.' },
+  { key: 'agents', title: 'People and organisations', icon: Users, empty: 'None match.' },
+  { key: 'unclassified', title: 'Unclassified', icon: Activity, empty: 'None match.' },
+];
+
+type Group = 'software' | 'instrument' | 'agents' | 'unclassified';
+
+function groupOf(source: Source): Group {
+  if (source.kind === 'software' || source.kind === 'instrument') return source.kind;
+  if (source.kind === 'person' || source.kind === 'organization') return 'agents';
+  return 'unclassified';
+}
 
 export default function SourcesPage() {
   const { data: sources, error: sourcesError, isLoading: sourcesLoading } = useSWR<Source[]>(`${API_BASE}/sources/`, fetcher);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'global' | 'device'>('all');
+  const [filterType, setFilterType] = useState<'all' | Group>('all');
 
-  // Filter sources based on search and scope filter
-  const filteredSources = sources?.filter(source => {
-    const matchesSearch = !searchQuery ||
-      source.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      source.description?.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesFilter =
-      filterType === 'all' ||
-      (filterType === 'global' && !source.device_name) ||
-      (filterType === 'device' && !!source.device_name);
-
-    return matchesSearch && matchesFilter;
-  });
-
-  const globalSources = filteredSources?.filter(s => !s.device_name) || [];
-  const deviceSources = filteredSources?.filter(s => !!s.device_name) || [];
+  const query = searchQuery.toLowerCase();
+  const filteredSources = sources?.filter(
+    (source) =>
+      !query ||
+      source.name.toLowerCase().includes(query) ||
+      source.description?.toLowerCase().includes(query)
+  );
+  const present = GROUPS.filter((group) => sources?.some((s) => groupOf(s) === group.key));
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -35,7 +45,8 @@ export default function SourcesPage() {
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Data Sources</h1>
           <p className="text-muted-foreground">
-            Diagnostic instruments, simulation codes, and data producers in the FDS ecosystem.
+            The codes, instruments and people that produce data. A code&apos;s page lists the runs it
+            carried out and the data they generated.
           </p>
         </div>
       </div>
@@ -52,55 +63,38 @@ export default function SourcesPage() {
             className="w-full pl-10 pr-4 py-2 bg-card/50 border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-hidden focus:border-border transition-colors"
           />
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setFilterType('all')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              filterType === 'all'
-                ? 'bg-muted text-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted'
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setFilterType('global')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              filterType === 'global'
-                ? 'bg-muted text-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted'
-            }`}
-          >
-            Global
-          </button>
-          <button
-            onClick={() => setFilterType('device')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              filterType === 'device'
-                ? 'bg-muted text-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted'
-            }`}
-          >
-            Device-Linked
-          </button>
-        </div>
+        {present.length > 1 && (
+          <div className="flex gap-2 flex-wrap">
+            {[{ key: 'all' as const, title: 'All' }, ...present].map((option) => (
+              <button
+                key={option.key}
+                onClick={() => setFilterType(option.key)}
+                aria-pressed={filterType === option.key}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  filterType === option.key
+                    ? 'bg-foreground text-background'
+                    : 'bg-muted text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {option.title}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Loading State */}
       {sourcesLoading && (
         <div className="card p-8 text-center text-muted-foreground">
           Loading sources...
         </div>
       )}
 
-      {/* Error State */}
       {sourcesError && (
         <div className="card p-8 text-center text-destructive">
           Failed to load sources
         </div>
       )}
 
-      {/* Empty State */}
       {!sourcesLoading && !sourcesError && (!filteredSources || filteredSources.length === 0) && (
         <div className="text-center py-16 bg-muted/30 rounded-lg border border-dashed border-border">
           <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
@@ -121,44 +115,34 @@ export default function SourcesPage() {
         </div>
       )}
 
-      {/* Sources List */}
-      {!sourcesLoading && !sourcesError && filteredSources && filteredSources.length > 0 && (
+      {!sourcesLoading && !sourcesError && !!filteredSources?.length && (
         <div className="space-y-8">
-          {/* Global Sources */}
-          {(filterType === 'all' || filterType === 'global') && globalSources.length > 0 && (
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="bg-muted p-2 rounded-lg text-foreground">
-                  <Globe className="w-5 h-5" />
+          {present
+            .filter((group) => filterType === 'all' || filterType === group.key)
+            .map((group) => {
+              const members = filteredSources.filter((s) => groupOf(s) === group.key);
+              const Icon = group.icon;
+              return (
+                <div key={group.key}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-muted p-2 rounded-lg text-foreground">
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-foreground">{group.title}</h2>
+                    <span className="text-sm text-muted-foreground">({members.length})</span>
+                  </div>
+                  {members.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {members.map((source) => (
+                        <SourceCard key={source.id} source={source} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">{group.empty}</p>
+                  )}
                 </div>
-                <h2 className="text-xl font-semibold text-foreground">Global Sources</h2>
-                <span className="text-sm text-muted-foreground">({globalSources.length})</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {globalSources.map((source) => (
-                  <SourceCard key={source.id} source={source} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Device-Linked Sources */}
-          {(filterType === 'all' || filterType === 'device') && deviceSources.length > 0 && (
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="bg-muted p-2 rounded-lg text-foreground">
-                  <Server className="w-5 h-5" />
-                </div>
-                <h2 className="text-xl font-semibold text-foreground">Device-Linked Sources</h2>
-                <span className="text-sm text-muted-foreground">({deviceSources.length})</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {deviceSources.map((source) => (
-                  <SourceCard key={source.id} source={source} />
-                ))}
-              </div>
-            </div>
-          )}
+              );
+            })}
         </div>
       )}
     </div>
