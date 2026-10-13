@@ -51,8 +51,8 @@ export default function DevicesPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Experimental Devices</h1>
-          <p className="text-muted-foreground">Select a device to browse shots and datasets.</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Devices</h1>
+          <p className="text-muted-foreground">Select a device to browse its shots, simulations and datasets.</p>
         </div>
         {devices && devices.length > 0 && (
           <button
@@ -185,7 +185,7 @@ export default function DevicesPage() {
                    <div>
                      <h3 className="text-xl font-semibold text-foreground mb-2">No Devices Registered Yet</h3>
                      <p className="text-muted-foreground mb-6">
-                       Get started by registering your first experimental device. Devices represent fusion reactors or tokamaks that generate data.
+                       Get started by registering your first device. A device is a machine that data is measured on or simulated for, such as a tokamak.
                      </p>
                    </div>
                    <button

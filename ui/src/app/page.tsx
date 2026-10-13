@@ -16,7 +16,8 @@ export default function Home() {
           Fusion Data Service
         </h1>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          Advanced access to experimental data and metadata for the fusion energy community.
+          Experimental and simulation data, and the metadata to find it, for the fusion energy
+          community.
         </p>
       </div>
 
@@ -27,7 +28,7 @@ export default function Home() {
             <div className="bg-muted p-2 rounded-lg text-foreground">
               <Server className="w-6 h-6" />
             </div>
-            <h2 className="text-2xl font-bold text-foreground">Experimental Devices</h2>
+            <h2 className="text-2xl font-bold text-foreground">Devices</h2>
           </div>
           <Link
             href="/devices"
@@ -58,7 +59,7 @@ export default function Home() {
               <div>
                 <h3 className="text-xl font-semibold text-foreground mb-2">No Devices Available</h3>
                 <p className="text-muted-foreground">
-                  There are no experimental devices registered in the system yet, or you don&apos;t have permission to view them.
+                  There are no devices registered yet, or you don&apos;t have permission to view them.
                 </p>
               </div>
             </div>
