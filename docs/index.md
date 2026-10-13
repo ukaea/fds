@@ -35,7 +35,8 @@ export TOKEN=$(uv run scripts/mint-token.py mint)
 
 Then register the example catalogue these pages refer to. It registers two real MAST shots where
 they already live at STFC, and metadata-only fixtures for a synthetic MAST-U shot, reference
-geometry and calibration, and an annotated shot:
+geometry and calibration, an annotated shot, and two simulation runs: one modelling a MAST shot,
+and a predictive MAST-U scenario that models no shot:
 
 ```bash
 FDS_TOKEN=$TOKEN uv run scripts/seed-example-catalogue.py

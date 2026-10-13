@@ -11,8 +11,10 @@ Register the example catalogue the documentation refers to.
 
 Two real MAST shots are registered where they already live at STFC, and the
 rest are metadata-only fixtures: a synthetic MAST-U shot, reference geometry
-and calibration, and an annotated shot. Nothing reads their bytes, so their
-object URLs point at a reserved example domain. Every function is idempotent.
+and calibration, an annotated shot, and two JINTRAC runs, one modelling MAST
+shot 30420 and one a predictive MAST-U scenario that models no shot. Nothing
+reads their bytes, so their object URLs point at a reserved example domain.
+Every function is idempotent.
 
 Run it against a local stack (see the README for the token):
 
@@ -772,6 +774,85 @@ def register_jintrac_collection(
     }
 
 
+def register_predictive_scenario(client: httpx.Client, base_url: str) -> int:
+    """Registers a predictive JINTRAC run for MAST-U that models no shot. Returns the collection id.
+
+    A prediction models no real shot, so it gets no invented one: its outputs and
+    its bundle are registered on the device, and the bundle carries what the run
+    simulated.
+    """
+    existing = client.get(
+        f"{base_url}/devices/mastu/collections/jintrac-predictive-h-mode"
+    )
+    if existing.status_code == 200:
+        return existing.json()["id"]
+
+    source_id = get_or_create_source(
+        client, base_url, "jintrac", "Integrated modelling code", "software"
+    )
+    act = client.post(
+        f"{base_url}/activities/",
+        json={
+            "source_id": source_id,
+            "source_version": "v220922",
+            "activity_type": "simulation",
+            "parameters": {
+                "run_id": "mastu-predictive-h-mode-01",
+                "transport_model": "Bohm-gyroBohm",
+            },
+            "started_at": "2024-06-03T09:00:00",
+            "ended_at": "2024-06-03T13:12:40",
+        },
+    )
+    act.raise_for_status()
+    activity_id = act.json()["id"]
+
+    dataset_ids = []
+    for stem in ["equilibrium", "core_profiles", "summary"]:
+        ds = client.post(
+            f"{base_url}/devices/mastu/datasets",
+            json={
+                "name": stem,
+                "title": f"JINTRAC Predictive {stem.replace('_', ' ').title()} (MAST-U)",
+                "url": f"s3://fds-data/mastu/predictive/h-mode-01/{stem}.nc",
+                "endpoint_url": FIXTURE_ENDPOINT,
+                "media_type": "application/netcdf",
+                "format": "NetCDF4",
+                "access_level": "public",
+                "activity_id": activity_id,
+            },
+        )
+        ds.raise_for_status()
+        dataset_ids.append(ds.json()["id"])
+
+    col = client.post(
+        f"{base_url}/devices/mastu/collections",
+        json={
+            "name": "jintrac-predictive-h-mode",
+            "title": "JINTRAC Predictive H-mode Scenario (MAST-U)",
+            "description": (
+                "A predictive JINTRAC run for a MAST-U H-mode scenario. It models no "
+                "discharge, so it belongs to the device rather than to a shot."
+            ),
+            "access_level": "public",
+            "activity_id": activity_id,
+            "scientific_metadata": [
+                {
+                    "name": "confinement_mode",
+                    "value": "H-mode",
+                    "description": "Simulated confinement regime.",
+                },
+                {"name": "transport_model", "value": "Bohm-gyroBohm"},
+            ],
+        },
+    )
+    col.raise_for_status()
+    collection_id = col.json()["id"]
+    for ds_id in dataset_ids:
+        client.post(f"{base_url}/collections/{collection_id}/datasets/{ds_id}")
+    return collection_id
+
+
 def get_admin_headers(
     kc_token_url: str, *, retries: int = 24, delay: float = 5.0
 ) -> dict[str, str]:
@@ -825,6 +906,7 @@ def seed_all(base_url: str, headers: dict[str, str]) -> dict:
         thomson_instrument_id = register_thomson_instrument_provenance(client, base_url)
         mast_upgrade = register_mast_upgrade_datasets(client, base_url)
         jintrac = register_jintrac_collection(client, base_url)
+        predictive_id = register_predictive_scenario(client, base_url)
 
         eq_id = client.get(
             f"{base_url}/devices/mast/shots/30421/datasets/equilibrium"
@@ -839,6 +921,7 @@ def seed_all(base_url: str, headers: dict[str, str]) -> dict:
         "mast_upgrade_analysed_collection_id": mast_upgrade["analysed_collection_id"],
         "jintrac_collection_id": jintrac["collection_id"],
         "jintrac_activity_id": jintrac["activity_id"],
+        "predictive_collection_id": predictive_id,
         "mast_30421_equilibrium_id": eq_id,
     }
 

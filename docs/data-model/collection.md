@@ -36,6 +36,8 @@ Then the run answers a catalogue question, across every device and shot:
 GET /v1/collections?activity_type=simulation&property=confinement_mode:H-mode
 ```
 
+A run that models no real shot, such as a predictive scenario, belongs to the device it models, not to an invented shot. Register its outputs and its bundle under `/devices/{device}`. The bundle is then listed with the device's collections, and the query above finds it. The bundle of a run that models no particular device is a global collection.
+
 If you do not bundle a run, its claims belong on its output datasets instead, and the run is not searchable as a run. That is a choice, not a gap: FDS records what a producer asserts and never infers claims they did not make.
 
 The same field on a hand-curated collection describes what the selection was chosen for rather than what a run produced. The shape and the query are identical; `activity_id` tells the two apart.
