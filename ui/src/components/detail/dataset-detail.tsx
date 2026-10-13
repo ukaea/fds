@@ -910,6 +910,9 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
             <Database className="text-primary w-8 h-8" />
             {datasetData?.name || id}
          </h1>
+         {datasetData?.title && (
+           <p className="text-lg text-muted-foreground -mt-2 mb-4">{datasetData.title}</p>
+         )}
          {datasetData?.description && (
            <p className="text-lg text-foreground max-w-4xl leading-relaxed mb-6">
               {datasetData.description}
