@@ -86,8 +86,13 @@ def generate_context() -> dict[str, Any]:
     return METADATA_CONTEXT
 
 
-def _build_used(activity: "Activity", base_url: str) -> tuple[list[Any], list[Any]]:
+def _build_used(
+    activity: "Activity", base_url: str, inputs: "Sequence[Dataset]"
+) -> tuple[list[Any], list[Any]]:
     """Build the ``prov:used`` shortcut list and ``prov:qualifiedUsage`` detail.
+
+    ``inputs`` are the run's input datasets the caller may read, as the caller
+    resolved them; the rest are left out.
 
     Two kinds of used entity:
     - input datasets → ``prov:hadRole = fuel:input``
@@ -100,7 +105,7 @@ def _build_used(activity: "Activity", base_url: str) -> tuple[list[Any], list[An
     # (entity @id, FuEL role concept, title). The title saves a reader fetching
     # each entity's own document just to name it.
     entries: list[tuple[str, str, str]] = []
-    for ds in getattr(activity, "input_datasets", None) or []:
+    for ds in inputs:
         entries.append((names.dataset(ds.id), FUEL_INPUT_ROLE, ds.title or ds.name))
     for instrument in getattr(activity, "instruments", None) or []:
         entries.append(
@@ -577,9 +582,13 @@ def map_dataset_to_dcat(
     geometry: "list[DatasetRead] | None" = None,
     calibration: "list[DatasetRead] | None" = None,
     annotations: "list[DatasetRead] | None" = None,
+    run_inputs: "Sequence[Dataset]" = (),
 ) -> dict[str, Any]:
     """
     Maps a Dataset to a dcat:Dataset.
+
+    ``run_inputs`` are the input datasets of the run that generated it which the
+    caller may read. The run's other inputs are left out of its embedded node.
 
     ``geometry`` / ``calibration`` supply resolved reference versions when the
     source object does not itself carry them (e.g. an ORM ``Dataset``). Both link
@@ -662,7 +671,9 @@ def map_dataset_to_dcat(
     # Embed the Activity as prov:wasGeneratedBy if the relationship is loaded
     activity: Activity | None = getattr(dataset, "activity", None)
     if activity:
-        data["prov:wasGeneratedBy"] = _build_activity_node(activity, base_url)
+        data["prov:wasGeneratedBy"] = _build_activity_node(
+            activity, base_url, run_inputs
+        )
         data["prov:generatedAtTime"] = _generated_at(activity)
 
     derivations = getattr(dataset, "derivations", None) or []
@@ -738,22 +749,27 @@ def map_source_to_dcat(source: "Source", base_url: str) -> dict[str, Any]:
     return {"@context": METADATA_CONTEXT, **node}
 
 
-def map_activity_to_dcat(activity: "Activity", base_url: str) -> dict[str, Any]:
+def map_activity_to_dcat(
+    activity: "Activity", base_url: str, *, inputs: "Sequence[Dataset]"
+) -> dict[str, Any]:
     """An Activity as a standalone PROV-O activity document.
 
     As with a Source, this is the node embedded elsewhere, given a context and
-    its own identifier so the published identifier resolves.
+    its own identifier so the published identifier resolves. ``inputs`` are the
+    input datasets the caller may read.
     """
     names = Identifiers(base_url)
     return {
         "@context": METADATA_CONTEXT,
         "@id": names.activity(activity.id),
-        **_build_activity_node(activity, base_url),
+        **_build_activity_node(activity, base_url, inputs),
     }
 
 
-def _build_activity_node(activity: "Activity", base_url: str) -> dict[str, Any]:
-    """Build the embedded ``prov:Activity`` node."""
+def _build_activity_node(
+    activity: "Activity", base_url: str, inputs: "Sequence[Dataset]"
+) -> dict[str, Any]:
+    """Build the embedded ``prov:Activity`` node, listing ``inputs`` as used."""
     prov_node: dict[str, Any] = {
         "@type": "prov:Activity",
         "prov:type": activity.activity_type,
@@ -771,7 +787,7 @@ def _build_activity_node(activity: "Activity", base_url: str) -> dict[str, Any]:
         prov_node["prov:endedAtTime"] = activity.ended_at.isoformat()
     if activity.parameters:
         prov_node["prov:value"] = activity.parameters
-    used, qualified_usage = _build_used(activity, base_url)
+    used, qualified_usage = _build_used(activity, base_url, inputs)
     if used:
         prov_node["prov:used"] = used
         prov_node["prov:qualifiedUsage"] = qualified_usage
@@ -834,6 +850,7 @@ def map_collection_to_dcat(
     *,
     datasets: Sequence[Dataset],
     child_collections: Sequence[Collection],
+    run_inputs: Sequence[Dataset] = (),
 ) -> dict[str, Any]:
     """Maps a Collection to a JSON-LD document typed as both ``dcat:Catalog``
     and ``prov:Collection``.
@@ -842,8 +859,9 @@ def map_collection_to_dcat(
     child Collections as ``dcat:catalog`` references (``@id`` plus title; the
     full documents live at their own URIs). Every member is additionally linked
     with ``prov:hadMember``, making the collection a well-formed
-    ``prov:Collection``. The producing Activity, if present, is embedded as a
-    ``prov:wasGeneratedBy`` node, consistent with ``map_dataset_to_dcat``.
+    ``prov:Collection``. The run the collection bundles, if any, is embedded as
+    a ``prov:wasGeneratedBy`` node whose inputs are ``run_inputs``: those the
+    caller may read.
     """
     names = Identifiers(base_url)
     collection_id = getattr(collection, "id", None)
@@ -921,7 +939,9 @@ def map_collection_to_dcat(
     # PROV-O provenance: embed the producing Activity if present
     activity: Activity | None = getattr(collection, "activity", None)
     if activity:
-        data["prov:wasGeneratedBy"] = _build_activity_node(activity, base_url)
+        data["prov:wasGeneratedBy"] = _build_activity_node(
+            activity, base_url, run_inputs
+        )
         data["prov:generatedAtTime"] = _generated_at(activity)
 
     return _with_catalog_record(

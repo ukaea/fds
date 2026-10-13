@@ -52,6 +52,7 @@ from app.services.visibility import (
     read_page,
     read_pages_by_group,
     readable_clause,
+    readable_only,
 )
 
 logger = structlog.get_logger(__name__)
@@ -756,5 +757,10 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             ),
             child_collections=self.get_child_collections(
                 collection.id, user, limit=INLINE_MEMBERS
+            ),
+            run_inputs=(
+                readable_only(self.session, collection.activity.input_datasets, user)
+                if collection.activity
+                else []
             ),
         )

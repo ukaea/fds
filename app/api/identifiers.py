@@ -21,7 +21,6 @@ from app.services.identifiers import (
     SOURCE,
 )
 from app.services.jsonld import (
-    map_activity_to_dcat,
     map_device_to_dcat,
     map_shot_to_dcat,
     map_source_to_dcat,
@@ -99,9 +98,10 @@ def resolve_source(
 
 @router.get(ACTIVITY, summary="The activity this URI names")
 def resolve_activity(
-    id: int, activity_service: ActivityServiceDep, base: BaseURLDep
+    id: int,
+    activity_service: ActivityServiceDep,
+    user: CurrentUserDep,
+    base: BaseURLDep,
 ) -> JSONResponse:
-    activity = activity_service.get(id)
-    if not activity:
-        raise ResourceNotFoundError(f"Activity {id} not found")
-    return _ld(map_activity_to_dcat(activity, base))
+    activity = activity_service.get_readable_or_raise(id, user)
+    return _ld(activity_service.to_dcat(activity, base, user))

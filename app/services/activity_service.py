@@ -3,6 +3,7 @@ from collections.abc import Iterable, Sequence
 from sqlmodel import Session, col, or_, select
 
 from app.auth.permissions import check_is_admin
+from app.core.context import ReadTier, record_restricted_access
 from app.models.activity import (
     Activity,
     ActivityAgent,
@@ -14,13 +15,16 @@ from app.models.activity import (
     ActivityUpdate,
     AgentRole,
 )
+from app.models.collection import Collection
 from app.models.dataset import Dataset
 from app.models.identity import AuthenticatedUser
+from app.models.policy import AccessLevel
 from app.models.source import Source, SourceKind
 from app.services.base_service import BaseService
 from app.services.exceptions import FDSValidationError, ResourceNotFoundError
+from app.services.jsonld import map_activity_to_dcat
 from app.services.source_service import SourceService
-from app.services.visibility import read_page
+from app.services.visibility import read_page, readable_access_levels, readable_only
 
 
 class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
@@ -96,6 +100,45 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         if not activity:
             raise ResourceNotFoundError(f"Activity {activity_id} not found")
         return activity
+
+    def get_readable_or_raise(
+        self, activity_id: int, user: AuthenticatedUser
+    ) -> Activity:
+        """Retrieve an Activity by id, for a caller who may read it.
+
+        A run has no access policy of its own. A caller may read it if they may
+        read a dataset it generated or a collection that bundles it, and only a
+        global admin may read a run with neither. A read that only restricted
+        records allow is recorded in the audit trail as a restricted read of the
+        run.
+        """
+        activity = self._require_activity(activity_id)
+        levels = readable_access_levels(
+            self.session,
+            Dataset,
+            user,
+            select(Dataset).where(Dataset.activity_id == activity_id),
+        ) | readable_access_levels(
+            self.session,
+            Collection,
+            user,
+            select(Collection).where(Collection.activity_id == activity_id),
+        )
+        if not levels:
+            check_is_admin(user)
+        if levels <= {AccessLevel.RESTRICTED}:
+            record_restricted_access("activity", activity_id, ReadTier.READ)
+        return activity
+
+    def to_dcat(
+        self, activity: Activity, base_url: str, user: AuthenticatedUser
+    ) -> dict:
+        """The run's ``prov:Activity`` document, listing only inputs ``user`` may read."""
+        return map_activity_to_dcat(
+            activity,
+            base_url,
+            inputs=readable_only(self.session, activity.input_datasets, user),
+        )
 
     def _require_dataset(self, dataset_id: int) -> Dataset:
         dataset = self.session.get(Dataset, dataset_id)
@@ -280,7 +323,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         limit: int = 100,
     ) -> Sequence[Dataset]:
         """List the datasets an Activity used as inputs."""
-        self._require_activity(activity_id)
+        self.get_readable_or_raise(activity_id, user)
         statement = (
             select(Dataset)
             .join(ActivityInput, col(ActivityInput.dataset_id) == col(Dataset.id))
@@ -325,10 +368,14 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         return True
 
     def get_instruments(
-        self, activity_id: int, offset: int = 0, limit: int = 100
+        self,
+        activity_id: int,
+        user: AuthenticatedUser,
+        offset: int = 0,
+        limit: int = 100,
     ) -> Sequence[Source]:
         """List the instruments an Activity used."""
-        self._require_activity(activity_id)
+        self.get_readable_or_raise(activity_id, user)
         statement = (
             select(Source)
             .join(
@@ -389,10 +436,14 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         return True
 
     def get_agents(
-        self, activity_id: int, offset: int = 0, limit: int = 100
+        self,
+        activity_id: int,
+        user: AuthenticatedUser,
+        offset: int = 0,
+        limit: int = 100,
     ) -> Sequence[ActivityAgent]:
         """List the additional agent associations (with roles) for an Activity."""
-        self._require_activity(activity_id)
+        self.get_readable_or_raise(activity_id, user)
         statement = (
             select(ActivityAgent)
             .where(ActivityAgent.activity_id == activity_id)
@@ -456,10 +507,14 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         return True
 
     def get_delegations(
-        self, activity_id: int, offset: int = 0, limit: int = 100
+        self,
+        activity_id: int,
+        user: AuthenticatedUser,
+        offset: int = 0,
+        limit: int = 100,
     ) -> Sequence[ActivityDelegation]:
         """List the delegation edges (``actedOnBehalfOf``) for an Activity."""
-        self._require_activity(activity_id)
+        self.get_readable_or_raise(activity_id, user)
         statement = (
             select(ActivityDelegation)
             .where(ActivityDelegation.activity_id == activity_id)

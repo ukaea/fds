@@ -395,13 +395,13 @@ def test_add_remove_instrument(
     activity_service.add_instrument(
         activity_id=activity.id, source_id=instrument.id, user=admin_user
     )
-    assert [s.id for s in activity_service.get_instruments(activity.id)] == [
-        instrument.id
-    ]
+    assert [
+        s.id for s in activity_service.get_instruments(activity.id, admin_user)
+    ] == [instrument.id]
     activity_service.remove_instrument(
         activity_id=activity.id, source_id=instrument.id, user=admin_user
     )
-    assert activity_service.get_instruments(activity.id) == []
+    assert activity_service.get_instruments(activity.id, admin_user) == []
 
 
 def test_add_remove_agent(
@@ -422,7 +422,7 @@ def test_add_remove_agent(
         role=AgentRole.ORCHESTRATOR,
         user=admin_user,
     )
-    agents = activity_service.get_agents(activity.id)
+    agents = activity_service.get_agents(activity.id, admin_user)
     assert [(a.source_id, a.role) for a in agents] == [
         (scheduler.id, AgentRole.ORCHESTRATOR)
     ]
@@ -434,12 +434,15 @@ def test_add_remove_agent(
         role=AgentRole.EXECUTOR,
         user=admin_user,
     )
-    assert activity_service.get_agents(activity.id)[0].role == AgentRole.EXECUTOR
+    assert (
+        activity_service.get_agents(activity.id, admin_user)[0].role
+        == AgentRole.EXECUTOR
+    )
 
     activity_service.remove_agent(
         activity_id=activity.id, source_id=scheduler.id, user=admin_user
     )
-    assert activity_service.get_agents(activity.id) == []
+    assert activity_service.get_agents(activity.id, admin_user) == []
 
 
 def test_create_activity_with_inline_delegation(
@@ -468,7 +471,7 @@ def test_create_activity_with_inline_delegation(
         user=admin_user,
     )
     assert activity.id is not None
-    delegations = activity_service.get_delegations(activity.id)
+    delegations = activity_service.get_delegations(activity.id, admin_user)
     assert [
         (d.subordinate_source_id, d.responsible_source_id) for d in delegations
     ] == [(code.id, scheduler.id)]
@@ -499,7 +502,7 @@ def test_add_remove_delegation(
         responsible_source_id=scheduler.id,
         user=admin_user,
     )
-    delegations = activity_service.get_delegations(activity.id)
+    delegations = activity_service.get_delegations(activity.id, admin_user)
     assert [
         (d.subordinate_source_id, d.responsible_source_id) for d in delegations
     ] == [(code.id, scheduler.id)]
@@ -511,7 +514,7 @@ def test_add_remove_delegation(
         responsible_source_id=scheduler.id,
         user=admin_user,
     )
-    assert len(activity_service.get_delegations(activity.id)) == 1
+    assert len(activity_service.get_delegations(activity.id, admin_user)) == 1
 
     activity_service.remove_delegation(
         activity_id=activity.id,
@@ -519,7 +522,7 @@ def test_add_remove_delegation(
         responsible_source_id=scheduler.id,
         user=admin_user,
     )
-    assert activity_service.get_delegations(activity.id) == []
+    assert activity_service.get_delegations(activity.id, admin_user) == []
 
 
 def test_delegation_rejects_instrument(

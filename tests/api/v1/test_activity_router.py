@@ -4,15 +4,19 @@ from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
 from app.models.activity import ActivityCreate, ActivityType
+from app.models.collection import CollectionCreate
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
+from app.models.policy import AccessLevel
 from app.models.shot import ShotCreate
 from app.models.source import SourceCreate, SourceKind
 from app.services.activity_service import ActivityService
+from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
 from app.services.source_service import SourceService
+from tests.conftest import resource
 
 
 @pytest.fixture(name="source")
@@ -340,3 +344,193 @@ def test_activity_delegation_endpoints(
         ).status_code
         == 204
     )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/v1/activities/{id}",
+        "/v1/activities/{id}/inputs",
+        "/v1/activities/{id}/instruments",
+        "/v1/activities/{id}/agents",
+        "/v1/activities/{id}/delegations",
+        "/activities/{id}",
+    ],
+)
+def test_run_of_a_restricted_dataset_is_not_public(
+    test_client: TestClient,
+    session: Session,
+    admin_user: AuthenticatedUser,
+    path: str,
+):
+    """Reading a run directly answers 403, as reading it through its dataset does."""
+    DeviceService(session).create(
+        DeviceCreate(name="sec-device", type="Test", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    run = ActivityService(session).create(
+        ActivityCreate(
+            activity_type=ActivityType.SIMULATION, parameters={"confidential": "run"}
+        ),
+        user=admin_user,
+    )
+    DatasetService(session).create(
+        DatasetCreate(
+            name="sec-output",
+            level=1,
+            device_name="sec-device",
+            access_level=AccessLevel.RESTRICTED,
+            activity_id=run.id,
+        ),
+        user=admin_user,
+    )
+    session.commit()
+
+    response = test_client.get(path.format(id=run.id))
+    assert response.status_code == 403, response.text
+    assert "confidential" not in response.text
+
+
+def test_run_of_a_public_dataset_is_public(
+    test_client: TestClient, session: Session, admin_user: AuthenticatedUser
+):
+    DeviceService(session).create(
+        DeviceCreate(name="pub-device", type="Test", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    run = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
+    )
+    DatasetService(session).create(
+        DatasetCreate(
+            name="pub-output", level=1, device_name="pub-device", activity_id=run.id
+        ),
+        user=admin_user,
+    )
+    session.commit()
+
+    response = test_client.get(f"/v1/activities/{run.id}")
+    assert response.status_code == 200, response.text
+    assert response.json()["id"] == run.id
+
+
+def test_run_bundled_by_a_public_collection_is_public(
+    test_client: TestClient, session: Session, admin_user: AuthenticatedUser
+):
+    run = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
+    )
+    CollectionService(session).create(
+        CollectionCreate(
+            name="pub-bundle", access_level=AccessLevel.PUBLIC, activity_id=run.id
+        ),
+        user=admin_user,
+    )
+    session.commit()
+
+    response = test_client.get(f"/v1/activities/{run.id}")
+    assert response.status_code == 200, response.text
+
+
+def test_run_with_no_outputs_is_not_public(
+    test_client: TestClient, session: Session, admin_user: AuthenticatedUser
+):
+    run = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
+    )
+    session.commit()
+
+    response = test_client.get(f"/v1/activities/{run.id}")
+    assert response.status_code == 403, response.text
+
+
+def test_device_admin_reads_a_run_through_a_restricted_output(
+    test_client: TestClient,
+    session: Session,
+    admin_user: AuthenticatedUser,
+    mast_admin_user_token: dict,
+    log_lines,
+):
+    """The read is recorded as a restricted read of the run."""
+    DeviceService(session).create(
+        DeviceCreate(name="MAST", type="Tokamak", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    run = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
+    )
+    DatasetService(session).create(
+        DatasetCreate(
+            name="mast-output",
+            level=1,
+            device_name="MAST",
+            access_level=AccessLevel.RESTRICTED,
+            activity_id=run.id,
+        ),
+        user=admin_user,
+    )
+    session.commit()
+    log_lines()
+
+    response = test_client.get(
+        f"/v1/activities/{run.id}", headers=mast_admin_user_token
+    )
+    assert response.status_code == 200, response.text
+    (line,) = [
+        entry
+        for entry in log_lines()
+        if entry.get("logger") == "fds.audit" and entry["event"] == "request"
+    ]
+    assert line["restricted_read"] == {"activity": [run.id]}
+
+
+def test_run_json_ld_leaves_out_inputs_the_caller_cannot_read(
+    test_client: TestClient, session: Session, admin_user: AuthenticatedUser
+):
+    DeviceService(session).create(
+        DeviceCreate(name="ld-device", type="Test", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    datasets = DatasetService(session)
+    open_input = datasets.create(
+        DatasetCreate(name="open-input", level=1, device_name="ld-device"),
+        user=admin_user,
+    )
+    restricted_input = datasets.create(
+        DatasetCreate(
+            name="restricted-input",
+            level=1,
+            device_name="ld-device",
+            access_level=AccessLevel.RESTRICTED,
+        ),
+        user=admin_user,
+    )
+    run = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
+    )
+    assert run.id is not None
+    assert open_input.id is not None
+    assert restricted_input.id is not None
+    for input_id in (open_input.id, restricted_input.id):
+        ActivityService(session).add_input(
+            activity_id=run.id, dataset_id=input_id, user=admin_user
+        )
+    output = datasets.create(
+        DatasetCreate(
+            name="ld-output", level=2, device_name="ld-device", activity_id=run.id
+        ),
+        user=admin_user,
+    )
+    session.commit()
+    ld = {"accept": "application/ld+json"}
+
+    run_document = test_client.get(f"/activities/{run.id}", headers=ld).json()
+    output_document = resource(
+        test_client.get(f"/v1/datasets/id/{output.id}", headers=ld).json()
+    )
+
+    for used in (
+        run_document["prov:used"],
+        output_document["prov:wasGeneratedBy"]["prov:used"],
+    ):
+        assert [entity["dct:title"] for entity in used] == ["open-input"]

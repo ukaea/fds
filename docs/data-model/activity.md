@@ -17,6 +17,10 @@ Records a computation or measurement event that produced a Dataset or Collection
 
 `source_id` is optional. A raw acquisition may name no agent at all, only the instrument it used.
 
+## Who may read a run
+
+A run has no access level of its own. Anyone who may read a dataset it generated, or a collection that bundles it, may read the run with its instruments, agents and delegations, and is answered 403 otherwise. Only a global admin may read a run that has neither yet. A run's inputs are listed only as far as the caller may read each one, in its JSON-LD as well as at `GET /v1/activities/{id}/inputs`.
+
 ## Agents and their roles
 
 A run may involve more than one agent. The executor is `source_id`; `agents` adds others, each with a role saying what it did:

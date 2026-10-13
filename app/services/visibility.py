@@ -121,6 +121,19 @@ def readable_clause(
     return or_(*(match for match, _ in readable)) if readable else false()
 
 
+def readable_access_levels(
+    session: Session,
+    model: type[Listed],
+    user: AuthenticatedUser,
+    scope: SelectOfScalar[Any],
+) -> set[AccessLevel]:
+    """The access levels of the rows of ``scope`` that ``user`` may read.
+
+    Empty when ``user`` may read none of them.
+    """
+    return {policy.access_level for _, policy in _readable(session, model, user, scope)}
+
+
 def read_page[T: Listed](
     session: Session,
     model: type[T],

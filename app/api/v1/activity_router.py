@@ -53,13 +53,14 @@ def read_activity(
     *,
     activity_id: int,
     activity_service: ActivityServiceDep,
+    user: CurrentUserDep,
 ) -> ActivityRead:
-    """Retrieve a single Activity by ID."""
-    from app.services.exceptions import ResourceNotFoundError
+    """Retrieve a single Activity by ID.
 
-    activity = activity_service.get(activity_id)
-    if not activity:
-        raise ResourceNotFoundError(f"Activity {activity_id} not found")
+    A caller may read a run if they may read a dataset it generated or a
+    collection that bundles it.
+    """
+    activity = activity_service.get_readable_or_raise(activity_id, user)
     return ActivityRead.model_validate(activity)
 
 
@@ -166,12 +167,13 @@ def list_activity_instruments(
     activity_id: int,
     activity_service: ActivityServiceDep,
     source_service: SourceServiceDep,
+    user: CurrentUserDep,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> list[SourceRead]:
     """List the instruments an Activity used."""
     instruments = activity_service.get_instruments(
-        activity_id, offset=offset, limit=limit
+        activity_id, user, offset=offset, limit=limit
     )
     return source_service.to_read_models(list(instruments))
 
@@ -216,9 +218,10 @@ def list_activity_agents(
     *,
     activity_id: int,
     activity_service: ActivityServiceDep,
+    user: CurrentUserDep,
 ) -> Sequence[ActivityAgent]:
     """List the additional agent associations (with roles) for an Activity."""
-    return activity_service.get_agents(activity_id)
+    return activity_service.get_agents(activity_id, user)
 
 
 @router.delete(
@@ -265,9 +268,10 @@ def list_activity_delegations(
     *,
     activity_id: int,
     activity_service: ActivityServiceDep,
+    user: CurrentUserDep,
 ) -> Sequence[ActivityDelegation]:
     """List the delegation edges (actedOnBehalfOf) for an Activity."""
-    return activity_service.get_delegations(activity_id)
+    return activity_service.get_delegations(activity_id, user)
 
 
 @router.delete(

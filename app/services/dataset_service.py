@@ -799,6 +799,11 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             geometry=enriched.geometry if include_geometry else None,
             calibration=enriched.calibration if include_calibration else None,
             annotations=enriched.annotations if include_annotations else None,
+            run_inputs=(
+                readable_only(self.session, dataset.activity.input_datasets, user)
+                if dataset.activity
+                else []
+            ),
         )
 
     def readable_read_models(
