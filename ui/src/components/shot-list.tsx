@@ -4,9 +4,9 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Calendar, ChevronRight, Search } from 'lucide-react';
+import { Calendar, ChevronRight, Cpu, Search } from 'lucide-react';
 import { fetcher, API_BASE, FetchError } from '@/lib/api';
-import { AvailableProperties, Shot } from '@/lib/types';
+import { AvailableProperties, Collection, Shot } from '@/lib/types';
 import { propertyQuery, withQuery } from '@/lib/properties';
 import { usePagedList } from '@/lib/use-paged-list';
 import { PropertyFilter } from '@/components/property-filter';
@@ -134,6 +134,20 @@ export function ShotList({
   const total = properties?.total ?? 0;
   const matched = filterQuery.length > 0 ? matching?.total ?? 0 : total;
 
+  // Which shots a simulation modelled, to mark them in the list. One request for
+  // the device rather than one per shot; past the first thousand runs a shot may
+  // go unmarked, which is a missing hint rather than a wrong one.
+  const { data: runs } = useSWR<Collection[]>(
+    deviceName
+      ? `${API_BASE}/devices/${deviceName}/collections?scope=shot&activity_type=simulation&limit=1000`
+      : null,
+    fetcher
+  );
+  const runsByShot = new Map<string, number>();
+  for (const run of runs ?? []) {
+    if (run.shot_id) runsByShot.set(run.shot_id, (runsByShot.get(run.shot_id) ?? 0) + 1);
+  }
+
   return (
     <SidePanelLayout
       side={
@@ -216,6 +230,13 @@ export function ShotList({
                     <Calendar className="w-4 h-4" />
                     <ClientDate timestamp={shot.shot_at} />
                   </div>
+                  {runsByShot.has(shot.id) && (
+                    <div className="flex items-center gap-1">
+                      <Cpu className="w-4 h-4" />
+                      {runsByShot.get(shot.id)} simulation run
+                      {runsByShot.get(shot.id) === 1 ? '' : 's'}
+                    </div>
+                  )}
                 </div>
                 <div className="mt-3">
                   <PropertyBadges properties={shot.scientific_metadata} />
