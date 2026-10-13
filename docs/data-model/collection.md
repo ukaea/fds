@@ -10,7 +10,7 @@ A named, citable group of Datasets.
 | `issued` | date | No | When the collection was formally published, the date a citation gives (`dct:issued`). Not when FDS listed it |
 | `access_level` | enum | No | Effective access level (inherited if not set) |
 | `root_url` | string | No | Access root for all physical data in this collection (`dcat:accessURL`) |
-| `activity_id` | integer | No | FK to the Activity that produced this collection |
+| `activity_id` | integer | No | FK to the Activity (run) this collection bundles, if any. See [Making a run discoverable](#making-a-run-discoverable) |
 | `scientific_metadata` | list | No | What this collection is about, see [Scientific metadata](index.md#scientific-metadata) |
 
 ## Making a run discoverable
@@ -30,10 +30,10 @@ A run's outputs are always reachable as the datasets carrying its `activity_id`,
 }
 ```
 
-Then the run answers a catalogue question:
+Then the run answers a catalogue question, across every device and shot:
 
 ```http
-GET /v1/devices/mast/shots/30420/collections?property=confinement_mode:H-mode
+GET /v1/collections?activity_type=simulation&property=confinement_mode:H-mode
 ```
 
 If you do not bundle a run, its claims belong on its output datasets instead, and the run is not searchable as a run. That is a choice, not a gap: FDS records what a producer asserts and never infers claims they did not make.
@@ -135,6 +135,22 @@ As with [datasets](dataset.md#listing-datasets), a collection is attached to a s
 curl "$API/collections?scope=global"               # global collections
 curl "$API/devices/mast/collections?scope=device"  # mast's device-level collections
 ```
+
+Every collection listing can also be filtered by the run each collection bundles, the one its `activity_id` names:
+
+| Parameter | Lists the collections that bundle |
+| --- | --- |
+| `activity_id` | This run |
+| `activity_type` | Runs of this type, such as `simulation` |
+| `source` | Runs carried out by the source with this name, such as `jintrac` |
+
+```text
+GET /v1/collections?activity_type=simulation     # every simulation run that has a bundle
+GET /v1/devices/mast/collections?source=jintrac  # JINTRAC runs on mast
+GET /v1/collections?activity_id=12               # run 12's bundle
+```
+
+A bundle can also hold datasets its run did not generate, such as the run's inputs. To list only what run 12 generated, use `GET /v1/datasets?activity_id=12`.
 
 ## Reading members
 

@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
-from app.models.activity import ActivityCreate
+from app.models.activity import ActivityCreate, ActivityType
 from app.models.collection import CollectionCreate
 from app.models.dataset import DatasetCreate
 from app.models.device import DeviceCreate
@@ -55,10 +55,16 @@ def _make_dataset(
 
 
 def _make_collection(
-    session: Session, name: str, device: str | None = None, shot_id: str | None = None
+    session: Session,
+    name: str,
+    device: str | None = None,
+    shot_id: str | None = None,
+    activity_id: int | None = None,
 ) -> int:
     col = CollectionService(session).create(
-        CollectionCreate(name=name, device_name=device, shot_id=shot_id),
+        CollectionCreate(
+            name=name, device_name=device, shot_id=shot_id, activity_id=activity_id
+        ),
         user=admin_user,
     )
     assert col.id is not None
@@ -219,6 +225,110 @@ def test_read_device_collections_by_scope(
         "/v1/devices/DEV/collections?scope=global", headers=admin_user_token
     )
     assert response.status_code == 422
+
+
+def test_read_collections_by_the_run_they_bundle(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _make_device(session)
+    _make_shot(session)
+    jintrac = SourceService(session).create(
+        SourceCreate(name="jintrac", kind=SourceKind.SOFTWARE), user=admin_user
+    )
+    efit = SourceService(session).create(
+        SourceCreate(name="efit", kind=SourceKind.SOFTWARE), user=admin_user
+    )
+    simulation = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.SIMULATION, source_id=jintrac.id),
+        user=admin_user,
+    )
+    prediction = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.SIMULATION, source_id=jintrac.id),
+        user=admin_user,
+    )
+    analysis = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.ANALYSIS, source_id=efit.id),
+        user=admin_user,
+    )
+    _make_collection(session, "curated")
+    _make_collection(session, "scenario", device="DEV", activity_id=prediction.id)
+    _make_collection(
+        session, "jintrac-run", device="DEV", shot_id="s1", activity_id=simulation.id
+    )
+    _make_collection(
+        session, "efit-run", device="DEV", shot_id="s1", activity_id=analysis.id
+    )
+
+    response = test_client.get(
+        "/v1/collections?activity_type=simulation", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    assert {c["name"] for c in response.json()} == {"scenario", "jintrac-run"}
+
+    response = test_client.get("/v1/collections?source=efit", headers=admin_user_token)
+    assert response.status_code == 200
+    assert [c["name"] for c in response.json()] == ["efit-run"]
+
+    response = test_client.get(
+        f"/v1/collections?activity_id={simulation.id}", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    assert [c["name"] for c in response.json()] == ["jintrac-run"]
+
+    response = test_client.get(
+        "/v1/devices/DEV/collections?scope=shot&activity_type=simulation",
+        headers=admin_user_token,
+    )
+    assert response.status_code == 200
+    assert [c["name"] for c in response.json()] == ["jintrac-run"]
+
+    response = test_client.get(
+        "/v1/devices/DEV/shots/s1/collections?source=jintrac",
+        headers=admin_user_token,
+    )
+    assert response.status_code == 200
+    assert [c["name"] for c in response.json()] == ["jintrac-run"]
+
+    # A source that ran nothing matches nothing.
+    response = test_client.get(
+        "/v1/collections?source=transp", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    assert response.json() == []
+
+    response = test_client.get(
+        "/v1/collections?activity_type=dream", headers=admin_user_token
+    )
+    assert response.status_code == 422
+
+
+def test_filtering_by_run_leaves_out_collections_the_caller_cannot_read(
+    test_client: TestClient, session: Session, non_admin_user_token: dict
+):
+    DeviceService(session).create(
+        DeviceCreate(name="DEV", type="Tokamak", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    _make_shot(session, "s1")
+    ShotService(session).create(
+        ShotCreate(id="s2", device_name="DEV", access_level=AccessLevel.RESTRICTED),
+        user=admin_user,
+    )
+    run = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
+    )
+    _make_collection(
+        session, "open-run", device="DEV", shot_id="s1", activity_id=run.id
+    )
+    _make_collection(
+        session, "restricted-run", device="DEV", shot_id="s2", activity_id=run.id
+    )
+
+    response = test_client.get(
+        "/v1/collections?activity_type=simulation", headers=non_admin_user_token
+    )
+    assert response.status_code == 200
+    assert [c["name"] for c in response.json()] == ["open-run"]
 
 
 def test_read_device_collection_by_name(

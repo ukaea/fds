@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.auth.security import AuthenticatedUser
-from app.models.activity import ActivityCreate
+from app.models.activity import ActivityCreate, ActivityType
 from app.models.dataset import Dataset, DatasetCreate
 from app.models.device import DeviceCreate
 from app.models.file_access import S3Credentials
@@ -293,6 +293,136 @@ def test_list_all_datasets_by_scope(
         "/v1/devices/LHD/datasets/?scope=global", headers=admin_user_token
     )
     assert response.status_code == 422
+
+
+def test_list_datasets_by_the_run_that_generated_them(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    DeviceService(session).create(
+        DeviceCreate(name="TCV", type="Tokamak"), user=admin_user
+    )
+    ShotService(session).create(
+        ShotCreate(id="400", device_name="TCV"), user=admin_user
+    )
+    jintrac = SourceService(session).create(
+        SourceCreate(name="jintrac", kind=SourceKind.SOFTWARE), user=admin_user
+    )
+    efit = SourceService(session).create(
+        SourceCreate(name="efit", kind=SourceKind.SOFTWARE), user=admin_user
+    )
+    simulation = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.SIMULATION, source_id=jintrac.id),
+        user=admin_user,
+    )
+    analysis = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.ANALYSIS, source_id=efit.id),
+        user=admin_user,
+    )
+    datasets = DatasetService(session)
+    datasets.create(
+        DatasetCreate(name="ip", level=1, device_name="TCV", shot_id="400"),
+        user=admin_user,
+    )
+    datasets.create(
+        DatasetCreate(
+            name="equilibrium",
+            level=2,
+            device_name="TCV",
+            shot_id="400",
+            activity_id=analysis.id,
+        ),
+        user=admin_user,
+    )
+    datasets.create(
+        DatasetCreate(
+            name="core_profiles",
+            level=2,
+            device_name="TCV",
+            shot_id="400",
+            activity_id=simulation.id,
+        ),
+        user=admin_user,
+    )
+    session.commit()
+
+    response = test_client.get(
+        f"/v1/datasets/?activity_id={simulation.id}", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    assert [ds["name"] for ds in response.json()] == ["core_profiles"]
+
+    response = test_client.get(
+        "/v1/datasets/?activity_type=analysis", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    assert [ds["name"] for ds in response.json()] == ["equilibrium"]
+
+    response = test_client.get(
+        "/v1/devices/TCV/datasets/?source=jintrac", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    assert [ds["name"] for ds in response.json()] == ["core_profiles"]
+
+    response = test_client.get(
+        "/v1/devices/TCV/shots/400/datasets/?activity_type=simulation",
+        headers=admin_user_token,
+    )
+    assert response.status_code == 200
+    assert [ds["name"] for ds in response.json()] == ["core_profiles"]
+
+    # A source that ran nothing matches nothing.
+    response = test_client.get("/v1/datasets/?source=transp", headers=admin_user_token)
+    assert response.status_code == 200
+    assert response.json() == []
+
+    response = test_client.get(
+        "/v1/datasets/?activity_type=dream", headers=admin_user_token
+    )
+    assert response.status_code == 422
+
+
+def test_filtering_by_run_leaves_out_datasets_the_caller_cannot_read(
+    test_client: TestClient, session: Session, non_admin_user_token: dict
+):
+    DeviceService(session).create(
+        DeviceCreate(name="MAST", type="Tokamak", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    ShotService(session).create(ShotCreate(id="1", device_name="MAST"), user=admin_user)
+    ShotService(session).create(
+        ShotCreate(id="2", device_name="MAST", access_level=AccessLevel.RESTRICTED),
+        user=admin_user,
+    )
+    run = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
+    )
+    DatasetService(session).create(
+        DatasetCreate(
+            name="open_profiles",
+            level=2,
+            device_name="MAST",
+            shot_id="1",
+            activity_id=run.id,
+        ),
+        user=admin_user,
+    )
+    DatasetService(session).create(
+        DatasetCreate(
+            name="restricted_profiles",
+            level=2,
+            device_name="MAST",
+            shot_id="2",
+            activity_id=run.id,
+        ),
+        user=admin_user,
+    )
+    session.commit()
+
+    response = test_client.get(
+        f"/v1/datasets/?activity_id={run.id}", headers=non_admin_user_token
+    )
+    assert response.status_code == 200
+    assert [ds["name"] for ds in response.json()] == ["open_profiles"]
 
 
 def test_read_global_dataset_by_name(test_client: TestClient, admin_user_token: dict):

@@ -12,7 +12,7 @@ from app.auth.access_control import (
 from app.auth.permissions import check_device_admin, check_is_admin
 from app.core.context import ReadTier
 from app.core.naming import normalise_device_name
-from app.models.activity import Activity
+from app.models.activity import Activity, ActivityType
 from app.models.collection import (
     Collection,
     CollectionCreate,
@@ -35,7 +35,11 @@ from app.services.exceptions import (
     ForbiddenError,
     ResourceNotFoundError,
 )
-from app.services.filters import property_clauses, scope_clauses
+from app.services.filters import (
+    activity_clauses,
+    property_clauses,
+    scope_clauses,
+)
 from app.services.jsonld import map_collection_to_dcat
 from app.services.shot_service import ShotService
 from app.services.visibility import read_page, read_pages_by_group
@@ -204,6 +208,9 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         offset: int = 0,
         limit: int = 100,
         properties: list[str] | None = None,
+        activity_type: ActivityType | None = None,
+        source: str | None = None,
+        activity_id: int | None = None,
     ) -> Sequence[Collection]:
         """Return every Collection, filtered by access level.
 
@@ -218,6 +225,9 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                     col(Collection.device_name), col(Collection.shot_id), scope
                 ),
                 *property_clauses(Collection.scientific_metadata, properties),
+                *activity_clauses(
+                    col(Collection.activity_id), activity_type, source, activity_id
+                ),
             )
             .order_by(col(Collection.id))
         )
@@ -285,6 +295,9 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         offset: int = 0,
         limit: int = 100,
         properties: list[str] | None = None,
+        activity_type: ActivityType | None = None,
+        source: str | None = None,
+        activity_id: int | None = None,
     ) -> Sequence[Collection]:
         """Return a device's Collections, filtered by access level.
 
@@ -300,6 +313,9 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                     col(Collection.device_name), col(Collection.shot_id), scope
                 ),
                 *property_clauses(Collection.scientific_metadata, properties),
+                *activity_clauses(
+                    col(Collection.activity_id), activity_type, source, activity_id
+                ),
             )
             .order_by(col(Collection.id))
         )
@@ -315,6 +331,9 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         offset: int = 0,
         limit: int = 100,
         properties: list[str] | None = None,
+        activity_type: ActivityType | None = None,
+        source: str | None = None,
+        activity_id: int | None = None,
     ) -> Sequence[Collection]:
         """Return all Collections scoped to a specific shot, filtered by access."""
         statement = (
@@ -323,6 +342,9 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 Collection.shot_id == shot_id,
                 Collection.device_name == normalise_device_name(device_name),
                 *property_clauses(Collection.scientific_metadata, properties),
+                *activity_clauses(
+                    col(Collection.activity_id), activity_type, source, activity_id
+                ),
             )
             .order_by(col(Collection.id))
         )

@@ -75,9 +75,9 @@ class ActivityDelegation(SQLModel, table=True):
 
 
 class ActivityBase(SQLModel):
-    source_id: int | None = Field(default=None, foreign_key="source.id")
+    source_id: int | None = Field(default=None, foreign_key="source.id", index=True)
     source_version: str | None = None
-    activity_type: ActivityType | None = None
+    activity_type: ActivityType | None = Field(default=None, index=True)
     parameters: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     started_at: UTCDatetime | None = None
     ended_at: UTCDatetime | None = None

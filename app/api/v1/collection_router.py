@@ -13,7 +13,7 @@ from app.api.deps import (
     Limit,
     Offset,
 )
-from app.models.activity import ActivityRead
+from app.models.activity import ActivityRead, ActivityType
 from app.models.collection import (
     CollectionCreate,
     CollectionDataset,
@@ -62,6 +62,9 @@ def read_collections_global(
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
+    activity_type: ActivityType | None = None,
+    source: str | None = None,
+    activity_id: int | None = None,
 ) -> list[CollectionRead]:
     """Retrieve every Collection accessible to the current user.
 
@@ -74,9 +77,22 @@ def read_collections_global(
     a particular value. Repeat it with a *different* name to require both:
     `?property=disruption&property=elm` matches only collections carrying
     each.
+
+    `activity_type`, `source` and `activity_id` filter on the run each collection
+    bundles, the one its `activity_id` names: `?activity_type=simulation` lists
+    the bundles of simulation runs. A bundle can also hold datasets its run did
+    not generate, such as the run's inputs. To list only what a run generated,
+    filter the dataset listings on `activity_id`.
     """
     collections = collection_service.get_multi(
-        user=user, scope=scope, offset=offset, limit=limit, properties=properties
+        user=user,
+        scope=scope,
+        offset=offset,
+        limit=limit,
+        properties=properties,
+        activity_type=activity_type,
+        source=source,
+        activity_id=activity_id,
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
 
@@ -177,6 +193,9 @@ def read_collections_device(
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
+    activity_type: ActivityType | None = None,
+    source: str | None = None,
+    activity_id: int | None = None,
 ) -> list[CollectionRead]:
     """Retrieve a device's Collections that the current user may read.
 
@@ -189,6 +208,12 @@ def read_collections_device(
     a particular value. Repeat it with a *different* name to require both:
     `?property=disruption&property=elm` matches only collections carrying
     each.
+
+    `activity_type`, `source` and `activity_id` filter on the run each collection
+    bundles, the one its `activity_id` names: `?activity_type=simulation` lists
+    the bundles of simulation runs. A bundle can also hold datasets its run did
+    not generate, such as the run's inputs. To list only what a run generated,
+    filter the dataset listings on `activity_id`.
     """
     collections = collection_service.get_collections_for_device(
         device_name,
@@ -197,6 +222,9 @@ def read_collections_device(
         offset=offset,
         limit=limit,
         properties=properties,
+        activity_type=activity_type,
+        source=source,
+        activity_id=activity_id,
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
 
@@ -267,6 +295,9 @@ def read_collections_shot(
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
+    activity_type: ActivityType | None = None,
+    source: str | None = None,
+    activity_id: int | None = None,
 ) -> list[CollectionRead]:
     """Retrieve all Collections scoped to a specific shot.
 
@@ -275,6 +306,12 @@ def read_collections_shot(
     a particular value. Repeat it with a *different* name to require both:
     `?property=disruption&property=elm` matches only collections carrying
     each.
+
+    `activity_type`, `source` and `activity_id` filter on the run each collection
+    bundles, the one its `activity_id` names: `?activity_type=simulation` lists
+    the bundles of simulation runs. A bundle can also hold datasets its run did
+    not generate, such as the run's inputs. To list only what a run generated,
+    filter the dataset listings on `activity_id`.
     """
     collections = collection_service.get_collections_for_shot(
         shot_id,
@@ -283,6 +320,9 @@ def read_collections_shot(
         offset=offset,
         limit=limit,
         properties=properties,
+        activity_type=activity_type,
+        source=source,
+        activity_id=activity_id,
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
 

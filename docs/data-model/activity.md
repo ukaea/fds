@@ -130,4 +130,11 @@ DELETE /v1/activities/{id}/inputs/{dataset_id}
 
 `DELETE` works the same way for instruments, agents and delegations. An agent cannot be removed while a delegation still names it; remove the delegation first.
 
-Output Datasets and Collections reference the run by setting their `activity_id`. See [Provenance](../provenance.md) for how these fit together.
+Output Datasets and Collections reference the run by setting their `activity_id`, and the listings filter on it:
+
+```text
+GET /v1/datasets?activity_id={id}      # the datasets the run generated
+GET /v1/collections?activity_id={id}   # the run's bundle
+```
+
+There is no listing of activities: find a run through its bundle or its outputs. See [Provenance](../provenance.md) for how these fit together.

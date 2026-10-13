@@ -3,10 +3,23 @@ from typing import Any
 from sqlalchemy import ColumnElement
 from sqlalchemy import select as sa_select
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlmodel import Numeric, and_, case, cast, func, literal, literal_column, or_
+from sqlmodel import (
+    Numeric,
+    and_,
+    case,
+    cast,
+    col,
+    func,
+    literal,
+    literal_column,
+    or_,
+    select,
+)
 
+from app.models.activity import Activity, ActivityType
 from app.models.policy import AccessLevel
 from app.models.scope import CatalogueScope, DeviceScope
+from app.models.source import Source
 from app.services.exceptions import FDSValidationError
 
 PROPERTY_SEPARATOR = ":"
@@ -264,3 +277,37 @@ def scope_clauses(
             return [shot_column.is_not(None)]
         case CatalogueScope.ALL:
             return []
+
+
+def activity_clauses(
+    activity_column: Any,
+    activity_type: ActivityType | None = None,
+    source: str | None = None,
+    activity_id: int | None = None,
+) -> list[ColumnElement[bool]]:
+    """Narrow a listing by the run each record names in its ``activity_id``.
+
+    ``activity_id`` keeps the records of one run. ``activity_type`` keeps those
+    whose run was of that type, and ``source`` those whose run was carried out
+    by the source with that name. A record with no ``activity_id`` matches none
+    of them.
+
+    For a dataset, that run is the one that generated it. For a collection, it
+    is the run the collection bundles, whose members may include datasets the
+    run did not generate, such as its inputs. Only the collection's own
+    ``activity_id`` is matched, not its members'.
+    """
+    clauses: list[ColumnElement[bool]] = []
+    if activity_id is not None:
+        clauses.append(activity_column == activity_id)
+    if activity_type is not None:
+        of_type = select(Activity.id).where(Activity.activity_type == activity_type)
+        clauses.append(activity_column.in_(of_type))
+    if source is not None:
+        by_source = (
+            select(Activity.id)
+            .join(Source, col(Source.id) == col(Activity.source_id))
+            .where(Source.name == source)
+        )
+        clauses.append(activity_column.in_(by_source))
+    return clauses

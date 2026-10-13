@@ -16,6 +16,7 @@ from app.auth.permissions import check_device_admin, check_is_admin
 from app.core.config import AzureStorageProvider, S3StorageProvider, config
 from app.core.context import ReadTier
 from app.core.naming import normalise_device_name
+from app.models.activity import ActivityType
 from app.models.dataset import (
     Dataset,
     DatasetCreate,
@@ -43,7 +44,11 @@ from app.services.exceptions import (
     ResourceNotFoundError,
 )
 from app.services.file_access_service import FileAccessService
-from app.services.filters import property_clauses, scope_clauses
+from app.services.filters import (
+    activity_clauses,
+    property_clauses,
+    scope_clauses,
+)
 from app.services.jsonld import map_dataset_to_dcat
 from app.services.reference_service import (
     CALIBRATION,
@@ -107,6 +112,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         name: str | None = None,
         properties: list[str] | None = None,
         shot_properties: list[str] | None = None,
+        activity_type: ActivityType | None = None,
+        source: str | None = None,
+        activity_id: int | None = None,
     ) -> Sequence[Dataset]:
         """
         Every dataset, whatever its scope. Filters by access level.
@@ -126,7 +134,10 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         if name is not None:
             statement = statement.where(self.model.name == name)
         statement = statement.where(
-            *property_clauses(self.model.scientific_metadata, properties)
+            *property_clauses(self.model.scientific_metadata, properties),
+            *activity_clauses(
+                col(Dataset.activity_id), activity_type, source, activity_id
+            ),
         )
         statement = self._apply_shot_properties(statement, shot_properties, user)
         return read_page(
@@ -617,6 +628,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         name: str | None = None,
         properties: list[str] | None = None,
         shot_properties: list[str] | None = None,
+        activity_type: ActivityType | None = None,
+        source: str | None = None,
+        activity_id: int | None = None,
     ) -> Sequence[Dataset]:
         """
         Get datasets hosted by a device, filtering by access.
@@ -639,7 +653,10 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         if name is not None:
             statement = statement.where(Dataset.name == name)
         statement = statement.where(
-            *property_clauses(Dataset.scientific_metadata, properties)
+            *property_clauses(Dataset.scientific_metadata, properties),
+            *activity_clauses(
+                col(Dataset.activity_id), activity_type, source, activity_id
+            ),
         )
         statement = self._apply_shot_properties(statement, shot_properties, user)
         return read_page(
@@ -659,6 +676,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         offset: int = 0,
         limit: int = 100,
         properties: list[str] | None = None,
+        activity_type: ActivityType | None = None,
+        source: str | None = None,
+        activity_id: int | None = None,
     ) -> Sequence[Dataset]:
         """
         Get all datasets for a specific shot (scoped by device name).
@@ -669,7 +689,12 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 Dataset.shot_id == shot_id,
                 Dataset.device_name == normalise_device_name(device_name),
             )
-            .where(*property_clauses(Dataset.scientific_metadata, properties))
+            .where(
+                *property_clauses(Dataset.scientific_metadata, properties),
+                *activity_clauses(
+                    col(Dataset.activity_id), activity_type, source, activity_id
+                ),
+            )
             .order_by(col(Dataset.id))
         )
         return read_page(

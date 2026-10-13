@@ -14,7 +14,7 @@ from app.api.deps import (
     Offset,
     SourceServiceDep,
 )
-from app.models.activity import ActivityRead
+from app.models.activity import ActivityRead, ActivityType
 from app.models.dataset import (
     DatasetCreate,
     DatasetDerivationCreate,
@@ -73,6 +73,9 @@ def read_datasets_global(
     name: str | None = None,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
     shot_properties: Annotated[list[str] | None, Query(alias="shot_property")] = None,
+    activity_type: ActivityType | None = None,
+    source: str | None = None,
+    activity_id: int | None = None,
 ) -> list[DatasetRead]:
     """
     Retrieve every dataset accessible to the current user.
@@ -88,6 +91,10 @@ def read_datasets_global(
     `shot_property` takes the same forms but applies them to the parent shot, so
     a dataset with no shot never matches it.
 
+    `activity_type`, `source` and `activity_id` filter on the run that generated
+    each dataset: `?activity_id=6` lists what run 6 generated, and
+    `?activity_type=simulation` lists simulated datasets.
+
     To scope to a single device, use `/devices/{device_name}/datasets`.
     """
     datasets = dataset_service.get_multi(
@@ -98,6 +105,9 @@ def read_datasets_global(
         name=name,
         properties=properties,
         shot_properties=shot_properties,
+        activity_type=activity_type,
+        source=source,
+        activity_id=activity_id,
     )
     return dataset_service.to_read_models(
         datasets,
@@ -171,6 +181,9 @@ def read_datasets_shot(
     include_calibration: bool = False,
     include_annotations: bool = False,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
+    activity_type: ActivityType | None = None,
+    source: str | None = None,
+    activity_id: int | None = None,
 ) -> list[DatasetRead]:
     """
     Retrieve all datasets for a specific shot.
@@ -178,6 +191,10 @@ def read_datasets_shot(
     `property` filters on each dataset's own `scientific_metadata`. Use `ufo` to
     match any dataset that carries that property, or `ufo:true` to match a
     particular value. Repeat the parameter to require all of them.
+
+    `activity_type`, `source` and `activity_id` filter on the run that generated
+    each dataset: `?activity_id=6` lists what run 6 generated, and
+    `?activity_type=simulation` lists simulated datasets.
     """
     datasets = dataset_service.get_datasets_for_shot(
         shot_id,
@@ -186,6 +203,9 @@ def read_datasets_shot(
         offset=offset,
         limit=limit,
         properties=properties,
+        activity_type=activity_type,
+        source=source,
+        activity_id=activity_id,
     )
     return dataset_service.to_read_models(
         datasets,
@@ -328,6 +348,9 @@ def read_datasets_device(
     name: str | None = None,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
     shot_properties: Annotated[list[str] | None, Query(alias="shot_property")] = None,
+    activity_type: ActivityType | None = None,
+    source: str | None = None,
+    activity_id: int | None = None,
 ) -> list[DatasetRead]:
     """
     Retrieve datasets hosted by a device.
@@ -345,6 +368,10 @@ def read_datasets_device(
     which is what spans both levels: `?name=equilibrium&shot_property=elm` finds
     the equilibrium datasets of shots that had ELMs. Device-level datasets have no
     shot, so `shot_property` matches nothing under `scope=device`.
+
+    `activity_type`, `source` and `activity_id` filter on the run that generated
+    each dataset: `?activity_id=6` lists what run 6 generated, and
+    `?activity_type=simulation` lists simulated datasets.
     """
     datasets = dataset_service.get_datasets_for_device(
         device_name,
@@ -355,6 +382,9 @@ def read_datasets_device(
         name=name,
         properties=properties,
         shot_properties=shot_properties,
+        activity_type=activity_type,
+        source=source,
+        activity_id=activity_id,
     )
     return dataset_service.to_read_models(
         datasets,
