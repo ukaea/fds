@@ -9,6 +9,7 @@ import { LoadMore } from '@/components/load-more';
 import { CollapsibleSection } from '@/components/collapsible-section';
 import { Collection, Device } from '@/lib/types';
 import { Layers, Database, ChevronRight, Globe, Server } from 'lucide-react';
+import { RunBadge } from '@/components/run-label';
 
 const PAGE_SIZE = 100;
 // A collection read inlines at most this many of each kind of member.
@@ -49,6 +50,7 @@ function CollectionCard({ col }: { col: Collection }) {
         <span className="px-2.5 py-0.5 rounded-full border text-foreground bg-muted border-border">
           {col.effective_access_level || col.access_level}
         </span>
+        <RunBadge activity={col.activity} />
         {col.shot_id && (
           <span className="px-2.5 py-0.5 rounded-full border text-foreground bg-muted border-border">
             shot {col.shot_id}

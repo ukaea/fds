@@ -4,7 +4,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
 import { fetcher, API_BASE, FetchError } from '@/lib/api';
-import { Dataset, Collection, Activity, Source, Shot } from '@/lib/types';
+import { Dataset, Collection, Activity, Shot } from '@/lib/types';
 import { useDeviceLabel } from '@/lib/use-device-label';
 import { Database, ChevronRight, Layers, MapPin, SlidersHorizontal, Highlighter } from 'lucide-react';
 import { availableProperties, propertyQuery, withQuery } from '@/lib/properties';
@@ -16,37 +16,20 @@ import { DatasetCard } from '@/components/dataset-card';
 import { DatasetResults } from '@/components/dataset-results';
 import { PropertyBadges, ScientificMetadata } from '@/components/properties';
 import { RelatedGroup } from '@/components/related-data';
-
-function formatSourceName(name: string): string {
-  return name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-}
+import { RunBadge } from '@/components/run-label';
 
 function formatDate(iso?: string): string {
   if (!iso) return '';
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function CollectionSection({
-  collection,
-  sourcesById,
-}: {
-  collection: Collection;
-  sourcesById: Map<number, string>;
-}) {
+function CollectionSection({ collection }: { collection: Collection }) {
+  // The collection's activity summary says what ran. When it ran is only on the
+  // full run, so that is requested here.
   const { data: activity } = useSWR<Activity>(
     collection.activity_id ? `${API_BASE}/activities/${collection.activity_id}` : null,
     fetcher
   );
-
-  const sourceName = activity?.source_id != null ? sourcesById.get(activity.source_id) : undefined;
-  let activityLabel: string | undefined;
-  if (sourceName) {
-    activityLabel = formatSourceName(sourceName);
-    if (activity?.started_at) activityLabel += ` · ${formatDate(activity.started_at)}`;
-  } else if (activity?.activity_type) {
-    activityLabel = activity.activity_type;
-    if (activity.started_at) activityLabel += ` · ${formatDate(activity.started_at)}`;
-  }
 
   const datasetCount = collection.datasets?.length ?? 0;
 
@@ -58,8 +41,11 @@ function CollectionSection({
         </div>
         <div>
           <h2 className="text-xl font-semibold text-foreground">{collection.title || collection.name}</h2>
-          {activityLabel && (
-            <p className="text-sm text-muted-foreground mt-0.5">{activityLabel}</p>
+          {collection.activity && (
+            <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+              <RunBadge activity={collection.activity} />
+              {activity?.started_at && <span>{formatDate(activity.started_at)}</span>}
+            </div>
           )}
         </div>
         <span className="text-sm text-muted-foreground ml-1">
@@ -132,10 +118,6 @@ export default function ShotDetail({
     deviceName && shotId ? `${API_BASE}/devices/${deviceName}/shots/${shotId}/collections` : null,
     fetcher
   );
-
-  const { data: sources } = useSWR<Source[]>(`${API_BASE}/sources/`, fetcher);
-
-  const sourcesById = new Map<number, string>(sources?.map(s => [s.id, s.name]) ?? []);
 
   // Datasets already shown inside a collection
   const datasetIdsInCollections = new Set<number>(
@@ -260,11 +242,7 @@ export default function ShotDetail({
         {/* One section per collection */}
         {propertyTokens.length === 0 &&
           collections?.map((collection) => (
-            <CollectionSection
-              key={collection.id}
-              collection={collection}
-              sourcesById={sourcesById}
-            />
+            <CollectionSection key={collection.id} collection={collection} />
           ))}
 
         {/* Datasets not in any collection */}

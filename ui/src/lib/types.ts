@@ -110,6 +110,7 @@ export interface Dataset {
   access_level?: string;
   effective_access_level?: string;
   activity_id?: number;
+  activity?: ActivitySummary | null;
   geometry_roles?: string[];
   geometry_references?: string[];
   calibration_roles?: string[];
@@ -167,6 +168,7 @@ export interface Collection {
   access_level?: string;
   effective_access_level?: string;
   activity_id?: number | null;
+  activity?: ActivitySummary | null;
   root_url?: string | null;
   created_at?: string;
   scientific_metadata?: ScientificProperty[];
@@ -174,11 +176,21 @@ export interface Collection {
   child_collections?: Collection[];
 }
 
+export type ActivityType = 'measurement' | 'simulation' | 'analysis' | 'calibration';
+
+// The run behind a dataset or collection, as FDS inlines it on every read so a
+// list can say what produced each row. The record's activity_id links to the rest.
+export interface ActivitySummary {
+  activity_type?: ActivityType | null;
+  source?: string | null;
+  source_version?: string | null;
+}
+
 export interface Activity {
   id: number;
   // Optional executor agent: a raw acquisition names no agent, just its instrument.
   source_id?: number | null;
-  activity_type?: string;
+  activity_type?: ActivityType;
   source_version?: string;
   parameters?: Record<string, unknown>;
   started_at?: string;

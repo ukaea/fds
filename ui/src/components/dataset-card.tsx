@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Database, FileCode } from 'lucide-react';
 import { Dataset } from '@/lib/types';
 import { PropertyBadges } from '@/components/properties';
+import { RunBadge } from '@/components/run-label';
 
 const BADGE = 'text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border';
 
@@ -75,6 +76,7 @@ export function DatasetCard({
           <FileCode className="w-4 h-4" />
           {formatMediaType(dataset.media_type)}
         </div>
+        <RunBadge activity={dataset.activity} />
         {showContext && dataset.device_name && (
           <span className={BADGE}>{dataset.device_name}</span>
         )}

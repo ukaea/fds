@@ -13,6 +13,7 @@ import { useDeviceLabel } from '@/lib/use-device-label';
 import { Layers, Database, FileCode, ChevronRight, Activity as ActivityIcon } from 'lucide-react';
 import { JsonLdPanel } from '@/components/jsonld-panel';
 import { CollapsibleSection } from '@/components/collapsible-section';
+import { RunBadge } from '@/components/run-label';
 
 function formatMediaType(mediaType?: string): string {
   if (!mediaType) return 'Zarr';
@@ -120,6 +121,7 @@ export default function CollectionDetail({ id }: { id: string }) {
             <span className="text-xs px-2.5 py-1 rounded-full border text-foreground bg-muted border-border">
               {collection.effective_access_level || collection.access_level}
             </span>
+            <RunBadge activity={collection.activity} />
             <span className="text-xs text-muted-foreground">dcat:Catalog</span>
           </div>
         </div>

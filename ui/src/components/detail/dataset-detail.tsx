@@ -15,6 +15,7 @@ import { citation, resolveIdentifier } from '@/lib/identifiers';
 import type { JsonLd } from '@/lib/identifier-page';
 import { JsonLdPanel } from '@/components/jsonld-panel';
 import { HeatmapCanvas } from '@/components/heatmap';
+import { RunBadge } from '@/components/run-label';
 
 function isZarr(mediaType?: string | null): boolean {
   return Boolean(mediaType?.toLowerCase().includes('zarr'));
@@ -921,6 +922,11 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
          <div className="flex flex-wrap gap-3">
              {device && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Device: {deviceLabel}</span>}
              {shot && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Shot: {shot}</span>}
+             {datasetData?.activity && (
+               <span className="text-sm">
+                 <RunBadge activity={datasetData.activity} />
+               </span>
+             )}
              {datasetData?.annotates && (
                 <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border flex items-center gap-1">
                     <Highlighter className="w-3.5 h-3.5" />
