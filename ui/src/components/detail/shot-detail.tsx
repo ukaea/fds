@@ -40,7 +40,11 @@ function CollectionSection({ collection }: { collection: Collection }) {
           <Layers className="w-5 h-5" />
         </div>
         <div>
-          <h2 className="text-xl font-semibold text-foreground">{collection.title || collection.name}</h2>
+          <h2 className="text-xl font-semibold text-foreground">
+            <Link href={`/collections/${collection.id}`} className="hover:text-primary transition-colors">
+              {collection.title || collection.name}
+            </Link>
+          </h2>
           {collection.activity && (
             <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
               <RunBadge activity={collection.activity} />
