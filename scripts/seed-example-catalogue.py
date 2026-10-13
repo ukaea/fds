@@ -227,6 +227,15 @@ def register_mast_datasets(client: httpx.Client, base_url: str) -> None:
         ("mast", "30421", SHOT_30421_IDS),
     ]:
         for ids_name in ids_list:
+            # Skip a dataset the shot already has. A 409 cannot be relied on: once
+            # a run is attached to a dataset, posting its name again without a run
+            # is not a conflict, so the dataset would be registered twice.
+            existing = client.get(
+                f"{base_url}/devices/{device}/shots/{shot_id}/datasets/{ids_name}"
+            )
+            existing.raise_for_status()
+            if existing.json():
+                continue
             meta: dict[str, object] = {
                 "name": ids_name,
                 "url": (f"s3://{STFC_BUCKET}/level2/shots/{shot_id}.zarr/{ids_name}"),
@@ -245,8 +254,7 @@ def register_mast_datasets(client: httpx.Client, base_url: str) -> None:
             resp = client.post(
                 f"{base_url}/devices/{device}/shots/{shot_id}/datasets", json=meta
             )
-            if resp.status_code not in (201, 409):
-                resp.raise_for_status()
+            resp.raise_for_status()
 
 
 def register_mast_geometry(client: httpx.Client, base_url: str) -> None:
