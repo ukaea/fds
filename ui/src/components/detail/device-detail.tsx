@@ -16,8 +16,9 @@ import { usePagedList } from '@/lib/use-paged-list';
 import { DeviceDatasets } from '@/components/device-datasets';
 import { ShotList, shotPropertiesUrl } from '@/components/shot-list';
 import { JsonLdPanel } from '@/components/jsonld-panel';
+import { SimulationBrowser } from '@/components/simulation-browser';
 
-type Tab = 'shots' | 'shot-datasets' | 'datasets';
+type Tab = 'shots' | 'shot-datasets' | 'simulations' | 'datasets';
 
 const DATASET_PAGE_SIZE = 100;
 
@@ -203,6 +204,12 @@ export default function DeviceDetail({ deviceName }: { deviceName: string }) {
           Shot Datasets
         </TabButton>
         <TabButton
+          active={activeTab === 'simulations'}
+          onClick={() => setActiveTab('simulations')}
+        >
+          Simulations
+        </TabButton>
+        <TabButton
           active={activeTab === 'datasets'}
           count={datasets?.length}
           onClick={() => setActiveTab('datasets')}
@@ -216,6 +223,10 @@ export default function DeviceDetail({ deviceName }: { deviceName: string }) {
       {activeTab === 'shot-datasets' && (
         <ShotDatasets deviceName={deviceName} aside={jsonLd} />
       )}
+
+      {/* Every run on the device, including those that modelled no shot, which a
+          shot's page cannot show. */}
+      {activeTab === 'simulations' && <SimulationBrowser deviceName={deviceName} />}
 
       {/* Device Datasets Tab: no filters, so no side column to hold the JSON-LD. */}
       {activeTab === 'datasets' && (

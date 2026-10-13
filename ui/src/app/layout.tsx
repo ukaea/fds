@@ -44,6 +44,9 @@ export default function RootLayout({
                     <Link href="/devices" className="hover:text-foreground transition-colors">
                       Devices
                     </Link>
+                    <Link href="/simulations" className="hover:text-foreground transition-colors">
+                      Simulations
+                    </Link>
                     <Link href="/datasets" className="hover:text-foreground transition-colors">
                       Datasets
                     </Link>

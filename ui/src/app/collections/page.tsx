@@ -9,16 +9,10 @@ import { LoadMore } from '@/components/load-more';
 import { CollapsibleSection } from '@/components/collapsible-section';
 import { Collection, Device } from '@/lib/types';
 import { Layers, Database, ChevronRight, Globe, Server } from 'lucide-react';
+import { memberCount } from '@/components/run-card';
 import { RunBadge } from '@/components/run-label';
 
 const PAGE_SIZE = 100;
-// A collection read inlines at most this many of each kind of member.
-const INLINE_MEMBERS = 100;
-
-function memberCount(count: number, noun: string): string {
-  const shown = count >= INLINE_MEMBERS ? `${INLINE_MEMBERS}+` : `${count}`;
-  return `${shown} ${noun}${count === 1 ? '' : 's'}`;
-}
 
 function CollectionCard({ col }: { col: Collection }) {
   return (
@@ -143,7 +137,8 @@ export default function CollectionsPage() {
           Collections group datasets into a single citable unit
           (<code className="text-foreground">dcat:Catalog</code>): the outputs of a run, a curated
           selection, or the contents of a store. Global collections are listed first, then each
-          device&apos;s, including those on its shots.
+          device&apos;s, including those on its shots. Simulation runs can also be browsed under{' '}
+          <Link href="/simulations" className="text-primary hover:underline">Simulations</Link>.
         </p>
       </div>
 

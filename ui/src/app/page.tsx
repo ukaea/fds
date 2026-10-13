@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import useSWR from 'swr';
-import { Database, Server, Activity, BookOpen } from 'lucide-react';
+import { Database, Server, Activity, BookOpen, Cpu } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Device } from '@/lib/types';
 
@@ -94,7 +94,14 @@ export default function Home() {
       </div>
 
       {/* Other Sections */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <Link href="/simulations" className="card group p-8 flex flex-col items-center text-center hover:bg-muted transition-colors">
+          <div className="bg-muted p-4 rounded-full mb-6 group-hover:scale-110 transition-transform">
+            <Cpu className="w-8 h-8 text-foreground" />
+          </div>
+          <h2 className="text-2xl font-bold mb-3">Simulations</h2>
+          <p className="text-muted-foreground">Find simulation runs by code, device or what they simulated, and the data they produced.</p>
+        </Link>
         <Link href="/sources" className="card group p-8 flex flex-col items-center text-center hover:bg-muted transition-colors">
           <div className="bg-muted p-4 rounded-full mb-6 group-hover:scale-110 transition-transform">
             <Activity className="w-8 h-8 text-foreground" />
