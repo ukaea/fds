@@ -170,7 +170,7 @@ GET /v1/devices/mast/shots/properties
 ```json
 {
   "total": 5300,
-  "annotations": [
+  "properties": [
     {"name": "flat_top", "records": 5300, "distinct": 1, "values": ["true"]},
     {"name": "campaign", "records": 5300, "distinct": 6, "values": ["M5", "M6", "M7", "M8", "M9", "M9a"]},
     {"name": "plasma_current_max", "records": 5300, "distinct": 5267, "unit": "A"}
