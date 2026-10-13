@@ -5,7 +5,6 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import (
     DEFAULT_PAGE_SIZE,
-    ActivityServiceDep,
     BaseURLDep,
     CurrentUserDep,
     DatasetServiceDep,
@@ -645,7 +644,7 @@ def delete_distribution(
 def read_dataset_activity(
     *,
     dataset_id: int,
-    activity_service: ActivityServiceDep,
+    dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
 ) -> ActivityRead:
     """
@@ -653,9 +652,7 @@ def read_dataset_activity(
     including timestamps, parameters, and source version.
     Returns 404 if the dataset has no associated activity.
     """
-    return ActivityRead.model_validate(
-        activity_service.get_for_dataset(dataset_id, user)
-    )
+    return ActivityRead.model_validate(dataset_service.get_activity(dataset_id, user))
 
 
 @router.get(
@@ -665,7 +662,7 @@ def read_dataset_activity(
 def read_dataset_source(
     *,
     dataset_id: int,
-    activity_service: ActivityServiceDep,
+    dataset_service: DatasetServiceDep,
     source_service: SourceServiceDep,
     user: CurrentUserDep,
 ) -> SourceRead:
@@ -673,5 +670,5 @@ def read_dataset_source(
     Retrieve the Source (diagnostic system or code) that produced this dataset.
     Shortcut for dataset → activity → source. Returns 404 if the dataset has no activity.
     """
-    activity = activity_service.get_for_dataset(dataset_id, user)
+    activity = dataset_service.get_activity(dataset_id, user)
     return source_service.to_read_model(activity.source)

@@ -16,7 +16,7 @@ from app.auth.permissions import check_device_admin, check_is_admin
 from app.core.config import AzureStorageProvider, S3StorageProvider, config
 from app.core.context import ReadTier
 from app.core.naming import normalise_device_name
-from app.models.activity import ActivityType
+from app.models.activity import Activity, ActivityType
 from app.models.dataset import (
     Dataset,
     DatasetCreate,
@@ -184,6 +184,28 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     ) -> None:
         """Enforce read access, and record it when the resource is not public."""
         check_read(dataset, self.session, user, tier)
+
+    def get_activity(self, dataset_id: int, user: AuthenticatedUser) -> Activity:
+        """The Activity that produced the dataset, for a caller who may read it.
+
+        The dataset's read check runs here rather than in the router, so a caller
+        cannot reach a restricted dataset's run parameters through this
+        sub-resource. It runs before the "no associated activity" 404, so the
+        response does not reveal whether a dataset the caller cannot read has
+        provenance recorded.
+        """
+        dataset = self.session.get(Dataset, dataset_id)
+        if not dataset:
+            raise ResourceNotFoundError(f"Dataset {dataset_id} not found")
+        self.check_read_access(dataset, user)
+        if not dataset.activity_id:
+            raise ResourceNotFoundError(
+                f"Dataset {dataset_id} has no associated activity"
+            )
+        activity = self.session.get(Activity, dataset.activity_id)
+        if not activity:
+            raise ResourceNotFoundError(f"Activity {dataset.activity_id} not found")
+        return activity
 
     def create(self, obj_in: DatasetCreate, user: AuthenticatedUser) -> Dataset:
         """Create a new dataset. Handles global, device, or shot context."""

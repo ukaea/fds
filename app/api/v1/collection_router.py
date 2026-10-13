@@ -5,7 +5,6 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import (
     DEFAULT_PAGE_SIZE,
-    ActivityServiceDep,
     BaseURLDep,
     CollectionServiceDep,
     CurrentUserDep,
@@ -604,7 +603,7 @@ def remove_child_collection(
 def read_collection_activity(
     *,
     collection_id: int,
-    activity_service: ActivityServiceDep,
+    collection_service: CollectionServiceDep,
     user: CurrentUserDep,
 ) -> ActivityRead:
     """Retrieve the Activity (provenance run) that produced this Collection.
@@ -612,5 +611,5 @@ def read_collection_activity(
     Returns 404 if the Collection has no associated activity.
     """
     return ActivityRead.model_validate(
-        activity_service.get_for_collection(collection_id, user)
+        collection_service.get_activity(collection_id, user)
     )

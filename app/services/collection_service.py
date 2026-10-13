@@ -13,7 +13,7 @@ from app.auth.access_control import (
 from app.auth.permissions import check_device_admin, check_is_admin
 from app.core.context import ReadTier
 from app.core.naming import normalise_device_name
-from app.models.activity import ActivityType
+from app.models.activity import Activity, ActivityType
 from app.models.available_properties import AvailableProperties
 from app.models.collection import (
     Collection,
@@ -713,6 +713,23 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             raise ResourceNotFoundError(f"Collection {collection_id} not found")
         self.check_read_access(collection, user)
         return collection
+
+    def get_activity(self, collection_id: int, user: AuthenticatedUser) -> Activity:
+        """The Activity the collection bundles, for a caller who may read it.
+
+        The collection's read check runs before the "no associated activity" 404,
+        so the response does not reveal whether a collection the caller cannot
+        read has a run recorded.
+        """
+        collection = self.get_readable_or_raise(collection_id, user)
+        if not collection.activity_id:
+            raise ResourceNotFoundError(
+                f"Collection {collection_id} has no associated activity"
+            )
+        activity = self.session.get(Activity, collection.activity_id)
+        if not activity:
+            raise ResourceNotFoundError(f"Activity {collection.activity_id} not found")
+        return activity
 
     def to_dcat(
         self, collection: Collection, base_url: str, user: AuthenticatedUser
