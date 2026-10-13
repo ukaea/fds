@@ -57,7 +57,7 @@ export default function SourceDetail({ id }: { id: string }) {
     );
   }
 
-  const isDeviceLinked = !!source.device_id;
+  const isDeviceLinked = !!source.device_name;
   const kindInfo = source.kind ? KIND_INFO[source.kind] : null;
 
   return (
@@ -143,7 +143,7 @@ export default function SourceDetail({ id }: { id: string }) {
             <div>
               <dt className="text-sm text-muted-foreground mb-1">Scope</dt>
               <dd className="text-foreground text-sm">
-                {isDeviceLinked ? `Device-Linked (ID: ${source.device_id})` : 'Global'}
+                {isDeviceLinked ? `Device: ${source.device_name}` : 'Global'}
               </dd>
             </div>
             <div>

@@ -20,14 +20,14 @@ export default function SourcesPage() {
 
     const matchesFilter =
       filterType === 'all' ||
-      (filterType === 'global' && !source.device_id) ||
-      (filterType === 'device' && !!source.device_id);
+      (filterType === 'global' && !source.device_name) ||
+      (filterType === 'device' && !!source.device_name);
 
     return matchesSearch && matchesFilter;
   });
 
-  const globalSources = filteredSources?.filter(s => !s.device_id) || [];
-  const deviceSources = filteredSources?.filter(s => !!s.device_id) || [];
+  const globalSources = filteredSources?.filter(s => !s.device_name) || [];
+  const deviceSources = filteredSources?.filter(s => !!s.device_name) || [];
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -172,11 +172,7 @@ function SourceCard({ source }: { source: Source }) {
       className="card p-6 group hover:bg-muted transition-colors block"
     >
       <div className="flex items-start gap-3 mb-3">
-        <div className={`p-2 rounded-lg ${
-          source.device_id
-            ? 'bg-muted text-foreground'
-            : 'bg-muted text-foreground'
-        }`}>
+        <div className="p-2 rounded-lg bg-muted text-foreground">
           <Activity className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
@@ -190,12 +186,8 @@ function SourceCard({ source }: { source: Source }) {
       </div>
 
       <div className="flex items-center justify-between mt-4">
-        <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
-          source.device_id
-            ? 'text-foreground bg-muted border-border'
-            : 'text-foreground bg-muted border-border'
-        }`}>
-          {source.device_id ? 'Device-Linked' : 'Global'}
+        <span className="text-xs px-2.5 py-1 rounded-full border font-medium text-foreground bg-muted border-border">
+          {source.device_name ?? 'Global'}
         </span>
         <div className="flex items-center text-xs text-muted-foreground group-hover:text-primary transition-colors font-medium">
           View Details <ChevronRight className="w-3.5 h-3.5 ml-1 group-hover:translate-x-0.5 transition-transform" />
@@ -203,11 +195,7 @@ function SourceCard({ source }: { source: Source }) {
       </div>
 
       {/* Bottom accent bar */}
-      <div className={`h-0.5 w-full mt-4 rounded-full transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left ${
-        source.device_id
-          ? 'bg-gradient-to-r from-muted to-muted'
-          : 'bg-gradient-to-r from-muted to-muted'
-      }`} />
+      <div className="h-0.5 w-full mt-4 rounded-full transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left bg-gradient-to-r from-muted to-muted" />
     </Link>
   );
 }

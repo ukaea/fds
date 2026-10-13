@@ -191,7 +191,8 @@ export interface Source {
   id: number;
   name: string;
   description?: string;
-  device_id?: number;
+  // The device the source belongs to; absent for a global source.
+  device_name?: string | null;
   // How the source projects into the PROV-O graph. null = unclassified.
   kind?: SourceKind | null;
 }
