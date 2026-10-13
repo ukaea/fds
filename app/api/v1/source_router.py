@@ -4,13 +4,11 @@ from fastapi import APIRouter, status
 
 from app.api.deps import (
     DEFAULT_PAGE_SIZE,
-    CollectionServiceDep,
     CurrentUserDep,
     Limit,
     Offset,
     SourceServiceDep,
 )
-from app.models.collection import CollectionRead
 from app.models.source import SourceCreate, SourceRead, SourceUpdate
 from app.services.exceptions import ResourceNotFoundError
 
@@ -42,23 +40,6 @@ def read_sources(
     """
     sources = source_service.get_multi(offset=offset, limit=limit)
     return source_service.to_read_models(sources)
-
-
-@router.get("/{name}/collections", response_model=list[CollectionRead])
-def read_collections_for_source(
-    name: str,
-    collection_service: CollectionServiceDep,
-    user: CurrentUserDep,
-    offset: Offset = 0,
-    limit: Limit = DEFAULT_PAGE_SIZE,
-) -> Sequence[CollectionRead]:
-    """
-    Return all Collections whose linked Activity was produced by the named Source.
-    """
-    collections = collection_service.get_for_source(
-        source_name=name, user=user, offset=offset, limit=limit
-    )
-    return collection_service.to_read_models(collections, user=user)
 
 
 @router.get("/id/{id}", response_model=SourceRead)

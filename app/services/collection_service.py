@@ -12,7 +12,7 @@ from app.auth.access_control import (
 from app.auth.permissions import check_device_admin, check_is_admin
 from app.core.context import ReadTier
 from app.core.naming import normalise_device_name
-from app.models.activity import Activity, ActivityType
+from app.models.activity import ActivityType
 from app.models.collection import (
     Collection,
     CollectionCreate,
@@ -25,7 +25,6 @@ from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.scope import CatalogueScope, DeviceScope
-from app.models.source import Source
 from app.services.base_service import BaseService
 from app.services.dataset_service import DatasetService
 from app.services.exceptions import (
@@ -346,25 +345,6 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                     col(Collection.activity_id), activity_type, source, activity_id
                 ),
             )
-            .order_by(col(Collection.id))
-        )
-        return read_page(
-            self.session, Collection, statement, user, offset=offset, limit=limit
-        )
-
-    def get_for_source(
-        self,
-        source_name: str,
-        user: AuthenticatedUser = ANONYMOUS_USER,
-        offset: int = 0,
-        limit: int = 100,
-    ) -> Sequence[Collection]:
-        """Return all Collections whose linked Activity was produced by the given Source."""
-        statement = (
-            select(Collection)
-            .join(Activity, Activity.id == Collection.activity_id)  # type: ignore[arg-type]
-            .join(Source, Source.id == Activity.source_id)  # type: ignore[arg-type]
-            .where(Source.name == source_name)
             .order_by(col(Collection.id))
         )
         return read_page(
