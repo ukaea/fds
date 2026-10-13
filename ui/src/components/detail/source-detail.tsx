@@ -2,9 +2,15 @@
 
 import useSWR from 'swr';
 import Link from 'next/link';
-import { Activity, ArrowLeft, ChevronRight, Server, Globe, Link2 } from 'lucide-react';
+import { Activity, ArrowLeft, ChevronRight, Database, Server, Globe, Layers, Link2 } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
-import { Source, SourceKind } from '@/lib/types';
+import { Collection, Dataset, Source, SourceKind } from '@/lib/types';
+import { usePagedList } from '@/lib/use-paged-list';
+import { LoadMore } from '@/components/load-more';
+import { DatasetResults } from '@/components/dataset-results';
+import { RunCard } from '@/components/run-card';
+
+const PAGE_SIZE = 50;
 
 // How each Source kind projects into the PROV-O graph. Instruments
 // are entities (tools an activity uses), not agents.
@@ -22,6 +28,19 @@ export default function SourceDetail({ id }: { id: string }) {
   );
 
   const sourceName = source?.name ?? id;
+
+  // The runs this source carried out, found through their bundles and through
+  // the datasets they generated. A run records the instruments it used apart
+  // from its source, so these lists are not requested for an instrument.
+  const agent = source?.kind !== 'instrument';
+  const runs = usePagedList<Collection>(
+    source && agent ? `${API_BASE}/collections?source=${encodeURIComponent(source.name)}` : null,
+    PAGE_SIZE
+  );
+  const generated = usePagedList<Dataset>(
+    source && agent ? `${API_BASE}/datasets?source=${encodeURIComponent(source.name)}` : null,
+    PAGE_SIZE
+  );
 
   if (error) {
     return (
@@ -176,13 +195,45 @@ export default function SourceDetail({ id }: { id: string }) {
               </p>
             )}
             <p className="leading-relaxed">
-              To trace what a run consumed and produced, open a dataset and check its Provenance panel, or
-              request a dataset as{' '}
-              <span className="font-mono text-foreground text-xs">application/ld+json</span>.
+              {agent
+                ? 'Its runs and the datasets they generated are listed below. Open a run to see what it used.'
+                : 'Open a dataset and check its Provenance panel to see the runs that used it.'}
             </p>
           </div>
         </div>
       </div>
+
+      {!!runs.items?.length && (
+        <section className="mt-10">
+          <h2 className="text-xl font-semibold text-foreground mb-4 flex items-center gap-3">
+            <span className="bg-muted p-2 rounded-lg"><Layers className="w-5 h-5" /></span>
+            Runs
+            <span className="text-sm font-normal text-muted-foreground">
+              ({runs.done ? runs.items.length : `${runs.items.length}+`})
+            </span>
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {runs.items.map((run) => (
+              <RunCard key={run.id} collection={run} />
+            ))}
+          </div>
+          <LoadMore onLoad={runs.loadMore} loading={runs.loadingMore} done={runs.done} />
+        </section>
+      )}
+
+      {!!generated.items?.length && (
+        <section className="mt-10">
+          <h2 className="text-xl font-semibold text-foreground mb-4 flex items-center gap-3">
+            <span className="bg-muted p-2 rounded-lg"><Database className="w-5 h-5" /></span>
+            Datasets it generated
+            <span className="text-sm font-normal text-muted-foreground">
+              ({generated.done ? generated.items.length : `${generated.items.length}+`})
+            </span>
+          </h2>
+          <DatasetResults datasets={generated.items} />
+          <LoadMore onLoad={generated.loadMore} loading={generated.loadingMore} done={generated.done} />
+        </section>
+      )}
     </div>
   );
 }
