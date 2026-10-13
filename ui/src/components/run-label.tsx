@@ -10,6 +10,10 @@ const ORIGIN: Record<ActivityType, { label: string; icon: LucideIcon }> = {
   calibration: { label: 'Calibration', icon: SlidersHorizontal },
 };
 
+export function originLabel(activity?: ActivitySummary | null): string | null {
+  return activity?.activity_type ? ORIGIN[activity.activity_type].label : null;
+}
+
 /** The code behind a run and the version it ran at, such as "jintrac v220922". */
 export function runName(activity?: ActivitySummary | null): string | null {
   if (!activity?.source) return null;
