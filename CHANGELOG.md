@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.0.8](https://github.com/ukaea/fds/compare/v0.0.7...v0.0.8) (2026-10-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* GET /v1/collections and GET /v1/devices/{device}/collections now also return the collections attached below them; pass scope=global and scope=device respectively for the previous results. GET /v1/sources/{name}/collections is removed; use GET /v1/collections?source={name} instead.
+
+### Features
+
+* Find simulation runs and their data without starting from a shot ([8b01b44](https://github.com/ukaea/fds/commit/8b01b446ab2bd0d9bdd6ae3542c5267deb1b6620))
+* Let a distribution declare the schema it conforms to ([#189](https://github.com/ukaea/fds/issues/189)) ([8838b7f](https://github.com/ukaea/fds/commit/8838b7fa6a469c56fb2646ddf11082be31531b9f))
+
+
+### Bug Fixes
+
+* Check read access on runs ([#202](https://github.com/ukaea/fds/issues/202)) ([71b55d1](https://github.com/ukaea/fds/commit/71b55d1204c3f254584c23f0e6035f719bbed1c9))
+* Return collection membership resources from POST endpoints ([#82](https://github.com/ukaea/fds/issues/82)) ([1046b59](https://github.com/ukaea/fds/commit/1046b590c039dd590fa3cf03eba9db0860db6458))
+
+
+### Performance Improvements
+
+* Build list responses in a fixed number of queries ([#193](https://github.com/ukaea/fds/issues/193)) ([bdbff60](https://github.com/ukaea/fds/commit/bdbff60b8d093ff275e2c39b92ad069191937937))
+* Resolve a short list's read policies together ([#196](https://github.com/ukaea/fds/issues/196)) ([3a0f3c7](https://github.com/ukaea/fds/commit/3a0f3c7338f83b0214ce74819691e05ff36eb807))
+* Resolve annotations, references and coverage in a fixed number of queries ([#198](https://github.com/ukaea/fds/issues/198)) ([f5855eb](https://github.com/ukaea/fds/commit/f5855ebfeecb8b240302e91d496d529574df15a4))
+
 ## [0.0.7](https://github.com/ukaea/fds/compare/v0.0.6...v0.0.7) (2026-10-08)
 
 
