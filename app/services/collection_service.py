@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 
 import structlog
+from sqlalchemy import ColumnElement
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
@@ -13,6 +14,7 @@ from app.auth.permissions import check_device_admin, check_is_admin
 from app.core.context import ReadTier
 from app.core.naming import normalise_device_name
 from app.models.activity import ActivityType
+from app.models.available_properties import AvailableProperties
 from app.models.collection import (
     Collection,
     CollectionCreate,
@@ -25,6 +27,10 @@ from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.scope import CatalogueScope, DeviceScope
+from app.services.available_properties import (
+    DEFAULT_MAX_VALUES,
+    available_properties,
+)
 from app.services.base_service import BaseService
 from app.services.dataset_service import DatasetService
 from app.services.exceptions import (
@@ -41,7 +47,11 @@ from app.services.filters import (
 )
 from app.services.jsonld import map_collection_to_dcat
 from app.services.shot_service import ShotService
-from app.services.visibility import read_page, read_pages_by_group
+from app.services.visibility import (
+    read_page,
+    read_pages_by_group,
+    readable_clause,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -103,9 +113,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             check_device_admin(user, obj_in.device_name)
 
         elif obj_in.device_name:
-            stmt = select(Device).where(Device.name == obj_in.device_name)
-            if not self.session.exec(stmt).first():
-                raise DeviceNotFoundError(f"Device '{obj_in.device_name}' not found")
+            self._require_device(obj_in.device_name)
             check_device_admin(user, obj_in.device_name)
 
         else:
@@ -199,6 +207,56 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
 
         return self.delete_unchecked(id)
 
+    def _require_device(self, device_name: str) -> None:
+        name = normalise_device_name(device_name)
+        if not self.session.exec(select(Device).where(Device.name == name)).first():
+            raise DeviceNotFoundError(f"Device '{device_name}' not found")
+
+    def _listing_clauses(
+        self,
+        *,
+        device_name: str | None = None,
+        shot_id: str | None = None,
+        scope: CatalogueScope | DeviceScope = CatalogueScope.ALL,
+        properties: list[str] | None = None,
+        activity_type: ActivityType | None = None,
+        source: str | None = None,
+        activity_id: int | None = None,
+    ) -> list[ColumnElement[bool]]:
+        """The clauses for the collections a listing asks for, before access.
+
+        The listings and the property summaries both use them, so a summary's
+        ``total`` counts the collections the matching listing returns.
+        """
+        clauses = scope_clauses(
+            col(Collection.device_name), col(Collection.shot_id), scope
+        )
+        if device_name is not None:
+            clauses.append(
+                col(Collection.device_name) == normalise_device_name(device_name)
+            )
+        if shot_id is not None:
+            clauses.append(col(Collection.shot_id) == shot_id)
+        return [
+            *clauses,
+            *property_clauses(Collection.scientific_metadata, properties),
+            *activity_clauses(
+                col(Collection.activity_id), activity_type, source, activity_id
+            ),
+        ]
+
+    def _page(
+        self,
+        clauses: list[ColumnElement[bool]],
+        user: AuthenticatedUser,
+        offset: int,
+        limit: int,
+    ) -> Sequence[Collection]:
+        statement = select(Collection).where(*clauses).order_by(col(Collection.id))
+        return read_page(
+            self.session, Collection, statement, user, offset=offset, limit=limit
+        )
+
     def get_multi(
         self,
         user: AuthenticatedUser = ANONYMOUS_USER,
@@ -217,21 +275,54 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         device, ``DEVICE`` for those attached to a device but not to a shot,
         ``SHOT`` for those attached to a shot.
         """
-        statement = (
-            select(Collection)
-            .where(
-                *scope_clauses(
-                    col(Collection.device_name), col(Collection.shot_id), scope
-                ),
-                *property_clauses(Collection.scientific_metadata, properties),
-                *activity_clauses(
-                    col(Collection.activity_id), activity_type, source, activity_id
-                ),
-            )
-            .order_by(col(Collection.id))
+        clauses = self._listing_clauses(
+            scope=scope,
+            properties=properties,
+            activity_type=activity_type,
+            source=source,
+            activity_id=activity_id,
         )
-        return read_page(
-            self.session, Collection, statement, user, offset=offset, limit=limit
+        return self._page(clauses, user, offset, limit)
+
+    def available_properties(
+        self,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+        *,
+        device_name: str | None = None,
+        scope: CatalogueScope | DeviceScope = CatalogueScope.ALL,
+        properties: list[str] | None = None,
+        activity_type: ActivityType | None = None,
+        source: str | None = None,
+        activity_id: int | None = None,
+        max_values: int = DEFAULT_MAX_VALUES,
+    ) -> AvailableProperties:
+        """The properties the matching collections carry, for building a filter.
+
+        Takes the same filters as the listing, so ``total`` counts the matching
+        collections this caller may read. With ``device_name`` it summarises that
+        device's listing, without it the root listing.
+        """
+        if device_name is not None:
+            self._require_device(device_name)
+        where = self._listing_clauses(
+            device_name=device_name,
+            scope=scope,
+            properties=properties,
+            activity_type=activity_type,
+            source=source,
+            activity_id=activity_id,
+        )
+        where.append(
+            readable_clause(
+                self.session, Collection, user, select(Collection).where(*where)
+            )
+        )
+        return available_properties(
+            self.session,
+            Collection,
+            col(Collection.scientific_metadata),
+            where=where,
+            max_values=max_values,
         )
 
     def get_by_name_in_context(
@@ -304,23 +395,15 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         attached to its shots. ``scope`` picks one of the two: ``DEVICE`` or
         ``SHOT``.
         """
-        statement = (
-            select(Collection)
-            .where(
-                Collection.device_name == normalise_device_name(device_name),
-                *scope_clauses(
-                    col(Collection.device_name), col(Collection.shot_id), scope
-                ),
-                *property_clauses(Collection.scientific_metadata, properties),
-                *activity_clauses(
-                    col(Collection.activity_id), activity_type, source, activity_id
-                ),
-            )
-            .order_by(col(Collection.id))
+        clauses = self._listing_clauses(
+            device_name=device_name,
+            scope=scope,
+            properties=properties,
+            activity_type=activity_type,
+            source=source,
+            activity_id=activity_id,
         )
-        return read_page(
-            self.session, Collection, statement, user, offset=offset, limit=limit
-        )
+        return self._page(clauses, user, offset, limit)
 
     def get_collections_for_shot(
         self,
@@ -335,21 +418,15 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         activity_id: int | None = None,
     ) -> Sequence[Collection]:
         """Return all Collections scoped to a specific shot, filtered by access."""
-        statement = (
-            select(Collection)
-            .where(
-                Collection.shot_id == shot_id,
-                Collection.device_name == normalise_device_name(device_name),
-                *property_clauses(Collection.scientific_metadata, properties),
-                *activity_clauses(
-                    col(Collection.activity_id), activity_type, source, activity_id
-                ),
-            )
-            .order_by(col(Collection.id))
+        clauses = self._listing_clauses(
+            device_name=device_name,
+            shot_id=shot_id,
+            properties=properties,
+            activity_type=activity_type,
+            source=source,
+            activity_id=activity_id,
         )
-        return read_page(
-            self.session, Collection, statement, user, offset=offset, limit=limit
-        )
+        return self._page(clauses, user, offset, limit)
 
     def add_dataset(
         self, collection_id: int, dataset_id: int, user: AuthenticatedUser

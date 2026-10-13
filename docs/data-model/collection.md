@@ -152,6 +152,10 @@ GET /v1/collections?activity_id=12               # run 12's bundle
 
 A bundle can also hold datasets its run did not generate, such as the run's inputs. To list only what run 12 generated, use `GET /v1/datasets?activity_id=12`.
 
+To see what the collections in a listing can be filtered by, ask for its property summary: `GET /collections/properties` or `GET /devices/{device}/collections/properties`. Each takes the same filters as its listing and answers in the same form as the [shot summary](index.md#discovering-what-to-filter-on).
+
+These routes take the name `properties`, so a global or device-level collection with that name cannot be read by name. Read it by id instead, with `GET /collections/id/{id}`.
+
 ## Reading members
 
 A collection read inlines its first 100 member Datasets as `datasets` and its first 100 child Collections as `child_collections`, ordered by id. Children are listed without their own members.

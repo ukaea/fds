@@ -331,6 +331,143 @@ def test_filtering_by_run_leaves_out_collections_the_caller_cannot_read(
     assert [c["name"] for c in response.json()] == ["open-run"]
 
 
+def test_collection_property_summary_takes_the_listing_filters(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _make_device(session)
+    _make_shot(session)
+    simulation = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
+    )
+    prediction = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
+    )
+    analysis = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.ANALYSIS), user=admin_user
+    )
+    collections = CollectionService(session)
+    collections.create(CollectionCreate(name="curated"), user=admin_user)
+    collections.create(
+        CollectionCreate(
+            name="jintrac-run",
+            device_name="DEV",
+            shot_id="s1",
+            activity_id=simulation.id,
+            scientific_metadata=[
+                ScientificProperty(name="confinement_mode", value="H-mode")
+            ],
+        ),
+        user=admin_user,
+    )
+    collections.create(
+        CollectionCreate(
+            name="scenario",
+            device_name="DEV",
+            activity_id=prediction.id,
+            scientific_metadata=[
+                ScientificProperty(name="confinement_mode", value="L-mode")
+            ],
+        ),
+        user=admin_user,
+    )
+    collections.create(
+        CollectionCreate(
+            name="efit-run",
+            device_name="DEV",
+            shot_id="s1",
+            activity_id=analysis.id,
+            scientific_metadata=[ScientificProperty(name="stage", value="1")],
+        ),
+        user=admin_user,
+    )
+
+    response = test_client.get("/v1/collections/properties", headers=admin_user_token)
+    assert response.status_code == 200
+    summary = response.json()
+    assert summary["total"] == 4
+    assert {p["name"] for p in summary["properties"]} == {"confinement_mode", "stage"}
+
+    response = test_client.get(
+        "/v1/collections/properties?activity_type=simulation", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    summary = response.json()
+    assert summary["total"] == 2
+    (mode,) = summary["properties"]
+    assert mode["name"] == "confinement_mode"
+    assert set(mode["values"]) == {"H-mode", "L-mode"}
+
+    response = test_client.get(
+        "/v1/devices/DEV/collections/properties?scope=shot", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    summary = response.json()
+    assert summary["total"] == 2
+    assert {p["name"] for p in summary["properties"]} == {"confinement_mode", "stage"}
+
+
+def test_collection_property_summary_leaves_out_what_the_caller_cannot_read(
+    test_client: TestClient, session: Session, non_admin_user_token: dict
+):
+    DeviceService(session).create(
+        DeviceCreate(name="DEV", type="Tokamak", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    _make_shot(session, "s1")
+    ShotService(session).create(
+        ShotCreate(id="s2", device_name="DEV", access_level=AccessLevel.RESTRICTED),
+        user=admin_user,
+    )
+    collections = CollectionService(session)
+    # Without a second readable collection, confinement_mode would be on every
+    # collection the caller sees, and a property that cannot divide the scope
+    # is left out of the summary.
+    collections.create(
+        CollectionCreate(name="open-notes", device_name="DEV", shot_id="s1"),
+        user=admin_user,
+    )
+    collections.create(
+        CollectionCreate(
+            name="open-run",
+            device_name="DEV",
+            shot_id="s1",
+            scientific_metadata=[
+                ScientificProperty(name="confinement_mode", value="H-mode")
+            ],
+        ),
+        user=admin_user,
+    )
+    collections.create(
+        CollectionCreate(
+            name="restricted-run",
+            device_name="DEV",
+            shot_id="s2",
+            scientific_metadata=[
+                ScientificProperty(name="confinement_mode", value="L-mode")
+            ],
+        ),
+        user=admin_user,
+    )
+
+    response = test_client.get(
+        "/v1/collections/properties", headers=non_admin_user_token
+    )
+    assert response.status_code == 200
+    summary = response.json()
+    assert summary["total"] == 2
+    (mode,) = summary["properties"]
+    assert mode["values"] == ["H-mode"]
+
+
+def test_collection_property_summary_of_an_unknown_device_is_a_404(
+    test_client: TestClient, admin_user_token: dict
+):
+    response = test_client.get(
+        "/v1/devices/nope/collections/properties", headers=admin_user_token
+    )
+    assert response.status_code == 404
+
+
 def test_read_device_collection_by_name(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):

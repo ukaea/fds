@@ -204,6 +204,8 @@ GET /v1/devices/mast/shots/properties?property=campaign:M9
 
 Values a caller is not permitted to read never appear, so two callers can see different properties over the same device.
 
+Collection listings have the same summary. `GET /v1/collections/properties?activity_type=simulation` lists the properties the bundles of simulation runs carry, so a client can offer filters over runs.
+
 ## URL structure
 
 ```text

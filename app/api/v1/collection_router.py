@@ -14,6 +14,7 @@ from app.api.deps import (
     Offset,
 )
 from app.models.activity import ActivityRead, ActivityType
+from app.models.available_properties import AvailableProperties
 from app.models.collection import (
     CollectionCreate,
     CollectionDataset,
@@ -25,6 +26,7 @@ from app.models.collection import (
 )
 from app.models.dataset import DatasetRead
 from app.models.scope import CatalogueScope, DeviceScope
+from app.services.available_properties import DEFAULT_MAX_VALUES
 from app.services.exceptions import ResourceNotFoundError
 
 router = APIRouter()
@@ -95,6 +97,44 @@ def read_collections_global(
         activity_id=activity_id,
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
+
+
+# Declared before /collections/{name}, which would otherwise take "properties" as
+# the name of a global collection.
+@router.get(
+    "/collections/properties",
+    response_model=AvailableProperties,
+    response_model_exclude_none=True,
+)
+def read_collection_properties(
+    *,
+    collection_service: CollectionServiceDep,
+    user: CurrentUserDep,
+    scope: CatalogueScope = CatalogueScope.ALL,
+    properties: Annotated[list[str] | None, Query(alias="property")] = None,
+    activity_type: ActivityType | None = None,
+    source: str | None = None,
+    activity_id: int | None = None,
+    max_values: int = DEFAULT_MAX_VALUES,
+) -> AvailableProperties:
+    """
+    The properties the listed collections carry, for building a filter.
+
+    One entry per property name, with how many collections carry it, how many
+    distinct values it has, and the values themselves when there are at most
+    `max_values` of them. Takes the same filters as `/collections`, so `total`
+    is the number of matching collections: with `?activity_type=simulation` it
+    summarises what simulation runs were about.
+    """
+    return collection_service.available_properties(
+        user=user,
+        scope=scope,
+        properties=properties,
+        activity_type=activity_type,
+        source=source,
+        activity_id=activity_id,
+        max_values=max_values,
+    )
 
 
 @router.get(
@@ -227,6 +267,46 @@ def read_collections_device(
         activity_id=activity_id,
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
+
+
+# Declared before /devices/{device_name}/collections/{name}, which would otherwise
+# take "properties" as the name of a device-level collection.
+@router.get(
+    "/devices/{device_name}/collections/properties",
+    response_model=AvailableProperties,
+    response_model_exclude_none=True,
+)
+def read_collection_properties_device(
+    *,
+    device_name: str,
+    collection_service: CollectionServiceDep,
+    user: CurrentUserDep,
+    scope: DeviceScope = DeviceScope.ALL,
+    properties: Annotated[list[str] | None, Query(alias="property")] = None,
+    activity_type: ActivityType | None = None,
+    source: str | None = None,
+    activity_id: int | None = None,
+    max_values: int = DEFAULT_MAX_VALUES,
+) -> AvailableProperties:
+    """
+    The properties a device's listed collections carry, for building a filter.
+
+    One entry per property name, with how many collections carry it, how many
+    distinct values it has, and the values themselves when there are at most
+    `max_values` of them. Takes the same filters as
+    `/devices/{device_name}/collections`, so `total` is the number of matching
+    collections.
+    """
+    return collection_service.available_properties(
+        user=user,
+        device_name=device_name,
+        scope=scope,
+        properties=properties,
+        activity_type=activity_type,
+        source=source,
+        activity_id=activity_id,
+        max_values=max_values,
+    )
 
 
 @router.get(
