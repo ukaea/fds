@@ -24,6 +24,7 @@ from app.models.collection import (
     CollectionUpdate,
 )
 from app.models.dataset import DatasetRead
+from app.models.scope import CatalogueScope, DeviceScope
 from app.services.exceptions import ResourceNotFoundError
 
 router = APIRouter()
@@ -56,12 +57,17 @@ def read_collections_global(
     *,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
+    scope: CatalogueScope = CatalogueScope.ALL,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
 ) -> list[CollectionRead]:
-    """Retrieve all global Collections accessible to the current user.
+    """Retrieve every Collection accessible to the current user.
+
+    A collection is attached to a shot, to a device as a whole, or to neither,
+    in which case it is global. All of them are listed unless `scope` asks for
+    one kind: `global`, `device` or `shot`.
 
     `property` filters on the Collection's own `scientific_metadata`. Use `elm`
     to match any collection that carries that property, or `elm:type-I` to match
@@ -70,7 +76,7 @@ def read_collections_global(
     each.
     """
     collections = collection_service.get_multi(
-        user=user, offset=offset, limit=limit, properties=properties
+        user=user, scope=scope, offset=offset, limit=limit, properties=properties
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
 
@@ -166,12 +172,17 @@ def read_collections_device(
     device_name: str,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
+    scope: DeviceScope = DeviceScope.ALL,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
 ) -> list[CollectionRead]:
-    """Retrieve all device-level Collections accessible to the current user.
+    """Retrieve a device's Collections that the current user may read.
+
+    These are the collections attached to the device as a whole and those
+    attached to its shots. `scope=device` lists only the first, `scope=shot`
+    only the second.
 
     `property` filters on the Collection's own `scientific_metadata`. Use `elm`
     to match any collection that carries that property, or `elm:type-I` to match
@@ -180,7 +191,12 @@ def read_collections_device(
     each.
     """
     collections = collection_service.get_collections_for_device(
-        device_name, user=user, offset=offset, limit=limit, properties=properties
+        device_name,
+        user=user,
+        scope=scope,
+        offset=offset,
+        limit=limit,
+        properties=properties,
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
 

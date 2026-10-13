@@ -106,6 +106,37 @@ def test_read_global_collections(
     assert "run-b" in names
 
 
+def test_read_all_collections_by_scope(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    """GET /collections lists every kind of Collection unless `scope` picks one."""
+    _make_device(session)
+    _make_shot(session)
+    _make_collection(session, "global-col")
+    _make_collection(session, "device-col", device="DEV")
+    _make_collection(session, "shot-col", device="DEV", shot_id="s1")
+
+    response = test_client.get("/v1/collections", headers=admin_user_token)
+    assert response.status_code == 200
+    assert {c["name"] for c in response.json()} == {
+        "global-col",
+        "device-col",
+        "shot-col",
+    }
+
+    response = test_client.get("/v1/collections?scope=global", headers=admin_user_token)
+    assert response.status_code == 200
+    assert [c["name"] for c in response.json()] == ["global-col"]
+
+    response = test_client.get("/v1/collections?scope=device", headers=admin_user_token)
+    assert response.status_code == 200
+    assert [c["name"] for c in response.json()] == ["device-col"]
+
+    response = test_client.get("/v1/collections?scope=shot", headers=admin_user_token)
+    assert response.status_code == 200
+    assert [c["name"] for c in response.json()] == ["shot-col"]
+
+
 def test_read_global_collection_by_name(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
@@ -146,7 +177,7 @@ def test_create_device_collection(
 def test_read_device_collections(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
-    """GET /devices/{device}/collections returns only device-level Collections."""
+    """GET /devices/{device}/collections leaves out global Collections."""
     _make_device(session)
     _make_collection(session, "d-col-1", device="DEV")
     _make_collection(session, "global-col")
@@ -156,6 +187,38 @@ def test_read_device_collections(
     names = [c["name"] for c in response.json()]
     assert "d-col-1" in names
     assert "global-col" not in names
+
+
+def test_read_device_collections_by_scope(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    """GET /devices/{device}/collections includes its shots' Collections."""
+    _make_device(session)
+    _make_shot(session)
+    _make_collection(session, "device-col", device="DEV")
+    _make_collection(session, "shot-col", device="DEV", shot_id="s1")
+
+    response = test_client.get("/v1/devices/DEV/collections", headers=admin_user_token)
+    assert response.status_code == 200
+    assert {c["name"] for c in response.json()} == {"device-col", "shot-col"}
+
+    response = test_client.get(
+        "/v1/devices/DEV/collections?scope=device", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    assert [c["name"] for c in response.json()] == ["device-col"]
+
+    response = test_client.get(
+        "/v1/devices/DEV/collections?scope=shot", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    assert [c["name"] for c in response.json()] == ["shot-col"]
+
+    # Nothing under a device is global.
+    response = test_client.get(
+        "/v1/devices/DEV/collections?scope=global", headers=admin_user_token
+    )
+    assert response.status_code == 422
 
 
 def test_read_device_collection_by_name(

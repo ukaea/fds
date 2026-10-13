@@ -121,6 +121,21 @@ Create a Collection, then add its member Datasets by id, one bodyless `POST` per
     }
     ```
 
+## Listing collections
+
+| Route | Returns |
+| --- | --- |
+| `GET /collections` | Every collection in the catalogue |
+| `GET /devices/{device}/collections` | Every collection the device hosts, shot-level and device-level |
+| `GET /devices/{device}/shots/{shot}/collections` | The collections of one shot |
+
+As with [datasets](dataset.md#listing-datasets), a collection is attached to a shot, to a device as a whole, or to neither, in which case it is global. The first two routes list all of these by default. Add `scope` to list only one kind: `global` (only `GET /collections` accepts this), `device` or `shot`.
+
+```bash
+curl "$API/collections?scope=global"               # global collections
+curl "$API/devices/mast/collections?scope=device"  # mast's device-level collections
+```
+
 ## Reading members
 
 A collection read inlines its first 100 member Datasets as `datasets` and its first 100 child Collections as `child_collections`, ordered by id. Children are listed without their own members.

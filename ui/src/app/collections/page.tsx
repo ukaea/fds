@@ -49,6 +49,11 @@ function CollectionCard({ col }: { col: Collection }) {
         <span className="px-2.5 py-0.5 rounded-full border text-foreground bg-muted border-border">
           {col.effective_access_level || col.access_level}
         </span>
+        {col.shot_id && (
+          <span className="px-2.5 py-0.5 rounded-full border text-foreground bg-muted border-border">
+            shot {col.shot_id}
+          </span>
+        )}
         {!!col.datasets?.length && (
           <span className="flex items-center gap-1">
             <Database className="w-3.5 h-3.5" />
@@ -136,7 +141,7 @@ export default function CollectionsPage() {
           Collections group datasets into a single citable unit
           (<code className="text-foreground">dcat:Catalog</code>): the outputs of a run, a curated
           selection, or the contents of a store. Global collections are listed first, then each
-          device&apos;s. A shot&apos;s own collections are listed on the shot.
+          device&apos;s, including those on its shots.
         </p>
       </div>
 
@@ -148,7 +153,7 @@ export default function CollectionsPage() {
             scope="global"
             title="Global"
             icon={<Globe className="w-4 h-4 text-muted-foreground" />}
-            url={`${API_BASE}/collections`}
+            url={`${API_BASE}/collections?scope=global`}
             onLoaded={onLoaded}
           />
           {devices?.map((device) => (

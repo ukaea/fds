@@ -25,6 +25,7 @@ from app.models.collection import (
 from app.models.dataset import Dataset
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
+from app.models.scope import CatalogueScope, DeviceScope
 from app.models.source import Source
 from app.services.base_service import BaseService
 from app.services.dataset_service import DatasetService
@@ -35,7 +36,7 @@ from app.services.exceptions import (
     ForbiddenError,
     ResourceNotFoundError,
 )
-from app.services.filters import property_clauses
+from app.services.filters import property_clauses, scope_clauses
 from app.services.jsonld import map_collection_to_dcat
 from app.services.shot_service import ShotService
 from app.services.visibility import read_page
@@ -200,16 +201,23 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         self,
         user: AuthenticatedUser = ANONYMOUS_USER,
         *,
+        scope: CatalogueScope = CatalogueScope.ALL,
         offset: int = 0,
         limit: int = 100,
         properties: list[str] | None = None,
     ) -> Sequence[Collection]:
-        """Return the global list of Collections, filtered by access level."""
+        """Return every Collection, filtered by access level.
+
+        ``scope`` picks one kind: ``GLOBAL`` for the collections attached to no
+        device, ``DEVICE`` for those attached to a device but not to a shot,
+        ``SHOT`` for those attached to a shot.
+        """
         statement = (
             select(Collection)
             .where(
-                col(Collection.device_name).is_(None),
-                col(Collection.shot_id).is_(None),
+                *scope_clauses(
+                    col(Collection.device_name), col(Collection.shot_id), scope
+                ),
                 *property_clauses(Collection.scientific_metadata, properties),
             )
             .order_by(col(Collection.id))
@@ -274,16 +282,24 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         self,
         device_name: str,
         user: AuthenticatedUser = ANONYMOUS_USER,
+        scope: DeviceScope = DeviceScope.ALL,
         offset: int = 0,
         limit: int = 100,
         properties: list[str] | None = None,
     ) -> Sequence[Collection]:
-        """Return device-level Collections (not tied to any shot), filtered by access."""
+        """Return a device's Collections, filtered by access level.
+
+        These are the collections attached to the device as a whole and those
+        attached to its shots. ``scope`` picks one of the two: ``DEVICE`` or
+        ``SHOT``.
+        """
         statement = (
             select(Collection)
             .where(
                 Collection.device_name == normalise_device_name(device_name),
-                col(Collection.shot_id).is_(None),
+                *scope_clauses(
+                    col(Collection.device_name), col(Collection.shot_id), scope
+                ),
                 *property_clauses(Collection.scientific_metadata, properties),
             )
             .order_by(col(Collection.id))
