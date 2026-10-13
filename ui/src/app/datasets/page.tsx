@@ -33,16 +33,20 @@ export default function DatasetsPage() {
     { keepPreviousData: true }
   );
 
+  // Each section requests only its own datasets. Filtering one list of every
+  // dataset would miss any past the first thousand, the most one request returns.
+  const { data: globalAll } = useSWR<Dataset[]>(
+    `${API_BASE}/datasets?scope=global&limit=1000`,
+    fetcher
+  );
+
   const query = searchQuery.toLowerCase();
   const matches = (text?: string) => (text ?? '').toLowerCase().includes(query);
 
-  const globalDatasets = (allDatasets ?? []).filter((d) => !d.device_name && matches(d.name));
+  const globalDatasets = (globalAll ?? []).filter((d) => matches(d.name));
   const filteredDevices = devices?.filter(
     (device) => matches(device.name) || matches(device.title) || matches(device.description)
   );
-  // Device-level datasets only (shot-level datasets live under each shot).
-  const deviceDatasets = (name: string) =>
-    (allDatasets ?? []).filter((d) => d.device_name === name && !d.shot_id);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -184,51 +188,58 @@ export default function DatasetsPage() {
 
           {!devicesLoading && !devicesError && filteredDevices && filteredDevices.length > 0 && (
             <div className="space-y-4">
-              {filteredDevices.map((device) => {
-                const datasets = deviceDatasets(device.name);
-                return (
-                  <div key={device.name} className="card overflow-hidden">
-                    <div className="p-6 bg-muted/30">
-                      <div className="flex items-center justify-between">
-                        <Link href={`/devices/${device.name}`} className="flex items-center gap-3 group">
-                          <div className="bg-muted p-2 rounded-lg text-foreground">
-                            <Server className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-                              {device.title || device.name}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              {device.description || 'No description available'}
-                            </p>
-                          </div>
-                        </Link>
-                      </div>
-                    </div>
-                    <div className="p-6">
-                      <div className="text-sm text-muted-foreground mb-3">
-                        <span className="font-medium text-foreground">Device Datasets:</span>
-                      </div>
-                      {datasets.length > 0 ? (
-                        <DeviceDatasets datasets={datasets} />
-                      ) : (
-                        <div className="text-center py-6 bg-card/30 rounded-lg border border-dashed border-border">
+              {filteredDevices.map((device) => (
+                <div key={device.name} className="card overflow-hidden">
+                  <div className="p-6 bg-muted/30">
+                    <div className="flex items-center justify-between">
+                      <Link href={`/devices/${device.name}`} className="flex items-center gap-3 group">
+                        <div className="bg-muted p-2 rounded-lg text-foreground">
+                          <Server className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+                            {device.title || device.name}
+                          </h3>
                           <p className="text-sm text-muted-foreground">
-                            No device-level datasets for {device.title || device.name}.
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Navigate to shots to view shot-level datasets.
+                            {device.description || 'No description available'}
                           </p>
                         </div>
-                      )}
+                      </Link>
                     </div>
                   </div>
-                );
-              })}
+                  <div className="p-6">
+                    <div className="text-sm text-muted-foreground mb-3">
+                      <span className="font-medium text-foreground">Device Datasets:</span>
+                    </div>
+                    <DeviceLevelDatasets device={device} />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// The device's datasets that are not attached to a shot. A shot's datasets are
+// listed on the shot's page.
+function DeviceLevelDatasets({ device }: { device: Device }) {
+  const { data: datasets } = useSWR<Dataset[]>(
+    `${API_BASE}/devices/${device.name}/datasets?scope=device&limit=1000`,
+    fetcher
+  );
+  if (!datasets) return null;
+  if (datasets.length > 0) return <DeviceDatasets datasets={datasets} />;
+  return (
+    <div className="text-center py-6 bg-card/30 rounded-lg border border-dashed border-border">
+      <p className="text-sm text-muted-foreground">
+        No device-level datasets for {device.title || device.name}.
+      </p>
+      <p className="text-xs text-muted-foreground mt-1">
+        Navigate to shots to view shot-level datasets.
+      </p>
     </div>
   );
 }

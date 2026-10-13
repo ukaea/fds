@@ -21,7 +21,6 @@ from app.models.dataset import (
     DatasetDerivationRead,
     DatasetLineageNode,
     DatasetRead,
-    DatasetScope,
     DatasetUpdate,
 )
 from app.models.distribution import (
@@ -29,6 +28,7 @@ from app.models.distribution import (
     DistributionRead,
     DistributionUpdate,
 )
+from app.models.scope import CatalogueScope, DeviceScope
 from app.models.source import SourceRead
 from app.services.exceptions import ResourceNotFoundError
 
@@ -63,6 +63,7 @@ def read_datasets_global(
     *,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
+    scope: CatalogueScope = CatalogueScope.ALL,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
@@ -74,7 +75,11 @@ def read_datasets_global(
     shot_properties: Annotated[list[str] | None, Query(alias="shot_property")] = None,
 ) -> list[DatasetRead]:
     """
-    Retrieve global datasets.
+    Retrieve every dataset accessible to the current user.
+
+    A dataset is attached to a shot, to a device as a whole, or to neither, in
+    which case it is global. All of them are listed unless `scope` asks for one
+    kind: `global`, `device` or `shot`.
 
     `property` filters on the dataset's own `scientific_metadata`. Use `elm` to
     match any dataset that carries that property, or `elm:type-I` to match a
@@ -87,6 +92,7 @@ def read_datasets_global(
     """
     datasets = dataset_service.get_multi(
         user=user,
+        scope=scope,
         offset=offset,
         limit=limit,
         name=name,
@@ -312,7 +318,7 @@ def read_datasets_device(
     device_name: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
-    scope: DatasetScope = DatasetScope.ALL,
+    scope: DeviceScope = DeviceScope.ALL,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,

@@ -23,7 +23,6 @@ from app.models.dataset import (
     DatasetDerivationCreate,
     DatasetLineageNode,
     DatasetRead,
-    DatasetScope,
     DatasetUpdate,
 )
 from app.models.device import Device
@@ -31,6 +30,7 @@ from app.models.distribution import Distribution, DistributionRead
 from app.models.file_access import CredentialRequest, anonymous_storage_options
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.policy import AccessLevel
+from app.models.scope import CatalogueScope, DeviceScope
 from app.models.shot import Shot
 from app.models.storage_options import derive_storage_options_type
 from app.services.annotation_service import AnnotationService
@@ -43,7 +43,7 @@ from app.services.exceptions import (
     ResourceNotFoundError,
 )
 from app.services.file_access_service import FileAccessService
-from app.services.filters import property_clauses
+from app.services.filters import property_clauses, scope_clauses
 from app.services.jsonld import map_dataset_to_dcat
 from app.services.reference_service import (
     CALIBRATION,
@@ -101,6 +101,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         self,
         user: AuthenticatedUser = ANONYMOUS_USER,
         *,
+        scope: CatalogueScope = CatalogueScope.ALL,
         offset: int = 0,
         limit: int = 100,
         name: str | None = None,
@@ -108,14 +109,20 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         shot_properties: list[str] | None = None,
     ) -> Sequence[Dataset]:
         """
-        Global list of datasets. Filters by access level.
+        Every dataset, whatever its scope. Filters by access level.
+
+        ``scope`` narrows it: ``GLOBAL`` to the datasets attached to no device,
+        ``DEVICE`` to those belonging to a device as a whole, ``SHOT`` to those
+        on a shot.
 
         ``properties`` filters on the dataset's own properties;
         ``shot_properties`` on those of its parent shot. A dataset with no shot
         never matches ``shot_properties``. To scope to one device, use
         ``get_datasets_for_device`` rather than filtering here.
         """
-        statement = select(self.model)
+        statement = select(self.model).where(
+            *scope_clauses(col(Dataset.device_name), col(Dataset.shot_id), scope)
+        )
         if name is not None:
             statement = statement.where(self.model.name == name)
         statement = statement.where(
@@ -604,7 +611,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         self,
         device_name: str,
         user: AuthenticatedUser = ANONYMOUS_USER,
-        scope: DatasetScope = DatasetScope.ALL,
+        scope: DeviceScope = DeviceScope.ALL,
         offset: int = 0,
         limit: int = 100,
         name: str | None = None,
@@ -626,12 +633,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         with ``scope=DEVICE`` matches nothing.
         """
         statement = select(Dataset).where(
-            Dataset.device_name == normalise_device_name(device_name)
+            Dataset.device_name == normalise_device_name(device_name),
+            *scope_clauses(col(Dataset.device_name), col(Dataset.shot_id), scope),
         )
-        if scope is DatasetScope.DEVICE:
-            statement = statement.where(col(Dataset.shot_id).is_(None))
-        elif scope is DatasetScope.SHOT:
-            statement = statement.where(col(Dataset.shot_id).is_not(None))
         if name is not None:
             statement = statement.where(Dataset.name == name)
         statement = statement.where(

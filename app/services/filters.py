@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Numeric, and_, case, cast, func, literal, literal_column, or_
 
 from app.models.policy import AccessLevel
+from app.models.scope import CatalogueScope, DeviceScope
 from app.services.exceptions import FDSValidationError
 
 PROPERTY_SEPARATOR = ":"
@@ -242,3 +243,24 @@ def policy_tuple_clause(
             conditions.append(cast(column, JSONB) == literal(value, JSONB))
 
     return and_(*conditions)
+
+
+def scope_clauses(
+    device_column: Any, shot_column: Any, scope: CatalogueScope | DeviceScope
+) -> list[ColumnElement[bool]]:
+    """The clauses that keep only the kind of record ``scope`` asks for.
+
+    A global record names no device, a device-level record names a device but no
+    shot, and a shot-level record names both. Which device a listing is under is
+    left to its own clauses, so ``DEVICE`` means the same under a device as at
+    the root.
+    """
+    match CatalogueScope(scope.value):
+        case CatalogueScope.GLOBAL:
+            return [device_column.is_(None)]
+        case CatalogueScope.DEVICE:
+            return [device_column.is_not(None), shot_column.is_(None)]
+        case CatalogueScope.SHOT:
+            return [shot_column.is_not(None)]
+        case CatalogueScope.ALL:
+            return []

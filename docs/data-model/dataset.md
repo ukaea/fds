@@ -154,15 +154,17 @@ same call:
 | `GET /devices/{device}/datasets` | Every dataset the device hosts, shot-level and device-level |
 | `GET /devices/{device}/shots/{shot}/datasets` | The datasets of one shot |
 
-The device listing covers the whole device by default. Narrow it with `scope`:
+A dataset is attached to a shot, to a device as a whole, or to neither, in which case it is global. The first two routes list all of these by default. Add `scope` to list only one kind:
 
-| `scope` | Returns |
+| `scope` | Lists |
 | --- | --- |
-| `all` (default) | Every dataset for the device |
-| `device` | Datasets belonging to the device as a whole rather than to any one shot |
-| `shot` | Datasets attached to one of the device's shots |
+| `all` (default) | Every dataset the route covers |
+| `global` | Global datasets. Only `GET /datasets` accepts this |
+| `device` | Datasets attached to a device as a whole, not to a shot |
+| `shot` | Datasets attached to a shot |
 
 ```bash
+curl "$API/datasets?scope=global"                # global datasets
 curl "$API/devices/mast/datasets"                # everything mast hosts
 curl "$API/devices/mast/datasets?scope=device"   # general device-level Datasets
 ```

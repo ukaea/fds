@@ -5,7 +5,7 @@ from sqlmodel import Session
 
 from app.auth.security import AuthenticatedUser
 from app.core.config import AzureStorageProvider
-from app.models.dataset import DatasetCreate, DatasetScope, DatasetUpdate
+from app.models.dataset import DatasetCreate, DatasetUpdate
 from app.models.device import DeviceCreate
 from app.models.file_access import (
     AzureCredentials,
@@ -14,6 +14,7 @@ from app.models.file_access import (
     S3Credentials,
 )
 from app.models.policy import AccessLevel
+from app.models.scope import DeviceScope
 from app.models.shot import ShotCreate
 from app.models.storage_options import (
     FsspecS3StorageOptions,
@@ -339,13 +340,13 @@ def test_get_datasets_for_device_scopes(
     assert {ds.id for ds in all_datasets} == {device_ds.id, shot_ds.id}
 
     device_only = dataset_service.get_datasets_for_device(
-        "Device X", user=admin_user, scope=DatasetScope.DEVICE
+        "Device X", user=admin_user, scope=DeviceScope.DEVICE
     )
     assert [ds.id for ds in device_only] == [device_ds.id]
     assert device_only[0].shot_id is None
 
     shot_only = dataset_service.get_datasets_for_device(
-        "Device X", user=admin_user, scope=DatasetScope.SHOT
+        "Device X", user=admin_user, scope=DeviceScope.SHOT
     )
     assert [ds.id for ds in shot_only] == [shot_ds.id]
     assert shot_only[0].shot_id == shot.id

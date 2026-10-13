@@ -241,6 +241,60 @@ def test_list_device_datasets_includes_shot_datasets(
     assert response.status_code == 422
 
 
+def test_list_all_datasets_by_scope(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    DeviceService(session).create(
+        DeviceCreate(name="LHD", type="Stellarator"), user=admin_user
+    )
+    ShotService(session).create(
+        ShotCreate(id="300", device_name="LHD"), user=admin_user
+    )
+    session.commit()
+
+    test_client.post(
+        "/v1/datasets/",
+        headers=admin_user_token,
+        json={"name": "constants", "level": 1, "url": "url_const"},
+    )
+    test_client.post(
+        "/v1/devices/LHD/datasets/",
+        headers=admin_user_token,
+        json={"name": "coil_geometry", "level": 0, "url": "url_geom"},
+    )
+    test_client.post(
+        "/v1/devices/LHD/shots/300/datasets/",
+        headers=admin_user_token,
+        json={"name": "electron_density", "level": 1, "url": "url_ne"},
+    )
+
+    response = test_client.get("/v1/datasets/", headers=admin_user_token)
+    assert response.status_code == 200
+    assert {ds["name"] for ds in response.json()} == {
+        "constants",
+        "coil_geometry",
+        "electron_density",
+    }
+
+    response = test_client.get("/v1/datasets/?scope=global", headers=admin_user_token)
+    assert response.status_code == 200
+    assert [ds["name"] for ds in response.json()] == ["constants"]
+
+    response = test_client.get("/v1/datasets/?scope=device", headers=admin_user_token)
+    assert response.status_code == 200
+    assert [ds["name"] for ds in response.json()] == ["coil_geometry"]
+
+    response = test_client.get("/v1/datasets/?scope=shot", headers=admin_user_token)
+    assert response.status_code == 200
+    assert [ds["name"] for ds in response.json()] == ["electron_density"]
+
+    # Nothing under a device is global.
+    response = test_client.get(
+        "/v1/devices/LHD/datasets/?scope=global", headers=admin_user_token
+    )
+    assert response.status_code == 422
+
+
 def test_read_global_dataset_by_name(test_client: TestClient, admin_user_token: dict):
     test_client.post(
         "/v1/datasets/",
