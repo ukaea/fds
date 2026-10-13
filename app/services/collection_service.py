@@ -6,7 +6,6 @@ from sqlmodel import Session, col, select
 
 from app.auth.access_control import (
     check_read,
-    get_effective_access_level,
     get_effective_policies,
     validate_policy_fields,
 )
@@ -22,7 +21,7 @@ from app.models.collection import (
     CollectionRead,
     CollectionUpdate,
 )
-from app.models.dataset import Dataset
+from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.scope import CatalogueScope, DeviceScope
@@ -39,7 +38,7 @@ from app.services.exceptions import (
 from app.services.filters import property_clauses, scope_clauses
 from app.services.jsonld import map_collection_to_dcat
 from app.services.shot_service import ShotService
-from app.services.visibility import read_page
+from app.services.visibility import read_page, read_pages_by_group
 
 logger = structlog.get_logger(__name__)
 
@@ -477,30 +476,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         ``include_storage_options=True`` to include short-lived credentials on
         each dataset.
         """
-        member_datasets = self.get_member_datasets(
-            collection.id, user, limit=INLINE_MEMBERS
-        )
-        dataset_reads = (
-            DatasetService(self.session).to_read_models(
-                member_datasets,
-                include_storage_options=include_storage_options,
-                user=user,
-            )
-            or None
-        )
-        children = self.get_child_collections(collection.id, user, limit=INLINE_MEMBERS)
-        child_reads = self.to_summary_read_models(children) or None
-
-        return CollectionRead.model_validate(
-            collection,
-            update={
-                "effective_access_level": get_effective_access_level(
-                    collection, self.session
-                ),
-                "datasets": dataset_reads,
-                "child_collections": child_reads,
-            },
-        )
+        (read,) = self.to_read_models([collection], include_storage_options, user)
+        return read
 
     def to_read_models(
         self,
@@ -508,12 +485,66 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         include_storage_options: bool = False,
         user: AuthenticatedUser = ANONYMOUS_USER,
     ) -> list[CollectionRead]:
-        """Batch convert Collection ORM objects to ``CollectionRead`` DTOs."""
-        return [
-            self.to_read_model(
-                c, include_storage_options=include_storage_options, user=user
+        """Batch convert Collection ORM objects to ``CollectionRead`` DTOs.
+
+        Members are read for the whole batch at once, so a listing issues the
+        same statements however many collections it returns.
+        """
+        ids = [c.id for c in collections if c.id is not None]
+        members = read_pages_by_group(
+            self.session,
+            Dataset,
+            select(Dataset)
+            .join(CollectionDataset, col(CollectionDataset.dataset_id) == Dataset.id)
+            .where(col(CollectionDataset.collection_id).in_(ids)),
+            col(CollectionDataset.collection_id),
+            user,
+            limit=INLINE_MEMBERS,
+        )
+        children = read_pages_by_group(
+            self.session,
+            Collection,
+            select(Collection)
+            .join(CollectionMember, col(CollectionMember.child_id) == Collection.id)
+            .where(col(CollectionMember.parent_id).in_(ids)),
+            col(CollectionMember.parent_id),
+            user,
+            limit=INLINE_MEMBERS,
+        )
+
+        # A dataset or child in several of these collections is read once.
+        unique_members = {d.id: d for page in members.values() for d in page}
+        member_reads: dict[int | None, DatasetRead] = {
+            read.id: read
+            for read in DatasetService(self.session).to_read_models(
+                list(unique_members.values()),
+                include_storage_options=include_storage_options,
+                user=user,
             )
-            for c in collections
+        }
+        unique_children = {c.id: c for page in children.values() for c in page}
+        child_reads: dict[int | None, CollectionRead] = {
+            read.id: read
+            for read in self.to_summary_read_models(list(unique_children.values()))
+        }
+        policies = get_effective_policies(collections, self.session)
+
+        return [
+            CollectionRead.model_validate(
+                collection,
+                update={
+                    "effective_access_level": policy.access_level,
+                    "datasets": [
+                        member_reads[d.id] for d in members.get(collection.id, [])
+                    ]
+                    or None,
+                    "child_collections": [
+                        child_reads[c.id] for c in children.get(collection.id, [])
+                    ]
+                    or None,
+                },
+            )
+            for collection, policy in zip(collections, policies, strict=True)
         ]
 
     def _check_write_auth(

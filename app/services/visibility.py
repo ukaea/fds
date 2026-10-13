@@ -5,7 +5,18 @@ from typing import Any
 from sqlalchemy import ColumnElement
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import aliased
-from sqlmodel import Session, and_, cast, col, exists, false, or_, select, tuple_
+from sqlmodel import (
+    Session,
+    and_,
+    cast,
+    col,
+    exists,
+    false,
+    func,
+    or_,
+    select,
+    tuple_,
+)
 from sqlmodel.sql.expression import Select, SelectOfScalar
 
 from app.auth.access_control import (
@@ -131,26 +142,37 @@ def read_page[T: Listed](
     if limit is not None:
         page = page.limit(limit)
     rows = list(session.exec(page).all())
-
-    restricted = [
-        match
-        for match, policy in readable
-        if policy.access_level == AccessLevel.RESTRICTED
-    ]
-    columns = _COLUMNS[model]
-    if restricted and rows:
-        keys = [
-            tuple(getattr(row, column.key) for column in columns.key) for row in rows
-        ]
-        listed = session.exec(
-            Select(*columns.key).where(tuple_(*columns.key).in_(keys), or_(*restricted))
-        ).all()
-        for row_key in listed:
-            record_restricted_access(
-                columns.table, resource_id(row_key), ReadTier.LISTED
-            )
+    _record_restricted_listed(session, model, readable, rows)
     record_returned(len(rows))
     return rows
+
+
+def read_pages_by_group[T: Listed](
+    session: Session,
+    model: type[T],
+    statement: SelectOfScalar[T],
+    group: Any,
+    user: AuthenticatedUser,
+    *,
+    limit: int,
+) -> dict[Any, list[T]]:
+    """``read_page`` for many groups at once, in a fixed number of queries.
+
+    ``statement`` selects ``model`` rows for every group wanted, and ``group`` is
+    the column that names each row's group. Each group gets the first ``limit``
+    rows ``user`` may read, in key order, as ``read_page`` would return for that
+    group alone.
+    """
+    readable = _readable(session, model, user, statement)
+    if not readable:
+        record_returned(0)
+        return {}
+    visible = statement.where(or_(*(match for match, _ in readable)))
+    pages = _first_rows_by_group(session, model, visible, group, limit)
+    rows = [row for page in pages.values() for row in page]
+    _record_restricted_listed(session, model, readable, rows)
+    record_returned(len(rows))
+    return pages
 
 
 def readable_only[T: Listed](
@@ -167,6 +189,62 @@ def readable_only[T: Listed](
         result.append(record)
     record_returned(len(result))
     return result
+
+
+def _first_rows_by_group[T: Listed](
+    session: Session,
+    model: type[T],
+    statement: SelectOfScalar[T],
+    group: Any,
+    limit: int,
+) -> dict[Any, list[T]]:
+    """The first ``limit`` rows of ``statement`` in each group, in key order.
+
+    Each row is numbered by key within its group, and rows numbered past
+    ``limit`` are left out.
+    """
+    key = _COLUMNS[model].key
+    numbered = (
+        statement.add_columns(
+            group.label("group_id"),
+            func.row_number().over(partition_by=group, order_by=key).label("position"),
+        )
+        .order_by(None)
+        .subquery()
+    )
+    rows = session.exec(
+        select(aliased(model, numbered), numbered.c.group_id)
+        .where(numbered.c.position <= limit)
+        .order_by(numbered.c.group_id, numbered.c.position)
+    ).all()
+
+    pages: dict[Any, list[T]] = {}
+    for row, group_id in rows:
+        pages.setdefault(group_id, []).append(row)
+    return pages
+
+
+def _record_restricted_listed(
+    session: Session,
+    model: type[Listed],
+    readable: list[tuple[ColumnElement[bool], EffectivePolicy]],
+    rows: Sequence[Listed],
+) -> None:
+    """Record in the audit trail each restricted row among ``rows``, as listed."""
+    restricted = [
+        match
+        for match, policy in readable
+        if policy.access_level == AccessLevel.RESTRICTED
+    ]
+    if not restricted or not rows:
+        return
+    columns = _COLUMNS[model]
+    keys = [tuple(getattr(row, column.key) for column in columns.key) for row in rows]
+    listed = session.exec(
+        Select(*columns.key).where(tuple_(*columns.key).in_(keys), or_(*restricted))
+    ).all()
+    for row_key in listed:
+        record_restricted_access(columns.table, resource_id(row_key), ReadTier.LISTED)
 
 
 def _readable(

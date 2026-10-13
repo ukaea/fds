@@ -695,6 +695,60 @@ def test_collection_read_inlines_only_the_first_page_of_members(
     assert len(ld["dcat:catalog"]) == 2
 
 
+def test_listing_caps_inlined_members_per_collection(
+    test_client: TestClient, session: Session, monkeypatch
+):
+    """Each listed collection inlines its own first page, not a share of one."""
+    monkeypatch.setattr(collection_service_module, "INLINE_MEMBERS", 2)
+    parent, datasets, children = _public_collection_with_members(session)
+    service = CollectionService(session)
+    sibling = service.create(
+        CollectionCreate(name="sibling", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    assert sibling.id is not None
+    # Added in reverse id order: the inlined page must still be in id order.
+    for ds in reversed(datasets):
+        service.add_dataset(sibling.id, ds, admin_user)
+
+    listed = test_client.get("/v1/collections?scope=global").json()
+    by_id = {c["id"]: c for c in listed}
+
+    assert [d["id"] for d in by_id[parent]["datasets"]] == datasets[:2]
+    assert [c["id"] for c in by_id[parent]["child_collections"]] == children[:2]
+    # A dataset in both collections is inlined in both.
+    assert [d["id"] for d in by_id[sibling.id]["datasets"]] == datasets[:2]
+    assert "child_collections" not in by_id[sibling.id]
+
+
+def test_listing_records_restricted_members_it_inlines(
+    test_client: TestClient, session: Session, admin_user_token: dict, log_lines
+):
+    parent, _, _ = _public_collection_with_members(session)
+    service = CollectionService(session)
+    restricted = DatasetService(session).create(
+        DatasetCreate(
+            name="thomson",
+            url="s3://bucket/thomson",
+            device_name="DEV",
+            access_level=AccessLevel.RESTRICTED,
+        ),
+        user=admin_user,
+    )
+    assert restricted.id is not None
+    service.add_dataset(parent, restricted.id, admin_user)
+    log_lines()
+
+    response = test_client.get("/v1/collections?scope=global", headers=admin_user_token)
+    assert response.status_code == 200, response.text
+    (line,) = [
+        entry
+        for entry in log_lines()
+        if entry.get("logger") == "fds.audit" and entry["event"] == "request"
+    ]
+    assert line["restricted_listed"] == {"dataset": [restricted.id]}
+
+
 def test_collection_members_listed_only_where_readable(
     test_client: TestClient, session: Session
 ):

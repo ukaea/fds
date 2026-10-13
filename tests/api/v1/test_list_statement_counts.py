@@ -142,6 +142,8 @@ def catalogue(session: Session, admin_user: AuthenticatedUser) -> int:
         ("/v1/devices/MAST/shots", {}),
         ("/v1/devices/MAST/shots", {"include_device": True}),
         ("/v1/devices/MAST/shots", {"include_annotations": True}),
+        ("/v1/collections", {}),
+        ("/v1/devices/MAST/collections", {}),
         ("/v1/collections/{parent}/collections", {}),
     ],
 )
