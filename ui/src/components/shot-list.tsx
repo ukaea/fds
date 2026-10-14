@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { preload } from 'swr';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Calendar, ChevronRight, Cpu, Search } from 'lucide-react';
 import { fetcher, API_BASE, FetchError } from '@/lib/api';
 import { AvailableProperties, Collection, Shot } from '@/lib/types';
 import { propertyQuery, withQuery } from '@/lib/properties';
-import { usePagedList } from '@/lib/use-paged-list';
+import { pageUrl, usePagedList } from '@/lib/use-paged-list';
 import { PropertyFilter } from '@/components/property-filter';
 import { SidePanelLayout } from '@/components/side-panel-layout';
 import { LoadMore } from '@/components/load-more';
@@ -103,13 +103,19 @@ export function ShotList({
     fetcher
   );
 
+  // The query for a selection of values, with the ranges and ID prefix as they
+  // stand. Both the requests below and the prefetch on hover build it here, so
+  // a prefetch is always for exactly the request a click then makes.
+  const queryFor = (tokens: string[]) =>
+    [
+      propertyQuery('property', tokens),
+      rangeQuery(ranges),
+      idPrefix.trim() ? `id_prefix=${encodeURIComponent(idPrefix.trim())}` : '',
+    ].filter(Boolean);
+
   // Filtered: an exact count of the matches. The listing cannot give one, since
   // its page is capped well below the number of shots that may match.
-  const filterQuery = [
-    propertyQuery('property', propertyTokens),
-    rangeQuery(ranges),
-    idPrefix.trim() ? `id_prefix=${encodeURIComponent(idPrefix.trim())}` : '',
-  ].filter(Boolean);
+  const filterQuery = queryFor(propertyTokens);
 
   const { data: matching } = useSWR<AvailableProperties>(
     deviceName && filterQuery.length > 0
@@ -133,6 +139,17 @@ export function ShotList({
 
   const total = properties?.total ?? 0;
   const matched = filterQuery.length > 0 ? matching?.total ?? 0 : total;
+
+  // Fetches what selecting a value would show while the pointer rests on it:
+  // the count and the first page of shots, under the urls the requests above
+  // will ask for, so a click finds both already answered. Nothing to fetch when
+  // the selection would be empty: the unfiltered count and page are loaded.
+  const preview = (tokens: string[]) => {
+    const query = queryFor(tokens);
+    if (query.length === 0) return;
+    preload(withQuery(shotPropertiesUrl(deviceName), ...query), fetcher);
+    preload(pageUrl(withQuery(shotsUrl(deviceName), ...query), 0, PAGE_SIZE), fetcher);
+  };
 
   // Which shots a simulation modelled, to mark them in the list. One request for
   // the device rather than one per shot; past the first thousand runs a shot may
@@ -163,6 +180,8 @@ export function ShotList({
                 ranges={ranges}
                 onRangesChange={setRanges}
                 valuesUrl={shotPropertyValuesUrl(deviceName)}
+                noun="shot"
+                onPreview={preview}
               />
             )}
             {aside}

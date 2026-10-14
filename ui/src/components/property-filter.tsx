@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
@@ -13,24 +13,94 @@ const IDLE = 'bg-card text-muted-foreground border-border hover:text-foreground 
 const ACTIVE = 'bg-foreground text-background border-foreground';
 const HEADING = 'text-muted-foreground uppercase text-[11px] font-bold tracking-wider';
 
+// Shown after a short rest rather than at once, so moving the pointer along a
+// row to reach one pill does not flash the count of every pill it crosses.
+// Keyboard focus shows it too, but not the focus a click leaves behind, or a
+// clicked pill's count would stay open while the pointer moves on.
+const COUNT =
+  'pointer-events-none absolute left-0 top-full z-20 mt-1 whitespace-nowrap rounded-md border border-border bg-card px-2 py-1 text-[11px] text-foreground shadow-lg invisible opacity-0 transition-opacity group-hover:visible group-hover:opacity-100 group-hover:delay-300 group-has-[:focus-visible]:visible group-has-[:focus-visible]:opacity-100';
+
+// How long the pointer or focus rests on an option before its result is
+// fetched. Long enough that crossing a row fetches nothing, short enough that
+// the result is usually back before the click.
+const PREVIEW_DELAY_MS = 150;
+
+/**
+ * Event handlers that fetch an option's result once the pointer or focus has
+ * rested on it, so the request a click makes is already answered when the
+ * click comes. A click before then cancels it, since the click fetches the
+ * same thing itself.
+ *
+ * One timer per control, because only one of its options can be under the
+ * pointer at a time.
+ */
+function usePreview() {
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const cancel = () => clearTimeout(timer.current);
+  return (preview?: () => void) => {
+    if (!preview) return {};
+    const start = () => {
+      cancel();
+      timer.current = setTimeout(preview, PREVIEW_DELAY_MS);
+    };
+    return {
+      onPointerEnter: start,
+      onFocus: start,
+      onPointerLeave: cancel,
+      onBlur: cancel,
+      onClickCapture: cancel,
+    };
+  };
+}
+
+function countText(count: number, noun: string): string {
+  return `${count} ${noun}${count !== 1 ? 's' : ''}`;
+}
+
+/**
+ * A value to select, with how many records carry it on hover or focus.
+ *
+ * The count is for the whole scope, not the current selection: it says what
+ * the value describes, and the shot count above the list already says what
+ * the selection returns.
+ */
 function Pill({
   label,
   active,
   onClick,
+  count,
+  noun = 'record',
+  onPreview,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
+  count?: number;
+  noun?: string;
+  onPreview?: () => void;
 }) {
-  return (
+  const id = useId();
+  const preview = usePreview();
+  const button = (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
+      aria-describedby={count !== undefined ? id : undefined}
+      {...preview(onPreview)}
       className={`${PILL} ${active ? ACTIVE : IDLE}`}
     >
       {label}
     </button>
+  );
+  if (count === undefined) return button;
+  return (
+    <span className="relative inline-block group">
+      {button}
+      <span role="tooltip" id={id} className={COUNT}>
+        {countText(count, noun)}
+      </span>
+    </span>
   );
 }
 
@@ -47,47 +117,70 @@ function PropertyName({ prop }: { prop: AvailableProperty }) {
  * means the same as selecting neither: a control whose options cancel out. The
  * segmented form says they are alternatives, and keeps all three reachable in
  * one click rather than cycling through them.
+ *
+ * The ends are rounded on the buttons rather than clipped by the border, which
+ * would also clip the counts that open below them.
  */
 function TriState({
   name,
   selected,
   onChange,
+  counts,
+  noun = 'record',
+  onPreview,
 }: {
   name: string;
   selected: string[];
   onChange: (selected: string[]) => void;
+  counts: Map<string, number>;
+  noun?: string;
+  onPreview?: (selected: string[]) => void;
 }) {
+  const id = useId();
+  const preview = usePreview();
   const yes = propertyToken(name, 'true');
   const no = propertyToken(name, 'false');
   const current = selected.includes(yes) ? yes : selected.includes(no) ? no : null;
 
-  const choose = (token: string | null) => {
+  const after = (token: string | null) => {
     const without = selected.filter((t) => t !== yes && t !== no);
-    onChange(token ? [...without, token] : without);
+    return token ? [...without, token] : without;
   };
 
-  const options: [string, string | null][] = [
-    ['any', null],
-    ['yes', yes],
-    ['no', no],
+  const options: [string, string | null, number | undefined][] = [
+    ['any', null, undefined],
+    ['yes', yes, counts.get('true')],
+    ['no', no, counts.get('false')],
   ];
 
   return (
-    <div className="inline-flex rounded-full border border-border overflow-hidden">
-      {options.map(([label, token]) => (
-        <button
-          key={label}
-          type="button"
-          aria-pressed={current === token}
-          onClick={() => choose(token)}
-          className={`text-xs px-2.5 py-1 transition-colors ${
-            current === token
-              ? 'bg-foreground text-background'
-              : 'bg-card text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          {label}
-        </button>
+    <div className="inline-flex rounded-full border border-border">
+      {options.map(([label, token, count], index) => (
+        <span key={label} className="relative inline-flex group">
+          <button
+            type="button"
+            aria-pressed={current === token}
+            aria-describedby={count !== undefined ? `${id}-${label}` : undefined}
+            onClick={() => onChange(after(token))}
+            {...preview(
+              onPreview && current !== token ? () => onPreview(after(token)) : undefined
+            )}
+            className={`text-xs px-2.5 py-1 transition-colors ${
+              index === 0 ? 'rounded-l-full' : ''
+            } ${index === options.length - 1 ? 'rounded-r-full' : ''} ${
+              current === token
+                ? 'bg-foreground text-background'
+                : 'bg-card text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+          </button>
+          {count !== undefined && (
+            <span role="tooltip" id={`${id}-${label}`} className={COUNT}>
+              {countText(count, noun)}
+            </span>
+          )}
+        </span>
       ))}
     </div>
   );
@@ -403,18 +496,30 @@ function TermRow({
   valuesUrl,
   selected,
   onChange,
+  noun,
+  onPreview,
 }: {
   prop: AvailableProperty;
   valuesUrl: (name: string, query: string) => string;
   selected: string[];
   onChange: (selected: string[]) => void;
+  noun?: string;
+  onPreview?: (selected: string[]) => void;
 }) {
-  const toggle = (token: string) =>
-    onChange(
-      selected.includes(token)
-        ? selected.filter((t) => t !== token)
-        : [...selected, token]
-    );
+  // The summary lists a property's values without how many records carry
+  // each, so the counts come from its values endpoint: one request per row,
+  // made with the panel so they are there before anything is hovered. A panel
+  // without a values endpoint shows no counts.
+  const { data: counted } = useSWR<PropertyValues>(
+    prop.values ? valuesUrl(prop.name, '') || null : null,
+    fetcher
+  );
+  const counts = new Map<string, number>(
+    counted?.values.map((entry) => [entry.value, entry.records])
+  );
+
+  const toggled = (token: string) =>
+    selected.includes(token) ? selected.filter((t) => t !== token) : [...selected, token];
 
   if (isBoolean(prop)) {
     return (
@@ -422,7 +527,14 @@ function TermRow({
         <div>
           <PropertyName prop={prop} />
         </div>
-        <TriState name={prop.name} selected={selected} onChange={onChange} />
+        <TriState
+          name={prop.name}
+          selected={selected}
+          onChange={onChange}
+          counts={counts}
+          noun={noun}
+          onPreview={onPreview}
+        />
       </div>
     );
   }
@@ -453,7 +565,10 @@ function TermRow({
               key={value}
               label={prop.unit ? `${value} ${prop.unit}` : value}
               active={selected.includes(token)}
-              onClick={() => toggle(token)}
+              onClick={() => onChange(toggled(token))}
+              count={counts.get(value)}
+              noun={noun}
+              onPreview={onPreview && (() => onPreview(toggled(token)))}
             />
           );
         })}
@@ -485,6 +600,8 @@ export function PropertyFilter({
   ranges = {},
   onRangesChange,
   valuesUrl,
+  noun,
+  onPreview,
 }: {
   // Only needed where two panels sit together and must be told apart.
   label?: string;
@@ -494,6 +611,11 @@ export function PropertyFilter({
   ranges?: Record<string, { min?: number; max?: number }>;
   onRangesChange?: (ranges: Record<string, { min?: number; max?: number }>) => void;
   valuesUrl?: (name: string, query: string) => string;
+  // What the counts count, in the singular: "shot" reads "3514 shots".
+  noun?: string;
+  // Called with the selection a click on the option under the pointer would
+  // make, so the caller can fetch that selection's results ahead of the click.
+  onPreview?: (selected: string[]) => void;
 }) {
   if (properties.length === 0) return null;
 
@@ -554,6 +676,8 @@ export function PropertyFilter({
                 valuesUrl={valuesUrl ?? noValues}
                 selected={selected}
                 onChange={onChange}
+                noun={noun}
+                onPreview={onPreview}
               />
               <span className="text-[11px] text-muted-foreground">
                 on {prop.dimension}
@@ -574,6 +698,8 @@ export function PropertyFilter({
                   valuesUrl={valuesUrl ?? noValues}
                   selected={selected}
                   onChange={onChange}
+                  noun={noun}
+                  onPreview={onPreview}
                 />
               ))}
           </div>
@@ -589,6 +715,8 @@ export function PropertyFilter({
                   valuesUrl={valuesUrl ?? noValues}
                   selected={selected}
                   onChange={onChange}
+                  noun={noun}
+                  onPreview={onPreview}
                 />
               ))}
           </div>

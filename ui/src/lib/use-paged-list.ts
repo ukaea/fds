@@ -2,6 +2,12 @@ import useSWRInfinite from 'swr/infinite';
 import { fetcher } from '@/lib/api';
 import { withQuery } from '@/lib/properties';
 
+// The url of one page, which is also the key SWR caches it under. A caller
+// prefetching a page builds its url here so the hook finds the prefetch.
+export function pageUrl(url: string, index: number, pageSize: number): string {
+  return withQuery(url, `offset=${index * pageSize}`, `limit=${pageSize}`);
+}
+
 /**
  * A listing read one page at a time and accumulated, for endless scroll.
  *
@@ -16,7 +22,7 @@ export function usePagedList<T>(url: string | null, pageSize: number) {
   const { data, error, isLoading, size, setSize } = useSWRInfinite<T[]>(
     (index, previous: T[] | null) => {
       if (!url || (previous && previous.length < pageSize)) return null;
-      return withQuery(url, `offset=${index * pageSize}`, `limit=${pageSize}`);
+      return pageUrl(url, index, pageSize);
     },
     fetcher,
     { keepPreviousData: true, revalidateFirstPage: false }
