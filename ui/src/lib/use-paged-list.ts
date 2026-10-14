@@ -23,12 +23,19 @@ export function usePagedList<T>(url: string | null, pageSize: number) {
   );
 
   const last = data?.[data.length - 1];
+  const done = !!last && last.length < pageSize;
   return {
     items: data?.flat(),
     error,
     isLoading,
-    done: !!last && last.length < pageSize,
+    done,
     loadingMore: !!data && data.length < size,
-    loadMore: () => setSize(size + 1),
+    // Asks for another page only once every page asked for so far has arrived.
+    // A LoadMore already in view calls this on every render, and each call
+    // restarts the fetch, so before the first page arrived a slow API never
+    // answered in time and the list was requested without end.
+    loadMore: () => {
+      if (data && data.length === size && !done) setSize(size + 1);
+    },
   };
 }
