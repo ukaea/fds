@@ -6,6 +6,7 @@ import { Providers } from "@/components/providers";
 import { UserMenu } from "@/components/user-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BrandMark } from "@/components/brand-mark";
+import { FdsVersion } from "@/components/fds-version";
 import { THEME_SCRIPT } from "@/lib/theme";
 
 const inter = Inter({ subsets: ['latin'] });
@@ -72,6 +73,7 @@ export default function RootLayout({
             <footer className="border-t border-border py-8 mt-auto">
               <div className="container mx-auto text-center text-sm text-muted-foreground">
                 Fusion Data Service
+                <FdsVersion prefix=" · " />
               </div>
             </footer>
           </div>
