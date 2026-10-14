@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.9](https://github.com/ukaea/fds/compare/v0.0.8...v0.0.9) (2026-10-14)
+
+
+### Features
+
+* Show the FDS version in the UI footer ([#205](https://github.com/ukaea/fds/issues/205)) ([985fbe9](https://github.com/ukaea/fds/commit/985fbe9814c0f1ee7aab60c3b4f5481ff1647c39))
+
+
+### Bug Fixes
+
+* Stop paged lists requesting their first page without end ([#203](https://github.com/ukaea/fds/issues/203)) ([53c528a](https://github.com/ukaea/fds/commit/53c528a9e973f1e261c15381427e9aaf312b47a0))
+
 ## [0.0.8](https://github.com/ukaea/fds/compare/v0.0.7...v0.0.8) (2026-10-13)
 
 
