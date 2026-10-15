@@ -425,6 +425,48 @@ def test_filtering_by_run_leaves_out_datasets_the_caller_cannot_read(
     assert [ds["name"] for ds in response.json()] == ["open_profiles"]
 
 
+def test_list_datasets_by_shot_id_prefix(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    DeviceService(session).create(
+        DeviceCreate(name="TCV", type="Tokamak"), user=admin_user
+    )
+    shots = ShotService(session)
+    shots.create(ShotCreate(id="30420", device_name="TCV"), user=admin_user)
+    shots.create(ShotCreate(id="30421", device_name="TCV"), user=admin_user)
+    shots.create(ShotCreate(id="30520", device_name="TCV"), user=admin_user)
+    datasets = DatasetService(session)
+    datasets.create(
+        DatasetCreate(name="eq_30420", level=2, device_name="TCV", shot_id="30420"),
+        user=admin_user,
+    )
+    datasets.create(
+        DatasetCreate(name="eq_30421", level=2, device_name="TCV", shot_id="30421"),
+        user=admin_user,
+    )
+    datasets.create(
+        DatasetCreate(name="eq_30520", level=2, device_name="TCV", shot_id="30520"),
+        user=admin_user,
+    )
+    datasets.create(
+        DatasetCreate(name="coil_geometry", level=1, device_name="TCV"),
+        user=admin_user,
+    )
+    session.commit()
+
+    response = test_client.get(
+        "/v1/datasets?shot_id_prefix=304", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    assert {ds["name"] for ds in response.json()} == {"eq_30420", "eq_30421"}
+
+    response = test_client.get(
+        "/v1/devices/TCV/datasets?shot_id_prefix=3052", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    assert [ds["name"] for ds in response.json()] == ["eq_30520"]
+
+
 def test_dataset_read_includes_a_summary_of_its_run(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):

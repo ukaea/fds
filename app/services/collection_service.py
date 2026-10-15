@@ -45,6 +45,7 @@ from app.services.filters import (
     activity_clauses,
     property_clauses,
     scope_clauses,
+    shot_id_prefix_clauses,
 )
 from app.services.jsonld import map_collection_to_dcat
 from app.services.shot_service import ShotService
@@ -223,6 +224,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         properties: list[str] | None = None,
         activity_type: ActivityType | None = None,
         source: str | None = None,
+        shot_id_prefix: str | None = None,
         activity_id: int | None = None,
     ) -> list[ColumnElement[bool]]:
         """The clauses for the collections a listing asks for, before access.
@@ -241,6 +243,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             clauses.append(col(Collection.shot_id) == shot_id)
         return [
             *clauses,
+            *shot_id_prefix_clauses(col(Collection.shot_id), shot_id_prefix),
             *property_clauses(Collection.scientific_metadata, properties),
             *activity_clauses(
                 col(Collection.activity_id), activity_type, source, activity_id
@@ -269,6 +272,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         properties: list[str] | None = None,
         activity_type: ActivityType | None = None,
         source: str | None = None,
+        shot_id_prefix: str | None = None,
         activity_id: int | None = None,
     ) -> Sequence[Collection]:
         """Return every Collection, filtered by access level.
@@ -283,6 +287,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             activity_type=activity_type,
             source=source,
             activity_id=activity_id,
+            shot_id_prefix=shot_id_prefix,
         )
         return self._page(clauses, user, offset, limit)
 
@@ -295,6 +300,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         properties: list[str] | None = None,
         activity_type: ActivityType | None = None,
         source: str | None = None,
+        shot_id_prefix: str | None = None,
         activity_id: int | None = None,
         max_values: int = DEFAULT_MAX_VALUES,
     ) -> AvailableProperties:
@@ -313,6 +319,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             activity_type=activity_type,
             source=source,
             activity_id=activity_id,
+            shot_id_prefix=shot_id_prefix,
         )
         where.append(
             readable_clause(
@@ -389,6 +396,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         properties: list[str] | None = None,
         activity_type: ActivityType | None = None,
         source: str | None = None,
+        shot_id_prefix: str | None = None,
         activity_id: int | None = None,
     ) -> Sequence[Collection]:
         """Return a device's Collections, filtered by access level.
@@ -404,6 +412,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             activity_type=activity_type,
             source=source,
             activity_id=activity_id,
+            shot_id_prefix=shot_id_prefix,
         )
         return self._page(clauses, user, offset, limit)
 

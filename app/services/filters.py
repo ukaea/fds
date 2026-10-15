@@ -279,6 +279,19 @@ def scope_clauses(
             return []
 
 
+def shot_id_prefix_clauses(
+    shot_column: Any, shot_id_prefix: str | None
+) -> list[ColumnElement[bool]]:
+    """Keep the records on a shot whose ID starts with ``shot_id_prefix``.
+
+    ``304`` keeps the records on shots 30420 and 30421 but not on 30520. A record
+    on no shot never matches.
+    """
+    if not shot_id_prefix:
+        return []
+    return [shot_column.startswith(shot_id_prefix, autoescape=True)]
+
+
 def activity_clauses(
     activity_column: Any,
     activity_type: ActivityType | None = None,

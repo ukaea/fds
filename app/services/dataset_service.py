@@ -49,6 +49,7 @@ from app.services.filters import (
     activity_clauses,
     property_clauses,
     scope_clauses,
+    shot_id_prefix_clauses,
 )
 from app.services.jsonld import map_dataset_to_dcat
 from app.services.reference_service import (
@@ -116,6 +117,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         activity_type: ActivityType | None = None,
         source: str | None = None,
         activity_id: int | None = None,
+        shot_id_prefix: str | None = None,
     ) -> Sequence[Dataset]:
         """
         Every dataset, whatever its scope. Filters by access level.
@@ -139,6 +141,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             *activity_clauses(
                 col(Dataset.activity_id), activity_type, source, activity_id
             ),
+            *shot_id_prefix_clauses(col(Dataset.shot_id), shot_id_prefix),
         )
         statement = self._apply_shot_properties(statement, shot_properties, user)
         return read_page(
@@ -654,6 +657,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         activity_type: ActivityType | None = None,
         source: str | None = None,
         activity_id: int | None = None,
+        shot_id_prefix: str | None = None,
     ) -> Sequence[Dataset]:
         """
         Get datasets hosted by a device, filtering by access.
@@ -680,6 +684,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             *activity_clauses(
                 col(Dataset.activity_id), activity_type, source, activity_id
             ),
+            *shot_id_prefix_clauses(col(Dataset.shot_id), shot_id_prefix),
         )
         statement = self._apply_shot_properties(statement, shot_properties, user)
         return read_page(

@@ -75,6 +75,7 @@ def read_datasets_global(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
+    shot_id_prefix: str | None = None,
 ) -> list[DatasetRead]:
     """
     Retrieve every dataset accessible to the current user.
@@ -94,6 +95,9 @@ def read_datasets_global(
     each dataset: `?activity_id=6` lists what run 6 generated, and
     `?activity_type=simulation` lists simulated datasets.
 
+    `shot_id_prefix` keeps the datasets on a shot whose ID starts with it, so `304`
+    finds those on shots 30420 and 30421. A dataset on no shot never matches.
+
     To scope to a single device, use `/devices/{device_name}/datasets`.
     """
     datasets = dataset_service.get_multi(
@@ -107,6 +111,7 @@ def read_datasets_global(
         activity_type=activity_type,
         source=source,
         activity_id=activity_id,
+        shot_id_prefix=shot_id_prefix,
     )
     return dataset_service.to_read_models(
         datasets,
@@ -350,6 +355,7 @@ def read_datasets_device(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
+    shot_id_prefix: str | None = None,
 ) -> list[DatasetRead]:
     """
     Retrieve datasets hosted by a device.
@@ -371,6 +377,9 @@ def read_datasets_device(
     `activity_type`, `source` and `activity_id` filter on the run that generated
     each dataset: `?activity_id=6` lists what run 6 generated, and
     `?activity_type=simulation` lists simulated datasets.
+
+    `shot_id_prefix` keeps the datasets on a shot whose ID starts with it, so `304`
+    finds those on shots 30420 and 30421. A dataset on no shot never matches.
     """
     datasets = dataset_service.get_datasets_for_device(
         device_name,
@@ -384,6 +393,7 @@ def read_datasets_device(
         activity_type=activity_type,
         source=source,
         activity_id=activity_id,
+        shot_id_prefix=shot_id_prefix,
     )
     return dataset_service.to_read_models(
         datasets,

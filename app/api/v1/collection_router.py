@@ -66,6 +66,7 @@ def read_collections_global(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
+    shot_id_prefix: str | None = None,
 ) -> list[CollectionRead]:
     """Retrieve every Collection accessible to the current user.
 
@@ -84,6 +85,10 @@ def read_collections_global(
     the bundles of simulation runs. A bundle can also hold datasets its run did
     not generate, such as the run's inputs. To list only what a run generated,
     filter the dataset listings on `activity_id`.
+
+    `shot_id_prefix` keeps the collections on a shot whose ID starts with it, so
+    `304` finds those on shots 30420 and 30421. A collection on no shot never
+    matches.
     """
     collections = collection_service.get_multi(
         user=user,
@@ -94,6 +99,7 @@ def read_collections_global(
         activity_type=activity_type,
         source=source,
         activity_id=activity_id,
+        shot_id_prefix=shot_id_prefix,
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
 
@@ -114,6 +120,7 @@ def read_collection_properties(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
+    shot_id_prefix: str | None = None,
     max_values: int = DEFAULT_MAX_VALUES,
 ) -> AvailableProperties:
     """
@@ -132,6 +139,7 @@ def read_collection_properties(
         activity_type=activity_type,
         source=source,
         activity_id=activity_id,
+        shot_id_prefix=shot_id_prefix,
         max_values=max_values,
     )
 
@@ -235,6 +243,7 @@ def read_collections_device(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
+    shot_id_prefix: str | None = None,
 ) -> list[CollectionRead]:
     """Retrieve a device's Collections that the current user may read.
 
@@ -253,6 +262,10 @@ def read_collections_device(
     the bundles of simulation runs. A bundle can also hold datasets its run did
     not generate, such as the run's inputs. To list only what a run generated,
     filter the dataset listings on `activity_id`.
+
+    `shot_id_prefix` keeps the collections on a shot whose ID starts with it, so
+    `304` finds those on shots 30420 and 30421. A collection on no shot never
+    matches.
     """
     collections = collection_service.get_collections_for_device(
         device_name,
@@ -264,6 +277,7 @@ def read_collections_device(
         activity_type=activity_type,
         source=source,
         activity_id=activity_id,
+        shot_id_prefix=shot_id_prefix,
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
 
@@ -285,6 +299,7 @@ def read_collection_properties_device(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
+    shot_id_prefix: str | None = None,
     max_values: int = DEFAULT_MAX_VALUES,
 ) -> AvailableProperties:
     """
@@ -304,6 +319,7 @@ def read_collection_properties_device(
         activity_type=activity_type,
         source=source,
         activity_id=activity_id,
+        shot_id_prefix=shot_id_prefix,
         max_values=max_values,
     )
 

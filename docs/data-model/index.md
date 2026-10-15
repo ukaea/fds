@@ -151,6 +151,12 @@ Shot lists also accept `id_prefix`, which keeps the shots whose ID starts with i
 GET /v1/devices/mast/shots?id_prefix=304
 ```
 
+Dataset and collection lists accept `shot_id_prefix` in the same way: it keeps the records on a shot whose ID starts with it, and a record on no shot never matches. With a run filter it finds the runs that modelled a shot, on any device:
+
+```text
+GET /v1/collections?activity_type=simulation&source=jintrac&shot_id_prefix=30420
+```
+
 Dataset lists additionally accept `name`, plus `shot_property`, which filters on an annotation carried by the dataset's *parent shot* rather than the dataset itself. That answers questions spanning both levels in one request:
 
 ```text

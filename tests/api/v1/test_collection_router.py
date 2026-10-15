@@ -468,6 +468,36 @@ def test_collection_property_summary_of_an_unknown_device_is_a_404(
     assert response.status_code == 404
 
 
+def test_list_collections_by_shot_id_prefix(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _make_device(session)
+    _make_shot(session, "30420")
+    _make_shot(session, "30520")
+    _make_collection(session, "on_30420", device="DEV", shot_id="30420")
+    _make_collection(session, "on_30520", device="DEV", shot_id="30520")
+    _make_collection(session, "device_level", device="DEV")
+
+    response = test_client.get(
+        "/v1/collections?shot_id_prefix=304", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    assert [c["name"] for c in response.json()] == ["on_30420"]
+
+    response = test_client.get(
+        "/v1/devices/DEV/collections?shot_id_prefix=305", headers=admin_user_token
+    )
+    assert response.status_code == 200
+    assert [c["name"] for c in response.json()] == ["on_30520"]
+
+    response = test_client.get(
+        "/v1/devices/DEV/collections/properties?shot_id_prefix=305",
+        headers=admin_user_token,
+    )
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+
+
 def test_collection_read_includes_a_summary_of_its_run(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
