@@ -12,6 +12,7 @@ import { SidePanelLayout } from '@/components/side-panel-layout';
 import { LoadMore } from '@/components/load-more';
 import { DatasetCard } from '@/components/dataset-card';
 import { RunCard } from '@/components/run-card';
+import { SearchBox } from '@/components/search-box';
 
 const PAGE_SIZE = 50;
 const DOCS = 'https://ukaea.github.io/fds/data-model/collection/#making-a-run-discoverable';
@@ -147,6 +148,9 @@ function shown(items: unknown[] | undefined, done: boolean): string | undefined 
  * narrows these. Simulated datasets are listed after them, whether bundled or
  * not, so a run without a bundle can still be found through its outputs.
  *
+ * The shot box narrows both lists, as you type, to the runs on shots whose ID
+ * starts with what is typed, on the chosen device or on any device.
+ *
  * With `deviceName`, only that device's runs are listed and the device filter is
  * hidden. Both lists then include runs that modelled no shot, such as
  * predictive scenarios.
@@ -155,6 +159,8 @@ export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
   const [source, setSource] = useState<string | null>(null);
   const [device, setDevice] = useState<string | null>(null);
   const [propertyTokens, setPropertyTokens] = useState<string[]>([]);
+  const [shotInput, setShotInput] = useState('');
+  const shotPrefix = shotInput.trim();
 
   const { data: sources } = useSWR<Source[]>(`${API_BASE}/sources/`, fetcher);
   const { data: devices } = useSWR<Device[]>(deviceName ? null : `${API_BASE}/devices/`, fetcher);
@@ -164,6 +170,7 @@ export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
   const runFilters = [
     'activity_type=simulation',
     source ? `source=${encodeURIComponent(source)}` : '',
+    shotPrefix ? `shot_id_prefix=${encodeURIComponent(shotPrefix)}` : '',
   ];
 
   // The property chips come from a summary of every run the code and device
@@ -184,7 +191,7 @@ export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
 
   const codes = (sources ?? []).filter((s) => s.kind === 'software').map((s) => s.name);
   const deviceOptions = (devices ?? []).map((d) => ({ value: d.name, label: d.title || d.name }));
-  const filtered = source !== null || device !== null || propertyTokens.length > 0;
+  const filtered = source !== null || device !== null || propertyTokens.length > 0 || shotPrefix !== '';
 
   const side = (
     <>
@@ -217,6 +224,18 @@ export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
             onChange={setDevice}
           />
         )}
+        <div>
+          <p className={HEADING}>Shot</p>
+          <div className="mt-3">
+            <SearchBox value={shotInput} onChange={setShotInput} label="Shot ID" inputMode="numeric" />
+          </div>
+          {shotPrefix && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Runs on shots whose ID starts with {shotPrefix}
+              {scope ? '' : ', on any device'}.
+            </p>
+          )}
+        </div>
       </div>
       <PropertyFilter
         label="What the run simulated"

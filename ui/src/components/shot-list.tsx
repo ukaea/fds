@@ -4,7 +4,7 @@ import { useState } from 'react';
 import useSWR, { preload } from 'swr';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Calendar, ChevronRight, Cpu, Search } from 'lucide-react';
+import { Calendar, ChevronRight, Cpu } from 'lucide-react';
 import { fetcher, API_BASE, FetchError } from '@/lib/api';
 import { AvailableProperties, Collection, Shot } from '@/lib/types';
 import { propertyQuery, withQuery } from '@/lib/properties';
@@ -12,6 +12,7 @@ import { pageUrl, usePagedList } from '@/lib/use-paged-list';
 import { PropertyFilter } from '@/components/property-filter';
 import { SidePanelLayout } from '@/components/side-panel-layout';
 import { LoadMore } from '@/components/load-more';
+import { SearchBox } from '@/components/search-box';
 import { PropertyBadges } from '@/components/properties';
 import { ClientDate } from '@/components/client-date';
 
@@ -190,18 +191,14 @@ export function ShotList({
       }
     >
       <form onSubmit={goToShot} className="mb-4">
-        <div className="relative w-full md:w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="search"
+        <div className="md:w-72">
+          <SearchBox
             value={idPrefix}
-            onChange={(e) => {
-              setIdPrefix(e.target.value);
+            onChange={(value) => {
+              setIdPrefix(value);
               setNotFound(null);
             }}
-            placeholder="Find a shot by ID"
-            aria-label="Find a shot by ID"
-            className="w-full pl-9 pr-3 py-2 text-sm bg-card border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-hidden focus:border-foreground/40"
+            label="Find a shot by ID"
           />
         </div>
         {notFound && (
