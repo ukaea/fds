@@ -439,6 +439,7 @@ def test_dataset_read_includes_a_summary_of_its_run(
             activity_type=ActivityType.SIMULATION,
             source_id=jintrac.id,
             source_version="v220922",
+            started_at=datetime(2026, 10, 3, 9, 12, tzinfo=UTC),
         ),
         user=admin_user,
     )
@@ -463,6 +464,7 @@ def test_dataset_read_includes_a_summary_of_its_run(
             "activity_type": "simulation",
             "source": "jintrac",
             "source_version": "v220922",
+            "started_at": "2026-10-03T09:12:00Z",
         },
         "coil_geometry": None,
     }

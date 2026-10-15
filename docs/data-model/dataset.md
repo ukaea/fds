@@ -29,11 +29,11 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 
 ### Recording a dataset's provenance
 
-A dataset read includes `activity`, a short summary of the run its `activity_id` names: the type of run, and the name and version of the source that carried it out. A list can use it to show which datasets were measured and which were simulated, without a request per dataset:
+A dataset read includes `activity`, a short summary of the run its `activity_id` names: the type of run, the name and version of the source that carried it out, and when the run started. A list can use it to show which datasets were measured and which were simulated, without a request per dataset. The start time tells apart two runs of the same source and version:
 
 ```json
 "activity_id": 8,
-"activity": {"activity_type": "simulation", "source": "jintrac", "source_version": "v220922"}
+"activity": {"activity_type": "simulation", "source": "jintrac", "source_version": "v220922", "started_at": "2026-10-03T09:12:00Z"}
 ```
 
 `activity` is read-only, and absent when the dataset has no `activity_id`. The full run is at `GET /v1/activities/{activity_id}`.
