@@ -184,6 +184,7 @@ export interface ActivitySummary {
   activity_type?: ActivityType | null;
   source?: string | null;
   source_version?: string | null;
+  started_at?: string | null;
 }
 
 export interface Activity {

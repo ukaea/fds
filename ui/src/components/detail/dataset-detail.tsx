@@ -15,7 +15,7 @@ import { citation, resolveIdentifier } from '@/lib/identifiers';
 import type { JsonLd } from '@/lib/identifier-page';
 import { JsonLdPanel } from '@/components/jsonld-panel';
 import { HeatmapCanvas } from '@/components/heatmap';
-import { RunBadge } from '@/components/run-label';
+import { RunLine } from '@/components/run-label';
 
 function isZarr(mediaType?: string | null): boolean {
   return Boolean(mediaType?.toLowerCase().includes('zarr'));
@@ -917,26 +917,13 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
          {datasetData?.title && (
            <p className="text-lg text-muted-foreground -mt-2 mb-4">{datasetData.title}</p>
          )}
+         {/* Which run made this dataset, since a shot can hold several with its name. */}
+         <RunLine activity={datasetData?.activity} activityId={datasetData?.activity_id} className="-mt-2 mb-4 text-muted-foreground" />
          {datasetData?.description && (
            <p className="text-lg text-foreground max-w-4xl leading-relaxed mb-6">
               {datasetData.description}
            </p>
          )}
-         <div className="flex flex-wrap gap-3">
-             {device && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Device: {deviceLabel}</span>}
-             {shot && <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border font-mono">Shot: {shot}</span>}
-             {datasetData?.activity && (
-               <span className="text-sm">
-                 <RunBadge activity={datasetData.activity} />
-               </span>
-             )}
-             {datasetData?.annotates && (
-                <span className="bg-muted text-foreground px-3 py-1 rounded-full text-sm border border-border flex items-center gap-1">
-                    <Highlighter className="w-3.5 h-3.5" />
-                    Annotates: {datasetData.annotates}
-                </span>
-             )}
-         </div>
       </div>
 
       <div className={datasetData && !vizDist ? 'max-w-3xl' : 'grid grid-cols-1 lg:grid-cols-3 gap-8'}>
@@ -1002,6 +989,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                         </Property>
                     )}
                     {datasetData?.quality_flag && <Property label="Quality"><span className="text-foreground">{datasetData.quality_flag}</span></Property>}
+                    {datasetData?.annotates && <Property label="Annotates"><span className="text-foreground">{datasetData.annotates}</span></Property>}
                     <Property label="Listed in FDS" last>
                         <span className="text-foreground">{datasetData?.created_at ? new Date(datasetData.created_at).toLocaleDateString(undefined, DATE) : 'Unknown'}</span>
                     </Property>
