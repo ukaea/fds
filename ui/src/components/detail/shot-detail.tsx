@@ -4,7 +4,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
 import { fetcher, API_BASE, FetchError } from '@/lib/api';
-import { Dataset, Collection, Activity, Shot } from '@/lib/types';
+import { Dataset, Collection, Shot } from '@/lib/types';
 import { useDeviceLabel } from '@/lib/use-device-label';
 import { Database, ChevronRight, Layers, MapPin, SlidersHorizontal, Highlighter } from 'lucide-react';
 import { availableProperties, propertyQuery, withQuery } from '@/lib/properties';
@@ -24,13 +24,6 @@ function formatDate(iso?: string): string {
 }
 
 function CollectionSection({ collection }: { collection: Collection }) {
-  // The collection's activity summary says what ran. When it ran is only on the
-  // full run, so that is requested here.
-  const { data: activity } = useSWR<Activity>(
-    collection.activity_id ? `${API_BASE}/activities/${collection.activity_id}` : null,
-    fetcher
-  );
-
   const datasetCount = collection.datasets?.length ?? 0;
 
   return (
@@ -46,9 +39,8 @@ function CollectionSection({ collection }: { collection: Collection }) {
             </Link>
           </h2>
           {collection.activity && (
-            <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+            <div className="mt-1">
               <RunBadge activity={collection.activity} />
-              {activity?.started_at && <span>{formatDate(activity.started_at)}</span>}
             </div>
           )}
         </div>

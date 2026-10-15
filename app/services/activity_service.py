@@ -280,6 +280,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
                 activity_type=activity.activity_type,
                 source=source,
                 source_version=activity.source_version,
+                started_at=activity.started_at,
             )
             for activity, source in rows
             if activity.id is not None

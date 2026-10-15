@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 from sqlmodel import Session
@@ -510,6 +510,7 @@ def test_collection_read_includes_a_summary_of_its_run(
             activity_type=ActivityType.SIMULATION,
             source_id=jintrac.id,
             source_version="v220922",
+            started_at=datetime(2026, 10, 3, 9, 12, tzinfo=UTC),
         ),
         user=admin_user,
     )
@@ -529,6 +530,7 @@ def test_collection_read_includes_a_summary_of_its_run(
         "activity_type": "simulation",
         "source": "jintrac",
         "source_version": "v220922",
+        "started_at": "2026-10-03T09:12:00Z",
     }
 
     response = test_client.get("/v1/devices/DEV/collections", headers=admin_user_token)
