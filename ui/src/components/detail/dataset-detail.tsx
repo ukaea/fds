@@ -567,8 +567,6 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
       if (vizDist && byUrl[vizDist.url]) loadZarrData(byUrl[vizDist.url], vizDist.url);
   };
 
-  const [autoLoadAttempted, setAutoLoadAttempted] = useState(false);
-
   useEffect(() => {
       if (!showGraph && !showCodeModal) return;
       const onKey = (e: KeyboardEvent) => {
@@ -579,17 +577,6 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
       window.addEventListener('keydown', onKey);
       return () => window.removeEventListener('keydown', onKey);
   }, [showGraph, showCodeModal]);
-
-  useEffect(() => {
-     if (datasetData && status !== "loading" && !autoLoadAttempted && !accessValues.granted && !accessValues.error) {
-         // Public data opens without asking, so there is nothing to click for.
-         if (datasetData.effective_access_level === 'public' || (vizDist && status === "authenticated")) {
-             setAutoLoadAttempted(true);
-             handleRequestAccess();
-         }
-     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetData, status, autoLoadAttempted, accessValues.granted, accessValues.error]);
 
   const loadZarrData = async (access: DataAccess, s3Path: string) => {
       // s3Path is like "s3://mast/level2/shots/30421.zarr/equilibrium" for data in
@@ -823,6 +810,22 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
          setProgress(null);
       }
   };
+
+  const autoLoadAttempted = useRef(false);
+
+  useEffect(() => {
+     if (datasetData && status !== "loading" && !autoLoadAttempted.current && !accessValues.granted && !accessValues.error) {
+         // Public data opens without asking, so there is nothing to click for.
+         if (datasetData.effective_access_level === 'public' || (vizDist && status === "authenticated")) {
+             autoLoadAttempted.current = true;
+             // For public data handleRequestAccess sets the grant before its
+             // first await, which costs one extra render when the page opens.
+             // eslint-disable-next-line react-hooks/set-state-in-effect
+             handleRequestAccess();
+         }
+     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetData, status, accessValues.granted, accessValues.error]);
 
   const onSelectVariable = async (newVar: string) => {
       setSelectedVar(newVar);
