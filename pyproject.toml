@@ -64,7 +64,7 @@ dev = [
     "ruff>=0.17.0",
     "pyright>=1.1.414",
     "testcontainers[postgres]>=4.15.0",
-    "moto[s3,sts]>=5.2.3",
+    "moto[s3,sts]>=5.2.4",
 ]
 
 [tool.pytest.ini_options]
