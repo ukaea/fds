@@ -21,6 +21,8 @@ GET /v1/devices/{device}/shots/{shot_id}/collections/{name}
 Accept: application/ld+json
 ```
 
+and on the dataset listings, described [below](#dataset-listings).
+
 ## Identifiers
 
 The `@id` of every entity is the name FDS publishes for it: what another catalogue stores when it
@@ -185,6 +187,62 @@ A distribution's `group` is not published. DCAT has no term for a part of a file
   }
 }
 ```
+
+## Dataset listings
+
+The dataset listings answer in JSON-LD as well:
+
+```http
+GET /v1/datasets
+GET /v1/devices/{device}/datasets
+GET /v1/devices/{device}/shots/{shot_id}/datasets
+Accept: application/ld+json
+```
+
+They take the same filters, and are paged with the same `offset` and `limit`, as in JSON. A page is
+one document whose `@graph` holds a `dcat:Dataset` node for each dataset on it, in listing order:
+
+```json
+{
+  "@context": { "...": "..." },
+  "@graph": [
+    {
+      "@type": "dcat:Dataset",
+      "@id": "https://example.org/datasets/13",
+      "title": "Kinetic profiles",
+      "prov:wasGeneratedBy": {"@type": "prov:Activity", "prov:type": "simulation", "...": "..."}
+    },
+    {
+      "@type": "dcat:Dataset",
+      "@id": "https://example.org/datasets/14",
+      "title": "Equilibrium",
+      "prov:wasGeneratedBy": {"@type": "prov:Activity", "prov:type": "simulation", "...": "..."}
+    }
+  ]
+}
+```
+
+Each node is the one the dataset's own document holds, so it carries the same provenance and
+distributions. FDS's records of the datasets are left out, as in any listing; each one is in the
+dataset's own document. A page with no datasets has an empty `@graph`.
+
+=== "curl"
+
+    ```bash
+    curl -H "Accept: application/ld+json" \
+      "$API/devices/mast/shots/30421/datasets?activity_type=simulation"
+    ```
+
+=== "Python (httpx)"
+
+    ```python
+    page = httpx.get(
+        f"{API}/devices/mast/shots/30421/datasets",
+        params={"activity_type": "simulation"},
+        headers={"Accept": "application/ld+json"},
+    ).json()
+    nodes = page["@graph"]
+    ```
 
 ## Shot as `dcat:Catalog`
 

@@ -186,6 +186,33 @@ def test_listing_issues_the_same_statements_whatever_the_page_size(
     assert len(large) == len(small)
 
 
+@pytest.mark.usefixtures("catalogue")
+@pytest.mark.parametrize(
+    ("path", "params"),
+    [
+        ("/v1/datasets", {}),
+        ("/v1/devices/MAST/datasets", {}),
+        ("/v1/devices/MAST/datasets", {"include_geometry": True}),
+        ("/v1/devices/MAST/datasets", {"include_calibration": True}),
+        ("/v1/devices/MAST/datasets", {"include_annotations": True}),
+        ("/v1/devices/MAST/shots/0/datasets", {}),
+    ],
+)
+def test_jsonld_listing_issues_the_same_statements_whatever_the_page_size(
+    test_client: TestClient, session: Session, path: str, params: dict[str, Any]
+):
+    ld = {"Accept": "application/ld+json"}
+    with statements(session) as small:
+        page = test_client.get(path, params={**params, "limit": 2}, headers=ld)
+        assert len(page.json()["@graph"]) == 2
+    session.expunge_all()
+    with statements(session) as large:
+        page = test_client.get(path, params={**params, "limit": 4}, headers=ld)
+        assert len(page.json()["@graph"]) == 4
+
+    assert len(large) == len(small)
+
+
 def test_reading_annotations_issues_the_same_statements_whatever_their_number(
     test_client: TestClient, session: Session, admin_user: AuthenticatedUser
 ):

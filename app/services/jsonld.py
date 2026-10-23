@@ -584,8 +584,23 @@ def map_dataset_to_dcat(
     annotations: "list[DatasetRead] | None" = None,
     run_inputs: "Sequence[Dataset]" = (),
 ) -> dict[str, Any]:
+    """Maps a Dataset to a ``dcat:Dataset`` document with FDS's record of it."""
+    node = dataset_node(
+        dataset, base_url, geometry, calibration, annotations, run_inputs
+    )
+    return _with_catalog_record({"@context": METADATA_CONTEXT, **node}, dataset)
+
+
+def dataset_node(
+    dataset: Dataset | DatasetRead,
+    base_url: str,
+    geometry: "list[DatasetRead] | None" = None,
+    calibration: "list[DatasetRead] | None" = None,
+    annotations: "list[DatasetRead] | None" = None,
+    run_inputs: "Sequence[Dataset]" = (),
+) -> dict[str, Any]:
     """
-    Maps a Dataset to a dcat:Dataset.
+    The Dataset's ``dcat:Dataset`` node alone, for a listing of datasets.
 
     ``run_inputs`` are the input datasets of the run that generated it which the
     caller may read. The run's other inputs are left out of its embedded node.
@@ -600,8 +615,7 @@ def map_dataset_to_dcat(
         names.dataset(dataset.id) if hasattr(dataset, "id") and dataset.id else None
     )
 
-    data = {
-        "@context": METADATA_CONTEXT,
+    data: dict[str, Any] = {
         "@type": "dcat:Dataset",
         "@id": dataset_uri,
         "title": dataset.title or dataset.name,
@@ -729,9 +743,7 @@ def map_dataset_to_dcat(
     if qualified_relations:
         data["dcat:qualifiedRelation"] = qualified_relations
 
-    return _with_catalog_record(
-        {k: v for k, v in data.items() if v is not None}, dataset
-    )
+    return {k: v for k, v in data.items() if v is not None}
 
 
 def map_source_to_dcat(source: "Source", base_url: str) -> dict[str, Any]:
