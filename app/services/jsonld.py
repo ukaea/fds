@@ -612,6 +612,11 @@ def map_dataset_to_dcat(
         "keywords": dataset.keywords.split(",") if dataset.keywords else [],
         "license": dataset.license,
         "version": dataset.version,
+        # The device and shot the dataset is filed under, as plain names rather
+        # than links, so that other catalogues can filter on them whatever
+        # addresses they give devices and shots.
+        "fuel:device": dataset.device_name,
+        "fuel:shot": dataset.shot_id,
     }
 
     if dataset.persistent_identifier:

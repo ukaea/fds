@@ -144,6 +144,26 @@ The record has no route of its own: its identifier is the resource's with `#reco
 resolves to the document that holds it. A catalogue that lists other resources, such as the
 catalogue of devices, embeds their nodes without their records.
 
+## Device and shot
+
+A dataset filed under a device, or under one of the device's shots, names them in `fuel:device`
+and `fuel:shot`:
+
+```json
+{
+  "@type": "dcat:Dataset",
+  "@id": "https://example.org/datasets/13",
+  "title": "Equilibrium (Shot 30421)",
+  "fuel:device": "mast",
+  "fuel:shot": "30421"
+}
+```
+
+The values are the device's `name` and the shot's ID as plain text, not links to the device and
+shot documents. Other catalogues give the same device and shot their own addresses, but can use
+the same names, so a search across catalogues can filter on these values. A dataset attached to a
+device but no shot has `fuel:device` only, and a global dataset has neither.
+
 ## Dataset vs Distribution
 
 FDS follows the [W3C DCAT ontology](https://www.w3.org/TR/vocab-dcat/): a **`dcat:Dataset`** is the abstract metadata entity describing *what* the data is, while a **`dcat:Distribution`** is a concrete physical access path describing *how* to retrieve it.
@@ -393,7 +413,7 @@ See [Provenance](provenance.md) for the model behind these terms.
 | `oa` | `http://www.w3.org/ns/oa#` | Web Annotation, used by `dqv:QualityAnnotation` (`oa:motivatedBy`, `oa:hasBody`) |
 | `adms` | `http://www.w3.org/ns/adms#` | `adms:identifier`, a persistent identifier registered elsewhere |
 | `skos` | `http://www.w3.org/2004/02/skos/core#` | `skos:notation`, the value of that identifier |
-| `fuel` | `https://w3id.org/fuel/ns#` | Fusion Energy Lexicon, the role concepts used by `prov:hadRole` and `dcat:hadRole` |
+| `fuel` | `https://w3id.org/fuel/ns#` | Fusion Energy Lexicon: the role concepts used by `prov:hadRole` and `dcat:hadRole`, and a dataset's `fuel:device` and `fuel:shot` |
 
 ## Ontology mapping summary
 
@@ -412,6 +432,8 @@ See [Provenance](provenance.md) for the model behind these terms.
 | "dataset produced by" | `prov:wasGeneratedBy` | PROV-O |
 | "activity used input / instrument" | `prov:used` + `prov:qualifiedUsage` (`prov:hadRole`) | PROV-O |
 | "activity associated with agent" | `prov:wasAssociatedWith` + `prov:qualifiedAssociation` (`prov:hadRole`) | PROV-O |
+| Dataset `device_name` | `fuel:device`, as plain text | FuEL |
+| Dataset `shot_id` | `fuel:shot`, as plain text | FuEL |
 | `persistent_identifier` | `adms:identifier` → `adms:Identifier` | ADMS, DCAT-AP |
 | `issued` (publication date) | `dct:issued` on the resource | Dublin Core, DCAT 3 |
 | producing Activity's `ended_at` | `prov:generatedAtTime` on the resource | PROV-O |

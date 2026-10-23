@@ -913,3 +913,51 @@ def test_temporal_coverage_roundtrip(
     assert cov["@type"] == "dct:PeriodOfTime"
     assert cov["startDate"].startswith("2024-03-15T14:00:00")
     assert cov["endDate"].startswith("2024-03-15T14:30:00")
+
+
+def test_dataset_jsonld_names_its_device_and_shot(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    DeviceService(session).create(
+        DeviceCreate(name="MAST", type="Spherical"), user=admin_user
+    )
+    ShotService(session).create(
+        ShotCreate(id="30421", device_name="MAST"), user=admin_user
+    )
+    datasets = DatasetService(session)
+    on_shot = datasets.create(
+        DatasetCreate(
+            name="efit",
+            device_name="MAST",
+            shot_id="30421",
+            url="s3://mast/30421/efit",
+        ),
+        user=admin_user,
+    )
+    on_device = datasets.create(
+        DatasetCreate(name="geometry", device_name="MAST", url="s3://mast/geometry"),
+        user=admin_user,
+    )
+    on_nothing = datasets.create(
+        DatasetCreate(name="constants", url="s3://global/constants"),
+        user=admin_user,
+    )
+    session.commit()
+    ld = {**admin_user_token, "Accept": "application/ld+json"}
+
+    shot_node = resource(
+        test_client.get(f"/v1/datasets/id/{on_shot.id}", headers=ld).json()
+    )
+    device_node = resource(
+        test_client.get(f"/v1/datasets/id/{on_device.id}", headers=ld).json()
+    )
+    global_node = resource(
+        test_client.get(f"/v1/datasets/id/{on_nothing.id}", headers=ld).json()
+    )
+
+    assert shot_node["fuel:device"] == "mast"
+    assert shot_node["fuel:shot"] == "30421"
+    assert device_node["fuel:device"] == "mast"
+    assert "fuel:shot" not in device_node
+    assert "fuel:device" not in global_node
+    assert "fuel:shot" not in global_node
