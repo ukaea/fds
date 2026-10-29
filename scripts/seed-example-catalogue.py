@@ -23,11 +23,14 @@ Run it against a local stack (see the README for the token):
 
 import os
 import time
+from typing import Any
 
 import httpx
 
 FDS_API_URL_DEFAULT = "http://localhost:8000/v1"
-KC_TOKEN_URL_DEFAULT = "http://localhost:8080/realms/fds/protocol/openid-connect/token"
+KC_TOKEN_URL_DEFAULT = (
+    "http://localhost:8080/realms/fds/protocol/openid-connect/token"
+)
 
 SHOT_30420_IDS = [
     "equilibrium",
@@ -69,6 +72,30 @@ IMAS_DD = "https://github.com/iterorganization/IMAS-Data-Dictionary/tree/"
 # them is sent straight to the public store with anonymous credentials.
 STFC_ENDPOINT = "https://s3.echo.stfc.ac.uk"
 STFC_BUCKET = "mast"
+DEVICE_TITLES = {
+    "mast": "MAST",
+    "mastu": "MAST-U",
+}
+
+MAPPED_IDS_CONFIG = [
+    {
+        "device": "mast",
+        "shot_id": "30421",
+        "ids_name": "wall",
+        "collection_name": "analysed",
+        # Icechunk repository containing the mapped IDS data
+        "icechunk_url": "s3://mast/test/khalid/icechunkyss",
+        # NetCDF alternative representation
+        "netcdf_url": "s3://mast/test/khalid/test.nc",
+        "netcdf_media": "application/netcdf",
+        "icechunk_media": "application/vnd.icechunk+zarr",
+        "group": "wall/0",
+        "icechunk_imas_dd_version": "4.0.0",
+        "title_suffix": "Analyzed Experiment Data",
+        "access_level": "public",
+        "netcdf_imas_dd_version": "3.42.0",
+    },
+]
 
 
 def get_or_create_source(
@@ -255,6 +282,9 @@ def register_mast_datasets(client: httpx.Client, base_url: str) -> None:
                 f"{base_url}/devices/{device}/shots/{shot_id}/datasets", json=meta
             )
             resp.raise_for_status()
+    register_mapped_ids_for_device(
+        client=client, base_url=base_url, device="mast"
+    )
 
 
 def register_mast_geometry(client: httpx.Client, base_url: str) -> None:
@@ -504,7 +534,9 @@ def register_efit_provenance(
     return source_id
 
 
-def register_thomson_instrument_provenance(client: httpx.Client, base_url: str) -> int:
+def register_thomson_instrument_provenance(
+    client: httpx.Client, base_url: str
+) -> int:
     """Registers the Thomson scattering system as a kind=instrument Source and an
     acquisition Activity that *used* it, naming no agent.
 
@@ -533,30 +565,75 @@ def register_thomson_instrument_provenance(client: httpx.Client, base_url: str) 
     return instrument_id
 
 
+def register_collection(
+    client: httpx.Client,
+    base_url: str,
+    device: str,
+    shot_id: str,
+    col_name: str,
+    title_suffix: str,
+    access_level: str,
+    root_url: str | None = None,
+    sci_meta: list[dict[str, Any]] | None = None,
+) -> tuple[int, bool]:
+
+    collection_url = (
+        f"{base_url}/devices/{device}/shots/{shot_id}/collections/{col_name}"
+    )
+
+    existing = client.get(collection_url)
+
+    if existing.status_code == 200:
+        return existing.json()["id"], False
+
+    if existing.status_code != 404:
+        existing.raise_for_status()
+
+    data: dict[str, Any] = {
+        "name": col_name,
+        "title": f"{DEVICE_TITLES[device.lower()]} Shot {shot_id}: {title_suffix}",
+        "description": (
+            "Mapped experimental data represented as IMAS IDS datasets."
+        ),
+        "access_level": access_level,
+    }
+    if root_url is not None:
+        data["root_url"] = root_url
+    if sci_meta is not None:
+        data["scientific_metadata"] = sci_meta
+
+    response = client.post(
+        f"{base_url}/devices/{device}/shots/{shot_id}/collections", json=data
+    )
+
+    if response.status_code == 409:
+        # To checkmate RACE condition.
+        # Another process may have created it between GET and POST.
+        existing = client.get(collection_url)
+        existing.raise_for_status()
+        return existing.json()["id"]
+
+    response.raise_for_status()
+    return response.json()["id"], True
+
+
 def register_mast_upgrade_datasets(
     client: httpx.Client, base_url: str
 ) -> dict[str, int]:
     """Registers MAST-U shot 50000 raw + analysed collections. Returns {raw_collection_id, analysed_collection_id}."""
 
     # Raw diagnostics (restricted NetCDF)
-    existing = client.get(
-        f"{base_url}/devices/mastu/shots/50000/collections/raw-diagnostics"
+    raw_collection_id, raw_created = register_collection(
+        client=client,
+        base_url=base_url,
+        device="mastu",
+        shot_id="50000",
+        col_name="raw-diagnostics",
+        access_level="restricted",
+        title_suffix="Raw Diagnostic Data",
     )
-    if existing.status_code == 200:
-        raw_collection_id = existing.json()["id"]
-    else:
-        raw_col = client.post(
-            f"{base_url}/devices/mastu/shots/50000/collections",
-            json={
-                "name": "raw-diagnostics",
-                "title": "MAST-U Shot 50000: Raw Diagnostic Data",
-                "description": "Unprocessed raw outputs from MAST-U diagnostic systems.",
-                "access_level": "restricted",
-            },
-        )
-        raw_col.raise_for_status()
-        raw_collection_id = raw_col.json()["id"]
 
+    if raw_created:
         for name, stem in [
             ("thomson-raw", "thomson_scattering"),
             ("charge-exchange-raw", "charge_exchange"),
@@ -580,27 +657,17 @@ def register_mast_upgrade_datasets(
             )
 
     # Analysed experimental data (public, IceChunk)
-    existing = client.get(f"{base_url}/devices/mastu/shots/50000/collections/analysed")
-    if existing.status_code == 200:
-        analysed_collection_id = existing.json()["id"]
-    else:
-        analysed_col = client.post(
-            f"{base_url}/devices/mastu/shots/50000/collections",
-            json={
-                "name": "analysed",
-                "title": "MAST-U Shot 50000: Analysed Experimental Data",
-                "description": (
-                    "Post-processed MAST-U diagnostic data in IMAS IDS format, "
-                    "stored as a single IceChunk repository. Each IDS is a group "
-                    "within the shared store."
-                ),
-                "access_level": "public",
-                "root_url": "s3://fds-data/shots/50000/analysed/",
-            },
-        )
-        analysed_col.raise_for_status()
-        analysed_collection_id = analysed_col.json()["id"]
-
+    analysed_collection_id, analysed_created = register_collection(
+        client=client,
+        base_url=base_url,
+        device="mastu",
+        shot_id="50000",
+        root_url="s3://fds-data/shots/50000/analysed/",
+        col_name="analysed",
+        access_level="public",
+        title_suffix="Analysed Experimental Data",
+    )
+    if analysed_created:
         for ids_name in MAST_U_IDS_GROUPS:
             ds = client.post(
                 f"{base_url}/devices/mastu/shots/50000/datasets",
@@ -621,6 +688,10 @@ def register_mast_upgrade_datasets(
 
     register_mast_upgrade_50001(client, base_url)
 
+    register_mapped_ids_for_device(
+        client=client, base_url=base_url, device="mastu"
+    )
+
     return {
         "raw_collection_id": raw_collection_id,
         "analysed_collection_id": analysed_collection_id,
@@ -634,58 +705,47 @@ def register_mast_upgrade_50001(client: httpx.Client, base_url: str) -> None:
     annotation filter over MAST-U equilibrium datasets returns 50000 and not this one.
     Its datasets follow IMAS DD 4.0.0, and the equilibrium also has a DD 3.42.0 copy.
     """
-    existing = client.get(f"{base_url}/devices/mastu/shots/50001/collections/analysed")
-    if existing.status_code == 200:
-        return
-
-    collection = client.post(
-        f"{base_url}/devices/mastu/shots/50001/collections",
-        json={
-            "name": "analysed",
-            "title": "MAST-U Shot 50001: Analysed Experimental Data",
-            "description": (
-                "Post-processed MAST-U diagnostic data in IMAS IDS format, stored as "
-                "a single IceChunk repository. This L-mode discharge was reconstructed "
-                "for equilibrium and magnetics only."
-            ),
-            "access_level": "public",
-            "root_url": "s3://fds-data/shots/50001/analysed/",
-        },
+    collection_id, raw_created = register_collection(
+        client=client,
+        base_url=base_url,
+        device="mastu",
+        shot_id="50000",
+        col_name="analysed",
+        access_level="public",
+        title_suffix="Analysed Experimental Data",
     )
-    collection.raise_for_status()
-    collection_id = collection.json()["id"]
-
-    for ids_name in ["equilibrium", "magnetics"]:
-        ds = client.post(
-            f"{base_url}/devices/mastu/shots/50001/datasets",
-            json={
-                "name": ids_name,
-                "title": f"MAST-U {ids_name.replace('_', ' ').title()} (Shot 50001)",
-                "level": 2,
-                "url": f"s3://fds-data/shots/50001/analysed/{ids_name}",
-                "endpoint_url": FIXTURE_ENDPOINT,
-                "media_type": "application/vnd.icechunk+zarr",
-                "format": "icechunk",
-                "conforms_to": f"{IMAS_DD}4.0.0",
-                "access_level": "public",
-            },
-        )
-        ds.raise_for_status()
-        client.post(
-            f"{base_url}/collections/{collection_id}/datasets/{ds.json()['id']}"
-        )
-        if ids_name == "equilibrium":
-            client.post(
-                f"{base_url}/datasets/{ds.json()['id']}/distributions",
+    if raw_created:
+        for ids_name in ["equilibrium", "magnetics"]:
+            ds = client.post(
+                f"{base_url}/devices/mastu/shots/50001/datasets",
                 json={
-                    "url": "s3://fds-data/shots/50001/dd3.nc",
-                    "group": "equilibrium",
+                    "name": ids_name,
+                    "title": f"MAST-U {ids_name.replace('_', ' ').title()} (Shot 50001)",
+                    "level": 2,
+                    "url": f"s3://fds-data/shots/50001/analysed/{ids_name}",
                     "endpoint_url": FIXTURE_ENDPOINT,
-                    "media_type": "application/x-netcdf",
-                    "format": "NetCDF-4",
-                    "conforms_to": f"{IMAS_DD}3.42.0",
+                    "media_type": "application/vnd.icechunk+zarr",
+                    "format": "icechunk",
+                    "conforms_to": f"{IMAS_DD}4.0.0",
+                    "access_level": "public",
                 },
-            ).raise_for_status()
+            )
+            ds.raise_for_status()
+            client.post(
+                f"{base_url}/collections/{collection_id}/datasets/{ds.json()['id']}"
+            )
+            if ids_name == "equilibrium":
+                client.post(
+                    f"{base_url}/datasets/{ds.json()['id']}/distributions",
+                    json={
+                        "url": "s3://fds-data/shots/50001/dd3.nc",
+                        "group": "equilibrium",
+                        "endpoint_url": FIXTURE_ENDPOINT,
+                        "media_type": "application/x-netcdf",
+                        "format": "NetCDF4",
+                        "conforms_to": f"{IMAS_DD}3.42.0",
+                    },
+                ).raise_for_status()
 
 
 def register_jintrac_collection(
@@ -780,6 +840,152 @@ def register_jintrac_collection(
         "activity_id": activity_id,
         "source_id": source_id,
     }
+
+
+def get_or_create_mapped_ids_dataset(
+    client: httpx.Client,
+    base_url: str,
+    config: dict,
+) -> int:
+    device = config["device"]
+    shot_id = config["shot_id"]
+    ids_name = config["ids_name"]
+
+    dataset_url = (
+        f"{base_url}/devices/{device}/shots/{shot_id}/datasets/{ids_name}"
+    )
+
+    existing = client.get(dataset_url)
+
+    if existing.status_code == 200:
+        records = existing.json()
+
+        # The current seeder uses this endpoint as a list in seed_all().
+        if records:
+            dataset = records[0] if isinstance(records, list) else records
+            return dataset["id"]
+
+    elif existing.status_code != 404:
+        existing.raise_for_status()
+
+    response = client.post(
+        f"{base_url}/devices/{device}/shots/{shot_id}/datasets/{ids_name}",
+        json={
+            "name": ids_name,
+            "title": (
+                f"{DEVICE_TITLES[device].upper()} {ids_name.replace('_', ' ').title()} "
+                f"(Shot {shot_id})"
+            ),
+            "url": config["icechunk_url"],
+            "endpoint_url": FIXTURE_ENDPOINT,
+            "media_type": config["icechunk_media"],
+            "conforms_to": f"{IMAS_DD}{config['icechunk_imas_dd_version']}",
+            "access_level": "public",
+        },
+    )
+
+    if response.status_code == 409:
+        existing = client.get(dataset_url)
+        existing.raise_for_status()
+        records = existing.json()
+        dataset = records[0] if isinstance(records, list) else records
+        return dataset["id"]
+
+    response.raise_for_status()
+    return response.json()["id"]
+
+
+def register_distribution(
+    client: httpx.Client,
+    base_url: str,
+    dataset_id: int,
+    config: dict,
+) -> None:
+    distributions_url = f"{base_url}/datasets/{dataset_id}/distributions"
+
+    # Confirm that this GET endpoint is supported by the FDS API.
+    existing = client.get(distributions_url)
+    existing.raise_for_status()
+
+    distributions = existing.json()
+
+    representations = [
+        {
+            "url": config["icechunk_url"],
+            "media_type": config["icechunk_media"],
+            "group": config["group"],
+            "format": "icechunk",
+            "conforms_to": (f"{IMAS_DD}{config['icechunk_imas_dd_version']}"),
+        },
+        {
+            "url": config["netcdf_url"],
+            "group": config["group"],
+            "media_type": config["netcdf_media"],
+            "format": "NetCDF4",
+            "conforms_to": (f"{IMAS_DD}{config['netcdf_imas_dd_version']}"),
+        },
+    ]
+
+    for rep in representations:
+        if any(
+            distribution.get("url") == rep["url"]
+            and distribution.get("group") == rep["group"]
+            for distribution in distributions
+        ):
+            continue
+
+        response = client.post(
+            distributions_url,
+            json={**rep, "endpoint_url": FIXTURE_ENDPOINT},
+        )
+        response.raise_for_status()
+
+def register_mapped_ids_for_device(
+    client: httpx.Client, base_url: str, device: str
+):
+    for config in MAPPED_IDS_CONFIG:
+        if config["device"] != device:
+            continue
+        register_mapped_ids_icechunk_netcdf(
+            client=client, base_url=base_url, config=config
+        )
+
+
+def register_mapped_ids_icechunk_netcdf(
+    client: httpx.Client, base_url: str, config: dict
+) -> None:
+
+    collection_id, _ = register_collection(
+        client=client,
+        base_url=base_url,
+        device=config["device"],
+        shot_id=config["shot_id"],
+        root_url=config["icechunk_url"],
+        col_name=config["collection_name"],
+        access_level=config["access_level"],
+        title_suffix=config["title_suffix"],
+    )
+    dataset_id = get_or_create_mapped_ids_dataset(
+        client=client,
+        base_url=base_url,
+        config=config,
+    )
+
+    # Ensure the dataset belongs to the analysed collection.
+    # Add an existence check using the supported FDS API before
+    # POSTing this relationship, or handle an existing-link response.
+    link_response = client.post(
+        f"{base_url}/collections/{collection_id}/datasets/{dataset_id}"
+    )
+    if link_response.status_code not in (200, 201, 204, 409):
+        link_response.raise_for_status()
+
+    register_distribution(
+        client=client,
+        base_url=base_url,
+        dataset_id=dataset_id,
+        config=config,
+    )
 
 
 def register_predictive_scenario(client: httpx.Client, base_url: str) -> int:
@@ -888,7 +1094,10 @@ def get_admin_headers(
         raise RuntimeError("Keycloak did not become ready in time.")
 
     token = resp.json()["access_token"]
-    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
 
 
 def seed_all(base_url: str, headers: dict[str, str]) -> dict:
@@ -910,8 +1119,12 @@ def seed_all(base_url: str, headers: dict[str, str]) -> dict:
             client, base_url, scheduler_id
         )
         register_mast_annotations(client, base_url)
-        efit_source_id = register_efit_provenance(client, base_url, scheduler_id)
-        thomson_instrument_id = register_thomson_instrument_provenance(client, base_url)
+        efit_source_id = register_efit_provenance(
+            client, base_url, scheduler_id
+        )
+        thomson_instrument_id = register_thomson_instrument_provenance(
+            client, base_url
+        )
         mast_upgrade = register_mast_upgrade_datasets(client, base_url)
         jintrac = register_jintrac_collection(client, base_url)
         predictive_id = register_predictive_scenario(client, base_url)
@@ -926,7 +1139,9 @@ def seed_all(base_url: str, headers: dict[str, str]) -> dict:
         "efit_source_id": efit_source_id,
         "thomson_instrument_source_id": thomson_instrument_id,
         "mast_upgrade_raw_collection_id": mast_upgrade["raw_collection_id"],
-        "mast_upgrade_analysed_collection_id": mast_upgrade["analysed_collection_id"],
+        "mast_upgrade_analysed_collection_id": mast_upgrade[
+            "analysed_collection_id"
+        ],
         "jintrac_collection_id": jintrac["collection_id"],
         "jintrac_activity_id": jintrac["activity_id"],
         "predictive_collection_id": predictive_id,
@@ -943,7 +1158,10 @@ def admin_headers() -> dict[str, str]:
     """
     token = os.environ.get("FDS_TOKEN")
     if token:
-        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        return {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
 
     kc_url = os.environ.get("KEYCLOAK_URL")
     if kc_url:
