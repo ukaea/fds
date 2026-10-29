@@ -265,11 +265,13 @@ def register_mast_datasets(client: httpx.Client, base_url: str) -> None:
                 continue
             meta: dict[str, object] = {
                 "name": ids_name,
-                "url": (f"s3://{STFC_BUCKET}/level2/shots/{shot_id}.zarr/{ids_name}"),
+                "url": (
+                    f"s3://{STFC_BUCKET}/level2/shots/{shot_id}.zarr/{ids_name}"
+                ),
                 "endpoint_url": STFC_ENDPOINT,
                 "access_level": "public",
                 "title": f"{ids_name.replace('_', ' ').title()} (Shot {shot_id})",
-                "media_type": "application/x-zarr",
+                "media_type": "application/zarr",
             }
             # thomson_scattering resolves its chord positions and calibration chain
             # from the versioned device-level references registered below.
@@ -302,7 +304,7 @@ def register_mast_geometry(client: httpx.Client, base_url: str) -> None:
             "applies_to": {"shots": ["30420"]},
             "url": "s3://fds-data/mast/geometry/thomson_positions_v1.nc",
             "endpoint_url": FIXTURE_ENDPOINT,
-            "media_type": "application/x-netcdf",
+            "media_type": "application/netcdf",
             "access_level": "public",
             "title": "MAST Thomson chord positions (v1, shot 30420)",
         },
@@ -313,7 +315,7 @@ def register_mast_geometry(client: httpx.Client, base_url: str) -> None:
             "applies_to": {"shot_ranges": [{"from_shot": "30421"}]},
             "url": "s3://fds-data/mast/geometry/thomson_positions_v2.nc",
             "endpoint_url": FIXTURE_ENDPOINT,
-            "media_type": "application/x-netcdf",
+            "media_type": "application/netcdf",
             "access_level": "public",
             "title": "MAST Thomson chord positions (v2, from shot 30421)",
         },
@@ -341,7 +343,7 @@ def register_mast_calibration(client: httpx.Client, base_url: str) -> None:
             "applies_to": {"shots": ["30420", "30421"]},
             "url": "s3://fds-data/mast/calibration/thomson_gain.nc",
             "endpoint_url": FIXTURE_ENDPOINT,
-            "media_type": "application/x-netcdf",
+            "media_type": "application/netcdf",
             "access_level": "public",
             "title": "MAST Thomson gain calibration (stage 1)",
         },
@@ -353,7 +355,7 @@ def register_mast_calibration(client: httpx.Client, base_url: str) -> None:
             "applies_to": {"shots": ["30420", "30421"]},
             "url": "s3://fds-data/mast/calibration/thomson_absolute.nc",
             "endpoint_url": FIXTURE_ENDPOINT,
-            "media_type": "application/x-netcdf",
+            "media_type": "application/netcdf",
             "access_level": "public",
             "title": "MAST Thomson absolute calibration (stage 2)",
         },
@@ -384,7 +386,7 @@ def register_mast_annotations(client: httpx.Client, base_url: str) -> None:
         "level": 2,
         "url": "s3://fds-data/shots/30421/annotations/elm_times.nc",
         "endpoint_url": FIXTURE_ENDPOINT,
-        "media_type": "application/x-netcdf",
+        "media_type": "application/netcdf",
         "access_level": "public",
         "title": "ELM event times (MAST shot 30421)",
         "description": (
@@ -741,7 +743,7 @@ def register_mast_upgrade_50001(client: httpx.Client, base_url: str) -> None:
                         "url": "s3://fds-data/shots/50001/dd3.nc",
                         "group": "equilibrium",
                         "endpoint_url": FIXTURE_ENDPOINT,
-                        "media_type": "application/x-netcdf",
+                        "media_type": "application/netcdf",
                         "format": "NetCDF4",
                         "conforms_to": f"{IMAS_DD}3.42.0",
                     },
