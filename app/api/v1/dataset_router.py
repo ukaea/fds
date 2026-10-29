@@ -60,6 +60,7 @@ def create_dataset_global(
 )
 def read_datasets_global(
     *,
+    request: Request,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     scope: CatalogueScope = CatalogueScope.ALL,
@@ -76,7 +77,8 @@ def read_datasets_global(
     source: str | None = None,
     activity_id: int | None = None,
     shot_id_prefix: str | None = None,
-) -> list[DatasetRead]:
+    base: BaseURLDep,
+) -> list[DatasetRead] | JSONResponse:
     """
     Retrieve every dataset accessible to the current user.
 
@@ -99,6 +101,9 @@ def read_datasets_global(
     finds those on shots 30420 and 30421. A dataset on no shot never matches.
 
     To scope to a single device, use `/devices/{device_name}/datasets`.
+
+    With `Accept: application/ld+json` the page is one JSON-LD document whose
+    `@graph` holds each dataset's `dcat:Dataset` node, in listing order.
     """
     datasets = dataset_service.get_multi(
         user=user,
@@ -113,6 +118,16 @@ def read_datasets_global(
         activity_id=activity_id,
         shot_id_prefix=shot_id_prefix,
     )
+    if "application/ld+json" in request.headers.get("accept", ""):
+        document = dataset_service.to_dcat_listing(
+            datasets,
+            base,
+            include_geometry=include_geometry,
+            include_calibration=include_calibration,
+            include_annotations=include_annotations,
+            user=user,
+        )
+        return JSONResponse(content=document, media_type="application/ld+json")
     return dataset_service.to_read_models(
         datasets,
         include_storage_options=include_storage_options,
@@ -174,6 +189,7 @@ def create_dataset_shot(
 )
 def read_datasets_shot(
     *,
+    request: Request,
     device_name: str,
     shot_id: str,
     dataset_service: DatasetServiceDep,
@@ -188,7 +204,8 @@ def read_datasets_shot(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
-) -> list[DatasetRead]:
+    base: BaseURLDep,
+) -> list[DatasetRead] | JSONResponse:
     """
     Retrieve all datasets for a specific shot.
 
@@ -199,6 +216,9 @@ def read_datasets_shot(
     `activity_type`, `source` and `activity_id` filter on the run that generated
     each dataset: `?activity_id=6` lists what run 6 generated, and
     `?activity_type=simulation` lists simulated datasets.
+
+    With `Accept: application/ld+json` the page is one JSON-LD document whose
+    `@graph` holds each dataset's `dcat:Dataset` node, in listing order.
     """
     datasets = dataset_service.get_datasets_for_shot(
         shot_id,
@@ -211,6 +231,16 @@ def read_datasets_shot(
         source=source,
         activity_id=activity_id,
     )
+    if "application/ld+json" in request.headers.get("accept", ""):
+        document = dataset_service.to_dcat_listing(
+            datasets,
+            base,
+            include_geometry=include_geometry,
+            include_calibration=include_calibration,
+            include_annotations=include_annotations,
+            user=user,
+        )
+        return JSONResponse(content=document, media_type="application/ld+json")
     return dataset_service.to_read_models(
         datasets,
         include_storage_options=include_storage_options,
@@ -339,6 +369,7 @@ def read_dataset_global_by_name(
 )
 def read_datasets_device(
     *,
+    request: Request,
     device_name: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
@@ -356,7 +387,8 @@ def read_datasets_device(
     source: str | None = None,
     activity_id: int | None = None,
     shot_id_prefix: str | None = None,
-) -> list[DatasetRead]:
+    base: BaseURLDep,
+) -> list[DatasetRead] | JSONResponse:
     """
     Retrieve datasets hosted by a device.
 
@@ -380,6 +412,9 @@ def read_datasets_device(
 
     `shot_id_prefix` keeps the datasets on a shot whose ID starts with it, so `304`
     finds those on shots 30420 and 30421. A dataset on no shot never matches.
+
+    With `Accept: application/ld+json` the page is one JSON-LD document whose
+    `@graph` holds each dataset's `dcat:Dataset` node, in listing order.
     """
     datasets = dataset_service.get_datasets_for_device(
         device_name,
@@ -395,6 +430,16 @@ def read_datasets_device(
         activity_id=activity_id,
         shot_id_prefix=shot_id_prefix,
     )
+    if "application/ld+json" in request.headers.get("accept", ""):
+        document = dataset_service.to_dcat_listing(
+            datasets,
+            base,
+            include_geometry=include_geometry,
+            include_calibration=include_calibration,
+            include_annotations=include_annotations,
+            user=user,
+        )
+        return JSONResponse(content=document, media_type="application/ld+json")
     return dataset_service.to_read_models(
         datasets,
         include_storage_options=include_storage_options,
