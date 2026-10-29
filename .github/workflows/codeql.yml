@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # The code scanning ruleset on main applies in the merge queue as well.
+  merge_group:
   schedule:
     # Weekly, so a newly published query finds existing code rather than waiting
     # for the next push.
