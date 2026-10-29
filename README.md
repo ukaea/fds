@@ -82,13 +82,18 @@ If you are developing your own UI, run it on `http://localhost:3001` and it can 
 reference UI against the same stack: the realm accepts logins from either port. A UI running in a
 container reaches FDS and Keycloak by joining the stack's network, `fds-dev_default`.
 
-To work on FDS itself, start the database alone and run FDS from your checkout with reload:
+To work on FDS itself, start the database alone and run FDS from your checkout with reload.
+`.env.example` holds the settings for that, including trust in the key pair generated above, so
+the tokens you mint work here as they do against the stack:
 
 ```bash
+cp .env.example .env               # once
 docker compose up -d postgres
 uv run alembic upgrade head
-FDS_DB_PASSWORD=fds uv run uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload
 ```
+
+Without those settings FDS trusts no issuer and refuses every token with a 401.
 
 > **Podman on macOS:** if `podman compose up` hangs, `scripts/podman-up.sh` works around it
 > (add `--idp` for Keycloak). Docker users do not need it.
@@ -133,7 +138,7 @@ Key configuration areas:
 - **Authentication**: the issuers whose tokens are accepted and the audience expected (`FDS_TRUSTED_IDPS`, `FDS_OIDC_AUDIENCE`). See [Access Control](https://ukaea.github.io/fds/access-control/).
 - **Storage**: the object stores FDS vends credentials for (`FDS_STORAGE_PROVIDERS`).
 
-`.env.example` lists every setting with its default.
+`.env.example` lists every setting, with the values for running FDS from a checkout.
 
 ## Development
 
@@ -147,12 +152,16 @@ The tests need a PostgreSQL to run against, because FDS has no other backend. Th
 `FDS_TEST_DB_URL` when it is set, and otherwise start a container for the run and throw it away:
 
 ```bash
-# against the compose stack's database
-FDS_TEST_DB_URL=postgresql+psycopg://fds:fds@localhost:5432/fds uv run --all-extras pytest
+# against a database of their own on the compose stack's server, created once
+docker compose exec postgres psql -U fds -c 'create database fds_test owner fds'
+FDS_TEST_DB_URL=postgresql+psycopg://fds:fds@localhost:5432/fds_test uv run --all-extras pytest
 
 # or let the tests start their own
 uv run --all-extras pytest
 ```
+
+Not the stack's own `fds` database: the tests create records that the example catalogue already
+holds, such as the device `mast`, and many of them fail.
 
 Each test runs in a transaction that is rolled back, and the schema is built once per run by the
 committed migrations, so a run also proves the migrations produce the schema the models expect.

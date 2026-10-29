@@ -962,7 +962,15 @@ if __name__ == "__main__":
 
     print(f"Seeding FDS at {fds_url}...")
     headers = admin_headers()
-    result = seed_all(fds_url, headers)
+    try:
+        result = seed_all(fds_url, headers)
+    except httpx.HTTPStatusError as e:
+        # FDS says why in the body, which raise_for_status leaves out: for a
+        # 401, the issuer, key or claim it rejected.
+        raise SystemExit(
+            f"{e.request.method} {e.request.url} returned "
+            f"{e.response.status_code}: {e.response.text}"
+        )
     print("Done. Summary:")
     for k, v in result.items():
         print(f"  {k}: {v}")

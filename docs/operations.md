@@ -103,8 +103,8 @@ is the fallback, and it goes stale if that catalogue moves.
 
 ## Settings
 
-Every setting is an environment variable. `.env.example` in the repository lists them with their
-defaults.
+Every setting is an environment variable. `.env.example` in the repository lists them all, with
+the values for running FDS from a checkout.
 
 ### Application
 

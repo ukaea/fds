@@ -42,9 +42,14 @@ are running, or let the tests start a container for the run. Each test runs in
 a transaction that is rolled back, and the schema is built once per run by the
 committed migrations.
 
+Give them a database of their own, not the stack's `fds`: the tests create
+records that the example catalogue already holds, such as the device `mast`,
+and many of them fail.
+
 ```bash
-# the compose stack's database, which is the quickest
-FDS_TEST_DB_URL=postgresql+psycopg://fds:fds@localhost:5432/fds uv run --all-extras pytest
+# a database beside the compose stack's, which is the quickest; create it once
+docker compose exec postgres psql -U fds -c 'create database fds_test owner fds'
+FDS_TEST_DB_URL=postgresql+psycopg://fds:fds@localhost:5432/fds_test uv run --all-extras pytest
 ```
 
 Letting the tests start their own container uses testcontainers, which talks to
