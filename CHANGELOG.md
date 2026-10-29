@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.0.10](https://github.com/ukaea/fds/compare/v0.0.9...v0.0.10) (2026-10-29)
+
+
+### Features
+
+* Find simulation runs by shot ([#215](https://github.com/ukaea/fds/issues/215)) ([4307d70](https://github.com/ukaea/fds/commit/4307d700c5f6b945b68a6ac1e83190ffd1d8b0df))
+* Name a dataset's device and shot in its JSON-LD ([#219](https://github.com/ukaea/fds/issues/219)) ([ce00e07](https://github.com/ukaea/fds/commit/ce00e07f1c4386d1b6782424c926bca525242418))
+* Say when each run started, and keep run badges inside their cards ([#214](https://github.com/ukaea/fds/issues/214)) ([43e76f5](https://github.com/ukaea/fds/commit/43e76f5d0b55320efc19d0bb2efdf4fa0f0d6378))
+* Show how many shots each filter value describes ([#207](https://github.com/ukaea/fds/issues/207)) ([6305f0a](https://github.com/ukaea/fds/commit/6305f0a0ad845f594858064de58ed29608be3dfe))
+
+
+### Bug Fixes
+
+* Keep a run's parameters whole when its JSON-LD is read as linked data ([#216](https://github.com/ukaea/fds/issues/216)) ([9863223](https://github.com/ukaea/fds/commit/986322314721420f5085bfb8635a4875ee1678ed))
+
 ## [0.0.9](https://github.com/ukaea/fds/compare/v0.0.8...v0.0.9) (2026-10-14)
 
 
