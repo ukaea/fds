@@ -132,7 +132,7 @@ FDS checks each link when it is set:
 
 Set `replaces` when registering the new dataset, or afterwards with `PATCH /v1/datasets/{id}`, which sets the whole list: `[]` clears it. Deleting a dataset removes its links. `replaced_by` lists only the replacements you may read.
 
-The replacement is not added to the collections the earlier version is in. Add it as you would any other member, and remove the earlier one if the collection should hold only the newest.
+The replacement is not added to the collections the earlier version is in. A repass of a processing chain registers a new collection for the new pass, which replaces the earlier pass's collection and leaves it as the record of that pass: see [A pass repeated](collection.md#a-pass-repeated). A collection you chose by hand keeps the versions you chose until you edit it.
 
 **Data corrected in a store that keeps its history.** An Icechunk repository keeps every earlier snapshot, and a commit stores only the chunks it changed, so the corrected data can go into the same store as the earlier data. Set each distribution's `ref` to the snapshot its record means, so each record keeps leading to its own data:
 

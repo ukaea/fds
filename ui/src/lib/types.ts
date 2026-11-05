@@ -177,6 +177,10 @@ export interface Collection {
   effective_access_level?: string;
   activity_id?: number | null;
   activity?: ActivitySummary | null;
+  // The collections this one replaces, and those replacing it that the reader
+  // may read: earlier and later versions, such as passes of a processing chain.
+  replaces?: number[] | null;
+  replaced_by?: number[] | null;
   root_url?: string | null;
   created_at?: string;
   scientific_metadata?: ScientificProperty[];

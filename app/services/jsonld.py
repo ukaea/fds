@@ -886,9 +886,15 @@ def map_collection_to_dcat(
     datasets: Sequence[Dataset],
     child_collections: Sequence[Collection],
     activity_inputs: Sequence[Dataset] = (),
+    replaces: Sequence[int] = (),
+    replaced_by: Sequence[int] = (),
 ) -> dict[str, Any]:
     """Maps a Collection to a JSON-LD document typed as both ``dcat:Catalog``
     and ``prov:Collection``.
+
+    ``replaces`` are the ids of the collections it replaces, published as
+    ``dct:replaces``, and ``replaced_by`` those replacing it that the caller may
+    read, published as ``dct:isReplacedBy``.
 
     Member Datasets are serialised as ``dcat:dataset`` references and nested
     child Collections as ``dcat:catalog`` references (``@id`` plus title; the
@@ -918,6 +924,10 @@ def map_collection_to_dcat(
         )
     if collection.issued:
         data["dct:issued"] = _issued_node(collection.issued)
+    if replaces:
+        data["dct:replaces"] = [{"@id": names.collection(i)} for i in replaces]
+    if replaced_by:
+        data["dct:isReplacedBy"] = [{"@id": names.collection(i)} for i in replaced_by]
 
     if collection.access_level:
         data["accessRights"] = collection.access_level.value

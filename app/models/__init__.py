@@ -19,6 +19,7 @@ from .collection import (
     CollectionMember,
     CollectionMemberRead,
     CollectionRead,
+    CollectionReplacement,
     CollectionUpdate,
 )
 from .coverage import Coverage, DateRange, ShotRange
@@ -78,6 +79,7 @@ __all__ = [
     "CollectionMember",
     "CollectionMemberRead",
     "CollectionRead",
+    "CollectionReplacement",
     "CollectionUpdate",
     "Coverage",
     "Dataset",

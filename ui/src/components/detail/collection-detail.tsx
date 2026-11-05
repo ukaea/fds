@@ -14,6 +14,7 @@ import { Layers, Database, FileCode, ChevronRight, Activity as ActivityIcon } fr
 import { JsonLdPanel } from '@/components/jsonld-panel';
 import { CollapsibleSection } from '@/components/collapsible-section';
 import { ActivityBadge } from '@/components/activity-label';
+import { ReplacedNotice, VersionList } from '@/components/versions';
 
 function formatMediaType(mediaType?: string): string {
   if (!mediaType) return 'Zarr';
@@ -130,6 +131,9 @@ export default function CollectionDetail({ id }: { id: string }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-8">
+          {/* A reader can come straight to the members without reading the
+              rest, so it says here when a newer version replaces this one. */}
+          <ReplacedNotice kind="collections" replacedBy={collection.replaced_by ?? []} />
           {!!children.items?.length && (
             <section>
               <div className="flex items-center gap-3 mb-4">
@@ -158,6 +162,9 @@ export default function CollectionDetail({ id }: { id: string }) {
                         </p>
                         {child.title && (
                           <p className="text-xs text-muted-foreground font-mono mt-0.5">{child.name}</p>
+                        )}
+                        {!!child.replaced_by?.length && (
+                          <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border">replaced</span>
                         )}
                       </div>
                     </div>
@@ -236,6 +243,16 @@ export default function CollectionDetail({ id }: { id: string }) {
               {collection.root_url && (
                 <Property label="Root URL">
                   <span className="font-mono break-all">{collection.root_url}</span>
+                </Property>
+              )}
+              {!!collection.replaced_by?.length && (
+                <Property label="Replaced by">
+                  <VersionList kind="collections" ids={collection.replaced_by} />
+                </Property>
+              )}
+              {!!collection.replaces?.length && (
+                <Property label="Replaces">
+                  <VersionList kind="collections" ids={collection.replaces} />
                 </Property>
               )}
               <Property label="Access Level" last>

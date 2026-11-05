@@ -12,6 +12,8 @@ A named, citable group of Datasets.
 | `root_url` | string | No | Access root for all physical data in this collection (`dcat:accessURL`) |
 | `activity_id` | integer | No | The Activity this collection bundles, if any. See [Making an Activity discoverable](#making-an-activity-discoverable) |
 | `scientific_metadata` | list | No | What this collection is about, see [Scientific metadata](index.md#scientific-metadata) |
+| `replaces` | list | No | Ids of the collections this one replaces, filed in the same device and shot. See [A pass repeated](#a-pass-repeated) |
+| `replaced_by` | list | Read-only | Ids of the collections that replace this one, giving only those you may read |
 
 ## Making an Activity discoverable
 
@@ -125,6 +127,26 @@ Create a Collection, then add its member Datasets by id, one bodyless `POST` per
     }
     ```
 
+## A pass repeated
+
+A processing chain, such as an inter-shot scheduler, runs several codes over a shot, and each code's run is its own Activity. Nothing records the chain's run as a whole, so a collection on the shot is where everything it generated is grouped: its `activity_id` stays unset, since it spans several Activities.
+
+When the chain runs again over the same shot, a repass, register a new collection for the new pass and list the earlier one in `replaces`. Leave the earlier collection as it is: it stays the record of what that pass generated, and can still be cited.
+
+```json
+{
+  "name": "analysed-2",
+  "title": "MAST-U Shot 50000: Analysed Experimental Data, Second Pass",
+  "replaces": [3]
+}
+```
+
+If the repass regenerated only some datasets, add the ones it left unchanged to the new collection as well, so it holds the whole pass.
+
+Collection listings and property summaries leave out a collection when you may read a collection that replaces it; add `include_replaced=true` to list it as well. The rules are those for [datasets](versions.md#when-the-data-changes): the replacement is filed in the same device and shot, several collections may replace one and one may replace several, and a collection cannot replace itself or one that already replaces it. A collection that replaces another needs no `activity_id`.
+
+A collection you chose by hand, such as the datasets behind a paper, holds the versions you chose. A repass does not change it; edit it yourself if it should hold newer versions.
+
 ## Listing collections
 
 | Route | Returns |
@@ -155,6 +177,8 @@ GET /v1/collections?activity_id=12               # Activity 12's bundle
 ```
 
 A bundle can also hold datasets its Activity did not generate, such as the Activity's inputs. To list only what Activity 12 generated, use `GET /v1/datasets?activity_id=12`.
+
+A collection is left out of every listing when you may read a collection that replaces it, unless you add `include_replaced=true`. See [A pass repeated](#a-pass-repeated).
 
 A collection read includes `activity`, a summary of the Activity it bundles, in the same form as on a [dataset read](dataset.md#recording-a-datasets-provenance). Each dataset inlined in the read carries a summary of its own Activity.
 

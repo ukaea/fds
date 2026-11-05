@@ -45,6 +45,9 @@ function CollectionCard({ col }: { col: Collection }) {
           {col.effective_access_level || col.access_level}
         </span>
         <ActivityBadge activity={col.activity} />
+        {!!col.replaced_by?.length && (
+          <span className="px-2.5 py-0.5 rounded-full border text-foreground bg-muted border-border">replaced</span>
+        )}
         {col.shot_id && (
           <span className="px-2.5 py-0.5 rounded-full border text-foreground bg-muted border-border">
             shot {col.shot_id}

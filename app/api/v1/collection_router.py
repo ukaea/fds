@@ -66,6 +66,7 @@ def read_collections_global(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
+    include_replaced: bool = False,
     shot_id_prefix: str | None = None,
 ) -> list[CollectionRead]:
     """Retrieve every Collection accessible to the current user.
@@ -87,6 +88,9 @@ def read_collections_global(
     inputs. To list only what an Activity generated, filter the dataset listings
     on `activity_id`.
 
+    A collection is left out when you may read a collection that replaces
+    it, unless `include_replaced=true`.
+
     `shot_id_prefix` keeps the collections on a shot whose ID starts with it, so
     `304` finds those on shots 30420 and 30421. A collection on no shot never
     matches.
@@ -100,6 +104,7 @@ def read_collections_global(
         activity_type=activity_type,
         source=source,
         activity_id=activity_id,
+        include_replaced=include_replaced,
         shot_id_prefix=shot_id_prefix,
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
@@ -121,6 +126,7 @@ def read_collection_properties(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
+    include_replaced: bool = False,
     shot_id_prefix: str | None = None,
     max_values: int = DEFAULT_MAX_VALUES,
 ) -> AvailableProperties:
@@ -140,6 +146,7 @@ def read_collection_properties(
         activity_type=activity_type,
         source=source,
         activity_id=activity_id,
+        include_replaced=include_replaced,
         shot_id_prefix=shot_id_prefix,
         max_values=max_values,
     )
@@ -244,6 +251,7 @@ def read_collections_device(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
+    include_replaced: bool = False,
     shot_id_prefix: str | None = None,
 ) -> list[CollectionRead]:
     """Retrieve a device's Collections that the current user may read.
@@ -265,6 +273,9 @@ def read_collections_device(
     inputs. To list only what an Activity generated, filter the dataset listings
     on `activity_id`.
 
+    A collection is left out when you may read a collection that replaces
+    it, unless `include_replaced=true`.
+
     `shot_id_prefix` keeps the collections on a shot whose ID starts with it, so
     `304` finds those on shots 30420 and 30421. A collection on no shot never
     matches.
@@ -279,6 +290,7 @@ def read_collections_device(
         activity_type=activity_type,
         source=source,
         activity_id=activity_id,
+        include_replaced=include_replaced,
         shot_id_prefix=shot_id_prefix,
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
@@ -301,6 +313,7 @@ def read_collection_properties_device(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
+    include_replaced: bool = False,
     shot_id_prefix: str | None = None,
     max_values: int = DEFAULT_MAX_VALUES,
 ) -> AvailableProperties:
@@ -321,6 +334,7 @@ def read_collection_properties_device(
         activity_type=activity_type,
         source=source,
         activity_id=activity_id,
+        include_replaced=include_replaced,
         shot_id_prefix=shot_id_prefix,
         max_values=max_values,
     )
@@ -395,6 +409,7 @@ def read_collections_shot(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
+    include_replaced: bool = False,
 ) -> list[CollectionRead]:
     """Retrieve all Collections scoped to a specific shot.
 
@@ -410,6 +425,9 @@ def read_collections_shot(
     also hold datasets its Activity did not generate, such as the Activity's
     inputs. To list only what an Activity generated, filter the dataset listings
     on `activity_id`.
+
+    A collection is left out when you may read a collection that replaces
+    it, unless `include_replaced=true`.
     """
     collections = collection_service.get_collections_for_shot(
         shot_id,
@@ -421,6 +439,7 @@ def read_collections_shot(
         activity_type=activity_type,
         source=source,
         activity_id=activity_id,
+        include_replaced=include_replaced,
     )
     return collection_service.to_read_models(collections, include_storage_options, user)
 
@@ -537,7 +556,7 @@ def read_child_collections(
     children = collection_service.get_child_collections(
         collection_id, user, offset=offset, limit=limit
     )
-    return collection_service.to_summary_read_models(children)
+    return collection_service.to_summary_read_models(children, user)
 
 
 @router.post(

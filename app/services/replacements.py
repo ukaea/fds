@@ -4,13 +4,14 @@ from collections.abc import Iterable, Sequence
 from sqlalchemy import ColumnElement
 from sqlmodel import Session, col, select
 
+from app.models.collection import Collection, CollectionReplacement
 from app.models.dataset import Dataset, DatasetReplacement
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.services.exceptions import FDSValidationError, ResourceNotFoundError
 from app.services.visibility import readable_clause, readable_only
 
-type Record = type[Dataset]
-type Link = type[DatasetReplacement]
+type Record = type[Dataset | Collection]
+type Link = type[DatasetReplacement | CollectionReplacement]
 
 
 def not_replaced(
@@ -117,7 +118,7 @@ def replaces_and_replaced_by(
     session: Session,
     record: Record,
     link: Link,
-    records: Sequence[Dataset],
+    records: Sequence[Dataset] | Sequence[Collection],
     user: AuthenticatedUser | None,
 ) -> dict[int | None, tuple[list[int], list[int]]]:
     """For each of ``records``, by id, two lists: the ids of the records it

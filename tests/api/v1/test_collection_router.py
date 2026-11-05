@@ -1222,3 +1222,257 @@ def test_collection_members_listed_only_where_readable(
     members = {m["@id"] for m in ld["prov:hadMember"]}
     assert not any(m.endswith(f"/datasets/{team_ds.id}") for m in members)
     assert not any(m.endswith(f"/collections/{team_col.id}") for m in members)
+
+
+def _mast_shots(session: Session) -> None:
+    DeviceService(session).create(
+        DeviceCreate(name="MAST", type="Spherical", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    ShotService(session).create(
+        ShotCreate(id="30421", device_name="MAST"), user=admin_user
+    )
+    ShotService(session).create(
+        ShotCreate(id="30420", device_name="MAST"), user=admin_user
+    )
+    session.commit()
+
+
+def _register(client: TestClient, token: dict, name: str, shot_id="30421", **body):
+    return client.post(
+        f"/v1/devices/mast/shots/{shot_id}/collections",
+        headers=token,
+        json={"name": name, "access_level": "public", **body},
+    )
+
+
+def _listed(client: TestClient, token: dict, query: str = "") -> list[int]:
+    response = client.get(
+        f"/v1/devices/mast/shots/30421/collections{query}", headers=token
+    )
+    return [c["id"] for c in response.json()]
+
+
+def test_a_collection_replaces_an_earlier_pass(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    old = _register(test_client, admin_user_token, "chain-pass-1").json()
+
+    new = _register(test_client, admin_user_token, "chain-pass-2", replaces=[old["id"]])
+
+    assert new.status_code == 201, new.text
+    read = test_client.get(
+        f"/v1/collections/id/{new.json()['id']}", headers=admin_user_token
+    )
+    assert read.json()["replaces"] == [old["id"]]
+    old_read = test_client.get(
+        f"/v1/collections/id/{old['id']}", headers=admin_user_token
+    )
+    assert old_read.json()["replaced_by"] == [new.json()["id"]]
+
+
+def test_listings_leave_out_replaced_collections(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    old = _register(test_client, admin_user_token, "chain-pass-1").json()
+    new = _register(
+        test_client, admin_user_token, "chain-pass-2", replaces=[old["id"]]
+    ).json()
+
+    everywhere = test_client.get("/v1/collections", headers=admin_user_token).json()
+    on_device = test_client.get(
+        "/v1/devices/mast/collections", headers=admin_user_token
+    ).json()
+    summary = test_client.get(
+        "/v1/collections/properties", headers=admin_user_token
+    ).json()
+
+    assert _listed(test_client, admin_user_token) == [new["id"]]
+    assert [c["id"] for c in everywhere] == [new["id"]]
+    assert [c["id"] for c in on_device] == [new["id"]]
+    assert summary["total"] == 1
+    assert _listed(test_client, admin_user_token, "?include_replaced=true") == [
+        old["id"],
+        new["id"],
+    ]
+
+
+def test_a_replacement_is_filed_in_the_same_place(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    old = _register(test_client, admin_user_token, "chain-pass-1", "30420").json()
+
+    response = _register(
+        test_client, admin_user_token, "chain-pass-2", replaces=[old["id"]]
+    )
+
+    assert response.status_code == 422
+    assert "same place" in response.json()["detail"]
+
+
+def test_replacing_a_missing_collection_is_not_found(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    response = _register(
+        test_client, admin_user_token, "chain-pass-2", replaces=[999999]
+    )
+
+    assert response.status_code == 404
+
+
+def test_a_collection_cannot_replace_itself(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    collection = _register(test_client, admin_user_token, "chain-pass-1").json()
+
+    response = test_client.patch(
+        f"/v1/collections/{collection['id']}",
+        headers=admin_user_token,
+        json={"replaces": [collection["id"]]},
+    )
+
+    assert response.status_code == 422
+
+
+def test_a_collection_cannot_replace_one_that_already_replaces_it(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    first = _register(test_client, admin_user_token, "chain-pass-1").json()
+    second = _register(
+        test_client, admin_user_token, "chain-pass-2", replaces=[first["id"]]
+    ).json()
+
+    response = test_client.patch(
+        f"/v1/collections/{first['id']}",
+        headers=admin_user_token,
+        json={"replaces": [second["id"]]},
+    )
+
+    assert response.status_code == 422
+    assert "already replaces" in response.json()["detail"]
+
+
+def test_an_update_sets_and_clears_the_replacements(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    old = _register(test_client, admin_user_token, "chain-pass-1").json()
+    new = _register(test_client, admin_user_token, "chain-pass-2").json()
+
+    linked = test_client.patch(
+        f"/v1/collections/{new['id']}",
+        headers=admin_user_token,
+        json={"replaces": [old["id"]]},
+    )
+    listed_while_linked = _listed(test_client, admin_user_token)
+    cleared = test_client.patch(
+        f"/v1/collections/{new['id']}",
+        headers=admin_user_token,
+        json={"replaces": []},
+    )
+
+    assert linked.status_code == 200, linked.text
+    assert listed_while_linked == [new["id"]]
+    assert cleared.status_code == 200, cleared.text
+    assert _listed(test_client, admin_user_token) == [old["id"], new["id"]]
+
+
+def test_deleting_the_replaced_collection_clears_the_link(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    old = _register(test_client, admin_user_token, "chain-pass-1").json()
+    new = _register(
+        test_client, admin_user_token, "chain-pass-2", replaces=[old["id"]]
+    ).json()
+
+    deleted = test_client.delete(
+        f"/v1/collections/{old['id']}", headers=admin_user_token
+    )
+
+    assert deleted.status_code == 204
+    read = test_client.get(f"/v1/collections/id/{new['id']}", headers=admin_user_token)
+    assert "replaces" not in read.json()
+
+
+def _public_with_restricted_replacement(session: Session) -> tuple[int, int]:
+    """The ids of a public collection and of a restricted collection replacing it."""
+    collections = CollectionService(session)
+    old = collections.create(
+        CollectionCreate(
+            name="chain-pass-1",
+            device_name="MAST",
+            shot_id="30421",
+            access_level=AccessLevel.PUBLIC,
+        ),
+        admin_user,
+    )
+    assert old.id is not None
+    new = collections.create(
+        CollectionCreate(
+            name="chain-pass-2",
+            device_name="MAST",
+            shot_id="30421",
+            access_level=AccessLevel.RESTRICTED,
+            replaces=[old.id],
+        ),
+        admin_user,
+    )
+    session.commit()
+    assert new.id is not None
+    return old.id, new.id
+
+
+def test_a_replacement_the_reader_cannot_read_is_not_named(
+    test_client: TestClient, session: Session, non_admin_user_token: dict
+):
+    _mast_shots(session)
+    old, _ = _public_with_restricted_replacement(session)
+
+    as_reader = test_client.get(
+        f"/v1/collections/id/{old}", headers=non_admin_user_token
+    )
+
+    assert as_reader.status_code == 200
+    assert "replaced_by" not in as_reader.json()
+
+
+def test_a_reader_who_cannot_read_the_replacement_lists_the_original(
+    test_client: TestClient, session: Session, non_admin_user_token: dict
+):
+    _mast_shots(session)
+    old, new = _public_with_restricted_replacement(session)
+
+    as_admin = CollectionService(session).get_collections_for_shot(
+        "30421", device_name="MAST", user=admin_user
+    )
+
+    assert _listed(test_client, non_admin_user_token) == [old]
+    assert [c.id for c in as_admin] == [new]
+
+
+def test_replacements_link_each_other_in_jsonld(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    old = _register(test_client, admin_user_token, "chain-pass-1").json()
+    new = _register(
+        test_client, admin_user_token, "chain-pass-2", replaces=[old["id"]]
+    ).json()
+    ld = {**admin_user_token, "Accept": "application/ld+json"}
+
+    old_node = resource(
+        test_client.get(f"/v1/collections/id/{old['id']}", headers=ld).json()
+    )
+    new_node = resource(
+        test_client.get(f"/v1/collections/id/{new['id']}", headers=ld).json()
+    )
+
+    assert new_node["dct:replaces"] == [{"@id": old_node["@id"]}]
+    assert old_node["dct:isReplacedBy"] == [{"@id": new_node["@id"]}]

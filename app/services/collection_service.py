@@ -21,12 +21,14 @@ from app.models.collection import (
     CollectionDataset,
     CollectionMember,
     CollectionRead,
+    CollectionReplacement,
     CollectionUpdate,
 )
 from app.models.dataset import Dataset, DatasetRead
 from app.models.device import Device
 from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.scope import CatalogueScope, DeviceScope
+from app.services import replacements
 from app.services.activity_service import ActivityService
 from app.services.available_properties import (
     DEFAULT_MAX_VALUES,
@@ -134,6 +136,15 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 f"Collection '{obj_in.name}' already exists in this context"
             )
 
+        replacements.check_replaces(
+            self.session,
+            Collection,
+            CollectionReplacement,
+            obj_in.replaces,
+            device_name=obj_in.device_name,
+            shot_id=obj_in.shot_id,
+        )
+
         # 3. Persist
         origin = obj_in.origin
         db_obj = Collection.model_validate(obj_in, update={"origin": origin})
@@ -145,6 +156,12 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             raise ConflictError(
                 f"Collection '{obj_in.name}' already exists in this context"
             ) from e
+        if obj_in.replaces:
+            assert db_obj.id is not None
+            replacements.write_replaces(
+                self.session, CollectionReplacement, db_obj.id, set(obj_in.replaces)
+            )
+            self.session.commit()
         self.session.refresh(db_obj)
         return db_obj
 
@@ -190,6 +207,25 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             effective_allowed_idps,
         )
 
+        # ``replaces`` is kept in the collectionreplacement table, not on the
+        # collection row, so the update below skips it and the links are
+        # written here.
+        if "replaces" in update_data:
+            assert db_obj.id is not None
+            wanted = set(update_data["replaces"] or [])
+            replacements.check_replaces(
+                self.session,
+                Collection,
+                CollectionReplacement,
+                wanted,
+                device_name=db_obj.device_name,
+                shot_id=db_obj.shot_id,
+                record_id=db_obj.id,
+            )
+            replacements.write_replaces(
+                self.session, CollectionReplacement, db_obj.id, wanted
+            )
+
         return self.update_unchecked(db_obj=db_obj, obj_in=obj_in)
 
     def delete(self, id: int, user: AuthenticatedUser) -> bool:
@@ -227,11 +263,15 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         source: str | None = None,
         shot_id_prefix: str | None = None,
         activity_id: int | None = None,
+        include_replaced: bool = False,
+        user: AuthenticatedUser,
     ) -> list[ColumnElement[bool]]:
         """The clauses for the collections a listing asks for, before access.
 
         The listings and the property summaries both use them, so a summary's
-        ``total`` counts the collections the matching listing returns.
+        ``total`` counts the collections the matching listing returns. A
+        collection is left out when ``user`` may read a collection that replaces
+        it, unless ``include_replaced``.
         """
         clauses = scope_clauses(
             col(Collection.device_name), col(Collection.shot_id), scope
@@ -248,6 +288,15 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             *property_clauses(Collection.scientific_metadata, properties),
             *activity_clauses(
                 col(Collection.activity_id), activity_type, source, activity_id
+            ),
+            *(
+                []
+                if include_replaced
+                else [
+                    replacements.not_replaced(
+                        self.session, Collection, CollectionReplacement, user
+                    )
+                ]
             ),
         ]
 
@@ -275,6 +324,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         source: str | None = None,
         shot_id_prefix: str | None = None,
         activity_id: int | None = None,
+        include_replaced: bool = False,
     ) -> Sequence[Collection]:
         """Return every Collection, filtered by access level.
 
@@ -289,6 +339,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             source=source,
             activity_id=activity_id,
             shot_id_prefix=shot_id_prefix,
+            include_replaced=include_replaced,
+            user=user,
         )
         return self._page(clauses, user, offset, limit)
 
@@ -303,6 +355,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         source: str | None = None,
         shot_id_prefix: str | None = None,
         activity_id: int | None = None,
+        include_replaced: bool = False,
         max_values: int = DEFAULT_MAX_VALUES,
     ) -> AvailableProperties:
         """The properties the matching collections carry, for building a filter.
@@ -321,6 +374,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             source=source,
             activity_id=activity_id,
             shot_id_prefix=shot_id_prefix,
+            include_replaced=include_replaced,
+            user=user,
         )
         where.append(
             readable_clause(
@@ -399,6 +454,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         source: str | None = None,
         shot_id_prefix: str | None = None,
         activity_id: int | None = None,
+        include_replaced: bool = False,
     ) -> Sequence[Collection]:
         """Return a device's Collections, filtered by access level.
 
@@ -414,6 +470,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             source=source,
             activity_id=activity_id,
             shot_id_prefix=shot_id_prefix,
+            include_replaced=include_replaced,
+            user=user,
         )
         return self._page(clauses, user, offset, limit)
 
@@ -428,6 +486,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         activity_type: ActivityType | None = None,
         source: str | None = None,
         activity_id: int | None = None,
+        include_replaced: bool = False,
     ) -> Sequence[Collection]:
         """Return all Collections scoped to a specific shot, filtered by access."""
         clauses = self._listing_clauses(
@@ -437,6 +496,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             activity_type=activity_type,
             source=source,
             activity_id=activity_id,
+            include_replaced=include_replaced,
+            user=user,
         )
         return self._page(clauses, user, offset, limit)
 
@@ -639,11 +700,16 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         unique_children = {c.id: c for page in children.values() for c in page}
         child_reads: dict[int | None, CollectionRead] = {
             read.id: read
-            for read in self.to_summary_read_models(list(unique_children.values()))
+            for read in self.to_summary_read_models(
+                list(unique_children.values()), user
+            )
         }
         policies = get_effective_policies(collections, self.session)
         activities = ActivityService(self.session).get_summaries(
             c.activity_id for c in collections
+        )
+        links = replacements.replaces_and_replaced_by(
+            self.session, Collection, CollectionReplacement, collections, user
         )
 
         return [
@@ -651,6 +717,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 collection,
                 update={
                     "effective_access_level": policy.access_level,
+                    "replaces": links.get(collection.id, ([], []))[0] or None,
+                    "replaced_by": links.get(collection.id, ([], []))[1] or None,
                     "activity": (
                         activities.get(collection.activity_id)
                         if collection.activity_id
@@ -683,18 +751,25 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             check_is_admin(user)
 
     def to_summary_read_models(
-        self, collections: Sequence[Collection]
+        self,
+        collections: Sequence[Collection],
+        user: AuthenticatedUser = ANONYMOUS_USER,
     ) -> list[CollectionRead]:
         """``CollectionRead`` DTOs without their members, as listed inside a parent."""
         policies = get_effective_policies(collections, self.session)
         activities = ActivityService(self.session).get_summaries(
             c.activity_id for c in collections
         )
+        links = replacements.replaces_and_replaced_by(
+            self.session, Collection, CollectionReplacement, collections, user
+        )
         return [
             CollectionRead.model_validate(
                 c,
                 update={
                     "effective_access_level": policy.access_level,
+                    "replaces": links.get(c.id, ([], []))[0] or None,
+                    "replaced_by": links.get(c.id, ([], []))[1] or None,
                     "activity": activities.get(c.activity_id)
                     if c.activity_id
                     else None,
@@ -784,9 +859,14 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         self, collection: Collection, base_url: str, user: AuthenticatedUser
     ) -> dict:
         """The collection's ``dcat:Catalog`` document, with the same members as its read."""
+        replaces, replaced_by = replacements.replaces_and_replaced_by(
+            self.session, Collection, CollectionReplacement, [collection], user
+        ).get(collection.id, ([], []))
         return map_collection_to_dcat(
             collection,
             base_url,
+            replaces=replaces,
+            replaced_by=replaced_by,
             datasets=self.get_member_datasets(
                 collection.id, user, limit=INLINE_MEMBERS
             ),

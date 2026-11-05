@@ -230,6 +230,8 @@ Each version of a dataset is a `dcat:Dataset` of its own. A version names each d
 }
 ```
 
+A collection that replaces another carries the same two terms.
+
 FDS does not publish DCAT's version chain (`dcat:previousVersion`, `dcat:hasVersion`, `dcat:hasCurrentVersion`). Those assume one line of versions with one current version, while two FDS datasets can each replace the same one. Nor does it publish `prov:wasRevisionOf`: PROV defines a revision as a derivation that keeps substantial content from the original, and a reprocessed dataset is usually made again from the same inputs instead.
 
 ## Shot as `dcat:Catalog`
@@ -458,6 +460,7 @@ See [Provenance](provenance.md) for the model behind these terms.
 | "dataset produced by" | `prov:wasGeneratedBy` | PROV-O |
 | Dataset `replaces` | `dct:replaces` | Dublin Core |
 | Dataset `replaced_by` | `dct:isReplacedBy` | Dublin Core |
+| Collection `replaces` / `replaced_by` | `dct:replaces` / `dct:isReplacedBy` | Dublin Core |
 | Distribution `ref` | `schema:version` on the `dcat:Distribution`, which then has no `dcat:downloadURL` | schema.org, DCAT 3 |
 | "activity used input / instrument" | `prov:used` + `prov:qualifiedUsage` (`prov:hadRole`) | PROV-O |
 | "activity associated with agent" | `prov:wasAssociatedWith` + `prov:qualifiedAssociation` (`prov:hadRole`) | PROV-O |

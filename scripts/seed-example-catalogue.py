@@ -586,6 +586,7 @@ def register_mast_upgrade_datasets(
         analysed_col.raise_for_status()
         analysed_collection_id = analysed_col.json()["id"]
 
+        members: list[dict] = []
         for ids_name in MAST_U_IDS_GROUPS:
             ds = client.post(
                 f"{base_url}/devices/mastu/shots/50000/datasets",
@@ -603,10 +604,8 @@ def register_mast_upgrade_datasets(
             client.post(
                 f"{base_url}/collections/{analysed_collection_id}/datasets/{ds.json()['id']}"
             )
-            if ids_name == "thomson_scattering":
-                register_thomson_reprocessing(
-                    client, base_url, ds.json(), analysed_collection_id
-                )
+            members.append(ds.json())
+        register_thomson_reprocessing(client, base_url, members, analysed_collection_id)
 
     register_mast_upgrade_50001(client, base_url)
 
@@ -617,14 +616,18 @@ def register_mast_upgrade_datasets(
 
 
 def register_thomson_reprocessing(
-    client: httpx.Client, base_url: str, original: dict, collection_id: int
+    client: httpx.Client, base_url: str, members: list[dict], collection_id: int
 ) -> None:
-    """Register a corrected version of MAST-U shot 50000's Thomson scattering data.
+    """Register a second pass over MAST-U shot 50000's analysed data, in which
+    only the Thomson scattering fit changed.
 
     The correction was committed to the same Icechunk store as the original. The
     original is pinned to the tag of the snapshot it describes, the correction to
-    its own tag, and the correction replaces the original in the collection.
+    its own tag. The first pass's collection is left as it is, the record of
+    that pass; a new collection holds the second pass, the correction with the
+    datasets it left unchanged, and replaces the first.
     """
+    original = next(m for m in members if m["name"] == "thomson_scattering")
     client.patch(
         f"{base_url}/distributions/{original['distributions'][0]['id']}",
         json={"ref": "v1"},
@@ -666,12 +669,27 @@ def register_thomson_reprocessing(
         },
     )
     corrected.raise_for_status()
-    client.post(
-        f"{base_url}/collections/{collection_id}/datasets/{corrected.json()['id']}"
-    ).raise_for_status()
-    client.delete(
-        f"{base_url}/collections/{collection_id}/datasets/{original['id']}"
-    ).raise_for_status()
+
+    second_pass = client.post(
+        f"{base_url}/devices/mastu/shots/50000/collections",
+        json={
+            "name": "analysed-2",
+            "title": "MAST-U Shot 50000: Analysed Experimental Data, Second Pass",
+            "description": (
+                "The analysed data after the Thomson scattering profiles were refit "
+                "with the corrected spectral calibration. The other datasets are "
+                "unchanged from the first pass."
+            ),
+            "access_level": "public",
+            "root_url": "s3://fds-data/shots/50000/analysed/",
+            "replaces": [collection_id],
+        },
+    )
+    second_pass.raise_for_status()
+    for member in [*(m for m in members if m is not original), corrected.json()]:
+        client.post(
+            f"{base_url}/collections/{second_pass.json()['id']}/datasets/{member['id']}"
+        ).raise_for_status()
 
 
 def register_mast_upgrade_50001(client: httpx.Client, base_url: str) -> None:

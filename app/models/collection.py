@@ -51,6 +51,23 @@ class CollectionMember(SQLModel, table=True):
     child: int = Field(foreign_key="collection.id", primary_key=True)
 
 
+class CollectionReplacement(SQLModel, table=True):
+    """One Collection replacing another: ``replacement`` is the newer
+    Collection, such as a later pass of a processing chain, and ``replaced`` is
+    the one it replaces. Both are filed in the same device and shot.
+
+    A Collection can replace several Collections, and several can replace one.
+    Deleting either Collection deletes the row.
+    """
+
+    __table_args__ = (
+        ForeignKeyConstraint(["replacement"], ["collection.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["replaced"], ["collection.id"], ondelete="CASCADE"),
+    )
+    replacement: int = Field(primary_key=True)
+    replaced: int = Field(primary_key=True, index=True)
+
+
 class CollectionDatasetRead(SQLModel):
     """A Dataset membership link on a Collection (``dcat:dataset``)."""
 
@@ -189,6 +206,13 @@ class CollectionCreate(CollectionBase):
     shot_id: str | None = None
     activity_id: int | None = None
     origin: str | None = None
+    replaces: list[int] = Field(
+        default_factory=list,
+        description=(
+            "The Collections this one replaces, such as the bundle of an earlier "
+            "pass of the same processing chain, filed in the same device and shot."
+        ),
+    )
 
 
 class CollectionRead(CollectionBase, TimestampMixin):
@@ -198,6 +222,10 @@ class CollectionRead(CollectionBase, TimestampMixin):
     are inlined one level deep as ``CollectionRead`` objects; their own
     ``datasets`` and ``child_collections`` fields are omitted to prevent
     unbounded recursive nesting in the response.
+
+    ``replaces`` lists the ids of the Collections this one replaces.
+    ``replaced_by`` lists those that replace it, giving only the ones the reader
+    may read.
     """
 
     id: int
@@ -205,6 +233,8 @@ class CollectionRead(CollectionBase, TimestampMixin):
     activity_id: int | None = None
     activity: "ActivitySummary | None" = None
     origin: str | None = None
+    replaces: list[int] | None = None
+    replaced_by: list[int] | None = None
     effective_access_level: AccessLevel | None = None
     datasets: list["DatasetRead"] | None = None
     child_collections: list["CollectionRead"] | None = None
@@ -244,3 +274,5 @@ class CollectionUpdate(SQLModel):
             "inherit from the enclosing shot or device policy."
         ),
     )
+    # Replaces the whole list; an empty list or null clears it.
+    replaces: list[int] | None = None

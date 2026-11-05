@@ -7,11 +7,11 @@ import { fetcher, API_BASE } from '@/lib/api';
 import { ActivitySummary } from '@/lib/types';
 import { ActivityBadge } from '@/components/activity-label';
 
-// The record kinds whose versions a page can list, as they appear in API and
-// page paths.
-export type VersionKind = 'datasets';
+// Datasets replace datasets and collections replace collections: the record
+// kinds whose versions a page can list, as they appear in API and page paths.
+export type VersionKind = 'datasets' | 'collections';
 
-const NOUN: Record<VersionKind, string> = { datasets: 'Dataset' };
+const NOUN: Record<VersionKind, string> = { datasets: 'Dataset', collections: 'Collection' };
 const LINK = 'text-primary underline underline-offset-4 hover:text-foreground';
 
 // What a version's link says about it, read from the record itself.

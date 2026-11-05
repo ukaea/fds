@@ -62,6 +62,7 @@ export function ActivityCard({ collection }: { collection: Collection }) {
       <div className="mt-4 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
         <ActivityBadge activity={collection.activity} />
         <CollectionPlace collection={collection} />
+        {!!collection.replaced_by?.length && <span className={BADGE}>replaced</span>}
         {members > 0 && (
           <span className="flex items-center gap-1">
             <Database className="w-3.5 h-3.5" />

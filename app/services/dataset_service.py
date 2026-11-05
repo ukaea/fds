@@ -672,8 +672,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 activity_id=update_data.get("activity_id", db_obj.activity_id),
                 dataset_id=db_obj.id,
             )
-            # ``replaces`` is not a column, so it is written here rather than
-            # by the update below.
+            # ``replaces`` is kept in the datasetreplacement table, not on the
+            # dataset row, so the update below skips it and the links are
+            # written here.
             if "replaces" in update_data:
                 replacements.write_replaces(
                     self.session, DatasetReplacement, db_obj.id, wanted
