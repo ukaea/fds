@@ -93,6 +93,8 @@ are faster and can look more closely.
   squash-merged and its title becomes the commit that decides the next version.
 - Include tests. For a bug fix, a test that fails without the fix is the point.
 - CI must pass before review.
+- An approved PR merges through a merge queue, which runs CI again on top of the
+  latest `main` and merges only if that passes.
 
 | Type | Use it for | Effect on the next release |
 | --- | --- | --- |

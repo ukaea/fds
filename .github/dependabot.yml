@@ -50,3 +50,8 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 2
+    ignore:
+      # A new Python minor is a new interpreter in production. It moves by hand,
+      # together with .python-version and the builder image.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-minor"]

@@ -1,8 +1,7 @@
 name: CI
 
+# No run on push to main: the merge queue has already tested what lands there.
 on:
-  push:
-    branches: [main]
   pull_request:
   merge_group:
   workflow_dispatch:
