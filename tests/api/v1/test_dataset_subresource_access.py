@@ -87,7 +87,7 @@ def test_restricted_distribution_url_does_not_leak(
 def test_restricted_activity_parameters_do_not_leak(
     test_client: TestClient, restricted_dataset_id: int
 ):
-    """Run parameters are free-form JSON and may carry anything the producer put
+    """Activity parameters are free-form JSON and may carry anything the producer put
     there, so they must not appear in a refused response."""
     resp = test_client.get(f"/v1/datasets/{restricted_dataset_id}/activity")
     assert "confidential" not in resp.text

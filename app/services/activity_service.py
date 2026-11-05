@@ -34,7 +34,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
     def create(self, obj_in: ActivityCreate, user: AuthenticatedUser) -> Activity:
         """Create an Activity and the provenance it declares.
 
-        A single request registers the run plus its used inputs, the
+        A single request registers the Activity plus its used inputs, the
         instruments it used, any additional agents (beyond the primary
         ``source_id`` executor), and any delegations between agents
         (``prov:actedOnBehalfOf``). Each of these can also be added or removed
@@ -102,11 +102,11 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
     ) -> Activity:
         """Retrieve an Activity by id, for a caller who may read it.
 
-        A run has no access policy of its own. A caller may read it if they may
-        read a dataset it generated or a collection that bundles it, and only a
-        global admin may read a run with neither. A read that only restricted
-        records allow is recorded in the audit trail as a restricted read of the
-        run.
+        An Activity has no access policy of its own. A caller may read it if
+        they may read a dataset it generated or a collection that bundles it, and
+        only a global admin may read an Activity with neither. A read that only
+        restricted records allow is recorded in the audit trail as a restricted
+        read of the Activity.
         """
         activity = self._require_activity(activity_id)
         levels = readable_access_levels(
@@ -129,7 +129,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
     def to_dcat(
         self, activity: Activity, base_url: str, user: AuthenticatedUser
     ) -> dict:
-        """The run's ``prov:Activity`` document, listing only inputs ``user`` may read."""
+        """The Activity's ``prov:Activity`` document, listing only inputs ``user`` may read."""
         return map_activity_to_dcat(
             activity,
             base_url,
@@ -258,7 +258,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
     def get_summaries(
         self, activity_ids: Iterable[int | None]
     ) -> dict[int, ActivitySummary]:
-        """Summaries of the runs ``activity_ids`` name, by id, read in one query.
+        """Summaries of the Activities ``activity_ids`` name, by id, read in one query.
 
         Callers pass only the ids of records the user may read, so a summary
         appears only where its record does.

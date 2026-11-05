@@ -8,8 +8,8 @@ import { Activity, Collection, Dataset, Source } from '@/lib/types';
 import { usePagedList } from '@/lib/use-paged-list';
 import { LoadMore } from '@/components/load-more';
 import { DatasetResults } from '@/components/dataset-results';
-import { RunCard } from '@/components/run-card';
-import { originLabel, runName } from '@/components/run-label';
+import { ActivityCard } from '@/components/activity-card';
+import { activityName } from '@/components/activity-label';
 
 const PAGE_SIZE = 100;
 
@@ -39,9 +39,9 @@ export default function ActivityDetail({ id }: { id: string }) {
     fetcher
   );
 
-  // The datasets the run generated, and its bundle, each requested separately. A
-  // bundle can also hold the run's inputs, so its members are not a list of what
-  // the run generated.
+  // The datasets the Activity generated, and its bundle, each requested
+  // separately. A bundle can also hold the Activity's inputs, so its members are
+  // not a list of what the Activity generated.
   const outputs = usePagedList<Dataset>(
     id ? `${API_BASE}/datasets?activity_id=${id}` : null,
     PAGE_SIZE
@@ -66,7 +66,7 @@ export default function ActivityDetail({ id }: { id: string }) {
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Data Sources
         </Link>
         <div className="card p-8 text-center text-muted-foreground">
-          Run {id} not found.
+          Activity {id} not found.
         </div>
       </div>
     );
@@ -80,8 +80,7 @@ export default function ActivityDetail({ id }: { id: string }) {
     source: executor?.name,
     source_version: activity.source_version,
   };
-  const origin = originLabel(summary);
-  const title = runName(summary) ?? (origin ? `${origin} run` : `Run ${activity.id}`);
+  const title = activityName(summary) ?? `Activity ${activity.id}`;
   const simulation = activity.activity_type === 'simulation';
 
   return (
@@ -103,7 +102,7 @@ export default function ActivityDetail({ id }: { id: string }) {
             </>
           )}
           <ChevronRight className="w-4 h-4 mx-2" />
-          <span className="text-foreground font-medium">Run {activity.id}</span>
+          <span className="text-foreground font-medium">Activity {activity.id}</span>
         </div>
       </div>
 
@@ -117,10 +116,8 @@ export default function ActivityDetail({ id }: { id: string }) {
             <div className="flex-1">
               <h1 className="text-3xl font-bold text-foreground mb-2">{title}</h1>
               <div className="flex items-center gap-2 flex-wrap">
-                {origin && (
-                  <span className="text-sm text-foreground">
-                    {simulation ? 'Simulation run' : `${origin} run`}
-                  </span>
+                {activity.activity_type && (
+                  <span className="text-sm text-foreground capitalize">{activity.activity_type}</span>
                 )}
                 {runId && <span className="text-sm font-mono text-muted-foreground">{runId}</span>}
                 <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium text-foreground bg-muted border-border">
@@ -207,7 +204,7 @@ export default function ActivityDetail({ id }: { id: string }) {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {bundles.map((bundle) => (
-              <RunCard key={bundle.id} collection={bundle} />
+              <ActivityCard key={bundle.id} collection={bundle} />
             ))}
           </div>
         </section>

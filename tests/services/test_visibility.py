@@ -226,7 +226,7 @@ def test_activity_inputs_page_over_readable_rows(session: Session, admin_user):
         service.add_input(
             activity_id=activity_id, dataset_id=dataset_id, user=admin_user
         )
-    # A public output, so that an anonymous caller may read the run at all.
+    # A public output, so that an anonymous caller may read the Activity at all.
     DatasetService(session).create(
         DatasetCreate(name="output", device_name="DEV", activity_id=activity_id),
         user=admin_user,

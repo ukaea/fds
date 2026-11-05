@@ -5,7 +5,7 @@ import { Database, Layers } from 'lucide-react';
 import { Collection } from '@/lib/types';
 import { useDeviceLabel } from '@/lib/use-device-label';
 import { PropertyBadges } from '@/components/properties';
-import { RunBadge } from '@/components/run-label';
+import { ActivityBadge } from '@/components/activity-label';
 
 const BADGE = 'text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border';
 
@@ -19,7 +19,7 @@ export function memberCount(count: number, noun: string): string {
 
 /**
  * Where a collection sits, in words: on a shot, on a device as a whole, or on
- * neither. A run that modelled no shot, such as a predictive scenario, is a
+ * neither. An Activity that modelled no shot, such as a predictive scenario, is a
  * device-level collection, and saying so is how a reader tells it from a
  * reconstruction of a real discharge.
  */
@@ -35,11 +35,11 @@ export function CollectionPlace({ collection }: { collection: Collection }) {
 }
 
 /**
- * A run's bundle as a list row: what ran, where, what the run says it was
- * about, and how much it produced. Links to the collection, the run's citable
- * record.
+ * An Activity's bundle as a list row: what ran, where, what the Activity says
+ * it was about, and how much it generated. Links to the collection, the
+ * Activity's citable record.
  */
-export function RunCard({ collection }: { collection: Collection }) {
+export function ActivityCard({ collection }: { collection: Collection }) {
   const members = collection.datasets?.length ?? 0;
 
   return (
@@ -60,7 +60,7 @@ export function RunCard({ collection }: { collection: Collection }) {
       </div>
 
       <div className="mt-4 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-        <RunBadge activity={collection.activity} />
+        <ActivityBadge activity={collection.activity} />
         <CollectionPlace collection={collection} />
         {members > 0 && (
           <span className="flex items-center gap-1">

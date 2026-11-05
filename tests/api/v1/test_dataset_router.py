@@ -393,7 +393,7 @@ def test_filtering_by_run_leaves_out_datasets_the_caller_cannot_read(
         ShotCreate(id="2", device_name="MAST", access_level=AccessLevel.RESTRICTED),
         user=admin_user,
     )
-    run = ActivityService(session).create(
+    activity = ActivityService(session).create(
         ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
     )
     DatasetService(session).create(
@@ -402,7 +402,7 @@ def test_filtering_by_run_leaves_out_datasets_the_caller_cannot_read(
             level=2,
             device_name="MAST",
             shot_id="1",
-            activity_id=run.id,
+            activity_id=activity.id,
         ),
         user=admin_user,
     )
@@ -412,14 +412,14 @@ def test_filtering_by_run_leaves_out_datasets_the_caller_cannot_read(
             level=2,
             device_name="MAST",
             shot_id="2",
-            activity_id=run.id,
+            activity_id=activity.id,
         ),
         user=admin_user,
     )
     session.commit()
 
     response = test_client.get(
-        f"/v1/datasets/?activity_id={run.id}", headers=non_admin_user_token
+        f"/v1/datasets/?activity_id={activity.id}", headers=non_admin_user_token
     )
     assert response.status_code == 200
     assert [ds["name"] for ds in response.json()] == ["open_profiles"]
@@ -476,7 +476,7 @@ def test_dataset_read_includes_a_summary_of_its_run(
     jintrac = SourceService(session).create(
         SourceCreate(name="jintrac", kind=SourceKind.SOFTWARE), user=admin_user
     )
-    run = ActivityService(session).create(
+    activity = ActivityService(session).create(
         ActivityCreate(
             activity_type=ActivityType.SIMULATION,
             source_id=jintrac.id,
@@ -488,7 +488,7 @@ def test_dataset_read_includes_a_summary_of_its_run(
     datasets = DatasetService(session)
     datasets.create(
         DatasetCreate(
-            name="core_profiles", level=2, device_name="TCV", activity_id=run.id
+            name="core_profiles", level=2, device_name="TCV", activity_id=activity.id
         ),
         user=admin_user,
     )
@@ -500,8 +500,8 @@ def test_dataset_read_includes_a_summary_of_its_run(
 
     response = test_client.get("/v1/devices/TCV/datasets/", headers=admin_user_token)
     assert response.status_code == 200
-    runs = {ds["name"]: ds.get("activity") for ds in response.json()}
-    assert runs == {
+    activities = {ds["name"]: ds.get("activity") for ds in response.json()}
+    assert activities == {
         "core_profiles": {
             "activity_type": "simulation",
             "source": "jintrac",

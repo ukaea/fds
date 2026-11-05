@@ -101,7 +101,7 @@ export default function Home() {
             <Cpu className="w-8 h-8 text-foreground" />
           </div>
           <h2 className="text-2xl font-bold mb-3">Simulations</h2>
-          <p className="text-muted-foreground">Find simulation runs by code, device or what they simulated, and the data they produced.</p>
+          <p className="text-muted-foreground">Find simulations by code, device or what they simulated, and the data they produced.</p>
         </Link>
         <Link href="/sources" className="card group p-8 flex flex-col items-center text-center hover:bg-muted transition-colors">
           <div className="bg-muted p-4 rounded-full mb-6 group-hover:scale-110 transition-transform">

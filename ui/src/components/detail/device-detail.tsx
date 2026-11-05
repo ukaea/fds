@@ -224,7 +224,7 @@ export default function DeviceDetail({ deviceName }: { deviceName: string }) {
         <ShotDatasets deviceName={deviceName} aside={jsonLd} />
       )}
 
-      {/* Every run on the device, including those that modelled no shot, which a
+      {/* Every simulation on the device, including those that modelled no shot, which a
           shot's page cannot show. */}
       {activeTab === 'simulations' && <SimulationBrowser deviceName={deviceName} />}
 

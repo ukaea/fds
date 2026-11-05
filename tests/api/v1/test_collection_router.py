@@ -316,14 +316,14 @@ def test_filtering_by_run_leaves_out_collections_the_caller_cannot_read(
         ShotCreate(id="s2", device_name="DEV", access_level=AccessLevel.RESTRICTED),
         user=admin_user,
     )
-    run = ActivityService(session).create(
+    activity = ActivityService(session).create(
         ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
     )
     _make_collection(
-        session, "open-run", device="DEV", shot_id="s1", activity_id=run.id
+        session, "open-run", device="DEV", shot_id="s1", activity_id=activity.id
     )
     _make_collection(
-        session, "restricted-run", device="DEV", shot_id="s2", activity_id=run.id
+        session, "restricted-run", device="DEV", shot_id="s2", activity_id=activity.id
     )
 
     response = test_client.get(
@@ -507,7 +507,7 @@ def test_collection_read_includes_a_summary_of_its_run(
     jintrac = SourceService(session).create(
         SourceCreate(name="jintrac", kind=SourceKind.SOFTWARE), user=admin_user
     )
-    run = ActivityService(session).create(
+    activity = ActivityService(session).create(
         ActivityCreate(
             activity_type=ActivityType.SIMULATION,
             source_id=jintrac.id,
@@ -516,10 +516,12 @@ def test_collection_read_includes_a_summary_of_its_run(
         ),
         user=admin_user,
     )
-    bundle = _make_collection(session, "jintrac-run", device="DEV", activity_id=run.id)
+    bundle = _make_collection(
+        session, "jintrac-run", device="DEV", activity_id=activity.id
+    )
     output = DatasetService(session).create(
         DatasetCreate(
-            name="core_profiles", level=2, device_name="DEV", activity_id=run.id
+            name="core_profiles", level=2, device_name="DEV", activity_id=activity.id
         ),
         user=admin_user,
     )
@@ -1016,7 +1018,7 @@ def test_collection_include_storage_options(
 def test_collection_jsonld_carries_scientific_metadata(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
-    """A run bundle's claims project the same way a Shot's or a Dataset's do."""
+    """An Activity's bundle's claims project the same way a Shot's or a Dataset's do."""
     CollectionService(session).create(
         CollectionCreate(
             name="ld-sci-col",

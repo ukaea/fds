@@ -228,8 +228,8 @@ def register_mast_datasets(client: httpx.Client, base_url: str) -> None:
     ]:
         for ids_name in ids_list:
             # Skip a dataset the shot already has. A 409 cannot be relied on: once
-            # a run is attached to a dataset, posting its name again without a run
-            # is not a conflict, so the dataset would be registered twice.
+            # an Activity is attached to a dataset, posting its name again without
+            # one is not a conflict, so the dataset would be registered twice.
             existing = client.get(
                 f"{base_url}/devices/{device}/shots/{shot_id}/datasets/{ids_name}"
             )
@@ -450,13 +450,13 @@ def register_efit_provenance(
     """Registers EFIT source + analysis activities for equilibrium datasets.
 
     The inter-shot scheduler orchestrates these automated between-shot analyses,
-    so each run associates the scheduler (orchestrator) and records EFIT acting
+    so each Activity associates the scheduler (orchestrator) and records EFIT acting
     on its behalf. Returns the EFIT source_id.
     """
     source_id = get_or_create_source(
         client, base_url, "efit", "EFIT equilibrium reconstruction code", "software"
     )
-    # The inter-shot scheduler orchestrated these runs; EFIT acted on its behalf.
+    # The inter-shot scheduler orchestrated these Activities; EFIT acted on its behalf.
     orchestration = {
         "agents": [{"source_id": scheduler_source_id, "role": "orchestrator"}],
         "delegations": [
@@ -509,8 +509,8 @@ def register_thomson_instrument_provenance(client: httpx.Client, base_url: str) 
     acquisition Activity that *used* it, naming no agent.
 
     A diagnostic is a tool, not something that bears responsibility, so it projects
-    to a prov:Entity the acquisition used (role=instrument), never an agent the run
-    was associated with. Returns the instrument's source_id.
+    to a prov:Entity the acquisition used (role=instrument), never an agent the
+    Activity was associated with. Returns the instrument's source_id.
     """
     instrument_id = get_or_create_source(
         client,
@@ -756,8 +756,8 @@ def register_jintrac_collection(
             "description": "JINTRAC transport simulation outputs: equilibrium, core profiles, and heat sources.",
             "access_level": "public",
             "activity_id": activity_id,
-            # What the run simulated, as opposed to what the shot measured. This
-            # is what makes the run findable as a run: the bundle answers
+            # What the simulation simulated, as opposed to what the shot measured.
+            # This is what makes the Activity findable: the bundle answers
             # ?annotation=confinement_mode:H-mode, the Activity never does.
             "scientific_metadata": [
                 {
@@ -786,8 +786,8 @@ def register_predictive_scenario(client: httpx.Client, base_url: str) -> int:
     """Registers a predictive JINTRAC run for MAST-U that models no shot. Returns the collection id.
 
     A prediction models no real shot, so it gets no invented one: its outputs and
-    its bundle are registered on the device, and the bundle carries what the run
-    simulated.
+    its bundle are registered on the device, and the bundle carries what the
+    simulation simulated.
     """
     existing = client.get(
         f"{base_url}/devices/mastu/collections/jintrac-predictive-h-mode"

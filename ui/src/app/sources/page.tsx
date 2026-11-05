@@ -45,7 +45,7 @@ export default function SourcesPage() {
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Data Sources</h1>
           <p className="text-muted-foreground">
-            The codes, instruments and people that produce data. A code&apos;s page lists the runs it
+            The codes, instruments and people that produce data. A code&apos;s page lists the Activities it
             carried out and the data they generated.
           </p>
         </div>

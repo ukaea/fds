@@ -9,8 +9,8 @@ import { LoadMore } from '@/components/load-more';
 import { CollapsibleSection } from '@/components/collapsible-section';
 import { Collection, Device } from '@/lib/types';
 import { Layers, Database, ChevronRight, Globe, Server } from 'lucide-react';
-import { memberCount } from '@/components/run-card';
-import { RunBadge } from '@/components/run-label';
+import { memberCount } from '@/components/activity-card';
+import { ActivityBadge } from '@/components/activity-label';
 
 const PAGE_SIZE = 100;
 
@@ -44,7 +44,7 @@ function CollectionCard({ col }: { col: Collection }) {
         <span className="px-2.5 py-0.5 rounded-full border text-foreground bg-muted border-border">
           {col.effective_access_level || col.access_level}
         </span>
-        <RunBadge activity={col.activity} />
+        <ActivityBadge activity={col.activity} />
         {col.shot_id && (
           <span className="px-2.5 py-0.5 rounded-full border text-foreground bg-muted border-border">
             shot {col.shot_id}
@@ -135,9 +135,9 @@ export default function CollectionsPage() {
         <h1 className="text-3xl font-bold text-foreground mb-2">Collections</h1>
         <p className="text-muted-foreground max-w-2xl">
           Collections group datasets into a single citable unit
-          (<code className="text-foreground">dcat:Catalog</code>): the outputs of a run, a curated
+          (<code className="text-foreground">dcat:Catalog</code>): the outputs of an Activity, a curated
           selection, or the contents of a store. Global collections are listed first, then each
-          device&apos;s, including those on its shots. Simulation runs can also be browsed under{' '}
+          device&apos;s, including those on its shots. Simulations can also be browsed under{' '}
           <Link href="/simulations" className="text-primary hover:underline">Simulations</Link>.
         </p>
       </div>

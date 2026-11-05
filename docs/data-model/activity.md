@@ -1,40 +1,42 @@
 # Activity
 
-Records a computation or measurement event that produced a Dataset or Collection. The primary provenance object (maps to `prov:Activity`).
+Records a computation or measurement event that generated a Dataset or Collection. The primary provenance object (maps to `prov:Activity`).
+
+An Activity is whatever process generated the data. It may be a direct measurement of the plasma, for raw data; a processing chain, or a repass of that chain over Datasets it has processed before; a single run of an analysis script; a simulation run; or a calibration. `activity_type` says which kind it is: `measurement`, `analysis`, `simulation` or `calibration`. Each time a process runs is a separate Activity, so a repass is a new Activity even when it uses the same code at the same version.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `source_id` | integer | No | The agent that carried the run out, its executor |
+| `source_id` | integer | No | The agent that carried the Activity out, its executor |
 | `source_version` | string | No | Version of the source used |
 | `activity_type` | enum | No | Controlled vocabulary: `measurement`, `simulation`, `analysis`, `calibration` |
-| `parameters` | object | No | Run-specific key-value parameters (opaque provenance bag) |
+| `parameters` | object | No | Key-value parameters of this Activity (opaque provenance bag) |
 | `started_at` | datetime | No | When execution began |
 | `ended_at` | datetime | No | When execution completed |
-| `inputs` | list of integer | No | Ids of the Datasets the run consumed |
-| `instruments` | list of integer | No | Ids of the `instrument` Sources the run used |
+| `inputs` | list of integer | No | Ids of the Datasets the Activity consumed |
+| `instruments` | list of integer | No | Ids of the `instrument` Sources the Activity used |
 | `agents` | list of object | No | Further agents, each `{source_id, role}` |
 | `delegations` | list of object | No | Which agent acted on behalf of which |
 
 `source_id` is optional. A raw acquisition may name no agent at all, only the instrument it used.
 
-## Who may read a run
+## Who may read an Activity
 
-A run has no access level of its own. Anyone who may read a dataset it generated, or a collection that bundles it, may read the run with its instruments, agents and delegations, and is answered 403 otherwise. Only a global admin may read a run that has neither yet. A run's inputs are listed only as far as the caller may read each one, in its JSON-LD as well as at `GET /v1/activities/{id}/inputs`.
+An Activity has no access level of its own. Anyone who may read a dataset it generated, or a collection that bundles it, may read the Activity with its instruments, agents and delegations, and is answered 403 otherwise. Only a global admin may read an Activity that has neither yet. An Activity's inputs are listed only as far as the caller may read each one, in its JSON-LD as well as at `GET /v1/activities/{id}/inputs`.
 
 ## Agents and their roles
 
-A run may involve more than one agent. The executor is `source_id`; `agents` adds others, each with a role saying what it did:
+An Activity may involve more than one agent. The executor is `source_id`; `agents` adds others, each with a role saying what it did:
 
 | Role | Meaning |
 | --- | --- |
-| `executor` | carried the run out |
-| `orchestrator` | coordinated the run without executing it, for example an inter-shot scheduler |
+| `executor` | carried the Activity out |
+| `orchestrator` | coordinated the Activity without executing it, for example an inter-shot scheduler |
 
-An agent holds one role per run, so a source listed in `agents` may not also be the executor, and may not appear twice.
+An agent holds one role per Activity, so a source listed in `agents` may not also be the executor, and may not appear twice.
 
-`delegations` records that one agent acted under another's authority for this run, for example an analysis code run by a scheduler. Both ends must be agents of the run, either the executor or a member of `agents`. This is a statement about responsibility, not data flow, so a scheduler that coordinates work but produces no data stays out of the lineage entirely.
+`delegations` records that one agent acted under another's authority for this Activity, for example an analysis code started by a scheduler. Both ends must be agents of the Activity, either the executor or a member of `agents`. This is a statement about responsibility, not data flow, so a scheduler that coordinates work but produces no data stays out of the lineage entirely.
 
-A single request can declare the whole run: what it consumed, what it used, who was involved, and who answered to whom.
+A single request can declare the whole Activity: what it consumed, what it used, who was involved, and who answered to whom.
 
 === "curl"
 
@@ -122,7 +124,7 @@ A single request can declare the whole run: what it consumed, what it used, who 
     ).json();
     ```
 
-Each part can also be maintained afterwards, which suits a pipeline that registers a run first and resolves its inputs later:
+Each part can also be maintained afterwards, which suits a pipeline that registers an Activity first and resolves its inputs later:
 
 ```http
 POST   /v1/activities/{id}/inputs/{dataset_id}
@@ -134,11 +136,11 @@ DELETE /v1/activities/{id}/inputs/{dataset_id}
 
 `DELETE` works the same way for instruments, agents and delegations. An agent cannot be removed while a delegation still names it; remove the delegation first.
 
-Output Datasets and Collections reference the run by setting their `activity_id`, and the listings filter on it:
+Output Datasets and Collections reference the Activity by setting their `activity_id`, and the listings filter on it:
 
 ```text
-GET /v1/datasets?activity_id={id}      # the datasets the run generated
-GET /v1/collections?activity_id={id}   # the run's bundle
+GET /v1/datasets?activity_id={id}      # the datasets the Activity generated
+GET /v1/collections?activity_id={id}   # the Activity's bundle
 ```
 
-There is no listing of activities: find a run through its bundle or its outputs. See [Provenance](../provenance.md) for how these fit together.
+There is no listing of activities: find an Activity through its bundle or its outputs. See [Provenance](../provenance.md) for how these fit together.

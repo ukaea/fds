@@ -32,7 +32,7 @@ export function shotPropertiesUrl(deviceName: string): string {
   return `${API_BASE}/devices/${deviceName}/shots/properties`;
 }
 
-// Values of one name, searched server-side: a device's `objective` runs to
+// Values of one name, searched server-side: a device's `objective` simulations to
 // hundreds of values several hundred characters long.
 export function shotPropertyValuesUrl(deviceName: string) {
   return (name: string, query: string) =>
@@ -153,17 +153,19 @@ export function ShotList({
   };
 
   // Which shots a simulation modelled, to mark them in the list. One request for
-  // the device rather than one per shot; past the first thousand runs a shot may
+  // the device rather than one per shot; past the first thousand simulations a shot may
   // go unmarked, which is a missing hint rather than a wrong one.
-  const { data: runs } = useSWR<Collection[]>(
+  const { data: simulations } = useSWR<Collection[]>(
     deviceName
       ? `${API_BASE}/devices/${deviceName}/collections?scope=shot&activity_type=simulation&limit=1000`
       : null,
     fetcher
   );
-  const runsByShot = new Map<string, number>();
-  for (const run of runs ?? []) {
-    if (run.shot_id) runsByShot.set(run.shot_id, (runsByShot.get(run.shot_id) ?? 0) + 1);
+  const simulationsByShot = new Map<string, number>();
+  for (const simulation of simulations ?? []) {
+    if (simulation.shot_id) {
+      simulationsByShot.set(simulation.shot_id, (simulationsByShot.get(simulation.shot_id) ?? 0) + 1);
+    }
   }
 
   return (
@@ -246,11 +248,11 @@ export function ShotList({
                     <Calendar className="w-4 h-4" />
                     <ClientDate timestamp={shot.shot_at} />
                   </div>
-                  {runsByShot.has(shot.id) && (
+                  {simulationsByShot.has(shot.id) && (
                     <div className="flex items-center gap-1">
                       <Cpu className="w-4 h-4" />
-                      {runsByShot.get(shot.id)} simulation run
-                      {runsByShot.get(shot.id) === 1 ? '' : 's'}
+                      {simulationsByShot.get(shot.id)} simulation
+                      {simulationsByShot.get(shot.id) === 1 ? '' : 's'}
                     </div>
                   )}
                 </div>

@@ -57,7 +57,7 @@ def read_activity(
 ) -> ActivityRead:
     """Retrieve a single Activity by ID.
 
-    A caller may read a run if they may read a dataset it generated or a
+    A caller may read an Activity if they may read a dataset it generated or a
     collection that bundles it.
     """
     activity = activity_service.get_readable_or_raise(activity_id, user)

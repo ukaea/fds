@@ -16,7 +16,7 @@ import { DatasetCard } from '@/components/dataset-card';
 import { DatasetResults } from '@/components/dataset-results';
 import { PropertyBadges, ScientificMetadata } from '@/components/properties';
 import { RelatedGroup } from '@/components/related-data';
-import { RunBadge } from '@/components/run-label';
+import { ActivityBadge } from '@/components/activity-label';
 
 function formatDate(iso?: string): string {
   if (!iso) return '';
@@ -40,7 +40,7 @@ function CollectionSection({ collection }: { collection: Collection }) {
           </h2>
           {collection.activity && (
             <div className="mt-1">
-              <RunBadge activity={collection.activity} />
+              <ActivityBadge activity={collection.activity} />
             </div>
           )}
         </div>

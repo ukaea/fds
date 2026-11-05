@@ -27,7 +27,7 @@ from tests.conftest import statements
 def catalogue(session: Session, admin_user: AuthenticatedUser) -> int:
     """A public device with 4 shots of 3 datasets each, and a collection
     holding a collection for each shot. Each shot's datasets and collection come
-    from a run of their own, so every row includes a different run. Each shot and
+    from an Activity of their own, so every row includes a different Activity. Each shot and
     dataset has an annotation of its own, and two device-level annotations cover
     shot ranges. Every dataset references a calibrated geometry. Returns the
     parent collection's id."""
@@ -64,7 +64,7 @@ def catalogue(session: Session, admin_user: AuthenticatedUser) -> int:
             ),
             admin_user,
         )
-        run = ActivityService(session).create(
+        activity = ActivityService(session).create(
             ActivityCreate(
                 activity_type=ActivityType.SIMULATION,
                 source_id=code.id,
@@ -82,7 +82,7 @@ def catalogue(session: Session, admin_user: AuthenticatedUser) -> int:
                     url=f"s3://bucket/{shot}/{n}.zarr",
                     geometry_references=["coils"],
                     calibration_references=["gain"],
-                    activity_id=run.id,
+                    activity_id=activity.id,
                 ),
                 admin_user,
             )
@@ -92,7 +92,7 @@ def catalogue(session: Session, admin_user: AuthenticatedUser) -> int:
                 name=f"run{shot}",
                 device_name="MAST",
                 shot_id=str(shot),
-                activity_id=run.id,
+                activity_id=activity.id,
             ),
             admin_user,
         )

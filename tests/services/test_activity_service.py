@@ -583,7 +583,7 @@ def test_delegation_to_unassociated_agent_rejected(
     admin_user: AuthenticatedUser,
     source_service: SourceService,
 ):
-    """A delegation whose ends are not agents of the run would be stored but
+    """A delegation whose ends are not agents of the Activity would be stored but
     never serialised, so it is refused at the boundary instead."""
     _, _, code, _ = setup_data
     stranger = source_service.create(

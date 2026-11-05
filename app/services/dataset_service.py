@@ -193,7 +193,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """The Activity that produced the dataset, for a caller who may read it.
 
         The dataset's read check runs here rather than in the router, so a caller
-        cannot reach a restricted dataset's run parameters through this
+        cannot reach a restricted dataset's Activity parameters through this
         sub-resource. It runs before the "no associated activity" 404, so the
         response does not reveal whether a dataset the caller cannot read has
         provenance recorded.
@@ -436,7 +436,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     ) -> DatasetLineageNode:
         """Walk a dataset's asserted upstreams transitively.
 
-        Only asserted derivations are followed. A run's inputs are not lineage on
+        Only asserted derivations are followed. An Activity's inputs are not lineage on
         their own: PROV-DM makes a usage-and-generation chain necessary but not
         sufficient for derivation, so composing them would claim edges nobody
         asserted.
@@ -752,12 +752,13 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         dataset: Dataset,
         distributions: list[Distribution],
         access_level: AccessLevel,
-        run: ActivitySummary | None,
+        activity: ActivitySummary | None,
     ) -> DatasetRead:
         """``dataset`` as a DatasetRead, its default distribution's fields inlined.
 
-        ``run`` is passed in rather than read from ``dataset``, whose ``activity``
-        is the ORM relationship: reading it would load each row's run separately.
+        ``activity`` is passed in rather than read from ``dataset``, whose
+        ``activity`` is the ORM relationship: reading it would load each row's
+        Activity separately.
         """
         default_dist = next((d for d in distributions if d.default_distribution), None)
         return DatasetRead.model_validate(
@@ -773,7 +774,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 ]
                 or None,
                 "effective_access_level": access_level,
-                "activity": run,
+                "activity": activity,
             },
         )
 
@@ -803,7 +804,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             geometry=enriched.geometry if include_geometry else None,
             calibration=enriched.calibration if include_calibration else None,
             annotations=enriched.annotations if include_annotations else None,
-            run_inputs=(
+            activity_inputs=(
                 readable_only(self.session, dataset.activity.input_datasets, user)
                 if dataset.activity
                 else []
@@ -965,8 +966,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         Converts Dataset ORM objects to DatasetRead DTOs, including the effective
         access level. The default distribution's fields are inlined, every
-        distribution is listed, and each read includes a summary of the run that
-        generated its dataset. Distributions, policies, runs and storage
+        distribution is listed, and each read includes a summary of the Activity
+        that generated its dataset. Distributions, policies, Activities and storage
         credentials, and references and annotations when included, are each
         resolved for all the datasets at once. ``include_geometry`` /
         ``include_calibration`` resolve each dataset's ``geometry_references`` /
@@ -974,7 +975,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         distributions = self._distributions_of(datasets)
         policies = get_effective_policies(datasets, self.session)
-        runs = ActivityService(self.session).get_summaries(
+        activities = ActivityService(self.session).get_summaries(
             d.activity_id for d in datasets
         )
         models = [
@@ -982,7 +983,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 dataset,
                 distributions[dataset.id],
                 policy.access_level,
-                runs.get(dataset.activity_id) if dataset.activity_id else None,
+                activities.get(dataset.activity_id) if dataset.activity_id else None,
             )
             for dataset, policy in zip(datasets, policies, strict=True)
         ]

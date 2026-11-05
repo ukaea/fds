@@ -152,7 +152,7 @@ def test_datasets_name_filter_without_annotations(test_client: TestClient):
 def annotated_collections_fixture(
     session: Session, admin_user: AuthenticatedUser, annotated_api_catalogue: None
 ) -> None:
-    """Two run bundles on MAST-U 50000: one simulated H-mode, one did not."""
+    """Two simulation bundles on MAST-U 50000: one simulated H-mode, one did not."""
     collections = CollectionService(session)
     for name, metadata in [
         (
@@ -180,7 +180,7 @@ def annotated_collections_fixture(
 
 @pytest.mark.usefixtures("annotated_collections")
 def test_collections_filtered_by_annotation(test_client: TestClient):
-    """A run is discoverable because its bundle carries the claim, not the run."""
+    """An Activity is discoverable because its bundle carries the claim, not the Activity."""
     resp = test_client.get(
         f"/v1/devices/{MAST_U}/shots/50000/collections",
         params={"property": "confinement_mode:H-mode"},
@@ -204,7 +204,7 @@ def test_collections_filtered_by_annotation_presence(test_client: TestClient):
 
 @pytest.mark.usefixtures("annotated_collections")
 def test_unannotated_collection_is_returned_when_unfiltered(test_client: TestClient):
-    """A run nobody annotated is still listed; it is only absent from filtered results."""
+    """A simulation nobody annotated is still listed; it is only absent from filtered results."""
     resp = test_client.get(f"/v1/devices/{MAST_U}/shots/50000/collections")
 
     assert resp.status_code == 200

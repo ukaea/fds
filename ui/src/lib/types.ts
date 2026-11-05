@@ -178,8 +178,9 @@ export interface Collection {
 
 export type ActivityType = 'measurement' | 'simulation' | 'analysis' | 'calibration';
 
-// The run behind a dataset or collection, as FDS inlines it on every read so a
-// list can say what produced each row. The record's activity_id links to the rest.
+// The Activity that generated a dataset or collection, as FDS inlines it on
+// every read so a list can say what produced each row. The record's activity_id
+// links to the rest.
 export interface ActivitySummary {
   activity_type?: ActivityType | null;
   source?: string | null;

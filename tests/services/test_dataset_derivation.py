@@ -232,7 +232,7 @@ def test_remove_derivation_belonging_to_another_dataset(session: Session):
 
 
 def test_upstream_need_not_be_an_activity_input(session: Session):
-    """Deliberate: derivation crosses runs, so no subset check against inputs."""
+    """Deliberate: derivation crosses Activities, so no subset check against inputs."""
     unrelated_id = _dataset_id(session, "unrelated")
     activity = _analysis_activity(session)
     derived = _dataset(

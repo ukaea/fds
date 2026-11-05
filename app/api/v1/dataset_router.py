@@ -91,8 +91,8 @@ def read_datasets_global(
     `shot_property` takes the same forms but applies them to the parent shot, so
     a dataset with no shot never matches it.
 
-    `activity_type`, `source` and `activity_id` filter on the run that generated
-    each dataset: `?activity_id=6` lists what run 6 generated, and
+    `activity_type`, `source` and `activity_id` filter on the Activity that
+    generated each dataset: `?activity_id=6` lists what Activity 6 generated, and
     `?activity_type=simulation` lists simulated datasets.
 
     `shot_id_prefix` keeps the datasets on a shot whose ID starts with it, so `304`
@@ -196,8 +196,8 @@ def read_datasets_shot(
     match any dataset that carries that property, or `ufo:true` to match a
     particular value. Repeat the parameter to require all of them.
 
-    `activity_type`, `source` and `activity_id` filter on the run that generated
-    each dataset: `?activity_id=6` lists what run 6 generated, and
+    `activity_type`, `source` and `activity_id` filter on the Activity that
+    generated each dataset: `?activity_id=6` lists what Activity 6 generated, and
     `?activity_type=simulation` lists simulated datasets.
     """
     datasets = dataset_service.get_datasets_for_shot(
@@ -374,8 +374,8 @@ def read_datasets_device(
     the equilibrium datasets of shots that had ELMs. Device-level datasets have no
     shot, so `shot_property` matches nothing under `scope=device`.
 
-    `activity_type`, `source` and `activity_id` filter on the run that generated
-    each dataset: `?activity_id=6` lists what run 6 generated, and
+    `activity_type`, `source` and `activity_id` filter on the Activity that
+    generated each dataset: `?activity_id=6` lists what Activity 6 generated, and
     `?activity_type=simulation` lists simulated datasets.
 
     `shot_id_prefix` keeps the datasets on a shot whose ID starts with it, so `304`
@@ -658,7 +658,7 @@ def read_dataset_activity(
     user: CurrentUserDep,
 ) -> ActivityRead:
     """
-    Retrieve the Activity (provenance run) that produced this dataset,
+    Retrieve the Activity that generated this dataset,
     including timestamps, parameters, and source version.
     Returns 404 if the dataset has no associated activity.
     """

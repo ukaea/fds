@@ -15,7 +15,6 @@ import { citation, resolveIdentifier } from '@/lib/identifiers';
 import type { JsonLd } from '@/lib/identifier-page';
 import { JsonLdPanel } from '@/components/jsonld-panel';
 import { HeatmapCanvas } from '@/components/heatmap';
-import { RunLine } from '@/components/run-label';
 
 function isZarr(mediaType?: string | null): boolean {
   return Boolean(mediaType?.toLowerCase().includes('zarr'));
@@ -917,8 +916,6 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
          {datasetData?.title && (
            <p className="text-lg text-muted-foreground -mt-2 mb-4">{datasetData.title}</p>
          )}
-         {/* Which run made this dataset, since a shot can hold several with its name. */}
-         <RunLine activity={datasetData?.activity} activityId={datasetData?.activity_id} className="-mt-2 mb-4 text-muted-foreground" />
          {datasetData?.description && (
            <p className="text-lg text-foreground max-w-4xl leading-relaxed mb-6">
               {datasetData.description}

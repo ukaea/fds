@@ -642,7 +642,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             for read in self.to_summary_read_models(list(unique_children.values()))
         }
         policies = get_effective_policies(collections, self.session)
-        runs = ActivityService(self.session).get_summaries(
+        activities = ActivityService(self.session).get_summaries(
             c.activity_id for c in collections
         )
 
@@ -652,7 +652,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 update={
                     "effective_access_level": policy.access_level,
                     "activity": (
-                        runs.get(collection.activity_id)
+                        activities.get(collection.activity_id)
                         if collection.activity_id
                         else None
                     ),
@@ -687,7 +687,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
     ) -> list[CollectionRead]:
         """``CollectionRead`` DTOs without their members, as listed inside a parent."""
         policies = get_effective_policies(collections, self.session)
-        runs = ActivityService(self.session).get_summaries(
+        activities = ActivityService(self.session).get_summaries(
             c.activity_id for c in collections
         )
         return [
@@ -695,7 +695,9 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 c,
                 update={
                     "effective_access_level": policy.access_level,
-                    "activity": runs.get(c.activity_id) if c.activity_id else None,
+                    "activity": activities.get(c.activity_id)
+                    if c.activity_id
+                    else None,
                     "datasets": None,
                     "child_collections": None,
                 },
@@ -766,7 +768,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
 
         The collection's read check runs before the "no associated activity" 404,
         so the response does not reveal whether a collection the caller cannot
-        read has a run recorded.
+        read has an Activity recorded.
         """
         collection = self.get_readable_or_raise(collection_id, user)
         if not collection.activity_id:
@@ -791,7 +793,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             child_collections=self.get_child_collections(
                 collection.id, user, limit=INLINE_MEMBERS
             ),
-            run_inputs=(
+            activity_inputs=(
                 readable_only(self.session, collection.activity.input_datasets, user)
                 if collection.activity
                 else []

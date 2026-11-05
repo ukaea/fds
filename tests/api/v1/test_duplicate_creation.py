@@ -78,7 +78,7 @@ def test_duplicate_dataset_name_allowed_with_different_activities(
 ):
     """
     Two datasets with the same name in the same context are permitted when
-    attributed to different Activities — e.g. two JINTRAC runs both producing an
+    attributed to different Activities — e.g. two JINTRAC simulations both producing an
     'equilibrium' IDS on the same shot. Dataset identity is the internal id, not
     the name, so the name alone does not have to be unique.
     """

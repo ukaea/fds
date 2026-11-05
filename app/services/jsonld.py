@@ -30,7 +30,7 @@ FUEL_ANNOTATION_ROLE = "fuel:annotation"
 FUEL_INPUT_ROLE = "fuel:input"
 FUEL_INSTRUMENT_ROLE = "fuel:instrument"
 
-# FuEL role concepts qualifying a prov:Association: the agent's function in the run.
+# FuEL role concepts qualifying a prov:Association: the agent's function in the Activity.
 FUEL_EXECUTOR_ROLE = "fuel:executor"
 FUEL_ORCHESTRATOR_ROLE = "fuel:orchestrator"
 
@@ -92,7 +92,7 @@ def _build_used(
 ) -> tuple[list[Any], list[Any]]:
     """Build the ``prov:used`` shortcut list and ``prov:qualifiedUsage`` detail.
 
-    ``inputs`` are the run's input datasets the caller may read, as the caller
+    ``inputs`` are the Activity's input datasets the caller may read, as the caller
     resolved them; the rest are left out.
 
     Two kinds of used entity:
@@ -204,8 +204,9 @@ def _build_associations(
             "prov:agent": {"@id": primary["@id"]},
             "prov:hadRole": {"@id": FUEL_EXECUTOR_ROLE},
         }
-        # The version this run used is the plan the executor followed, so it
-        # belongs to this association, not to the Source every run shares. A
+        # The version this Activity used is the plan the executor followed, so
+        # it belongs to this association, not to the Source every Activity
+        # shares. A
         # blank node: nothing is stored per version.
         if activity.source_version:
             association["prov:hadPlan"] = {
@@ -583,13 +584,14 @@ def map_dataset_to_dcat(
     geometry: "list[DatasetRead] | None" = None,
     calibration: "list[DatasetRead] | None" = None,
     annotations: "list[DatasetRead] | None" = None,
-    run_inputs: "Sequence[Dataset]" = (),
+    activity_inputs: "Sequence[Dataset]" = (),
 ) -> dict[str, Any]:
     """
     Maps a Dataset to a dcat:Dataset.
 
-    ``run_inputs`` are the input datasets of the run that generated it which the
-    caller may read. The run's other inputs are left out of its embedded node.
+    ``activity_inputs`` are the input datasets of the Activity that generated it
+    which the caller may read. The Activity's other inputs are left out of its
+    embedded node.
 
     ``geometry`` / ``calibration`` supply resolved reference versions when the
     source object does not itself carry them (e.g. an ORM ``Dataset``). Both link
@@ -678,7 +680,7 @@ def map_dataset_to_dcat(
     activity: Activity | None = getattr(dataset, "activity", None)
     if activity:
         data["prov:wasGeneratedBy"] = _build_activity_node(
-            activity, base_url, run_inputs
+            activity, base_url, activity_inputs
         )
         data["prov:generatedAtTime"] = _generated_at(activity)
 
@@ -856,7 +858,7 @@ def map_collection_to_dcat(
     *,
     datasets: Sequence[Dataset],
     child_collections: Sequence[Collection],
-    run_inputs: Sequence[Dataset] = (),
+    activity_inputs: Sequence[Dataset] = (),
 ) -> dict[str, Any]:
     """Maps a Collection to a JSON-LD document typed as both ``dcat:Catalog``
     and ``prov:Collection``.
@@ -865,8 +867,8 @@ def map_collection_to_dcat(
     child Collections as ``dcat:catalog`` references (``@id`` plus title; the
     full documents live at their own URIs). Every member is additionally linked
     with ``prov:hadMember``, making the collection a well-formed
-    ``prov:Collection``. The run the collection bundles, if any, is embedded as
-    a ``prov:wasGeneratedBy`` node whose inputs are ``run_inputs``: those the
+    ``prov:Collection``. The Activity the collection bundles, if any, is embedded as
+    a ``prov:wasGeneratedBy`` node whose inputs are ``activity_inputs``: those the
     caller may read.
     """
     names = Identifiers(base_url)
@@ -893,7 +895,7 @@ def map_collection_to_dcat(
     if collection.access_level:
         data["accessRights"] = collection.access_level.value
 
-    # Claims about what this collection is: a run's outputs where activity_id is
+    # Claims about what this collection is: an Activity's outputs where activity_id is
     # set, a selection's criteria otherwise. Same projection as Shot and Dataset.
     sci_meta = getattr(collection, "scientific_metadata", None)
     if sci_meta:
@@ -946,7 +948,7 @@ def map_collection_to_dcat(
     activity: Activity | None = getattr(collection, "activity", None)
     if activity:
         data["prov:wasGeneratedBy"] = _build_activity_node(
-            activity, base_url, run_inputs
+            activity, base_url, activity_inputs
         )
         data["prov:generatedAtTime"] = _generated_at(activity)
 

@@ -151,7 +151,7 @@ Shot lists also accept `id_prefix`, which keeps the shots whose ID starts with i
 GET /v1/devices/mast/shots?id_prefix=304
 ```
 
-Dataset and collection lists accept `shot_id_prefix` in the same way: it keeps the records on a shot whose ID starts with it, and a record on no shot never matches. With a run filter it finds the runs that modelled a shot, on any device:
+Dataset and collection lists accept `shot_id_prefix` in the same way: it keeps the records on a shot whose ID starts with it, and a record on no shot never matches. With an Activity filter it finds the Activities that modelled a shot, on any device:
 
 ```text
 GET /v1/collections?activity_type=simulation&source=jintrac&shot_id_prefix=30420
@@ -210,7 +210,7 @@ GET /v1/devices/mast/shots/properties?property=campaign:M9
 
 Values a caller is not permitted to read never appear, so two callers can see different properties over the same device.
 
-Collection listings have the same summary. `GET /v1/collections/properties?activity_type=simulation` lists the properties the bundles of simulation runs carry, so a client can offer filters over runs.
+Collection listings have the same summary. `GET /v1/collections/properties?activity_type=simulation` lists the properties the bundles of simulation runs carry, so a client can offer filters over Activities.
 
 ## URL structure
 

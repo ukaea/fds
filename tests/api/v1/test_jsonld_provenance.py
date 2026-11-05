@@ -105,7 +105,7 @@ def test_jsonld_provenance(
     agent = prov["prov:wasAssociatedWith"]
     assert agent["@type"] == "prov:SoftwareAgent"
     assert agent["dct:title"] == "prov-source"
-    # The version is this run's, not the Source's: it rides on the association
+    # The version is this Activity's, not the Source's: it rides on the association
     # as the plan the executor followed, and the shared agent node has none.
     assert "dcat:version" not in agent
     (association,) = prov["prov:qualifiedAssociation"]

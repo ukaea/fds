@@ -313,7 +313,7 @@ def test_activity_delegation_endpoints(
         json={"name": "scheduler-y", "kind": "software"},
         headers=admin_user_token,
     ).json()
-    # The scheduler must be an agent of the run before it can be delegated to.
+    # The scheduler must be an agent of the Activity before it can be delegated to.
     test_client.post(
         f"/v1/activities/{activity.id}/agents/{scheduler['id']}",
         params={"role": "orchestrator"},
@@ -363,12 +363,12 @@ def test_run_of_a_restricted_dataset_is_not_public(
     admin_user: AuthenticatedUser,
     path: str,
 ):
-    """Reading a run directly answers 403, as reading it through its dataset does."""
+    """Reading an Activity directly answers 403, as reading it through its dataset does."""
     DeviceService(session).create(
         DeviceCreate(name="sec-device", type="Test", access_level=AccessLevel.PUBLIC),
         user=admin_user,
     )
-    run = ActivityService(session).create(
+    activity = ActivityService(session).create(
         ActivityCreate(
             activity_type=ActivityType.SIMULATION, parameters={"confidential": "run"}
         ),
@@ -380,83 +380,86 @@ def test_run_of_a_restricted_dataset_is_not_public(
             level=1,
             device_name="sec-device",
             access_level=AccessLevel.RESTRICTED,
-            activity_id=run.id,
+            activity_id=activity.id,
         ),
         user=admin_user,
     )
     session.commit()
 
-    response = test_client.get(path.format(id=run.id))
+    response = test_client.get(path.format(id=activity.id))
     assert response.status_code == 403, response.text
     assert "confidential" not in response.text
 
 
-def test_run_of_a_public_dataset_is_public(
+def test_activity_of_a_public_dataset_is_public(
     test_client: TestClient, session: Session, admin_user: AuthenticatedUser
 ):
     DeviceService(session).create(
         DeviceCreate(name="pub-device", type="Test", access_level=AccessLevel.PUBLIC),
         user=admin_user,
     )
-    run = ActivityService(session).create(
+    activity = ActivityService(session).create(
         ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
     )
     DatasetService(session).create(
         DatasetCreate(
-            name="pub-output", level=1, device_name="pub-device", activity_id=run.id
+            name="pub-output",
+            level=1,
+            device_name="pub-device",
+            activity_id=activity.id,
         ),
         user=admin_user,
     )
     session.commit()
 
-    response = test_client.get(f"/v1/activities/{run.id}")
+    response = test_client.get(f"/v1/activities/{activity.id}")
     assert response.status_code == 200, response.text
-    assert response.json()["id"] == run.id
+    assert response.json()["id"] == activity.id
 
 
-def test_run_bundled_by_a_public_collection_is_public(
+def test_activity_bundled_by_a_public_collection_is_public(
     test_client: TestClient, session: Session, admin_user: AuthenticatedUser
 ):
-    run = ActivityService(session).create(
+    activity = ActivityService(session).create(
         ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
     )
     CollectionService(session).create(
         CollectionCreate(
-            name="pub-bundle", access_level=AccessLevel.PUBLIC, activity_id=run.id
+            name="pub-bundle", access_level=AccessLevel.PUBLIC, activity_id=activity.id
         ),
         user=admin_user,
     )
     session.commit()
 
-    response = test_client.get(f"/v1/activities/{run.id}")
+    response = test_client.get(f"/v1/activities/{activity.id}")
     assert response.status_code == 200, response.text
 
 
-def test_run_with_no_outputs_is_not_public(
+def test_activity_with_no_outputs_is_not_public(
     test_client: TestClient, session: Session, admin_user: AuthenticatedUser
 ):
-    run = ActivityService(session).create(
+    activity = ActivityService(session).create(
         ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
     )
     session.commit()
 
-    response = test_client.get(f"/v1/activities/{run.id}")
+    response = test_client.get(f"/v1/activities/{activity.id}")
     assert response.status_code == 403, response.text
 
 
-def test_device_admin_reads_a_run_through_a_restricted_output(
+def test_device_admin_reads_an_activity_through_a_restricted_output(
     test_client: TestClient,
     session: Session,
     admin_user: AuthenticatedUser,
     mast_admin_user_token: dict,
     log_lines,
 ):
-    """The read is recorded as a restricted read of the run."""
+    """The read is recorded as a restricted read of the Activity."""
     DeviceService(session).create(
         DeviceCreate(name="MAST", type="Tokamak", access_level=AccessLevel.PUBLIC),
         user=admin_user,
     )
-    run = ActivityService(session).create(
+    activity = ActivityService(session).create(
         ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
     )
     DatasetService(session).create(
@@ -465,7 +468,7 @@ def test_device_admin_reads_a_run_through_a_restricted_output(
             level=1,
             device_name="MAST",
             access_level=AccessLevel.RESTRICTED,
-            activity_id=run.id,
+            activity_id=activity.id,
         ),
         user=admin_user,
     )
@@ -473,7 +476,7 @@ def test_device_admin_reads_a_run_through_a_restricted_output(
     log_lines()
 
     response = test_client.get(
-        f"/v1/activities/{run.id}", headers=mast_admin_user_token
+        f"/v1/activities/{activity.id}", headers=mast_admin_user_token
     )
     assert response.status_code == 200, response.text
     (line,) = [
@@ -481,10 +484,10 @@ def test_device_admin_reads_a_run_through_a_restricted_output(
         for entry in log_lines()
         if entry.get("logger") == "fds.audit" and entry["event"] == "request"
     ]
-    assert line["restricted_read"] == {"activity": [run.id]}
+    assert line["restricted_read"] == {"activity": [activity.id]}
 
 
-def test_run_json_ld_leaves_out_inputs_the_caller_cannot_read(
+def test_activity_json_ld_leaves_out_inputs_the_caller_cannot_read(
     test_client: TestClient, session: Session, admin_user: AuthenticatedUser
 ):
     DeviceService(session).create(
@@ -505,32 +508,32 @@ def test_run_json_ld_leaves_out_inputs_the_caller_cannot_read(
         ),
         user=admin_user,
     )
-    run = ActivityService(session).create(
+    activity = ActivityService(session).create(
         ActivityCreate(activity_type=ActivityType.SIMULATION), user=admin_user
     )
-    assert run.id is not None
+    assert activity.id is not None
     assert open_input.id is not None
     assert restricted_input.id is not None
     for input_id in (open_input.id, restricted_input.id):
         ActivityService(session).add_input(
-            activity_id=run.id, dataset_id=input_id, user=admin_user
+            activity_id=activity.id, dataset_id=input_id, user=admin_user
         )
     output = datasets.create(
         DatasetCreate(
-            name="ld-output", level=2, device_name="ld-device", activity_id=run.id
+            name="ld-output", level=2, device_name="ld-device", activity_id=activity.id
         ),
         user=admin_user,
     )
     session.commit()
     ld = {"accept": "application/ld+json"}
 
-    run_document = test_client.get(f"/activities/{run.id}", headers=ld).json()
+    activity_document = test_client.get(f"/activities/{activity.id}", headers=ld).json()
     output_document = resource(
         test_client.get(f"/v1/datasets/id/{output.id}", headers=ld).json()
     )
 
     for used in (
-        run_document["prov:used"],
+        activity_document["prov:used"],
         output_document["prov:wasGeneratedBy"]["prov:used"],
     ):
         assert [entity["dct:title"] for entity in used] == ["open-input"]

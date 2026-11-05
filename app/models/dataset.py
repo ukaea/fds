@@ -193,7 +193,7 @@ class Dataset(DatasetBase, TimestampMixin, table=True):
             postgresql_where=text("activity_id IS NULL AND origin IS NOT NULL"),
         ),
         # Attributed datasets: one per (name, context, activity).
-        # Allows multiple runs (different activity_ids) to each produce same-named datasets.
+        # Lets several Activities each generate a dataset of the same name.
         Index(
             "idx_dataset_unique_with_activity",
             "name",

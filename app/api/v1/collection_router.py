@@ -80,11 +80,12 @@ def read_collections_global(
     `?property=disruption&property=elm` matches only collections carrying
     each.
 
-    `activity_type`, `source` and `activity_id` filter on the run each collection
-    bundles, the one its `activity_id` names: `?activity_type=simulation` lists
-    the bundles of simulation runs. A bundle can also hold datasets its run did
-    not generate, such as the run's inputs. To list only what a run generated,
-    filter the dataset listings on `activity_id`.
+    `activity_type`, `source` and `activity_id` filter on the Activity each
+    collection bundles, the one its `activity_id` names:
+    `?activity_type=simulation` lists the bundles of simulations. A bundle can
+    also hold datasets its Activity did not generate, such as the Activity's
+    inputs. To list only what an Activity generated, filter the dataset listings
+    on `activity_id`.
 
     `shot_id_prefix` keeps the collections on a shot whose ID starts with it, so
     `304` finds those on shots 30420 and 30421. A collection on no shot never
@@ -257,11 +258,12 @@ def read_collections_device(
     `?property=disruption&property=elm` matches only collections carrying
     each.
 
-    `activity_type`, `source` and `activity_id` filter on the run each collection
-    bundles, the one its `activity_id` names: `?activity_type=simulation` lists
-    the bundles of simulation runs. A bundle can also hold datasets its run did
-    not generate, such as the run's inputs. To list only what a run generated,
-    filter the dataset listings on `activity_id`.
+    `activity_type`, `source` and `activity_id` filter on the Activity each
+    collection bundles, the one its `activity_id` names:
+    `?activity_type=simulation` lists the bundles of simulations. A bundle can
+    also hold datasets its Activity did not generate, such as the Activity's
+    inputs. To list only what an Activity generated, filter the dataset listings
+    on `activity_id`.
 
     `shot_id_prefix` keeps the collections on a shot whose ID starts with it, so
     `304` finds those on shots 30420 and 30421. A collection on no shot never
@@ -402,11 +404,12 @@ def read_collections_shot(
     `?property=disruption&property=elm` matches only collections carrying
     each.
 
-    `activity_type`, `source` and `activity_id` filter on the run each collection
-    bundles, the one its `activity_id` names: `?activity_type=simulation` lists
-    the bundles of simulation runs. A bundle can also hold datasets its run did
-    not generate, such as the run's inputs. To list only what a run generated,
-    filter the dataset listings on `activity_id`.
+    `activity_type`, `source` and `activity_id` filter on the Activity each
+    collection bundles, the one its `activity_id` names:
+    `?activity_type=simulation` lists the bundles of simulations. A bundle can
+    also hold datasets its Activity did not generate, such as the Activity's
+    inputs. To list only what an Activity generated, filter the dataset listings
+    on `activity_id`.
     """
     collections = collection_service.get_collections_for_shot(
         shot_id,
@@ -622,7 +625,7 @@ def read_collection_activity(
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
 ) -> ActivityRead:
-    """Retrieve the Activity (provenance run) that produced this Collection.
+    """Retrieve the Activity that generated this Collection.
 
     Returns 404 if the Collection has no associated activity.
     """

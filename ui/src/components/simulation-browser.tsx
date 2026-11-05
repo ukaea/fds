@@ -11,11 +11,11 @@ import { PropertyFilter } from '@/components/property-filter';
 import { SidePanelLayout } from '@/components/side-panel-layout';
 import { LoadMore } from '@/components/load-more';
 import { DatasetCard } from '@/components/dataset-card';
-import { RunCard } from '@/components/run-card';
+import { ActivityCard } from '@/components/activity-card';
 import { SearchBox } from '@/components/search-box';
 
 const PAGE_SIZE = 50;
-const DOCS = 'https://ukaea.github.io/fds/data-model/collection/#making-a-run-discoverable';
+const DOCS = 'https://ukaea.github.io/fds/data-model/collection/#making-an-activity-discoverable';
 
 const PILL = 'text-xs px-2.5 py-1 rounded-full border transition-colors';
 const IDLE = 'bg-card text-muted-foreground border-border hover:text-foreground hover:border-foreground/40';
@@ -141,19 +141,20 @@ function shown(items: unknown[] | undefined, done: boolean): string | undefined 
 }
 
 /**
- * Simulation runs and the data they produced, across devices and shots.
+ * Simulations and the data they produced, across devices and shots.
  *
- * Runs are listed through their bundles: collections whose activity_id names a
- * simulation run, carrying what the run says it simulated. The property filter
- * narrows these. Simulated datasets are listed after them, whether bundled or
- * not, so a run without a bundle can still be found through its outputs.
+ * Simulations are listed through their bundles: collections whose activity_id
+ * names a simulation Activity, carrying what it says it simulated. The property
+ * filter narrows these. Simulated datasets are listed after them, whether
+ * bundled or not, so a simulation without a bundle can still be found through
+ * its outputs.
  *
- * The shot box narrows both lists, as you type, to the runs on shots whose ID
- * starts with what is typed, on the chosen device or on any device.
+ * The shot box narrows both lists, as you type, to the simulations on shots
+ * whose ID starts with what is typed, on the chosen device or on any device.
  *
- * With `deviceName`, only that device's runs are listed and the device filter is
- * hidden. Both lists then include runs that modelled no shot, such as
- * predictive scenarios.
+ * With `deviceName`, only that device's simulations are listed and the device
+ * filter is hidden. Both lists then include simulations that modelled no shot,
+ * such as predictive scenarios.
  */
 export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
   const [source, setSource] = useState<string | null>(null);
@@ -167,25 +168,25 @@ export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
 
   const scope = deviceName ?? device;
   const base = scope ? `${API_BASE}/devices/${scope}` : API_BASE;
-  const runFilters = [
+  const simulationFilters = [
     'activity_type=simulation',
     source ? `source=${encodeURIComponent(source)}` : '',
     shotPrefix ? `shot_id_prefix=${encodeURIComponent(shotPrefix)}` : '',
   ];
 
-  // The property chips come from a summary of every run the code and device
-  // filters leave, not from the runs loaded so far. The summary leaves out the
+  // The property chips come from a summary of every simulation the code and
+  // device filters leave, not from the simulations loaded so far. The summary leaves out the
   // property filter itself, so picking one chip does not hide the others.
-  const { data: runProperties } = useSWR<AvailableProperties>(
-    withQuery(`${base}/collections/properties`, ...runFilters),
+  const { data: simulationProperties } = useSWR<AvailableProperties>(
+    withQuery(`${base}/collections/properties`, ...simulationFilters),
     fetcher
   );
-  const runs = usePagedList<Collection>(
-    withQuery(`${base}/collections`, ...runFilters, propertyQuery('property', propertyTokens)),
+  const simulations = usePagedList<Collection>(
+    withQuery(`${base}/collections`, ...simulationFilters, propertyQuery('property', propertyTokens)),
     PAGE_SIZE
   );
   const datasets = usePagedList<Dataset>(
-    withQuery(`${base}/datasets`, ...runFilters),
+    withQuery(`${base}/datasets`, ...simulationFilters),
     PAGE_SIZE
   );
 
@@ -231,15 +232,15 @@ export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
           </div>
           {shotPrefix && (
             <p className="text-xs text-muted-foreground mt-2">
-              Runs on shots whose ID starts with {shotPrefix}
+              Simulations on shots whose ID starts with {shotPrefix}
               {scope ? '' : ', on any device'}.
             </p>
           )}
         </div>
       </div>
       <PropertyFilter
-        label="What the run simulated"
-        properties={runProperties?.properties ?? []}
+        label="What it simulated"
+        properties={simulationProperties?.properties ?? []}
         selected={propertyTokens}
         onChange={setPropertyTokens}
       />
@@ -251,43 +252,43 @@ export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
       <section className="mb-12">
         <SectionHeading
           icon={Layers}
-          title="Runs"
-          count={shown(runs.items, runs.done)}
-          hint="Simulation runs bundled as a citable collection, with what each says it simulated."
+          title="Simulations"
+          count={shown(simulations.items, simulations.done)}
+          hint="Simulations bundled as a citable collection, with what each says it simulated."
         />
-        {runs.isLoading && !runs.items && (
-          <div className="card p-6 text-center text-muted-foreground">Loading runs…</div>
+        {simulations.isLoading && !simulations.items && (
+          <div className="card p-6 text-center text-muted-foreground">Loading simulations…</div>
         )}
-        {runs.error && (
-          <div className="card p-6 text-center text-destructive">Failed to load runs.</div>
+        {simulations.error && (
+          <div className="card p-6 text-center text-destructive">Failed to load simulations.</div>
         )}
-        {runs.items && runs.items.length === 0 && (
+        {simulations.items && simulations.items.length === 0 && (
           <div className="text-center py-12 px-6 text-muted-foreground bg-muted/20 rounded-lg border border-dashed border-border">
             <Cpu className="w-10 h-10 mx-auto mb-3 opacity-30" />
             {filtered ? (
-              <p>No runs match these filters.</p>
+              <p>No simulations match these filters.</p>
             ) : (
               <>
-                <p className="font-medium">No simulation runs have been bundled yet.</p>
+                <p className="font-medium">No simulations have been bundled yet.</p>
                 <p className="text-sm mt-1 max-w-xl mx-auto">
-                  A run is listed here once it has a bundle: a collection of its outputs whose
-                  activity_id names the run.{' '}
+                  A simulation is listed here once it has a bundle: a collection of its outputs
+                  whose activity_id names its Activity.{' '}
                   <a href={DOCS} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                    How to make a run discoverable
+                    How to make an Activity discoverable
                   </a>
                 </p>
               </>
             )}
           </div>
         )}
-        {!!runs.items?.length && (
+        {!!simulations.items?.length && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {runs.items.map((run) => (
-              <RunCard key={run.id} collection={run} />
+            {simulations.items.map((simulation) => (
+              <ActivityCard key={simulation.id} collection={simulation} />
             ))}
           </div>
         )}
-        <LoadMore onLoad={runs.loadMore} loading={runs.loadingMore} done={runs.done} />
+        <LoadMore onLoad={simulations.loadMore} loading={simulations.loadingMore} done={simulations.done} />
       </section>
 
       <section>
@@ -297,7 +298,7 @@ export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
           count={shown(datasets.items, datasets.done)}
           hint={
             propertyTokens.length > 0
-              ? 'Every dataset a simulation generated, bundled or not. The filter on what a run simulated applies to runs only.'
+              ? 'Every dataset a simulation generated, bundled or not. The filter on what a simulation simulated applies to bundled simulations only.'
               : 'Every dataset a simulation generated, bundled or not.'
           }
         />

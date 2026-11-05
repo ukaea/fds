@@ -10,14 +10,14 @@ A named, citable group of Datasets.
 | `issued` | date | No | When the collection was formally published, the date a citation gives (`dct:issued`). Not when FDS listed it |
 | `access_level` | enum | No | Effective access level (inherited if not set) |
 | `root_url` | string | No | Access root for all physical data in this collection (`dcat:accessURL`) |
-| `activity_id` | integer | No | FK to the Activity (run) this collection bundles, if any. See [Making a run discoverable](#making-a-run-discoverable) |
+| `activity_id` | integer | No | The Activity this collection bundles, if any. See [Making an Activity discoverable](#making-an-activity-discoverable) |
 | `scientific_metadata` | list | No | What this collection is about, see [Scientific metadata](index.md#scientific-metadata) |
 
-## Making a run discoverable
+## Making an Activity discoverable
 
-A Collection carries `scientific_metadata` like a Shot or a Dataset, and its list endpoints take the same `property` filter. That is how a simulation run becomes something you can search for.
+A Collection carries `scientific_metadata` like a Shot or a Dataset, and its list endpoints take the same `property` filter. That is how an Activity, such as a simulation run, becomes something you can search for.
 
-A run's outputs are always reachable as the datasets carrying its `activity_id`, so a bundle is never required. It is what you create when you want the run itself to be findable and citable. Set `activity_id` to the run and record what the run was about:
+An Activity's outputs are always reachable as the datasets carrying its `activity_id`, so a bundle is never required. It is what you create when you want the Activity itself to be findable and citable. Set `activity_id` to the Activity and record what it was about:
 
 ```json
 {
@@ -30,17 +30,17 @@ A run's outputs are always reachable as the datasets carrying its `activity_id`,
 }
 ```
 
-Then the run answers a catalogue question, across every device and shot:
+Then the Activity answers a catalogue question, across every device and shot:
 
 ```http
 GET /v1/collections?activity_type=simulation&property=confinement_mode:H-mode
 ```
 
-A run that models no real shot, such as a predictive scenario, belongs to the device it models, not to an invented shot. Register its outputs and its bundle under `/devices/{device}`. The bundle is then listed with the device's collections, and the query above finds it. The bundle of a run that models no particular device is a global collection.
+An Activity that models no real shot, such as a predictive scenario, belongs to the device it models, not to an invented shot. Register its outputs and its bundle under `/devices/{device}`. The bundle is then listed with the device's collections, and the query above finds it. The bundle of a run that models no particular device is a global collection.
 
-If you do not bundle a run, its claims belong on its output datasets instead, and the run is not searchable as a run. That is a choice, not a gap: FDS records what a producer asserts and never infers claims they did not make.
+If you do not bundle an Activity, its claims belong on its output datasets instead, and the Activity itself is not searchable. That is a choice, not a gap: FDS records what a producer asserts and never infers claims they did not make.
 
-The same field on a hand-curated collection describes what the selection was chosen for rather than what a run produced. The shape and the query are identical; `activity_id` tells the two apart.
+The same field on a hand-curated collection describes what the selection was chosen for rather than what an Activity generated. The shape and the query are identical; `activity_id` tells the two apart.
 
 Collections support nesting (a Collection can contain other Collections) and a Dataset can belong to multiple Collections. The Dataset's URI is independent of its collection membership, so adding or moving a dataset never changes its URL.
 
@@ -140,23 +140,23 @@ curl "$API/collections?scope=global"               # global collections
 curl "$API/devices/mast/collections?scope=device"  # mast's device-level collections
 ```
 
-Every collection listing can also be filtered by the run each collection bundles, the one its `activity_id` names:
+Every collection listing can also be filtered by the Activity each collection bundles, the one its `activity_id` names:
 
 | Parameter | Lists the collections that bundle |
 | --- | --- |
-| `activity_id` | This run |
-| `activity_type` | Runs of this type, such as `simulation` |
-| `source` | Runs carried out by the source with this name, such as `jintrac` |
+| `activity_id` | This Activity |
+| `activity_type` | Activities of this type, such as `simulation` |
+| `source` | Activities carried out by the source with this name, such as `jintrac` |
 
 ```text
 GET /v1/collections?activity_type=simulation     # every simulation run that has a bundle
-GET /v1/devices/mast/collections?source=jintrac  # JINTRAC runs on mast
-GET /v1/collections?activity_id=12               # run 12's bundle
+GET /v1/devices/mast/collections?source=jintrac  # JINTRAC simulations on mast
+GET /v1/collections?activity_id=12               # Activity 12's bundle
 ```
 
-A bundle can also hold datasets its run did not generate, such as the run's inputs. To list only what run 12 generated, use `GET /v1/datasets?activity_id=12`.
+A bundle can also hold datasets its Activity did not generate, such as the Activity's inputs. To list only what Activity 12 generated, use `GET /v1/datasets?activity_id=12`.
 
-A collection read includes `activity`, a summary of the run it bundles, in the same form as on a [dataset read](dataset.md#recording-a-datasets-provenance). Each dataset inlined in the read carries a summary of its own run.
+A collection read includes `activity`, a summary of the Activity it bundles, in the same form as on a [dataset read](dataset.md#recording-a-datasets-provenance). Each dataset inlined in the read carries a summary of its own Activity.
 
 To see what the collections in a listing can be filtered by, ask for its property summary: `GET /collections/properties` or `GET /devices/{device}/collections/properties`. Each takes the same filters as its listing and answers in the same form as the [shot summary](index.md#discovering-what-to-filter-on).
 

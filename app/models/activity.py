@@ -63,10 +63,10 @@ class ActivityDelegation(SQLModel, table=True):
     """Delegation of responsibility within an Activity — ``prov:actedOnBehalfOf``.
 
     The ``subordinate`` agent acted under the ``responsible`` agent's authority
-    for this run (e.g. an analysis code coordinated by a scheduler). Both ends are
+    for this Activity (e.g. an analysis code coordinated by a scheduler). Both ends are
     agents, never instruments; the edge is responsibility, not data flow, so it
     never enters the lineage plane. Activity-scoped — the same two agents may
-    stand in different relationships in different runs.
+    stand in different relationships in different Activities.
     """
 
     activity: int = Field(foreign_key="activity.id", primary_key=True)
@@ -122,7 +122,7 @@ class ActivityDelegationInput(SQLModel):
 class ActivityCreate(ActivityBase):
     """Create an Activity and declare its whole provenance in one request.
 
-    ``inputs`` are dataset ids the run consumed; ``instruments`` are instrument
+    ``inputs`` are dataset ids the Activity consumed; ``instruments`` are instrument
     Source ids it used; ``agents`` are additional agents (beyond the primary
     ``source_id`` executor) with their roles; ``delegations`` record which agent
     acted on behalf of which (``prov:actedOnBehalfOf``). The service builds the
@@ -185,11 +185,11 @@ class ActivityRead(ActivityBase):
 
 
 class ActivitySummary(SQLModel):
-    """A short summary of the run a record names in its ``activity_id``.
+    """A short summary of the Activity a record names in its ``activity_id``.
 
     Dataset and collection reads include it, so a list can say what produced each
-    row without a request per row. The start time tells apart two runs of the
-    same source and version. The full run is read by ``activity_id``.
+    row without a request per row. The start time tells apart two Activities with
+    the same source and version. The full Activity is read by ``activity_id``.
     """
 
     activity_type: ActivityType | None = None

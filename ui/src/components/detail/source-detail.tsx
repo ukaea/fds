@@ -8,7 +8,7 @@ import { Collection, Dataset, Source, SourceKind } from '@/lib/types';
 import { usePagedList } from '@/lib/use-paged-list';
 import { LoadMore } from '@/components/load-more';
 import { DatasetResults } from '@/components/dataset-results';
-import { RunCard } from '@/components/run-card';
+import { ActivityCard } from '@/components/activity-card';
 
 const PAGE_SIZE = 50;
 
@@ -29,11 +29,11 @@ export default function SourceDetail({ id }: { id: string }) {
 
   const sourceName = source?.name ?? id;
 
-  // The runs this source carried out, found through their bundles and through
-  // the datasets they generated. A run records the instruments it used apart
+  // The Activities this source carried out, found through their bundles and
+  // through the datasets they generated. An Activity records the instruments it used apart
   // from its source, so these lists are not requested for an instrument.
   const agent = source?.kind !== 'instrument';
-  const runs = usePagedList<Collection>(
+  const bundles = usePagedList<Collection>(
     source && agent ? `${API_BASE}/collections?source=${encodeURIComponent(source.name)}` : null,
     PAGE_SIZE
   );
@@ -184,40 +184,40 @@ export default function SourceDetail({ id }: { id: string }) {
                 This source is an <span className="text-foreground font-medium">instrument</span> — a tool, not an
                 agent. In PROV-O it is a <span className="text-foreground font-medium">{kindInfo.prov}</span> that an{' '}
                 <span className="text-foreground font-medium">Activity</span> <span className="font-mono text-xs">used</span>{' '}
-                (role <span className="font-mono text-xs">instrument</span>), never the agent a run was associated with.
+                (role <span className="font-mono text-xs">instrument</span>), never the agent an Activity was associated with.
               </p>
             ) : (
               <p className="leading-relaxed">
                 This source is a <span className="text-foreground font-medium">{kindInfo ? kindInfo.prov : 'prov:Agent'}</span>{' '}
-                — it bears responsibility for the runs it performs. Each execution is recorded as an{' '}
+                — it bears responsibility for the Activities it carries out. Each execution is recorded as an{' '}
                 <span className="text-foreground font-medium">Activity</span> (prov:Activity) it{' '}
-                <span className="font-mono text-xs">wasAssociatedWith</span>, linked to the datasets that run produced.
+                <span className="font-mono text-xs">wasAssociatedWith</span>, linked to the datasets that Activity generated.
               </p>
             )}
             <p className="leading-relaxed">
               {agent
-                ? 'Its runs and the datasets they generated are listed below. Open a run to see what it used.'
-                : 'Open a dataset and check its Provenance panel to see the runs that used it.'}
+                ? 'Its Activities and the datasets they generated are listed below. Open an Activity to see what it used.'
+                : 'Open a dataset and check its Provenance panel to see the Activities that used it.'}
             </p>
           </div>
         </div>
       </div>
 
-      {!!runs.items?.length && (
+      {!!bundles.items?.length && (
         <section className="mt-10">
           <h2 className="text-xl font-semibold text-foreground mb-4 flex items-center gap-3">
             <span className="bg-muted p-2 rounded-lg"><Layers className="w-5 h-5" /></span>
-            Runs
+            Activities
             <span className="text-sm font-normal text-muted-foreground">
-              ({runs.done ? runs.items.length : `${runs.items.length}+`})
+              ({bundles.done ? bundles.items.length : `${bundles.items.length}+`})
             </span>
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {runs.items.map((run) => (
-              <RunCard key={run.id} collection={run} />
+            {bundles.items.map((bundle) => (
+              <ActivityCard key={bundle.id} collection={bundle} />
             ))}
           </div>
-          <LoadMore onLoad={runs.loadMore} loading={runs.loadingMore} done={runs.done} />
+          <LoadMore onLoad={bundles.loadMore} loading={bundles.loadingMore} done={bundles.done} />
         </section>
       )}
 
