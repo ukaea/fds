@@ -1,0 +1,1 @@
+Throwaway file for a merge-restriction test. Never merged into main.
