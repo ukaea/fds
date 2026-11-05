@@ -498,6 +498,70 @@ def test_update_dataset(
     assert updated_dataset.distributions[0].url == "old_url"  # Should remain unchanged
 
 
+@pytest.mark.parametrize(
+    ("shot_id", "update"),
+    [
+        (None, {"device_name": None}),
+        ("s1", {"shot_id": None}),
+        ("s1", {"device_name": None, "shot_id": None}),
+    ],
+)
+def test_update_dataset_cannot_clear_context(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+    shot_id: str | None,
+    update: dict,
+):
+    """Sending null for device_name or shot_id is a move, and is refused."""
+    device_service.create(DeviceCreate(name="DEV", type="Tokamak"), user=admin_user)
+    shot_service.create(ShotCreate(id="s1", device_name="DEV"), user=admin_user)
+    dataset = dataset_service.create(
+        DatasetCreate(
+            name="ds", level=1, url="url", device_name="DEV", shot_id=shot_id
+        ),
+        user=admin_user,
+    )
+    assert dataset.id is not None
+    with pytest.raises(ForbiddenError):
+        dataset_service.update(
+            id=dataset.id, obj_in=DatasetUpdate(**update), user=admin_user
+        )
+    stored = dataset_service.get(dataset.id)
+    assert stored is not None
+    assert (stored.device_name, stored.shot_id) == ("dev", shot_id)
+
+
+@pytest.mark.parametrize(
+    ("device_name", "shot_id"), [(None, None), ("DEV", None), ("DEV", "s1")]
+)
+def test_update_dataset_accepts_its_current_context(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    dataset_service: DatasetService,
+    admin_user: AuthenticatedUser,
+    device_name: str | None,
+    shot_id: str | None,
+):
+    """Re-sending the current context, nulls included, is not a move."""
+    device_service.create(DeviceCreate(name="DEV", type="Tokamak"), user=admin_user)
+    shot_service.create(ShotCreate(id="s1", device_name="DEV"), user=admin_user)
+    dataset = dataset_service.create(
+        DatasetCreate(
+            name="ds", level=1, url="url", device_name=device_name, shot_id=shot_id
+        ),
+        user=admin_user,
+    )
+    assert dataset.id is not None
+    updated = dataset_service.update(
+        id=dataset.id,
+        obj_in=DatasetUpdate(device_name=device_name, shot_id=shot_id, title="T"),
+        user=admin_user,
+    )
+    assert updated.title == "T"
+
+
 def test_delete_dataset(
     device_service: DeviceService,
     shot_service: ShotService,

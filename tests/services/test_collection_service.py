@@ -329,6 +329,65 @@ def test_update_collection_cannot_change_device(
         )
 
 
+@pytest.mark.parametrize(
+    ("shot_id", "update"),
+    [
+        (None, {"device_name": None}),
+        ("s1", {"shot_id": None}),
+        ("s1", {"device_name": None, "shot_id": None}),
+    ],
+)
+def test_update_collection_cannot_clear_context(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    collection_service: CollectionService,
+    admin_user: AuthenticatedUser,
+    shot_id: str | None,
+    update: dict,
+):
+    """Sending null for device_name or shot_id is a move, and is refused."""
+    _make_device(device_service, admin_user)
+    _make_shot(shot_service, admin_user)
+    col = collection_service.create(
+        CollectionCreate(name="col", device_name="DEV", shot_id=shot_id), admin_user
+    )
+    assert col.id is not None
+    with pytest.raises(ForbiddenError):
+        collection_service.update(
+            id=col.id, obj_in=CollectionUpdate(**update), user=admin_user
+        )
+    stored = collection_service.get(col.id)
+    assert stored is not None
+    assert (stored.device_name, stored.shot_id) == ("dev", shot_id)
+
+
+@pytest.mark.parametrize(
+    ("device_name", "shot_id"), [(None, None), ("DEV", None), ("DEV", "s1")]
+)
+def test_update_collection_accepts_its_current_context(
+    device_service: DeviceService,
+    shot_service: ShotService,
+    collection_service: CollectionService,
+    admin_user: AuthenticatedUser,
+    device_name: str | None,
+    shot_id: str | None,
+):
+    """Re-sending the current context, nulls included, is not a move."""
+    _make_device(device_service, admin_user)
+    _make_shot(shot_service, admin_user)
+    col = collection_service.create(
+        CollectionCreate(name="col", device_name=device_name, shot_id=shot_id),
+        admin_user,
+    )
+    assert col.id is not None
+    updated = collection_service.update(
+        id=col.id,
+        obj_in=CollectionUpdate(device_name=device_name, shot_id=shot_id, title="T"),
+        user=admin_user,
+    )
+    assert updated.title == "T"
+
+
 def test_delete_collection(
     collection_service: CollectionService, admin_user: AuthenticatedUser
 ):

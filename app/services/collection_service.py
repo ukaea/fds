@@ -171,9 +171,10 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             obj_in.device_name = normalise_device_name(obj_in.device_name)
 
         # Prevent context moves
-        if obj_in.device_name and obj_in.device_name != db_obj.device_name:
+        sent = obj_in.model_fields_set
+        if "device_name" in sent and obj_in.device_name != db_obj.device_name:
             raise ForbiddenError("Cannot move a Collection between device contexts")
-        if obj_in.shot_id and obj_in.shot_id != db_obj.shot_id:
+        if "shot_id" in sent and obj_in.shot_id != db_obj.shot_id:
             raise ForbiddenError("Cannot move a Collection between shots")
 
         # Validate the merged policy state
