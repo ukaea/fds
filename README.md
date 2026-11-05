@@ -1,6 +1,6 @@
 # Fusion Data Service (FDS)
 
-[![CI](https://github.com/ukaea/fds/actions/workflows/ci.yml/badge.svg)](https://github.com/ukaea/fds/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/check-runs/ukaea/fds/main?label=CI)](https://github.com/ukaea/fds/commits/main)
 [![Licence](https://img.shields.io/badge/licence-Apache--2.0-blue.svg)](LICENSE)
 
 The Fusion Data Service (FDS) is a platform designed to provide scalable, FAIR-compliant access to fusion experiment metadata and data. It aligns with fusion community standards (like IMAS) to ensure interoperability and supports a flexible data hierarchy suitable for multimodal fusion research data.
