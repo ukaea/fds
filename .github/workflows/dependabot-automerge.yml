@@ -3,10 +3,10 @@ name: Dependabot auto-merge
 # Routine dependency bumps merge themselves once CI is green. A human still
 # looks at every major, which is where a bump can mean real work.
 #
-# The release app approves the PR and arms auto-merge. Once CI passes the PR
-# joins the merge queue, which tests it again on top of the latest main, so
-# nothing lands unverified. The built-in token will not do: GitHub does not let
-# it add a PR to a merge queue.
+# The release app arms auto-merge. Once CI passes the PR joins the merge queue,
+# which tests it again on top of the latest main, so nothing lands unverified.
+# The built-in token will not do: GitHub does not let it add a PR to a merge
+# queue.
 
 on:
   pull_request:
@@ -38,11 +38,9 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - name: Approve and arm auto-merge
+      - name: Arm auto-merge
         if: steps.app.outcome == 'success'
-        run: |
-          gh pr review --approve "$PR_URL"
-          gh pr merge --auto --squash "$PR_URL"
+        run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ steps.app.outputs.token }}
