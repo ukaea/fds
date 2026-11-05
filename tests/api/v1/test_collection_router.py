@@ -657,7 +657,7 @@ def test_add_and_remove_dataset_membership(
         headers=admin_user_token,
     )
     assert add_resp.status_code == 201
-    assert add_resp.json() == {"collection_id": col_id, "dataset_id": ds_id}
+    assert add_resp.json() == {"collection": col_id, "dataset": ds_id}
 
     # Verify inlined in GET response
     get_resp = test_client.get("/v1/collections/run", headers=admin_user_token)
@@ -705,7 +705,7 @@ def test_add_and_remove_child_collection(
         headers=admin_user_token,
     )
     assert add_resp.status_code == 201
-    assert add_resp.json() == {"parent_id": parent_id, "child_id": child_id}
+    assert add_resp.json() == {"parent": parent_id, "child": child_id}
 
     # Verify child appears in parent's read model
     get_resp = test_client.get("/v1/collections/parent", headers=admin_user_token)
@@ -793,9 +793,9 @@ def test_add_child_collection_handles_an_existing_cycle(
     # Legacy databases may contain cycles created before validation existed.
     session.add_all(
         [
-            CollectionMember(parent_id=first, child_id=second),
-            CollectionMember(parent_id=second, child_id=first),
-            CollectionMember(parent_id=second, child_id=descendant),
+            CollectionMember(parent=first, child=second),
+            CollectionMember(parent=second, child=first),
+            CollectionMember(parent=second, child=descendant),
         ]
     )
     session.commit()
@@ -816,8 +816,8 @@ def test_collection_read_handles_an_existing_cycle(
     second = _make_collection(session, "second")
     session.add_all(
         [
-            CollectionMember(parent_id=first, child_id=second),
-            CollectionMember(parent_id=second, child_id=first),
+            CollectionMember(parent=first, child=second),
+            CollectionMember(parent=second, child=first),
         ]
     )
     session.commit()

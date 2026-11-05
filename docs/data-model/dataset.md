@@ -25,7 +25,7 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 | `activity_id` | integer | No | FK to the Activity that produced this dataset (provenance) |
 | `derived_from` | list | No | Upstream entities this dataset was built from, see below |
 | `annotates` | string | No | For an annotation dataset: the property it localises (see [Annotation datasets](reference-datasets.md#annotation-datasets)) |
-| `subject_dataset_id` | integer | No | For a dataset-frame annotation: the source dataset it localises a property in |
+| `subject_dataset` | integer | No | For a dataset-frame annotation: the id of the source dataset it localises a property in |
 
 ### Recording a dataset's provenance
 

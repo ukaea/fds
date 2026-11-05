@@ -259,14 +259,14 @@ Some annotations are too big or too numerous for an inline [`extent`](index.md#a
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `annotates` | string | No | The property this dataset localises (e.g. `elm`). Marks the dataset as an annotation and matches the inline annotation of the same `name` on its subject |
-| `subject_dataset_id` | integer | No | For a dataset-frame annotation: the source `Dataset` it localises a property in |
+| `subject_dataset` | integer | No | For a dataset-frame annotation: the id of the source `Dataset` it localises a property in |
 | `applies_to` | object | No | For a device-frame annotation: which shots it covers (same selectors as geometry) |
 
 An annotation's coordinates live in its subject's frame, and FDS never re-frames them. The subject fixes the frame:
 
 | Frame | How it is declared | Example |
 | --- | --- | --- |
-| **Dataset** | `subject_dataset_id` names the source dataset | A UFO mask in a specific camera signal |
+| **Dataset** | `subject_dataset` names the source dataset | A UFO mask in a specific camera signal |
 | **Shot** | the annotation `Dataset` belongs to the shot (`shot_id`) | An ELM-time array on the shot's time base |
 | **Device** | device-level (`shot_id` null) with `applies_to` | A camera dead-region across a campaign |
 
@@ -274,7 +274,7 @@ An annotation's coordinates live in its subject's frame, and FDS never re-frames
 
 `?include_annotations=true` resolves a subject's annotations into an `annotations` field, off by default. Resolution stays within the subject's frame:
 
-- a **Dataset** read returns the annotations whose `subject_dataset_id` is that dataset;
+- a **Dataset** read returns the annotations whose `subject_dataset` is that dataset;
 - a **Shot** read returns the annotation datasets belonging to it, plus the device-level annotations whose `applies_to` covers it.
 
 A Dataset read does not fold in its parent Shot's annotations: that would present shot-frame events as if they belonged on the diagnostic's axis, a time-base consistency FDS does not assert. A consumer overlaying a shot's events across many diagnostics fetches the shot's annotation and aligns to each dataset itself.

@@ -142,7 +142,7 @@ def catalogue(session: Session, admin_user: AuthenticatedUser) -> int:
                 device_name="MAST",
                 shot_id=subject.shot_id,
                 annotates="ufo",
-                subject_dataset_id=subject.id,
+                subject_dataset=subject.id,
             ),
             admin_user,
         )
@@ -211,7 +211,7 @@ def test_reading_annotations_issues_the_same_statements_whatever_their_number(
                     device_name="MAST",
                     shot_id="1",
                     annotates="ufo",
-                    subject_dataset_id=subject.id,
+                    subject_dataset=subject.id,
                 ),
                 admin_user,
             )

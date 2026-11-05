@@ -91,7 +91,7 @@ def _scene(device_service, shot_service, dataset_service, admin_user):
             "ufo-mask",
             shot_id="100",
             annotates="ufo",
-            subject_dataset_id=signal.id,
+            subject_dataset=signal.id,
         ),
         # shot frame: belongs to the shot, no dataset subject
         "shot_frame": _make_public_dataset(
@@ -207,7 +207,7 @@ def test_annotations_resolved_only_where_readable(
         "ufo-review",
         shot_id="100",
         annotates="ufo",
-        subject_dataset_id=scene["signal"].id,
+        subject_dataset=scene["signal"].id,
     )
     _make_team_dataset(
         dataset_service, admin_user, "elm-review", shot_id="100", annotates="elm"

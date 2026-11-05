@@ -47,8 +47,8 @@ A single request can declare the whole run: what it consumed, what it used, who 
            "started_at": "2024-01-15T10:00:00", "ended_at": "2024-01-15T10:12:34",
            "inputs": [3, 7], "instruments": [21],
            "agents": [{"source_id": 5, "role": "orchestrator"}],
-           "delegations": [{"subordinate_source_id": '"$SOURCE_ID"',
-                            "responsible_source_id": 5}]}'
+           "delegations": [{"subordinate_source": '"$SOURCE_ID"',
+                            "responsible_source": 5}]}'
     ```
 
 === "Python (requests)"
@@ -68,7 +68,7 @@ A single request can declare the whole run: what it consumed, what it used, who 
             "instruments": [21],
             "agents": [{"source_id": scheduler_id, "role": "orchestrator"}],
             "delegations": [
-                {"subordinate_source_id": source_id, "responsible_source_id": scheduler_id}
+                {"subordinate_source": source_id, "responsible_source": scheduler_id}
             ],
         },
     ).json()
@@ -91,7 +91,7 @@ A single request can declare the whole run: what it consumed, what it used, who 
             "instruments": [21],
             "agents": [{"source_id": scheduler_id, "role": "orchestrator"}],
             "delegations": [
-                {"subordinate_source_id": source_id, "responsible_source_id": scheduler_id}
+                {"subordinate_source": source_id, "responsible_source": scheduler_id}
             ],
         },
     ).json()
@@ -115,7 +115,7 @@ A single request can declare the whole run: what it consumed, what it used, who 
           instruments: [21],
           agents: [{ source_id: schedulerId, role: "orchestrator" }],
           delegations: [
-            { subordinate_source_id: sourceId, responsible_source_id: schedulerId },
+            { subordinate_source: sourceId, responsible_source: schedulerId },
           ],
         }),
       })

@@ -158,7 +158,7 @@ class DatasetBase(
             "For an annotation dataset: the property it localises (e.g. 'elm'). "
             "Marks the dataset as an annotation and matches the inline annotation of the "
             "same name on its subject. "
-            "The subject fixes the frame: subject_dataset_id (dataset frame) or the "
+            "The subject fixes the frame: subject_dataset (dataset frame) or the "
             "annotation's own shot_id (shot frame). Coordinates live in the "
             "annotation's data, in that frame."
         ),
@@ -207,7 +207,7 @@ class Dataset(DatasetBase, TimestampMixin, table=True):
     id: int | None = Field(default=None, primary_key=True)
     shot_id: str | None = Field(default=None, index=True)
     activity_id: int | None = Field(default=None, foreign_key="activity.id", index=True)
-    subject_dataset_id: int | None = Field(
+    subject_dataset: int | None = Field(
         default=None,
         foreign_key="dataset.id",
         index=True,
@@ -235,7 +235,7 @@ class Dataset(DatasetBase, TimestampMixin, table=True):
     derivations: list["DatasetDerivation"] = Relationship(
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan",
-            "primaryjoin": "Dataset.id==DatasetDerivation.dataset_id",
+            "primaryjoin": "Dataset.id==DatasetDerivation.dataset",
         },
     )
 
@@ -266,7 +266,7 @@ class DatasetDerivationBase(SQLModel):
 
 class DatasetDerivation(DatasetDerivationBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    dataset_id: int = Field(foreign_key="dataset.id", index=True)
+    dataset: int = Field(foreign_key="dataset.id", index=True)
 
 
 class DatasetDerivationCreate(DatasetDerivationBase):
@@ -296,7 +296,7 @@ class DatasetDerivationCreate(DatasetDerivationBase):
 
 class DatasetDerivationRead(DatasetDerivationBase):
     id: int
-    dataset_id: int
+    dataset: int
 
 
 class DatasetLineageNode(SQLModel):
@@ -342,7 +342,7 @@ class DatasetCreate(DatasetBase):
 
     shot_id: str | None = None
     activity_id: int | None = None
-    subject_dataset_id: int | None = None
+    subject_dataset: int | None = None
     origin: str | None = None
     # Default distribution fields — passed through to a Distribution row with
     # default_distribution=True on create.  Only created when url is supplied.
@@ -373,7 +373,7 @@ class DatasetRead(DatasetBase, TimestampMixin):
     shot_id: str | None = None
     activity_id: int | None = None
     activity: "ActivitySummary | None" = None
-    subject_dataset_id: int | None = None
+    subject_dataset: int | None = None
     origin: str | None = None
     effective_access_level: AccessLevel | None = None
     # Default distribution fields inlined for convenience (None when no distribution exists)
@@ -431,4 +431,4 @@ class DatasetUpdate(SQLModel):
     calibration_stage: int | None = None
     applies_to: Coverage | None = None
     annotates: str | None = None
-    subject_dataset_id: int | None = None
+    subject_dataset: int | None = None

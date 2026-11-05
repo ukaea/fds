@@ -35,8 +35,8 @@ class CollectionDataset(SQLModel, table=True):
     ``CollectionService.remove_dataset``.
     """
 
-    collection_id: int = Field(foreign_key="collection.id", primary_key=True)
-    dataset_id: int = Field(foreign_key="dataset.id", primary_key=True)
+    collection: int = Field(foreign_key="collection.id", primary_key=True)
+    dataset: int = Field(foreign_key="dataset.id", primary_key=True)
 
 
 class CollectionMember(SQLModel, table=True):
@@ -47,22 +47,22 @@ class CollectionMember(SQLModel, table=True):
     and ``CollectionService.remove_child_collection``.
     """
 
-    parent_id: int = Field(foreign_key="collection.id", primary_key=True)
-    child_id: int = Field(foreign_key="collection.id", primary_key=True)
+    parent: int = Field(foreign_key="collection.id", primary_key=True)
+    child: int = Field(foreign_key="collection.id", primary_key=True)
 
 
 class CollectionDatasetRead(SQLModel):
     """A Dataset membership link on a Collection (``dcat:dataset``)."""
 
-    collection_id: int
-    dataset_id: int
+    collection: int
+    dataset: int
 
 
 class CollectionMemberRead(SQLModel):
     """A child-Collection membership link (``dcat:catalog``)."""
 
-    parent_id: int
-    child_id: int
+    parent: int
+    child: int
 
 
 class CollectionBase(

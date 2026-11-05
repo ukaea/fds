@@ -38,21 +38,21 @@ if TYPE_CHECKING:
 class ActivityInput(SQLModel, table=True):
     """Datasets that an Activity consumed as inputs."""
 
-    activity_id: int = Field(foreign_key="activity.id", primary_key=True)
-    dataset_id: int = Field(foreign_key="dataset.id", primary_key=True)
+    activity: int = Field(foreign_key="activity.id", primary_key=True)
+    dataset: int = Field(foreign_key="dataset.id", primary_key=True)
 
 
 class ActivityInstrument(SQLModel, table=True):
     """Instruments that an Activity used — Sources of kind ``instrument``."""
 
-    activity_id: int = Field(foreign_key="activity.id", primary_key=True)
-    source_id: int = Field(foreign_key="source.id", primary_key=True)
+    activity: int = Field(foreign_key="activity.id", primary_key=True)
+    source: int = Field(foreign_key="source.id", primary_key=True)
 
 
 class ActivityAgent(SQLModel, table=True):
     """Additional agents associated with an Activity, beyond its executor."""
 
-    activity_id: int = Field(foreign_key="activity.id", primary_key=True)
+    activity: int = Field(foreign_key="activity.id", primary_key=True)
     source_id: int = Field(foreign_key="source.id", primary_key=True)
     role: AgentRole = Field(default=AgentRole.EXECUTOR)
 
@@ -69,9 +69,9 @@ class ActivityDelegation(SQLModel, table=True):
     stand in different relationships in different runs.
     """
 
-    activity_id: int = Field(foreign_key="activity.id", primary_key=True)
-    subordinate_source_id: int = Field(foreign_key="source.id", primary_key=True)
-    responsible_source_id: int = Field(foreign_key="source.id", primary_key=True)
+    activity: int = Field(foreign_key="activity.id", primary_key=True)
+    subordinate_source: int = Field(foreign_key="source.id", primary_key=True)
+    responsible_source: int = Field(foreign_key="source.id", primary_key=True)
 
 
 class ActivityBase(SQLModel):
@@ -106,15 +106,15 @@ class ActivityDelegationInput(SQLModel):
     """A delegation to record when creating an Activity: the ``subordinate`` agent
     acted on behalf of the ``responsible`` agent. Both are agent Sources."""
 
-    subordinate_source_id: int
-    responsible_source_id: int
+    subordinate_source: int
+    responsible_source: int
 
     @model_validator(mode="after")
     def ends_must_differ(self) -> Self:
-        if self.subordinate_source_id == self.responsible_source_id:
+        if self.subordinate_source == self.responsible_source:
             raise ValueError(
                 f"a source cannot act on behalf of itself "
-                f"(source {self.subordinate_source_id})"
+                f"(source {self.subordinate_source})"
             )
         return self
 
@@ -168,8 +168,8 @@ class ActivityCreate(ActivityBase):
             associated.add(self.source_id)
         for delegation in self.delegations:
             for source_id in (
-                delegation.subordinate_source_id,
-                delegation.responsible_source_id,
+                delegation.subordinate_source,
+                delegation.responsible_source,
             ):
                 if source_id not in associated:
                     raise ValueError(
@@ -201,21 +201,21 @@ class ActivitySummary(SQLModel):
 class ActivityInputRead(SQLModel):
     """An input-dataset link on an Activity (``prov:used``, role ``input``)."""
 
-    activity_id: int
-    dataset_id: int
+    activity: int
+    dataset: int
 
 
 class ActivityInstrumentRead(SQLModel):
     """An instrument link on an Activity (``prov:used``, role ``instrument``)."""
 
-    activity_id: int
-    source_id: int
+    activity: int
+    source: int
 
 
 class ActivityAgentRead(SQLModel):
     """An agent association (with role) on an Activity."""
 
-    activity_id: int
+    activity: int
     source_id: int
     role: AgentRole
 
@@ -223,9 +223,9 @@ class ActivityAgentRead(SQLModel):
 class ActivityDelegationRead(SQLModel):
     """A delegation association on an Activity — ``prov:actedOnBehalfOf``."""
 
-    activity_id: int
-    subordinate_source_id: int
-    responsible_source_id: int
+    activity: int
+    subordinate_source: int
+    responsible_source: int
 
 
 class ActivityUpdate(SQLModel):

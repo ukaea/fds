@@ -27,9 +27,9 @@ class AnnotationService:
         ids = {dataset.id for dataset in datasets} - {None}
         by_subject: defaultdict[int | None, list[Dataset]] = defaultdict(list)
         if ids:
-            statement = select(Dataset).where(col(Dataset.subject_dataset_id).in_(ids))
+            statement = select(Dataset).where(col(Dataset.subject_dataset).in_(ids))
             for annotation in self.session.exec(statement):
-                by_subject[annotation.subject_dataset_id].append(annotation)
+                by_subject[annotation.subject_dataset].append(annotation)
         return [by_subject[dataset.id] for dataset in datasets]
 
     def for_shots(self, shots: Sequence[Shot]) -> list[list[Dataset]]:
@@ -49,7 +49,7 @@ class AnnotationService:
                     {(shot.device_name, shot.id) for shot in shots}
                 ),
                 col(Dataset.annotates).is_not(None),
-                col(Dataset.subject_dataset_id).is_(None),
+                col(Dataset.subject_dataset).is_(None),
             )
         ).all()
         by_shot: defaultdict[tuple[str | None, str | None], list[Dataset]] = (

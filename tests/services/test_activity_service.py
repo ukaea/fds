@@ -463,8 +463,8 @@ def test_create_activity_with_inline_delegation(
             ],
             delegations=[
                 ActivityDelegationInput(
-                    subordinate_source_id=code.id,
-                    responsible_source_id=scheduler.id,
+                    subordinate_source=code.id,
+                    responsible_source=scheduler.id,
                 )
             ],
         ),
@@ -472,9 +472,9 @@ def test_create_activity_with_inline_delegation(
     )
     assert activity.id is not None
     delegations = activity_service.get_delegations(activity.id, admin_user)
-    assert [
-        (d.subordinate_source_id, d.responsible_source_id) for d in delegations
-    ] == [(code.id, scheduler.id)]
+    assert [(d.subordinate_source, d.responsible_source) for d in delegations] == [
+        (code.id, scheduler.id)
+    ]
 
 
 def test_add_remove_delegation(
@@ -503,9 +503,9 @@ def test_add_remove_delegation(
         user=admin_user,
     )
     delegations = activity_service.get_delegations(activity.id, admin_user)
-    assert [
-        (d.subordinate_source_id, d.responsible_source_id) for d in delegations
-    ] == [(code.id, scheduler.id)]
+    assert [(d.subordinate_source, d.responsible_source) for d in delegations] == [
+        (code.id, scheduler.id)
+    ]
 
     # Idempotent.
     activity_service.add_delegation(
@@ -549,8 +549,8 @@ def test_delegation_rejects_instrument(
                 ],
                 delegations=[
                     ActivityDelegationInput(
-                        subordinate_source_id=code.id,
-                        responsible_source_id=instrument.id,
+                        subordinate_source=code.id,
+                        responsible_source=instrument.id,
                     )
                 ],
             ),
@@ -617,8 +617,8 @@ def test_cannot_strip_an_agent_a_delegation_depends_on(
             ],
             delegations=[
                 ActivityDelegationInput(
-                    subordinate_source_id=code.id,
-                    responsible_source_id=scheduler.id,
+                    subordinate_source=code.id,
+                    responsible_source=scheduler.id,
                 )
             ],
         ),
@@ -650,8 +650,8 @@ def test_cannot_reassign_executor_a_delegation_depends_on(
             ],
             delegations=[
                 ActivityDelegationInput(
-                    subordinate_source_id=code.id,
-                    responsible_source_id=scheduler.id,
+                    subordinate_source=code.id,
+                    responsible_source=scheduler.id,
                 )
             ],
         ),

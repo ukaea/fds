@@ -119,9 +119,9 @@ export interface Dataset {
   applies_to?: Coverage;
   scientific_metadata?: ScientificProperty[];
   // Set on an annotation dataset: the property it localises. Its subject
-  // fixes the frame — subject_dataset_id, or else the shot it belongs to.
+  // fixes the frame — subject_dataset, or else the shot it belongs to.
   annotates?: string | null;
-  subject_dataset_id?: number | null;
+  subject_dataset?: number | null;
   // Resolved reference versions, populated by ?include_geometry / ?include_calibration.
   geometry?: Dataset[];
   calibration?: Dataset[];
@@ -212,14 +212,14 @@ export interface Source {
 
 // An agent associated with an Activity, with its role (prov:wasAssociatedWith).
 export interface ActivityAgent {
-  activity_id: number;
+  activity: number;
   source_id: number;
   role: string;
 }
 
 // A delegation edge on an Activity (prov:actedOnBehalfOf).
 export interface ActivityDelegation {
-  activity_id: number;
-  subordinate_source_id: number;
-  responsible_source_id: number;
+  activity: number;
+  subordinate_source: number;
+  responsible_source: number;
 }

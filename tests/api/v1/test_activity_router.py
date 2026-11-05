@@ -230,7 +230,7 @@ def test_activity_input_endpoints(
     base = f"/v1/activities/{activity.id}/inputs"
     created = test_client.post(f"{base}/{dataset.id}", headers=admin_user_token)
     assert created.status_code == 201
-    assert created.json() == {"activity_id": activity.id, "dataset_id": dataset.id}
+    assert created.json() == {"activity": activity.id, "dataset": dataset.id}
     listed = test_client.get(base, headers=admin_user_token)
     assert listed.status_code == 200
     assert [d["id"] for d in listed.json()] == [dataset.id]
@@ -255,8 +255,8 @@ def test_activity_instrument_endpoints(
     created = test_client.post(f"{base}/{instrument['id']}", headers=admin_user_token)
     assert created.status_code == 201
     assert created.json() == {
-        "activity_id": activity.id,
-        "source_id": instrument["id"],
+        "activity": activity.id,
+        "source": instrument["id"],
     }
     assert [
         s["id"] for s in test_client.get(base, headers=admin_user_token).json()
@@ -287,12 +287,12 @@ def test_activity_agent_endpoints(
     )
     assert created.status_code == 201
     assert created.json() == {
-        "activity_id": activity.id,
+        "activity": activity.id,
         "source_id": agent["id"],
         "role": "orchestrator",
     }
     assert test_client.get(base, headers=admin_user_token).json() == [
-        {"activity_id": activity.id, "source_id": agent["id"], "role": "orchestrator"}
+        {"activity": activity.id, "source_id": agent["id"], "role": "orchestrator"}
     ]
     assert (
         test_client.delete(
@@ -327,15 +327,15 @@ def test_activity_delegation_endpoints(
     )
     assert created.status_code == 201
     assert created.json() == {
-        "activity_id": activity.id,
-        "subordinate_source_id": source.id,
-        "responsible_source_id": scheduler["id"],
+        "activity": activity.id,
+        "subordinate_source": source.id,
+        "responsible_source": scheduler["id"],
     }
     assert test_client.get(base, headers=admin_user_token).json() == [
         {
-            "activity_id": activity.id,
-            "subordinate_source_id": source.id,
-            "responsible_source_id": scheduler["id"],
+            "activity": activity.id,
+            "subordinate_source": source.id,
+            "responsible_source": scheduler["id"],
         }
     ]
     assert (

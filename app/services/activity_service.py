@@ -54,8 +54,8 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         for agent in obj_in.agents:
             self._require_agent(agent.source_id)
         for delegation in obj_in.delegations:
-            self._require_agent(delegation.subordinate_source_id)
-            self._require_agent(delegation.responsible_source_id)
+            self._require_agent(delegation.subordinate_source)
+            self._require_agent(delegation.responsible_source)
 
         activity = Activity.model_validate(
             obj_in.model_dump(
@@ -68,17 +68,13 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         assert activity.id is not None
 
         for dataset_id in obj_in.inputs:
-            self.session.add(
-                ActivityInput(activity_id=activity.id, dataset_id=dataset_id)
-            )
+            self.session.add(ActivityInput(activity=activity.id, dataset=dataset_id))
         for source_id in obj_in.instruments:
-            self.session.add(
-                ActivityInstrument(activity_id=activity.id, source_id=source_id)
-            )
+            self.session.add(ActivityInstrument(activity=activity.id, source=source_id))
         for agent in obj_in.agents:
             self.session.add(
                 ActivityAgent(
-                    activity_id=activity.id,
+                    activity=activity.id,
                     source_id=agent.source_id,
                     role=agent.role,
                 )
@@ -86,9 +82,9 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         for delegation in obj_in.delegations:
             self.session.add(
                 ActivityDelegation(
-                    activity_id=activity.id,
-                    subordinate_source_id=delegation.subordinate_source_id,
-                    responsible_source_id=delegation.responsible_source_id,
+                    activity=activity.id,
+                    subordinate_source=delegation.subordinate_source,
+                    responsible_source=delegation.responsible_source,
                 )
             )
         self.session.commit()
@@ -186,10 +182,10 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
     ) -> None:
         """Refuse to strip an agent that a delegation on this activity still names."""
         statement = select(ActivityDelegation).where(
-            ActivityDelegation.activity_id == activity_id,
+            ActivityDelegation.activity == activity_id,
             or_(
-                ActivityDelegation.subordinate_source_id == source_id,
-                ActivityDelegation.responsible_source_id == source_id,
+                ActivityDelegation.subordinate_source == source_id,
+                ActivityDelegation.responsible_source == source_id,
             ),
         )
         if self.session.exec(statement).first():
@@ -297,7 +293,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         existing = self.session.get(ActivityInput, (activity_id, dataset_id))
         if existing:
             return existing
-        link = ActivityInput(activity_id=activity_id, dataset_id=dataset_id)
+        link = ActivityInput(activity=activity_id, dataset=dataset_id)
         self.session.add(link)
         self.session.commit()
         return link
@@ -327,8 +323,8 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         self.get_readable_or_raise(activity_id, user)
         statement = (
             select(Dataset)
-            .join(ActivityInput, col(ActivityInput.dataset_id) == col(Dataset.id))
-            .where(ActivityInput.activity_id == activity_id)
+            .join(ActivityInput, col(ActivityInput.dataset) == col(Dataset.id))
+            .where(ActivityInput.activity == activity_id)
             .order_by(col(Dataset.id))
         )
         return read_page(
@@ -349,7 +345,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         existing = self.session.get(ActivityInstrument, (activity_id, source_id))
         if existing:
             return existing
-        link = ActivityInstrument(activity_id=activity_id, source_id=source_id)
+        link = ActivityInstrument(activity=activity_id, source=source_id)
         self.session.add(link)
         self.session.commit()
         return link
@@ -379,10 +375,8 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         self.get_readable_or_raise(activity_id, user)
         statement = (
             select(Source)
-            .join(
-                ActivityInstrument, col(ActivityInstrument.source_id) == col(Source.id)
-            )
-            .where(ActivityInstrument.activity_id == activity_id)
+            .join(ActivityInstrument, col(ActivityInstrument.source) == col(Source.id))
+            .where(ActivityInstrument.activity == activity_id)
             .offset(offset)
             .limit(limit)
         )
@@ -412,7 +406,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
             self.session.add(existing)
             self.session.commit()
             return existing
-        link = ActivityAgent(activity_id=activity_id, source_id=source_id, role=role)
+        link = ActivityAgent(activity=activity_id, source_id=source_id, role=role)
         self.session.add(link)
         self.session.commit()
         return link
@@ -447,7 +441,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         self.get_readable_or_raise(activity_id, user)
         statement = (
             select(ActivityAgent)
-            .where(ActivityAgent.activity_id == activity_id)
+            .where(ActivityAgent.activity == activity_id)
             .offset(offset)
             .limit(limit)
         )
@@ -478,9 +472,9 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         if existing:
             return existing
         link = ActivityDelegation(
-            activity_id=activity_id,
-            subordinate_source_id=subordinate_source_id,
-            responsible_source_id=responsible_source_id,
+            activity=activity_id,
+            subordinate_source=subordinate_source_id,
+            responsible_source=responsible_source_id,
         )
         self.session.add(link)
         self.session.commit()
@@ -518,7 +512,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         self.get_readable_or_raise(activity_id, user)
         statement = (
             select(ActivityDelegation)
-            .where(ActivityDelegation.activity_id == activity_id)
+            .where(ActivityDelegation.activity == activity_id)
             .offset(offset)
             .limit(limit)
         )
@@ -530,7 +524,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         """Retrieve all Activities associated with a Source — as the primary
         executor (``source_id``) or as an additional agent (``ActivityAgent``).
         """
-        agent_activity_ids = select(ActivityAgent.activity_id).where(
+        agent_activity_ids = select(ActivityAgent.activity).where(
             ActivityAgent.source_id == source_id
         )
         statement = (

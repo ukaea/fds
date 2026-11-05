@@ -185,8 +185,8 @@ def _build_associations(
     # subordinate source id -> URIs of the agents it acted on behalf of
     behalf: dict[int, list[str]] = {}
     for link in getattr(activity, "delegation_links", None) or []:
-        behalf.setdefault(link.subordinate_source_id, []).append(
-            names.source(link.responsible_source_id)
+        behalf.setdefault(link.subordinate_source, []).append(
+            names.source(link.responsible_source)
         )
 
     primary: dict[str, Any] | None = None

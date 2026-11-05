@@ -52,7 +52,7 @@ class TestActivityAgents:
 class TestActivityDelegations:
     def test_a_source_may_not_act_on_behalf_of_itself(self):
         with pytest.raises(ValidationError, match="act on behalf of itself"):
-            ActivityDelegationInput(subordinate_source_id=1, responsible_source_id=1)
+            ActivityDelegationInput(subordinate_source=1, responsible_source=1)
 
     def test_delegation_ends_must_be_agents_of_the_activity(self):
         """A delegation naming an unassociated agent would be stored but never
@@ -61,9 +61,7 @@ class TestActivityDelegations:
             ActivityCreate(
                 source_id=1,
                 delegations=[
-                    ActivityDelegationInput(
-                        subordinate_source_id=1, responsible_source_id=9
-                    )
+                    ActivityDelegationInput(subordinate_source=1, responsible_source=9)
                 ],
             )
 
@@ -72,9 +70,7 @@ class TestActivityDelegations:
             source_id=1,
             agents=[ActivityAgentInput(source_id=2, role=AgentRole.ORCHESTRATOR)],
             delegations=[
-                ActivityDelegationInput(
-                    subordinate_source_id=1, responsible_source_id=2
-                )
+                ActivityDelegationInput(subordinate_source=1, responsible_source=2)
             ],
         )
         assert len(activity.delegations) == 1

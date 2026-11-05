@@ -42,8 +42,8 @@ def _dataset_from_delegated_run(session):
             ],
             delegations=[
                 ActivityDelegationInput(
-                    subordinate_source_id=code.id,
-                    responsible_source_id=scheduler.id,
+                    subordinate_source=code.id,
+                    responsible_source=scheduler.id,
                 )
             ],
         ),

@@ -339,7 +339,7 @@ def register_mast_annotations(client: httpx.Client, base_url: str) -> None:
 
     A feature annotation is an ordinary Dataset marked with ``annotates``, naming
     the feature it localises. Its subject fixes its frame: this one belongs to the
-    shot (``shot_id`` set, no ``subject_dataset_id``), so its event times are on
+    shot (``shot_id`` set, no ``subject_dataset``), so its event times are on
     the shot's own time base and a Shot read with ``?include_annotations=true``
     resolves it. The name matches the shot's inline ``elm`` annotation, which carries the
     feature's presence and rough window. Idempotent.
@@ -461,8 +461,8 @@ def register_efit_provenance(
         "agents": [{"source_id": scheduler_source_id, "role": "orchestrator"}],
         "delegations": [
             {
-                "subordinate_source_id": source_id,
-                "responsible_source_id": scheduler_source_id,
+                "subordinate_source": source_id,
+                "responsible_source": scheduler_source_id,
             }
         ],
     }

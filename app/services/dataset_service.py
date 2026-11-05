@@ -238,7 +238,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             for derivation in obj_in.derived_from:
                 self.session.add(
                     DatasetDerivation.model_validate(
-                        derivation, update={"dataset_id": dataset.id}
+                        derivation, update={"dataset": dataset.id}
                     )
                 )
             self.session.commit()
@@ -362,7 +362,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             seen.add(current)
             upstreams = self.session.exec(
                 select(DatasetDerivation).where(
-                    DatasetDerivation.dataset_id == current,
+                    DatasetDerivation.dataset == current,
                     col(DatasetDerivation.source_dataset_id).is_not(None),
                 )
             ).all()
@@ -385,9 +385,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         self._authorize_write(dataset.device_name, user)
         self._validate_derivation(obj_in, dataset_id=dataset_id)
 
-        link = DatasetDerivation.model_validate(
-            obj_in, update={"dataset_id": dataset_id}
-        )
+        link = DatasetDerivation.model_validate(obj_in, update={"dataset": dataset_id})
         self.session.add(link)
         self.session.commit()
         self.session.refresh(link)
@@ -401,7 +399,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         self._authorize_write(dataset.device_name, user)
 
         link = self.session.get(DatasetDerivation, derivation_id)
-        if not link or link.dataset_id != dataset_id:
+        if not link or link.dataset != dataset_id:
             raise ResourceNotFoundError(
                 f"Derivation {derivation_id} not found for Dataset {dataset_id}"
             )
@@ -426,7 +424,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         self.check_read_access(dataset, user)
         statement = (
             select(DatasetDerivation)
-            .where(DatasetDerivation.dataset_id == dataset_id)
+            .where(DatasetDerivation.dataset == dataset_id)
             .order_by(col(DatasetDerivation.id))
             .offset(offset)
             .limit(limit)
@@ -461,7 +459,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
 
         derivations = self.session.exec(
             select(DatasetDerivation)
-            .where(DatasetDerivation.dataset_id == dataset.id)
+            .where(DatasetDerivation.dataset == dataset.id)
             .order_by(col(DatasetDerivation.id))
         ).all()
 
@@ -610,7 +608,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
 
     def _reject_if_upstream(self, id: int) -> None:
         dependants = self.session.exec(
-            select(DatasetDerivation.dataset_id).where(
+            select(DatasetDerivation.dataset).where(
                 DatasetDerivation.source_dataset_id == id
             )
         ).all()

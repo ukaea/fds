@@ -465,9 +465,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 f"Dataset {dataset_id} is already a member of Collection {collection_id}"
             )
 
-        membership = CollectionDataset(
-            collection_id=collection_id, dataset_id=dataset_id
-        )
+        membership = CollectionDataset(collection=collection_id, dataset=dataset_id)
         self.session.add(membership)
         self.session.commit()
         return membership
@@ -527,7 +525,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         if self._contains_collection(child_id, parent_id):
             raise FDSValidationError("Nesting these Collections would create a cycle")
 
-        membership = CollectionMember(parent_id=parent_id, child_id=child_id)
+        membership = CollectionMember(parent=parent_id, child=child_id)
         self.session.add(membership)
         self.session.commit()
         return membership
@@ -549,9 +547,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 continue
             seen.add(current)
             children = self.session.exec(
-                select(CollectionMember.child_id).where(
-                    CollectionMember.parent_id == current
-                )
+                select(CollectionMember.child).where(CollectionMember.parent == current)
             ).all()
             frontier.extend(children)
         return False
@@ -613,9 +609,9 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             self.session,
             Dataset,
             select(Dataset)
-            .join(CollectionDataset, col(CollectionDataset.dataset_id) == Dataset.id)
-            .where(col(CollectionDataset.collection_id).in_(ids)),
-            col(CollectionDataset.collection_id),
+            .join(CollectionDataset, col(CollectionDataset.dataset) == Dataset.id)
+            .where(col(CollectionDataset.collection).in_(ids)),
+            col(CollectionDataset.collection),
             user,
             limit=INLINE_MEMBERS,
         )
@@ -623,9 +619,9 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             self.session,
             Collection,
             select(Collection)
-            .join(CollectionMember, col(CollectionMember.child_id) == Collection.id)
-            .where(col(CollectionMember.parent_id).in_(ids)),
-            col(CollectionMember.parent_id),
+            .join(CollectionMember, col(CollectionMember.child) == Collection.id)
+            .where(col(CollectionMember.parent).in_(ids)),
+            col(CollectionMember.parent),
             user,
             limit=INLINE_MEMBERS,
         )
@@ -723,8 +719,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             return []
         statement = (
             select(Dataset)
-            .join(CollectionDataset, col(CollectionDataset.dataset_id) == Dataset.id)
-            .where(col(CollectionDataset.collection_id) == collection_id)
+            .join(CollectionDataset, col(CollectionDataset.dataset) == Dataset.id)
+            .where(col(CollectionDataset.collection) == collection_id)
             .order_by(col(Dataset.id))
         )
         return read_page(
@@ -747,8 +743,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             return []
         statement = (
             select(Collection)
-            .join(CollectionMember, col(CollectionMember.child_id) == Collection.id)
-            .where(col(CollectionMember.parent_id) == parent_id)
+            .join(CollectionMember, col(CollectionMember.child) == Collection.id)
+            .where(col(CollectionMember.parent) == parent_id)
             .order_by(col(Collection.id))
         )
         return read_page(

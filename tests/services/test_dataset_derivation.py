@@ -334,7 +334,7 @@ def test_lineage_terminates_on_a_cycle(session: Session):
     b = _dataset(
         session, "b", derived_from=[DatasetDerivationCreate(source_dataset_id=_id(a))]
     )
-    session.add(DatasetDerivation(dataset_id=_id(a), source_dataset_id=_id(b)))
+    session.add(DatasetDerivation(dataset=_id(a), source_dataset_id=_id(b)))
     session.commit()  # closes the loop: a <- b <- a
 
     lineage = DatasetService(session).get_lineage(_id(a), admin)
