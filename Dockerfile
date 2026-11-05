@@ -10,7 +10,7 @@ COPY alembic.ini README.md /fds/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra s3 --extra gcs --extra azure --extra otel
 
-FROM python:3.14-slim-bookworm
+FROM python:3.15-slim-bookworm
 WORKDIR /fds
 RUN groupadd --system fds && useradd --system --gid fds --uid 1000 --no-create-home fds
 # The app runs from its own virtualenv and never imports the base image's pip,
