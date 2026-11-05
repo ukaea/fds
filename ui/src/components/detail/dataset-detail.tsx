@@ -15,6 +15,7 @@ import { citation, resolveIdentifier } from '@/lib/identifiers';
 import type { JsonLd } from '@/lib/identifier-page';
 import { JsonLdPanel } from '@/components/jsonld-panel';
 import { HeatmapCanvas } from '@/components/heatmap';
+import { ReplacedNotice, VersionList } from '@/components/versions';
 
 function isZarr(mediaType?: string | null): boolean {
   return Boolean(mediaType?.toLowerCase().includes('zarr'));
@@ -326,7 +327,9 @@ function fsspecOptions(access: DataAccess): string {
 
 // An icechunk dataset is often a group in a larger store, the collection's
 // root_url, so the store is opened there and the rest of the path is the group.
-function icechunkSnippet(url: string, access: DataAccess, storeRoot?: string): string {
+// A ref is a tag naming the snapshot that holds this dataset's data; without one
+// the store is read at the tip of main, its newest data.
+function icechunkSnippet(url: string, access: DataAccess, storeRoot?: string, ref?: string | null): string {
   const root = storeRoot && url.startsWith(storeRoot) ? storeRoot : url;
   const group = url.slice(root.length).replace(/^\/|\/$/g, '');
   const { bucket, key } = splitS3(root);
@@ -358,7 +361,7 @@ storage = icechunk.s3_storage(
 ${args.map((a) => `    ${a},`).join('\n')}
 )
 repo = icechunk.Repository.open(storage)
-session = repo.readonly_session("main")
+session = repo.readonly_session(${ref ? `tag="${ref}"` : '"main"'})
 ds = xr.open_zarr(session.store${group ? `, group="${group}"` : ''}, consolidated=False)
 print(ds)`;
 }
@@ -368,7 +371,7 @@ function buildSnippet(dist: Distribution, access: DataAccess, storeRoot?: string
   const mediaType = (dist.media_type ?? '').toLowerCase();
   const format = (dist.format ?? '').toLowerCase();
 
-  if (isIcechunk(dist)) return icechunkSnippet(url, access, storeRoot);
+  if (isIcechunk(dist)) return icechunkSnippet(url, access, storeRoot, dist.ref);
 
   const options = fsspecOptions(access);
 
@@ -461,6 +464,9 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
     datasetData?.activity_id ? `${API_BASE}/datasets/${datasetData.id}/activity` : null,
     fetcher
   );
+
+  const replaces = datasetData?.replaces ?? [];
+  const replacedBy = datasetData?.replaced_by ?? [];
 
   const { data: executor } = useSWR<Source>(
     activityData?.source_id != null ? `${API_BASE}/sources/id/${activityData.source_id}` : null,
@@ -966,6 +972,8 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                         </Property>
                     )}
                     {datasetData?.version && <Property label="Version"><span className="text-foreground">{datasetData.version}</span></Property>}
+                    {replacedBy.length > 0 && <Property label="Replaced by"><VersionList kind="datasets" ids={replacedBy} /></Property>}
+                    {replaces.length > 0 && <Property label="Replaces"><VersionList kind="datasets" ids={replaces} /></Property>}
                     {datasetData?.publisher && <Property label="Publisher"><span className="text-foreground">{datasetData.publisher}</span></Property>}
                     {(datasetData?.temporal_start || datasetData?.temporal_end) && (
                         <Property label="Temporal coverage">
@@ -999,6 +1007,10 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                     Data Access
                     {selectedAccess || (selectedDist && isHttp(selectedDist.url)) ? <Unlock className="w-5 h-5 text-foreground" /> : <Lock className="w-5 h-5 text-muted-foreground" />}
                 </h3>
+
+                {/* A reader can come straight to the data without reading the
+                    rest, so it says here when a newer version replaces this one. */}
+                <ReplacedNotice kind="datasets" replacedBy={replacedBy} />
 
                 {distributions.length > 1 && (
                     <div className="mb-6">
@@ -1059,6 +1071,12 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                             <>
                                 <p className="text-muted-foreground font-medium uppercase tracking-wider pt-1">Group</p>
                                 <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded-sm">{selectedDist.group}</p>
+                            </>
+                        )}
+                        {selectedDist.ref && (
+                            <>
+                                <p className="text-muted-foreground font-medium uppercase tracking-wider pt-1">Ref</p>
+                                <p className="break-all text-foreground font-mono bg-card border border-border p-2 rounded-sm">{selectedDist.ref}</p>
                             </>
                         )}
                         {selectedDist.conforms_to && (

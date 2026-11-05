@@ -690,7 +690,6 @@ def test_get_datasets_with_storage_options(
 
 def test_scientific_metadata_roundtrip(
     test_client: TestClient,
-    session: Session,
     admin_user_token: dict,
 ):
     sci_meta = [
@@ -961,3 +960,469 @@ def test_dataset_jsonld_names_its_device_and_shot(
     assert "fuel:shot" not in device_node
     assert "fuel:device" not in global_node
     assert "fuel:shot" not in global_node
+
+
+def _mast_shots(session: Session) -> None:
+    DeviceService(session).create(
+        DeviceCreate(name="MAST", type="Spherical", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    ShotService(session).create(
+        ShotCreate(id="30421", device_name="MAST"), user=admin_user
+    )
+    ShotService(session).create(
+        ShotCreate(id="30420", device_name="MAST"), user=admin_user
+    )
+    session.commit()
+
+
+def _activity(session: Session) -> int:
+    activity = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.ANALYSIS), user=admin_user
+    )
+    session.commit()
+    assert activity.id is not None
+    return activity.id
+
+
+def _register(client: TestClient, token: dict, shot_id: str = "30421", **body):
+    return client.post(
+        f"/v1/devices/mast/shots/{shot_id}/datasets",
+        headers=token,
+        json={"name": "thomson_scattering", **body},
+    )
+
+
+def _listed(client: TestClient, token: dict, query: str = "") -> list[int]:
+    response = client.get(
+        f"/v1/devices/mast/shots/30421/datasets{query}", headers=token
+    )
+    return [d["id"] for d in response.json()]
+
+
+def test_a_distribution_names_a_point_in_its_store_history(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    created = _register(
+        test_client,
+        admin_user_token,
+        url="s3://bucket/30421/thomson_scattering",
+        ref="v1",
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["ref"] == "v1"
+    distribution = created.json()["distributions"][0]
+    assert distribution["ref"] == "v1"
+
+    response = test_client.patch(
+        f"/v1/distributions/{distribution['id']}",
+        headers=admin_user_token,
+        json={"ref": "v2"},
+    )
+    assert response.status_code == 200
+    assert response.json()["ref"] == "v2"
+
+
+def test_a_distribution_without_a_ref_has_none(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    created = _register(
+        test_client, admin_user_token, url="s3://bucket/30421/thomson_scattering"
+    )
+
+    assert created.status_code == 201
+    assert "ref" not in created.json()
+    assert "ref" not in created.json()["distributions"][0]
+
+
+def test_a_dataset_replaces_an_earlier_version(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    store = "s3://bucket/30421/thomson_scattering"
+    old = _register(test_client, admin_user_token, url=store, ref="v1").json()
+
+    new = _register(
+        test_client,
+        admin_user_token,
+        url=store,
+        ref="v2",
+        activity_id=reprocessing,
+        replaces=[old["id"]],
+    )
+
+    assert new.status_code == 201, new.text
+    assert new.json()["replaces"] == [old["id"]]
+    assert "replaced_by" not in new.json()
+    read = test_client.get(f"/v1/datasets/id/{old['id']}", headers=admin_user_token)
+    assert read.json()["replaced_by"] == [new.json()["id"]]
+    assert "replaces" not in read.json()
+
+
+def test_listings_leave_out_replaced_datasets(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    old = _register(test_client, admin_user_token).json()
+    new = _register(
+        test_client,
+        admin_user_token,
+        activity_id=reprocessing,
+        replaces=[old["id"]],
+    ).json()
+
+    by_name = test_client.get(
+        "/v1/devices/mast/shots/30421/datasets/thomson_scattering",
+        headers=admin_user_token,
+    ).json()
+    everywhere = test_client.get("/v1/datasets/", headers=admin_user_token).json()
+
+    assert _listed(test_client, admin_user_token) == [new["id"]]
+    assert [d["id"] for d in by_name] == [new["id"]]
+    assert [d["id"] for d in everywhere] == [new["id"]]
+    assert _listed(test_client, admin_user_token, "?include_replaced=true") == [
+        old["id"],
+        new["id"],
+    ]
+
+
+def test_two_datasets_can_replace_one(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    old = _register(test_client, admin_user_token).json()
+    recalibrated = _register(
+        test_client,
+        admin_user_token,
+        activity_id=reprocessing,
+        replaces=[old["id"]],
+    ).json()
+    refitted = _register(
+        test_client,
+        admin_user_token,
+        activity_id=_activity(session),
+        replaces=[old["id"]],
+    ).json()
+
+    read = test_client.get(f"/v1/datasets/id/{old['id']}", headers=admin_user_token)
+
+    assert read.json()["replaced_by"] == [recalibrated["id"], refitted["id"]]
+    assert _listed(test_client, admin_user_token) == [
+        recalibrated["id"],
+        refitted["id"],
+    ]
+
+
+def test_one_dataset_can_replace_several(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    first = _register(test_client, admin_user_token).json()
+    second = _register(test_client, admin_user_token, activity_id=reprocessing).json()
+
+    merged = _register(
+        test_client,
+        admin_user_token,
+        activity_id=_activity(session),
+        replaces=[second["id"], first["id"]],
+    )
+
+    assert merged.status_code == 201, merged.text
+    assert merged.json()["replaces"] == [first["id"], second["id"]]
+    assert _listed(test_client, admin_user_token) == [merged.json()["id"]]
+
+
+def test_a_dataset_registered_without_an_activity_can_be_replaced(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    old = _register(test_client, admin_user_token).json()
+
+    new = _register(
+        test_client,
+        admin_user_token,
+        activity_id=reprocessing,
+        replaces=[old["id"]],
+    )
+
+    assert new.status_code == 201, new.text
+
+
+def test_a_replacement_names_the_activity_that_generated_it(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    old = _register(test_client, admin_user_token, name="thomson_v1").json()
+
+    response = _register(test_client, admin_user_token, replaces=[old["id"]])
+
+    assert response.status_code == 422
+    assert "activity_id" in response.json()["detail"]
+
+
+def test_a_replacement_is_filed_in_the_same_place(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    old = _register(test_client, admin_user_token, shot_id="30420").json()
+
+    response = _register(
+        test_client,
+        admin_user_token,
+        activity_id=reprocessing,
+        replaces=[old["id"]],
+    )
+
+    assert response.status_code == 422
+    assert "same place" in response.json()["detail"]
+
+
+def test_replacing_a_missing_dataset_is_not_found(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    response = _register(
+        test_client, admin_user_token, activity_id=reprocessing, replaces=[999999]
+    )
+
+    assert response.status_code == 404
+
+
+def test_a_dataset_cannot_replace_itself(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    dataset = _register(test_client, admin_user_token, activity_id=reprocessing).json()
+
+    response = test_client.patch(
+        f"/v1/datasets/{dataset['id']}",
+        headers=admin_user_token,
+        json={"replaces": [dataset["id"]]},
+    )
+
+    assert response.status_code == 422
+
+
+def test_a_dataset_cannot_replace_one_that_already_replaces_it(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    first = _register(test_client, admin_user_token).json()
+    second = _register(
+        test_client,
+        admin_user_token,
+        activity_id=reprocessing,
+        replaces=[first["id"]],
+    ).json()
+    third = _register(
+        test_client,
+        admin_user_token,
+        activity_id=_activity(session),
+        replaces=[second["id"]],
+    ).json()
+
+    response = test_client.patch(
+        f"/v1/datasets/{first['id']}",
+        headers=admin_user_token,
+        json={"replaces": [third["id"]], "activity_id": reprocessing},
+    )
+
+    assert response.status_code == 422
+    assert "already replaces" in response.json()["detail"]
+
+
+def test_a_replacement_can_be_linked_after_it_is_registered(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    old = _register(test_client, admin_user_token).json()
+    new = _register(test_client, admin_user_token, activity_id=reprocessing).json()
+
+    response = test_client.patch(
+        f"/v1/datasets/{new['id']}",
+        headers=admin_user_token,
+        json={"replaces": [old["id"]]},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["replaces"] == [old["id"]]
+    assert _listed(test_client, admin_user_token) == [new["id"]]
+
+
+def test_an_empty_list_clears_the_replacements(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    old = _register(test_client, admin_user_token).json()
+    new = _register(
+        test_client,
+        admin_user_token,
+        activity_id=reprocessing,
+        replaces=[old["id"]],
+    ).json()
+
+    response = test_client.patch(
+        f"/v1/datasets/{new['id']}", headers=admin_user_token, json={"replaces": []}
+    )
+
+    assert response.status_code == 200, response.text
+    assert "replaces" not in response.json()
+    assert _listed(test_client, admin_user_token) == [old["id"], new["id"]]
+
+
+def test_the_activity_cannot_be_cleared_from_a_replacement(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    old = _register(test_client, admin_user_token, name="thomson_v1").json()
+    new = _register(
+        test_client,
+        admin_user_token,
+        activity_id=reprocessing,
+        replaces=[old["id"]],
+    ).json()
+
+    response = test_client.patch(
+        f"/v1/datasets/{new['id']}",
+        headers=admin_user_token,
+        json={"activity_id": None},
+    )
+
+    assert response.status_code == 422
+
+
+def test_deleting_the_replaced_dataset_clears_the_link(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    old = _register(test_client, admin_user_token).json()
+    new = _register(
+        test_client,
+        admin_user_token,
+        activity_id=reprocessing,
+        replaces=[old["id"]],
+    ).json()
+
+    deleted = test_client.delete(f"/v1/datasets/{old['id']}", headers=admin_user_token)
+
+    assert deleted.status_code == 204
+    read = test_client.get(f"/v1/datasets/id/{new['id']}", headers=admin_user_token)
+    assert read.status_code == 200
+    assert "replaces" not in read.json()
+
+
+def _public_with_restricted_replacement(
+    session: Session, activity_id: int
+) -> tuple[int, int]:
+    """The ids of a public dataset and of a restricted dataset replacing it."""
+    datasets = DatasetService(session)
+    old = datasets.create(
+        DatasetCreate(
+            name="thomson_scattering",
+            device_name="MAST",
+            shot_id="30421",
+            access_level=AccessLevel.PUBLIC,
+        ),
+        user=admin_user,
+    )
+    assert old.id is not None
+    new = datasets.create(
+        DatasetCreate(
+            name="thomson_scattering",
+            device_name="MAST",
+            shot_id="30421",
+            access_level=AccessLevel.RESTRICTED,
+            activity_id=activity_id,
+            replaces=[old.id],
+        ),
+        user=admin_user,
+    )
+    session.commit()
+    assert new.id is not None
+    return old.id, new.id
+
+
+def test_a_replacement_the_reader_cannot_read_is_not_named(
+    test_client: TestClient, session: Session, non_admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    old, new = _public_with_restricted_replacement(session, reprocessing)
+    datasets = DatasetService(session)
+    original = datasets.get(old)
+    assert original is not None
+
+    as_reader = test_client.get(f"/v1/datasets/id/{old}", headers=non_admin_user_token)
+    as_admin = datasets.to_read_model(original, user=admin_user)
+
+    assert as_reader.status_code == 200
+    assert "replaced_by" not in as_reader.json()
+    assert as_admin.replaced_by == [new]
+
+
+def test_a_reader_who_cannot_read_the_replacement_lists_the_original(
+    test_client: TestClient, session: Session, non_admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    old, new = _public_with_restricted_replacement(session, reprocessing)
+
+    as_admin = DatasetService(session).get_datasets_for_shot(
+        "30421", device_name="MAST", user=admin_user
+    )
+
+    assert _listed(test_client, non_admin_user_token) == [old]
+    assert [d.id for d in as_admin] == [new]
+
+
+def test_replacements_link_each_other_in_jsonld(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    store = "s3://bucket/30421/thomson_scattering"
+    old = _register(test_client, admin_user_token, url=store, ref="v1").json()
+    new = _register(
+        test_client,
+        admin_user_token,
+        url=store,
+        activity_id=reprocessing,
+        replaces=[old["id"]],
+    ).json()
+    ld = {**admin_user_token, "Accept": "application/ld+json"}
+
+    old_node = resource(
+        test_client.get(f"/v1/datasets/id/{old['id']}", headers=ld).json()
+    )
+    new_node = resource(
+        test_client.get(f"/v1/datasets/id/{new['id']}", headers=ld).json()
+    )
+
+    assert old_node["dcat:distribution"] == [
+        {
+            "@type": "dcat:Distribution",
+            "dcat:accessURL": old_node["@id"],
+            "schema:version": "v1",
+        }
+    ]
+    assert new_node["dcat:distribution"][0]["dcat:downloadURL"] == store
+    assert "schema:version" not in new_node["dcat:distribution"][0]
+    assert new_node["dct:replaces"] == [{"@id": old_node["@id"]}]
+    assert old_node["dct:isReplacedBy"] == [{"@id": new_node["@id"]}]
+    assert "dct:replaces" not in old_node
+    assert "dct:isReplacedBy" not in new_node

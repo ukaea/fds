@@ -3,43 +3,56 @@ from collections.abc import Sequence
 
 from sqlmodel import Session, col, select, tuple_
 
-from app.models.dataset import Dataset
+from app.models.dataset import Dataset, DatasetReplacement
+from app.models.identity import AuthenticatedUser
 from app.models.shot import Shot
 from app.services.coverage import CoverageMatcher
+from app.services.replacements import not_replaced
 
 
 class AnnotationService:
-    """Resolve annotations for a subject, within its frame.
+    """Find the annotations to include when a dataset or a shot is read.
 
-    An annotation ``Dataset`` (``annotates`` set) localises a property in a subject's
-    frame. Resolution never crosses frames: a dataset resolves only its own
-    dataset-frame annotations; a shot resolves its shot-frame annotations plus the
-    device-level (shot-ranged) annotations whose coverage includes it. FDS never
-    re-frames, so a shot-frame annotation is never surfaced on a dataset read.
+    An annotation is a Dataset with ``annotates`` set, marking where something
+    happens, such as ELM times. It is attached to one of three things:
+
+    - a dataset, named in ``subject_dataset``, such as a mask over one camera
+      signal;
+    - a shot, such as the ELM times for that shot;
+    - a device, with ``applies_to`` naming the shots it covers.
+
+    A dataset read includes the annotations attached to that dataset. A shot
+    read includes those attached to the shot and the device annotations that
+    cover it, but not those attached to the shot's datasets.
+
+    An annotation is left out when the reader may read one that replaces it, so
+    a correction is not shown beside the annotation it corrects.
     """
 
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def for_datasets(self, datasets: Sequence[Dataset]) -> list[list[Dataset]]:
-        """Dataset-frame annotations for each of ``datasets``, in order: those
-        whose subject is that dataset."""
+    def for_datasets(
+        self, datasets: Sequence[Dataset], *, user: AuthenticatedUser
+    ) -> list[list[Dataset]]:
+        """The annotations attached to each of ``datasets``, in the same order."""
         ids = {dataset.id for dataset in datasets} - {None}
         by_subject: defaultdict[int | None, list[Dataset]] = defaultdict(list)
         if ids:
-            statement = select(Dataset).where(col(Dataset.subject_dataset).in_(ids))
+            statement = select(Dataset).where(
+                col(Dataset.subject_dataset).in_(ids),
+                not_replaced(self.session, Dataset, DatasetReplacement, user),
+            )
             for annotation in self.session.exec(statement):
                 by_subject[annotation.subject_dataset].append(annotation)
         return [by_subject[dataset.id] for dataset in datasets]
 
-    def for_shots(self, shots: Sequence[Shot]) -> list[list[Dataset]]:
-        """Shot-frame plus device-frame annotations for each of ``shots``, in order.
-
-        Shot-frame annotations belong to the shot and have no dataset subject (the
-        subject is the shot itself). Device-frame annotations are device-level
-        (``shot_id`` null) and included when their ``applies_to`` covers the shot,
-        reusing the shared ``CoverageMatcher``. Dataset-frame annotations that merely
-        live in the shot are excluded. All the shots are resolved together.
+    def for_shots(
+        self, shots: Sequence[Shot], *, user: AuthenticatedUser
+    ) -> list[list[Dataset]]:
+        """For each of ``shots``, in the same order, the annotations attached to
+        it and the device annotations whose ``applies_to`` covers it. All the
+        shots are looked up together.
         """
         if not shots:
             return []
@@ -50,6 +63,7 @@ class AnnotationService:
                 ),
                 col(Dataset.annotates).is_not(None),
                 col(Dataset.subject_dataset).is_(None),
+                not_replaced(self.session, Dataset, DatasetReplacement, user),
             )
         ).all()
         by_shot: defaultdict[tuple[str | None, str | None], list[Dataset]] = (
@@ -63,6 +77,7 @@ class AnnotationService:
                 col(Dataset.device_name).in_({shot.device_name for shot in shots}),
                 col(Dataset.shot_id).is_(None),
                 col(Dataset.annotates).is_not(None),
+                not_replaced(self.session, Dataset, DatasetReplacement, user),
             )
         ).all()
         coverage = CoverageMatcher(self.session)

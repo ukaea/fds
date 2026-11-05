@@ -9,6 +9,7 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 | `name` | string | Yes | Short name, unique within its scope (e.g. `equilibrium`) |
 | `url` | string | No | Physical location (`s3://`, `gs://`, `az://`), taken from the primary Distribution and absent if none exists yet |
 | `group` | string | No | Group inside the file at `url` that holds the dataset, taken from the primary Distribution |
+| `ref` | string | No | Point in the history of the store at `url` that holds the data, such as an Icechunk tag, taken from the primary Distribution |
 | `conforms_to` | string | No | Schema the primary distribution follows, taken from the primary Distribution |
 | `media_type` | string | No | MIME type of the primary distribution (e.g. `application/x-zarr`) |
 | `format` | string | No | Format label (e.g. `NetCDF4`) |
@@ -24,6 +25,8 @@ The core discovery object. A **Dataset** is the abstract metadata entity describ
 | `scientific_metadata` | list | No | Diagnostic-specific parameters, see [Scientific metadata](index.md#scientific-metadata) below |
 | `activity_id` | integer | No | FK to the Activity that produced this dataset (provenance) |
 | `derived_from` | list | No | Upstream entities this dataset was built from, see below |
+| `replaces` | list | No | Ids of the earlier versions this dataset replaces, filed in the same device and shot. See [Changes & Versions](versions.md#when-the-data-changes) |
+| `replaced_by` | list | Read-only | Ids of the datasets that replace this one, giving only those you may read |
 | `annotates` | string | No | For an annotation dataset: the property it localises (see [Annotation datasets](reference-datasets.md#annotation-datasets)) |
 | `subject_dataset` | integer | No | For a dataset-frame annotation: the id of the source dataset it localises a property in |
 
@@ -219,6 +222,7 @@ A Distribution is a physical access path for a Dataset, describing *how* to retr
 | --- | --- | --- | --- |
 | `url` | string | Yes | Download or access URL (e.g. `s3://fds-data/shots/30421/equilibrium`) |
 | `group` | string | No | Group inside the file at `url` that holds the dataset, when the file holds several (see below) |
+| `ref` | string | No | Point in the history of the store at `url` that holds the data, such as an Icechunk tag. Unset when `url` alone says what to open (see below) |
 | `conforms_to` | string | No | http or https URL of the schema this copy follows, such as an IMAS Data Dictionary version (see below) |
 | `media_type` | string | No | IANA media type (e.g. `application/x-zarr`, `application/x-hdf5`) |
 | `format` | string | No | Human-readable format label (e.g. `NetCDF4`, `HDF5`) |
@@ -228,7 +232,7 @@ A Distribution is a physical access path for a Dataset, describing *how* to retr
 
 A Distribution has no access policy of its own: FDS applies the Dataset's to every distribution, for both metadata and credentials. Some copies may be harder to reach than that level suggests, such as a proprietary-format copy behind a site firewall or a data-access layer alongside an open-format copy in public storage. That restriction belongs to the infrastructure, not to FDS, so register at least one distribution that is as available as the Dataset's level says.
 
-In most cases a Dataset will have exactly one Distribution, and you won't need to think about the distinction. The Dataset endpoints return the primary distribution's `url`, `group`, `conforms_to`, `media_type`, and `format` inlined directly on the Dataset response, so there is nothing extra to fetch.
+In most cases a Dataset will have exactly one Distribution, and you won't need to think about the distinction. The Dataset endpoints return the primary distribution's `url`, `group`, `ref`, `conforms_to`, `media_type`, and `format` inlined directly on the Dataset response, so there is nothing extra to fetch.
 
 ### How the data is opened
 
@@ -289,6 +293,26 @@ f = fs.open(
 )
 ds = xr.open_dataset(f, engine="h5netcdf", group="equilibrium")
 ```
+
+### A point in a store's history
+
+Some stores keep their own history. Each commit to an Icechunk repository makes a new snapshot and keeps the earlier ones, and a tag names a snapshot. Set `ref` to the tag that holds the dataset's data, and readers open the store there:
+
+```json
+{
+  "url": "s3://fds-data/shots/50000/analysed/thomson_scattering",
+  "ref": "v1",
+  "media_type": "application/vnd.icechunk+zarr"
+}
+```
+
+```python
+repo = icechunk.Repository.open(icechunk.s3_storage(**storage_options))
+session = repo.readonly_session(tag="v1")
+ds = xr.open_zarr(session.store, group="thomson_scattering", consolidated=False)
+```
+
+`ref` is for stores that name their versions outside the URL, as Icechunk does. Leave it unset when `url` alone says what to open. For an Icechunk repository that is the tip of branch `main`, its newest data, which suits data meant to keep changing, such as a store that grows as shots are added. Some stores name a version in the URL itself, such as a commit id in the path: register that URL and leave `ref` unset. FDS stores `ref` as given and does not check that it exists. Name a tag rather than a snapshot id: expiring old snapshots keeps tagged ones, while an untagged snapshot can be expired and its data deleted. [Changes & Versions](versions.md#when-the-data-changes) shows how a ref keeps an earlier version readable after the store is corrected.
 
 ### The same data in another schema
 

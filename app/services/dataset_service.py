@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
+from sqlalchemy import ColumnElement
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select, tuple_
 
@@ -24,6 +25,7 @@ from app.models.dataset import (
     DatasetDerivationCreate,
     DatasetLineageNode,
     DatasetRead,
+    DatasetReplacement,
     DatasetUpdate,
 )
 from app.models.device import Device
@@ -34,6 +36,7 @@ from app.models.policy import AccessLevel
 from app.models.scope import CatalogueScope, DeviceScope
 from app.models.shot import Shot
 from app.models.storage_options import derive_storage_options_type
+from app.services import replacements
 from app.services.activity_service import ActivityService
 from app.services.annotation_service import AnnotationService
 from app.services.base_service import BaseService
@@ -62,6 +65,16 @@ from app.services.reference_service import (
 from app.services.visibility import read_page, readable_clause, readable_only
 
 logger = structlog.get_logger(__name__)
+
+
+def _listed(
+    session: Session, include_replaced: bool, user: AuthenticatedUser
+) -> list[ColumnElement[bool]]:
+    """The datasets a listing shows ``user``: those that no dataset ``user`` may
+    read replaces, or every dataset with ``include_replaced``."""
+    if include_replaced:
+        return []
+    return [replacements.not_replaced(session, Dataset, DatasetReplacement, user)]
 
 
 @dataclass
@@ -118,6 +131,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         source: str | None = None,
         activity_id: int | None = None,
         shot_id_prefix: str | None = None,
+        include_replaced: bool = False,
     ) -> Sequence[Dataset]:
         """
         Every dataset, whatever its scope. Filters by access level.
@@ -130,9 +144,13 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         ``shot_properties`` on those of its parent shot. A dataset with no shot
         never matches ``shot_properties``. To scope to one device, use
         ``get_datasets_for_device`` rather than filtering here.
+
+        A dataset that ``user`` may read a replacement of is listed only with
+        ``include_replaced``.
         """
         statement = select(self.model).where(
-            *scope_clauses(col(Dataset.device_name), col(Dataset.shot_id), scope)
+            *scope_clauses(col(Dataset.device_name), col(Dataset.shot_id), scope),
+            *_listed(self.session, include_replaced, user),
         )
         if name is not None:
             statement = statement.where(self.model.name == name)
@@ -222,6 +240,12 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         origin = obj_in.origin
         self._reject_duplicate(obj_in, origin)
         self._validate_references(obj_in)
+        self._validate_replacements(
+            obj_in.replaces,
+            device_name=obj_in.device_name,
+            shot_id=obj_in.shot_id,
+            activity_id=obj_in.activity_id,
+        )
 
         for derivation in obj_in.derived_from:
             self._validate_derivation(derivation)
@@ -233,7 +257,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             db_obj.distributions.append(self._build_distribution(obj_in, obj_in.url))
         dataset = self._persist(db_obj, obj_in.name)
 
-        if obj_in.derived_from:
+        if obj_in.derived_from or obj_in.replaces:
             assert dataset.id is not None
             for derivation in obj_in.derived_from:
                 self.session.add(
@@ -241,6 +265,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                         derivation, update={"dataset": dataset.id}
                     )
                 )
+            replacements.write_replaces(
+                self.session, DatasetReplacement, dataset.id, set(obj_in.replaces)
+            )
             self.session.commit()
             self.session.refresh(dataset)
         return dataset
@@ -305,11 +332,43 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 shot_id=obj_in.shot_id,
             )
 
+    def _validate_replacements(
+        self,
+        replaces: Sequence[int],
+        *,
+        device_name: str | None,
+        shot_id: str | None,
+        activity_id: int | None,
+        dataset_id: int | None = None,
+    ) -> None:
+        """Check that a dataset may replace each dataset in ``replaces``: by the
+        rules for any replacement, and by naming the Activity that generated it,
+        which tells it apart from the datasets it replaces. ``dataset_id`` is the
+        replacement's own id, None while registering it.
+        """
+        if not replaces:
+            return
+        if activity_id is None:
+            raise FDSValidationError(
+                "A dataset that replaces another must name the Activity that "
+                "generated it in activity_id"
+            )
+        replacements.check_replaces(
+            self.session,
+            Dataset,
+            DatasetReplacement,
+            replaces,
+            device_name=device_name,
+            shot_id=shot_id,
+            record_id=dataset_id,
+        )
+
     def _build_distribution(self, obj_in: DatasetCreate, url: str) -> Distribution:
         """Build the default distribution for a dataset's ``url``."""
         return Distribution(
             url=url,
             group=obj_in.group,
+            ref=obj_in.ref,
             conforms_to=obj_in.conforms_to,
             endpoint_url=obj_in.endpoint_url,
             region=obj_in.region,
@@ -595,6 +654,31 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 exclude_id=db_obj.id,
             )
 
+        # Re-check the replacements against the merged state, so the Activity
+        # cannot be cleared from a dataset that replaces another.
+        if update_data.keys() & {"replaces", "activity_id"}:
+            assert db_obj.id is not None
+            wanted = (
+                set(update_data["replaces"] or [])
+                if "replaces" in update_data
+                else replacements.replaced_ids(
+                    self.session, DatasetReplacement, db_obj.id
+                )
+            )
+            self._validate_replacements(
+                sorted(wanted),
+                device_name=db_obj.device_name,
+                shot_id=db_obj.shot_id,
+                activity_id=update_data.get("activity_id", db_obj.activity_id),
+                dataset_id=db_obj.id,
+            )
+            # ``replaces`` is not a column, so it is written here rather than
+            # by the update below.
+            if "replaces" in update_data:
+                replacements.write_replaces(
+                    self.session, DatasetReplacement, db_obj.id, wanted
+                )
+
         return self.update_unchecked(db_obj=db_obj, obj_in=obj_in)
 
     def delete(self, id: int, user: AuthenticatedUser) -> bool:
@@ -629,15 +713,19 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         user: AuthenticatedUser = ANONYMOUS_USER,
         device_name: str | None = None,
         shot_id: str | None = None,
+        include_replaced: bool = False,
     ) -> list[Dataset]:
         """
         Return all datasets with the given name in the given context.
         Multiple datasets may share a name when produced by different Activities.
+        A dataset that ``user`` may read a replacement of is returned only with
+        ``include_replaced``.
         """
         statement = select(Dataset).where(
             Dataset.name == name,
             Dataset.device_name == normalise_device_name(device_name),
             Dataset.shot_id == shot_id,
+            *_listed(self.session, include_replaced, user),
         )
         return read_page(
             self.session, Dataset, statement.order_by(col(Dataset.id)), user
@@ -657,6 +745,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         source: str | None = None,
         activity_id: int | None = None,
         shot_id_prefix: str | None = None,
+        include_replaced: bool = False,
     ) -> Sequence[Dataset]:
         """
         Get datasets hosted by a device, filtering by access.
@@ -670,11 +759,13 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         ``shot_properties`` on those of its parent shot, which answers questions
         spanning both levels (e.g. equilibrium datasets from shots that had ELMs).
         Since device-level datasets have no shot, combining ``shot_properties``
-        with ``scope=DEVICE`` matches nothing.
+        with ``scope=DEVICE`` matches nothing. A dataset that ``user`` may read a
+        replacement of is listed only with ``include_replaced``.
         """
         statement = select(Dataset).where(
             Dataset.device_name == normalise_device_name(device_name),
             *scope_clauses(col(Dataset.device_name), col(Dataset.shot_id), scope),
+            *_listed(self.session, include_replaced, user),
         )
         if name is not None:
             statement = statement.where(Dataset.name == name)
@@ -706,15 +797,19 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         activity_type: ActivityType | None = None,
         source: str | None = None,
         activity_id: int | None = None,
+        include_replaced: bool = False,
     ) -> Sequence[Dataset]:
         """
-        Get all datasets for a specific shot (scoped by device name).
+        Get all datasets for a specific shot (scoped by device name). A dataset
+        that ``user`` may read a replacement of is listed only with
+        ``include_replaced``.
         """
         statement = (
             select(Dataset)
             .where(
                 Dataset.shot_id == shot_id,
                 Dataset.device_name == normalise_device_name(device_name),
+                *_listed(self.session, include_replaced, user),
             )
             .where(
                 *property_clauses(Dataset.scientific_metadata, properties),
@@ -753,6 +848,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         distributions: list[Distribution],
         access_level: AccessLevel,
         activity: ActivitySummary | None,
+        replacements: tuple[list[int], list[int]],
     ) -> DatasetRead:
         """``dataset`` as a DatasetRead, its default distribution's fields inlined.
 
@@ -766,6 +862,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             update={
                 "url": default_dist.url if default_dist else None,
                 "group": default_dist.group if default_dist else None,
+                "ref": default_dist.ref if default_dist else None,
                 "conforms_to": default_dist.conforms_to if default_dist else None,
                 "media_type": default_dist.media_type if default_dist else None,
                 "format": default_dist.format if default_dist else None,
@@ -775,6 +872,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 or None,
                 "effective_access_level": access_level,
                 "activity": activity,
+                "replaces": replacements[0] or None,
+                "replaced_by": replacements[1] or None,
             },
         )
 
@@ -809,6 +908,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 if dataset.activity
                 else []
             ),
+            replaces=enriched.replaces or [],
+            replaced_by=enriched.replaced_by or [],
         )
 
     def readable_read_models(
@@ -978,12 +1079,16 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         activities = ActivityService(self.session).get_summaries(
             d.activity_id for d in datasets
         )
+        links = replacements.replaces_and_replaced_by(
+            self.session, Dataset, DatasetReplacement, datasets, user
+        )
         models = [
             self._read_model(
                 dataset,
                 distributions[dataset.id],
                 policy.access_level,
                 activities.get(dataset.activity_id) if dataset.activity_id else None,
+                links.get(dataset.id, ([], [])),
             )
             for dataset, policy in zip(datasets, policies, strict=True)
         ]
@@ -1006,7 +1111,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                     setattr(model, kind.name, resolved[kind.name])
         if include_annotations:
             annotations = self.readable_read_models(
-                AnnotationService(self.session).for_datasets(datasets),
+                AnnotationService(self.session).for_datasets(
+                    datasets, user=user or ANONYMOUS_USER
+                ),
                 user,
                 include_storage_options=include_storage_options,
             )

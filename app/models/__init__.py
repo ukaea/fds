@@ -30,6 +30,7 @@ from .dataset import (
     DatasetDerivationRead,
     DatasetLineageNode,
     DatasetRead,
+    DatasetReplacement,
     DatasetUpdate,
 )
 from .device import Device, DeviceCreate, DeviceRead, DeviceUpdate
@@ -86,6 +87,7 @@ __all__ = [
     "DatasetDerivationRead",
     "DatasetLineageNode",
     "DatasetRead",
+    "DatasetReplacement",
     "DatasetUpdate",
     "DateRange",
     "Device",

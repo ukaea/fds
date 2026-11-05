@@ -86,6 +86,7 @@ export function DatasetCard({
           </span>
         )}
         {restricted && <span className={BADGE}>{access}</span>}
+        {dataset.replaced_by?.length ? <span className={BADGE}>replaced</span> : null}
         {dataset.level !== undefined && <span className={BADGE}>Level {dataset.level}</span>}
         {!!dataset.geometry_roles?.length && (
           <span className={BADGE}>geometry: {dataset.geometry_roles.join(', ')}</span>

@@ -585,6 +585,8 @@ def map_dataset_to_dcat(
     calibration: "list[DatasetRead] | None" = None,
     annotations: "list[DatasetRead] | None" = None,
     activity_inputs: "Sequence[Dataset]" = (),
+    replaces: Sequence[int] | None = None,
+    replaced_by: Sequence[int] | None = None,
 ) -> dict[str, Any]:
     """
     Maps a Dataset to a dcat:Dataset.
@@ -592,6 +594,11 @@ def map_dataset_to_dcat(
     ``activity_inputs`` are the input datasets of the Activity that generated it
     which the caller may read. The Activity's other inputs are left out of its
     embedded node.
+
+    ``replaces`` are the ids of the datasets it replaces, published as
+    ``dct:replaces``, and ``replaced_by`` those replacing it that the caller may
+    read, published as ``dct:isReplacedBy``. Either falls back to the field of
+    the same name on a ``DatasetRead``.
 
     ``geometry`` / ``calibration`` supply resolved reference versions when the
     source object does not itself carry them (e.g. an ORM ``Dataset``). Both link
@@ -629,6 +636,15 @@ def map_dataset_to_dcat(
     if dataset.issued:
         data["dct:issued"] = _issued_node(dataset.issued)
 
+    if replaces is None:
+        replaces = getattr(dataset, "replaces", None)
+    if replaces:
+        data["dct:replaces"] = [{"@id": names.dataset(i)} for i in replaces]
+    if replaced_by is None:
+        replaced_by = getattr(dataset, "replaced_by", None)
+    if replaced_by:
+        data["dct:isReplacedBy"] = [{"@id": names.dataset(i)} for i in replaced_by]
+
     if dataset.access_level:
         data["accessRights"] = dataset.access_level.value
 
@@ -654,7 +670,14 @@ def map_dataset_to_dcat(
         dist_nodes = []
         for dist in distributions:
             node: dict[str, Any] = {"@type": "dcat:Distribution"}
-            if dist.url.startswith(("http://", "https://")):
+            if dist.ref:
+                # The bare URL leads to whatever the store holds now, not to this
+                # distribution's data, so it is not published as a download.
+                # Readers go through FDS, which gives the ref, and the ref is
+                # carried as the version of the data the distribution holds.
+                node["dcat:accessURL"] = dataset_uri
+                node["schema:version"] = dist.ref
+            elif dist.url.startswith(("http://", "https://")):
                 # Public HTTPS: accessURL = downloadURL = the URL
                 node["dcat:accessURL"] = dist.url
                 node["dcat:downloadURL"] = dist.url
@@ -672,7 +695,11 @@ def map_dataset_to_dcat(
         data["dcat:distribution"] = dist_nodes
         # Convenience shorthand: downloadURL of the default distribution (HTTP/S only)
         default = next((d for d in distributions if d.default_distribution), None)
-        if default and default.url.startswith(("http://", "https://")):
+        if (
+            default
+            and not default.ref
+            and default.url.startswith(("http://", "https://"))
+        ):
             data["dcat:downloadURL"] = default.url
 
     # PROV-O Mapping (Provenance)

@@ -199,6 +199,9 @@ export default function CollectionDetail({ id }: { id: string }) {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-4">
+                        {!!ds.replaced_by?.length && (
+                          <span className="text-xs px-2 py-0.5 bg-muted rounded-sm text-foreground">replaced</span>
+                        )}
                         <span className="text-xs px-2 py-0.5 bg-muted rounded-sm text-foreground flex items-center gap-1">
                           <FileCode className="w-3 h-3" />
                           {formatMediaType(ds.media_type)}

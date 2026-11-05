@@ -76,6 +76,7 @@ def read_datasets_global(
     source: str | None = None,
     activity_id: int | None = None,
     shot_id_prefix: str | None = None,
+    include_replaced: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve every dataset accessible to the current user.
@@ -98,6 +99,9 @@ def read_datasets_global(
     `shot_id_prefix` keeps the datasets on a shot whose ID starts with it, so `304`
     finds those on shots 30420 and 30421. A dataset on no shot never matches.
 
+    A dataset is left out when you may read a dataset that replaces it,
+    unless `include_replaced=true`.
+
     To scope to a single device, use `/devices/{device_name}/datasets`.
     """
     datasets = dataset_service.get_multi(
@@ -112,6 +116,7 @@ def read_datasets_global(
         source=source,
         activity_id=activity_id,
         shot_id_prefix=shot_id_prefix,
+        include_replaced=include_replaced,
     )
     return dataset_service.to_read_models(
         datasets,
@@ -188,6 +193,7 @@ def read_datasets_shot(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
+    include_replaced: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all datasets for a specific shot.
@@ -199,6 +205,9 @@ def read_datasets_shot(
     `activity_type`, `source` and `activity_id` filter on the Activity that
     generated each dataset: `?activity_id=6` lists what Activity 6 generated, and
     `?activity_type=simulation` lists simulated datasets.
+
+    A dataset is left out when you may read a dataset that replaces it,
+    unless `include_replaced=true`.
     """
     datasets = dataset_service.get_datasets_for_shot(
         shot_id,
@@ -210,6 +219,7 @@ def read_datasets_shot(
         activity_type=activity_type,
         source=source,
         activity_id=activity_id,
+        include_replaced=include_replaced,
     )
     return dataset_service.to_read_models(
         datasets,
@@ -237,13 +247,20 @@ def read_dataset_by_name(
     include_geometry: bool = False,
     include_calibration: bool = False,
     include_annotations: bool = False,
+    include_replaced: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve all datasets with the given name within a shot context.
     Multiple datasets may share a name when produced by different Activities.
+    A dataset is left out when you may read a dataset that replaces it,
+    unless `include_replaced=true`.
     """
     datasets = dataset_service.get_by_name_in_context(
-        name=name, user=user, device_name=device_name, shot_id=shot_id
+        name=name,
+        user=user,
+        device_name=device_name,
+        shot_id=shot_id,
+        include_replaced=include_replaced,
     )
     return dataset_service.to_read_models(
         datasets,
@@ -317,11 +334,15 @@ def read_dataset_global_by_name(
     include_geometry: bool = False,
     include_calibration: bool = False,
     include_annotations: bool = False,
+    include_replaced: bool = False,
 ) -> list[DatasetRead]:
     """
-    Retrieve all global datasets with the given name.
+    Retrieve all global datasets with the given name. A dataset is left out
+    when you may read a dataset that replaces it, unless `include_replaced=true`.
     """
-    datasets = dataset_service.get_by_name_in_context(name=name, user=user)
+    datasets = dataset_service.get_by_name_in_context(
+        name=name, user=user, include_replaced=include_replaced
+    )
     return dataset_service.to_read_models(
         datasets,
         include_storage_options=include_storage_options,
@@ -356,6 +377,7 @@ def read_datasets_device(
     source: str | None = None,
     activity_id: int | None = None,
     shot_id_prefix: str | None = None,
+    include_replaced: bool = False,
 ) -> list[DatasetRead]:
     """
     Retrieve datasets hosted by a device.
@@ -380,6 +402,9 @@ def read_datasets_device(
 
     `shot_id_prefix` keeps the datasets on a shot whose ID starts with it, so `304`
     finds those on shots 30420 and 30421. A dataset on no shot never matches.
+
+    A dataset is left out when you may read a dataset that replaces it,
+    unless `include_replaced=true`.
     """
     datasets = dataset_service.get_datasets_for_device(
         device_name,
@@ -394,6 +419,7 @@ def read_datasets_device(
         source=source,
         activity_id=activity_id,
         shot_id_prefix=shot_id_prefix,
+        include_replaced=include_replaced,
     )
     return dataset_service.to_read_models(
         datasets,
@@ -420,12 +446,18 @@ def read_dataset_device_by_name(
     include_geometry: bool = False,
     include_calibration: bool = False,
     include_annotations: bool = False,
+    include_replaced: bool = False,
 ) -> list[DatasetRead]:
     """
-    Retrieve all device-level datasets with the given name.
+    Retrieve all device-level datasets with the given name. A dataset is left
+    out when you may read a dataset that replaces it, unless
+    `include_replaced=true`.
     """
     datasets = dataset_service.get_by_name_in_context(
-        name=name, user=user, device_name=device_name
+        name=name,
+        user=user,
+        device_name=device_name,
+        include_replaced=include_replaced,
     )
     return dataset_service.to_read_models(
         datasets,

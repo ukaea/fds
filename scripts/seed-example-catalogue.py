@@ -6,21 +6,6 @@
 # ]
 # ///
 
-"""
-Register the example catalogue the documentation refers to.
-
-Two real MAST shots are registered where they already live at STFC, and the
-rest are metadata-only fixtures: a synthetic MAST-U shot, reference geometry
-and calibration, an annotated shot, and two JINTRAC runs, one modelling MAST
-shot 30420 and one a predictive MAST-U scenario that models no shot. Nothing
-reads their bytes, so their object URLs point at a reserved example domain.
-Every function is idempotent.
-
-Run it against a local stack (see the README for the token):
-
-    FDS_TOKEN=$(uv run scripts/mint-token.py mint) uv run scripts/seed-example-catalogue.py
-"""
-
 import os
 import time
 
@@ -618,6 +603,10 @@ def register_mast_upgrade_datasets(
             client.post(
                 f"{base_url}/collections/{analysed_collection_id}/datasets/{ds.json()['id']}"
             )
+            if ids_name == "thomson_scattering":
+                register_thomson_reprocessing(
+                    client, base_url, ds.json(), analysed_collection_id
+                )
 
     register_mast_upgrade_50001(client, base_url)
 
@@ -625,6 +614,64 @@ def register_mast_upgrade_datasets(
         "raw_collection_id": raw_collection_id,
         "analysed_collection_id": analysed_collection_id,
     }
+
+
+def register_thomson_reprocessing(
+    client: httpx.Client, base_url: str, original: dict, collection_id: int
+) -> None:
+    """Register a corrected version of MAST-U shot 50000's Thomson scattering data.
+
+    The correction was committed to the same Icechunk store as the original. The
+    original is pinned to the tag of the snapshot it describes, the correction to
+    its own tag, and the correction replaces the original in the collection.
+    """
+    client.patch(
+        f"{base_url}/distributions/{original['distributions'][0]['id']}",
+        json={"ref": "v1"},
+    ).raise_for_status()
+
+    source_id = get_or_create_source(
+        client,
+        base_url,
+        "thomson-fit",
+        "Thomson scattering profile fitting",
+        "software",
+    )
+    activity = client.post(
+        f"{base_url}/activities/",
+        json={
+            "source_id": source_id,
+            "activity_type": "analysis",
+            "source_version": "1.1",
+            "parameters": {"note": "refit with the corrected spectral calibration"},
+            "started_at": "2026-10-28T09:00:00",
+            "ended_at": "2026-10-28T09:41:12",
+        },
+    )
+    activity.raise_for_status()
+
+    corrected = client.post(
+        f"{base_url}/devices/mastu/shots/50000/datasets",
+        json={
+            "name": "thomson_scattering",
+            "title": "MAST-U Thomson Scattering (Shot 50000)",
+            "url": original["url"],
+            "ref": "v2",
+            "endpoint_url": FIXTURE_ENDPOINT,
+            "media_type": "application/vnd.icechunk+zarr",
+            "format": "icechunk",
+            "access_level": "public",
+            "activity_id": activity.json()["id"],
+            "replaces": [original["id"]],
+        },
+    )
+    corrected.raise_for_status()
+    client.post(
+        f"{base_url}/collections/{collection_id}/datasets/{corrected.json()['id']}"
+    ).raise_for_status()
+    client.delete(
+        f"{base_url}/collections/{collection_id}/datasets/{original['id']}"
+    ).raise_for_status()
 
 
 def register_mast_upgrade_50001(client: httpx.Client, base_url: str) -> None:

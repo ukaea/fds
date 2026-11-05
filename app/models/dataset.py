@@ -269,6 +269,23 @@ class DatasetDerivation(DatasetDerivationBase, table=True):
     dataset: int = Field(foreign_key="dataset.id", index=True)
 
 
+class DatasetReplacement(SQLModel, table=True):
+    """One Dataset replacing another: ``replacement`` is the newer Dataset and
+    ``replaced`` is the one it replaces. Both are filed in the same device and
+    shot.
+
+    A Dataset can replace several Datasets, and several can replace one.
+    Deleting either Dataset deletes the row.
+    """
+
+    __table_args__ = (
+        ForeignKeyConstraint(["replacement"], ["dataset.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["replaced"], ["dataset.id"], ondelete="CASCADE"),
+    )
+    replacement: int = Field(primary_key=True)
+    replaced: int = Field(primary_key=True, index=True)
+
+
 class DatasetDerivationCreate(DatasetDerivationBase):
     """An upstream to assert, either inline on the dataset or afterwards."""
 
@@ -344,10 +361,19 @@ class DatasetCreate(DatasetBase):
     activity_id: int | None = None
     subject_dataset: int | None = None
     origin: str | None = None
+    replaces: list[int] = Field(
+        default_factory=list,
+        description=(
+            "The Datasets this one replaces: earlier versions of the same data, "
+            "filed in the same device and shot. A Dataset that replaces another "
+            "must name the Activity that generated it."
+        ),
+    )
     # Default distribution fields — passed through to a Distribution row with
     # default_distribution=True on create.  Only created when url is supplied.
     url: str | None = None
     group: str | None = None
+    ref: str | None = None
     conforms_to: SchemaURI | None = None
     endpoint_url: str | None = None
     region: str | None = None
@@ -360,13 +386,16 @@ class DatasetCreate(DatasetBase):
 class DatasetRead(DatasetBase, TimestampMixin):
     """Dataset response schema.
 
-    ``url``, ``group``, ``conforms_to``, ``media_type``, ``format``, and
-    ``storage_options`` are denormalised from the default distribution for
+    ``url``, ``group``, ``ref``, ``conforms_to``, ``media_type``, ``format``,
+    and ``storage_options`` are denormalised from the default distribution for
     convenience.
     ``distributions`` lists all distributions associated with the dataset,
     including the default one (identified by ``default_distribution=True``).
     In JSON-LD responses these fields are re-separated into proper
     ``dcat:Dataset`` and ``dcat:distribution`` nodes.
+
+    ``replaces`` lists the ids of the Datasets this one replaces. ``replaced_by``
+    lists those that replace it, giving only the ones the reader may read.
     """
 
     id: int
@@ -375,10 +404,13 @@ class DatasetRead(DatasetBase, TimestampMixin):
     activity: "ActivitySummary | None" = None
     subject_dataset: int | None = None
     origin: str | None = None
+    replaces: list[int] | None = None
+    replaced_by: list[int] | None = None
     effective_access_level: AccessLevel | None = None
     # Default distribution fields inlined for convenience (None when no distribution exists)
     url: str | None = None
     group: str | None = None
+    ref: str | None = None
     conforms_to: str | None = None
     media_type: str | None = None
     format: str | None = None
@@ -432,3 +464,5 @@ class DatasetUpdate(SQLModel):
     applies_to: Coverage | None = None
     annotates: str | None = None
     subject_dataset: int | None = None
+    # Replaces the whole list; an empty list or null clears it.
+    replaces: list[int] | None = None

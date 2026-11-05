@@ -111,6 +111,10 @@ export interface Dataset {
   effective_access_level?: string;
   activity_id?: number;
   activity?: ActivitySummary | null;
+  // The datasets this one replaces, and those replacing it that the reader
+  // may read: earlier and later versions of the same data.
+  replaces?: number[] | null;
+  replaced_by?: number[] | null;
   geometry_roles?: string[];
   geometry_references?: string[];
   calibration_roles?: string[];
@@ -141,6 +145,10 @@ export interface Distribution {
   // The group inside the file at url that holds this dataset, when the file
   // holds several datasets.
   group?: string | null;
+  // The point in the store's history holding this data, such as an Icechunk
+  // tag, for stores that name versions outside the URL. Unset when the URL
+  // alone says what to open; for Icechunk that is the tip of main.
+  ref?: string | null;
   // URI of the schema this copy follows, such as an IMAS Data Dictionary
   // version. Values can differ between copies in different schemas.
   conforms_to?: string | null;

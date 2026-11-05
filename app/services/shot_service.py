@@ -471,7 +471,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
             devices = {d.name: d for d in self.session.exec(statement)}
         annotations = (
             DatasetService(self.session).readable_read_models(
-                AnnotationService(self.session).for_shots(shots), user
+                AnnotationService(self.session).for_shots(shots, user=user), user
             )
             if include_annotations
             else [[] for _ in shots]

@@ -168,7 +168,7 @@ device but no shot has `fuel:device` only, and a global dataset has neither.
 
 FDS follows the [W3C DCAT ontology](https://www.w3.org/TR/vocab-dcat/): a **`dcat:Dataset`** is the abstract metadata entity describing *what* the data is, while a **`dcat:Distribution`** is a concrete physical access path describing *how* to retrieve it.
 
-The standard JSON API returns a **denormalised convenience view** where the primary distribution's `url`, `group`, `conforms_to`, `media_type`, and `format` are inlined directly on the Dataset object. A Dataset can be registered without any distributions (metadata-first); distributions are added via `POST /datasets/{id}/distributions`. Multiple distributions are supported, for example the same data as HDF5 and CSV, provided all of them carry the same information.
+The standard JSON API returns a **denormalised convenience view** where the primary distribution's `url`, `group`, `ref`, `conforms_to`, `media_type`, and `format` are inlined directly on the Dataset object. A Dataset can be registered without any distributions (metadata-first); distributions are added via `POST /datasets/{id}/distributions`. Multiple distributions are supported, for example the same data as HDF5 and CSV, provided all of them carry the same information.
 
 When you request `application/ld+json`, FDS re-separates these back into the correct DCAT structure. Each distribution emits `dcat:accessURL` (required by DCAT 3). The value depends on the URL scheme:
 
@@ -205,6 +205,32 @@ A distribution's `group` is not published. DCAT has no term for a part of a file
   }
 }
 ```
+
+A distribution with a `ref` has no `dcat:downloadURL`, since its URL alone leads to whatever the store holds now rather than to the distribution's data. Its `dcat:accessURL` is the dataset's address in FDS, where the JSON API gives the ref and FDS vends credentials, and the ref is published as `schema:version`:
+
+```json
+{
+  "@type": "dcat:Distribution",
+  "dcat:accessURL": "http://localhost:3000/datasets/42",
+  "schema:version": "v1"
+}
+```
+
+No general vocabulary has a term for a point in a store's history. `schema:version` is the closest, and a consumer that does not know FDS reads it as a version label.
+
+### Versions
+
+Each version of a dataset is a `dcat:Dataset` of its own. A version names each dataset it replaces with `dct:replaces`, and a replaced dataset names each replacement you may read with `dct:isReplacedBy`. DCAT 3 uses these two to say that one version supersedes another:
+
+```json
+{
+  "@type": "dcat:Dataset",
+  "@id": "http://localhost:3000/datasets/58",
+  "dct:replaces": [{"@id": "http://localhost:3000/datasets/13"}]
+}
+```
+
+FDS does not publish DCAT's version chain (`dcat:previousVersion`, `dcat:hasVersion`, `dcat:hasCurrentVersion`). Those assume one line of versions with one current version, while two FDS datasets can each replace the same one. Nor does it publish `prov:wasRevisionOf`: PROV defines a revision as a derivation that keeps substantial content from the original, and a reprocessed dataset is usually made again from the same inputs instead.
 
 ## Shot as `dcat:Catalog`
 
@@ -430,6 +456,9 @@ See [Provenance](provenance.md) for the model behind these terms.
 | Source (`kind=instrument`) | `prov:Entity` (used with role `instrument`) | PROV-O |
 | Activity | `prov:Activity` | PROV-O |
 | "dataset produced by" | `prov:wasGeneratedBy` | PROV-O |
+| Dataset `replaces` | `dct:replaces` | Dublin Core |
+| Dataset `replaced_by` | `dct:isReplacedBy` | Dublin Core |
+| Distribution `ref` | `schema:version` on the `dcat:Distribution`, which then has no `dcat:downloadURL` | schema.org, DCAT 3 |
 | "activity used input / instrument" | `prov:used` + `prov:qualifiedUsage` (`prov:hadRole`) | PROV-O |
 | "activity associated with agent" | `prov:wasAssociatedWith` + `prov:qualifiedAssociation` (`prov:hadRole`) | PROV-O |
 | Dataset `device_name` | `fuel:device`, as plain text | FuEL |

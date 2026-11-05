@@ -39,6 +39,13 @@ class DistributionBase(SQLModel):
             Dataset, for a file that holds several Datasets as groups, e.g.
             ``"equilibrium"`` in a NetCDF file of a whole shot.  ``None`` when
             ``url`` addresses the Dataset on its own.
+        ref: The point in the history of the store at ``url`` that holds this
+            distribution's data, in the store's own terms, for a store that
+            names its versions outside the URL: for an Icechunk repository, a
+            tag such as ``"v1"``.  ``None`` when ``url`` alone says what to
+            open: for Icechunk, the tip of branch ``main``; for a store whose
+            URL names a commit, that commit.  FDS stores the value as given and
+            does not check that it exists.
         conforms_to: http or https URL naming the schema this copy follows
             (``dct:conformsTo``), e.g. an IMAS Data Dictionary version as
             ``https://github.com/iterorganization/IMAS-Data-Dictionary/tree/4.0.0``.
@@ -73,6 +80,7 @@ class DistributionBase(SQLModel):
 
     url: str
     group: str | None = Field(default=None)
+    ref: str | None = Field(default=None)
     conforms_to: SchemaURI | None = Field(default=None)
     endpoint_url: str | None = Field(default=None)
     region: str | None = Field(default=None)
@@ -104,6 +112,7 @@ class DistributionRead(DistributionBase):
 class DistributionUpdate(SQLModel):
     url: str | None = None
     group: str | None = None
+    ref: str | None = None
     conforms_to: SchemaURI | None = None
     endpoint_url: str | None = None
     region: str | None = None
