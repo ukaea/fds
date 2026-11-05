@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -17,6 +19,7 @@ from app.core.config import TrustedIdP
 LOCAL_ISSUER = "urn:fds:local"
 AUDIENCE = "fds-client"
 KID = "local-1"
+MINT_TOKEN = Path(__file__).parents[2] / "scripts" / "mint-token.py"
 
 
 def _key_pair():
@@ -163,6 +166,36 @@ async def test_rotating_the_file_is_picked_up_when_the_cache_expires(
     with pytest.raises(HTTPException):
         await claims_for(local_idp, mint(private_key), mocker)
     assert await claims_for(local_idp, mint(new_key), mocker) is not None
+
+
+def mint_token_script(*args: str) -> str:
+    """Run scripts/mint-token.py as people do, returning what it prints."""
+    result = subprocess.run(
+        [sys.executable, str(MINT_TOKEN), *args],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+@pytest.mark.asyncio
+async def test_a_key_regenerated_by_the_script_is_accepted_at_once(
+    local_idp, jwks_file, mocker
+):
+    """Each key the script makes has an ID of its own, so FDS reads the file
+    again on meeting a new one instead of checking it against the cached key."""
+    # The script writes the file local_idp trusts.
+    out_dir = str(jwks_file.parent)
+    key = str(jwks_file.parent / "local-issuer.key")
+
+    mint_token_script("init", "--out-dir", out_dir)
+    first = mint_token_script("mint", "--key", key)
+    assert await claims_for(local_idp, first, mocker) is not None
+
+    mint_token_script("init", "--out-dir", out_dir, "--force")
+    second = mint_token_script("mint", "--key", key)
+    assert await claims_for(local_idp, second, mocker) is not None
 
 
 @pytest.mark.asyncio

@@ -123,8 +123,10 @@ FDS has to have that issuer's public keys. It gets them in one of three ways, pe
 | `{"issuer": "...", "jwks_uri": "http://idp-internal:8080/realms/fds/protocol/openid-connect/certs"}` | The given URL. For when FDS reaches the provider at a different address from the one written in the token, as on a container network. The `iss` claim must still match `issuer` exactly. |
 | `{"issuer": "...", "jwks_file": "/etc/fds/local-issuer.jwks.json"}` | A file on disk. No identity provider is contacted. |
 
-Keys are cached for ten minutes however they are obtained, so replacing a file takes effect
-within that window.
+Keys are cached for ten minutes however they are obtained. A token naming a key ID that is not in
+the cache makes FDS fetch the keys again, so a new key under a new ID is accepted at once, while a
+key replaced under its old ID is not used until the cached copy expires.
+`scripts/mint-token.py` names each key by its thumbprint, so a new key pair always has a new ID.
 
 ### Which scopes FDS accepts from an issuer
 

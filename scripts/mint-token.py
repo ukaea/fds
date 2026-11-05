@@ -30,6 +30,8 @@ keep lifetimes short, and remove the issuer from FDS_TRUSTED_IDPS to revoke.
 """
 
 import argparse
+import base64
+import hashlib
 import json
 import sys
 from datetime import UTC, datetime, timedelta
@@ -41,7 +43,23 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
 
 DEFAULT_ISSUER = "urn:fds:local"
-DEFAULT_KEY_ID = "local-1"
+
+
+def key_id(public_key: rsa.RSAPublicKey) -> str:
+    """The key's RFC 7638 thumbprint, so that every key has an ID of its own.
+
+    FDS caches an issuer's keys and reads them again only for an ID it has not
+    seen, so a new key under an old ID would be checked against the old key
+    until the cache expired.
+    """
+    jwk = json.loads(RSAAlgorithm.to_jwk(public_key))
+    members = json.dumps(
+        {"e": jwk["e"], "kty": "RSA", "n": jwk["n"]},
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    digest = hashlib.sha256(members.encode()).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 
 
 def init(args: argparse.Namespace) -> int:
@@ -66,7 +84,8 @@ def init(args: argparse.Namespace) -> int:
     key_path.chmod(0o600)
 
     jwk = json.loads(RSAAlgorithm.to_jwk(private_key.public_key()))
-    jwk |= {"kid": args.key_id, "alg": "RS256", "use": "sig"}
+    kid = args.key_id or key_id(private_key.public_key())
+    jwk |= {"kid": kid, "alg": "RS256", "use": "sig"}
     jwks_path.write_text(json.dumps({"keys": [jwk]}, indent=2) + "\n")
 
     print(f"private key  {key_path}  (keep this secret, do not commit it)")
@@ -99,7 +118,7 @@ def mint(args: argparse.Namespace) -> int:
         },
         private_key,
         algorithm="RS256",
-        headers={"kid": args.key_id},
+        headers={"kid": args.key_id or key_id(private_key.public_key())},
     )
     print(token)
     return 0
@@ -113,7 +132,9 @@ def main() -> int:
 
     p_init = sub.add_parser("init", help="generate a key pair")
     p_init.add_argument("--out-dir", type=Path, default=Path("dev"))
-    p_init.add_argument("--key-id", default=DEFAULT_KEY_ID)
+    p_init.add_argument(
+        "--key-id", help="the key's ID (default: its RFC 7638 thumbprint)"
+    )
     p_init.add_argument(
         "--force", action="store_true", help="replace an existing key pair"
     )
@@ -121,7 +142,11 @@ def main() -> int:
 
     p_mint = sub.add_parser("mint", help="sign a token")
     p_mint.add_argument("--key", type=Path, default=Path("dev/local-issuer.key"))
-    p_mint.add_argument("--key-id", default=DEFAULT_KEY_ID)
+    p_mint.add_argument(
+        "--key-id",
+        help="the signing key's ID (default: its RFC 7638 thumbprint); a key "
+        "pair made before IDs were thumbprints has the ID local-1",
+    )
     p_mint.add_argument("--issuer", default=DEFAULT_ISSUER)
     p_mint.add_argument("--audience", default="fds-client")
     p_mint.add_argument("--subject", default="local-operator")

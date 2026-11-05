@@ -20,12 +20,19 @@ the local stack is set up for (see the README):
 
     FDS_SIGNING_KEY=dev/local-issuer.key    # the default
 
+Tokens name the key by its thumbprint, as scripts/mint-token.py does. A key
+pair made before it did has the ID local-1: regenerate it, or put a token from
+`mint --key-id local-1` in FDS_TOKEN.
+
 Without either, the tests that write are skipped and the read-only ones still
 run, so the suite is usable against a deployment where you hold no key.
 
 Everything these tests create, they delete.
 """
 
+import base64
+import hashlib
+import json
 import os
 import uuid
 from collections.abc import Generator
@@ -36,6 +43,7 @@ import httpx
 import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
+from jwt.algorithms import RSAAlgorithm
 
 FDS_URL = os.environ.get("FDS_URL", "http://localhost:8000/v1")
 SIGNING_KEY = Path(os.environ.get("FDS_SIGNING_KEY", "dev/local-issuer.key"))
@@ -43,7 +51,19 @@ ISSUER = os.environ.get("FDS_TOKEN_ISSUER", "urn:fds:local")
 AUDIENCE = os.environ.get("FDS_TOKEN_AUDIENCE", "fds-client")
 
 
-def sign(key, *, scope: str, issuer: str = ISSUER, kid: str = "local-1") -> str:
+def key_id(public_key) -> str:
+    """The key's RFC 7638 thumbprint, the ID scripts/mint-token.py gives it."""
+    jwk = json.loads(RSAAlgorithm.to_jwk(public_key))
+    members = json.dumps(
+        {"e": jwk["e"], "kty": "RSA", "n": jwk["n"]},
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    digest = hashlib.sha256(members.encode()).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+
+
+def sign(key, *, scope: str, issuer: str = ISSUER) -> str:
     now = datetime.now(UTC)
     return jwt.encode(
         {
@@ -56,7 +76,7 @@ def sign(key, *, scope: str, issuer: str = ISSUER, kid: str = "local-1") -> str:
         },
         key,
         algorithm="RS256",
-        headers={"kid": kid},
+        headers={"kid": key_id(key.public_key())},
     )
 
 
