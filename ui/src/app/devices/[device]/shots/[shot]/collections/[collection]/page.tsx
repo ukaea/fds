@@ -10,7 +10,7 @@ export default async function CollectionInShotPage({ params }: Params) {
   const { device, shot, collection } = await params;
 
   const record = await fetchJson<{ id?: number }>(
-    `/v1/devices/${device}/shots/${shot}/collections/${collection}`
+    `/devices/${device}/shots/${shot}/collections/${collection}`
   );
   if (record?.id == null) notFound();
 

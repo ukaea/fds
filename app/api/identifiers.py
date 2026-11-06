@@ -14,6 +14,7 @@ from app.api.negotiation import JSONLDResponse
 from app.services.exceptions import ResourceNotFoundError
 from app.services.identifiers import (
     ACTIVITY,
+    CATALOG,
     COLLECTION,
     DATASET,
     DEVICE,
@@ -21,6 +22,7 @@ from app.services.identifiers import (
     SOURCE,
 )
 from app.services.jsonld import (
+    map_catalog_to_dcat,
     map_device_to_dcat,
     map_shot_to_dcat,
     map_source_to_dcat,
@@ -100,3 +102,14 @@ def resolve_activity(
 ) -> JSONLDResponse:
     activity = activity_service.get_readable_or_raise(id, user)
     return JSONLDResponse(activity_service.to_dcat(activity, base, user))
+
+
+@router.get(CATALOG, summary="The catalogue of everything this FDS holds")
+def resolve_catalog(
+    device_service: DeviceServiceDep,
+    user: CurrentUserDep,
+    base: BaseURLDep,
+) -> JSONLDResponse:
+    return JSONLDResponse(
+        map_catalog_to_dcat(device_service.get_multi(user=user), base)
+    )

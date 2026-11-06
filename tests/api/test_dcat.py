@@ -1,6 +1,8 @@
+import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
+from app.core.config import config
 from app.models.device import Device
 from app.models.policy import AccessLevel
 
@@ -77,3 +79,17 @@ def test_get_catalog(test_client: TestClient, session: Session):
         None,
     )
     assert private_entry is None
+
+
+def test_catalog_is_named_without_the_api_version(
+    test_client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(config, "base_url", "https://fds.example.org")
+
+    by_api = test_client.get("/v1/catalog")
+    by_identifier = test_client.get("/catalog")
+
+    assert by_api.json()["@id"] == "https://fds.example.org/catalog"
+    assert by_identifier.status_code == 200
+    assert by_identifier.headers["content-type"] == "application/ld+json"
+    assert by_identifier.json() == by_api.json()

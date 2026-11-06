@@ -4,7 +4,7 @@ from fastapi import APIRouter
 
 from app.api.deps import BaseURLDep, CurrentUserDep, DeviceServiceDep
 from app.api.negotiation import JSONLDResponse
-from app.services.jsonld import device_node, generate_context
+from app.services.jsonld import map_catalog_to_dcat
 
 router = APIRouter()
 
@@ -17,27 +17,7 @@ def get_catalog(
 ) -> dict[str, Any]:
     """
     Returns the root Data Catalog (DCAT) for the Fusion Data Service.
-    This catalog aggregates all Devices (as sub-catalogs).
+    This catalog aggregates all Devices (as sub-catalogs). Its `@id` is the
+    catalogue's identifier, `/catalog`, which carries no API version.
     """
-
-    # Root Catalog Metadata
-    catalog: dict[str, Any] = {
-        "@context": generate_context(),
-        "@type": "dcat:Catalog",
-        "@id": f"{base}/v1/catalog",
-        "title": "Fusion Data Service Catalog",
-        "description": "A centralized catalog for fusion energy data.",
-        "publisher": "Fusion Data Service",
-    }
-
-    # List all devices as sub-catalogs
-    devices = device_service.get_multi(user=user)
-    sub_catalogs: list[dict[str, Any]] = []
-
-    for device in devices:
-        dcat_device = device_node(device, base)
-        sub_catalogs.append(dcat_device)
-
-    catalog["dcat:catalog"] = sub_catalogs
-
-    return catalog
+    return map_catalog_to_dcat(device_service.get_multi(user=user), base)

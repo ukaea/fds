@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { auth } from '@/auth';
+import { API_VERSION } from '@/lib/api-version';
 
 export type JsonLd = Record<string, unknown>;
 
@@ -21,9 +22,12 @@ async function get(path: string, accept: string): Promise<Response | null> {
   }
 }
 
-/** One record from the versioned API, for a page that has to resolve a name to an id. */
+/**
+ * One record from the versioned API, for a page that has to resolve a name to an
+ * id. `path` is the route below the API's version, such as `/devices/mast`.
+ */
 export async function fetchJson<T>(path: string): Promise<T | null> {
-  const response = await get(path, 'application/json');
+  const response = await get(`${API_VERSION}${path}`, 'application/json');
   return response ? ((await response.json()) as T) : null;
 }
 

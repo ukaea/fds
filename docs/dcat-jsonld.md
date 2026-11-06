@@ -50,7 +50,11 @@ GET /sources/{id}
 GET /activities/{id}
 GET /devices/{device}
 GET /devices/{device}/shots/{shot_id}
+GET /catalog
 ```
+
+`/catalog` names the catalogue of everything the service holds, whose `dcat:catalog` lists its
+devices. `/v1/catalog` serves the same document through the API.
 
 A version belongs to the contract between the service and a client, not to a dataset, so putting
 one in the name would give the same dataset a second identifier every time the API moved on. The

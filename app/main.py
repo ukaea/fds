@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 
 from app import __version__
 from app.api.exception_handlers import add_exception_handlers
@@ -34,14 +34,19 @@ def health() -> dict[str, str]:
     return {"status": "ok", "version": __version__}
 
 
-app.include_router(identifier_router)
-app.include_router(device_router.router, prefix="/v1/devices", tags=["devices"])
-app.include_router(shot_router.router, prefix="/v1", tags=["shots"])
-app.include_router(source_router.router, prefix="/v1/sources", tags=["sources"])
-app.include_router(activity_router.router, prefix="/v1/activities", tags=["activities"])
-app.include_router(dataset_router.router, prefix="/v1", tags=["datasets"])
-app.include_router(collection_router.router, prefix="/v1", tags=["collections"])
-app.include_router(catalog_router.router, prefix="/v1", tags=["catalog"])
-app.include_router(
-    file_access_router.router, prefix="/v1/file-access", tags=["file-access"]
+# The API's version. Every versioned route sits under it; the identifiers and
+# /health carry no version.
+v1 = APIRouter(prefix="/v1")
+v1.include_router(device_router.router, prefix="/devices", tags=["devices"])
+v1.include_router(shot_router.router, tags=["shots"])
+v1.include_router(source_router.router, prefix="/sources", tags=["sources"])
+v1.include_router(activity_router.router, prefix="/activities", tags=["activities"])
+v1.include_router(dataset_router.router, tags=["datasets"])
+v1.include_router(collection_router.router, tags=["collections"])
+v1.include_router(catalog_router.router, tags=["catalog"])
+v1.include_router(
+    file_access_router.router, prefix="/file-access", tags=["file-access"]
 )
+
+app.include_router(identifier_router)
+app.include_router(v1)

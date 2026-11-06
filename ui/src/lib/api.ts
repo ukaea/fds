@@ -35,4 +35,4 @@ export const ldFetcher = async (url: string) => {
   return res.json();
 };
 
-export const API_BASE = '/api/v1';
+export { API_BASE } from '@/lib/api-version';

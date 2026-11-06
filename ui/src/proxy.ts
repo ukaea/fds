@@ -13,6 +13,7 @@ export const config = {
     '/activities/:id',
     '/devices/:name',
     '/devices/:name/shots/:shot',
+    '/catalog',
   ],
 };
 

@@ -483,6 +483,19 @@ def _with_catalog_record(node: dict[str, Any], entry: Any) -> dict[str, Any]:
     }
 
 
+def map_catalog_to_dcat(devices: "Sequence[Device]", base_url: str) -> dict[str, Any]:
+    """Maps the whole of FDS to its root ``dcat:Catalog``, holding ``devices``."""
+    return {
+        "@context": generate_context(),
+        "@type": "dcat:Catalog",
+        "@id": Identifiers(base_url).catalog(),
+        "title": "Fusion Data Service Catalog",
+        "description": "A centralized catalog for fusion energy data.",
+        "publisher": "Fusion Data Service",
+        "dcat:catalog": [device_node(device, base_url) for device in devices],
+    }
+
+
 def map_device_to_dcat(device: Device | DeviceRead, base_url: str) -> dict[str, Any]:
     """Maps a Device to a ``dcat:Catalog`` document with FDS's record of it."""
     return _with_catalog_record(

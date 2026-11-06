@@ -175,3 +175,24 @@ def test_identifiers_answer_a_browser_with_a_page(
 
     assert page.status_code == 200, f"{identifier} -> {page.status_code}"
     assert page.headers["content-type"].startswith("text/html")
+
+
+def test_the_catalogue_identifier_resolves(
+    http_client: httpx.Client, admin_headers: dict[str, str]
+):
+    ld = {**admin_headers, "Accept": "application/ld+json"}
+    identifier = http_client.get(f"{FDS_URL}/catalog", headers=ld).json()["@id"]
+    assert "/v1/" not in identifier
+
+    resolved = http_client.get(identifier, headers=ld)
+    # A person is sent on to the devices the catalogue lists.
+    page = http_client.get(
+        identifier,
+        headers={**admin_headers, "Accept": "text/html"},
+        follow_redirects=True,
+    )
+
+    assert resolved.status_code == 200, f"{identifier} -> {resolved.status_code}"
+    assert resolved.json()["@id"] == identifier
+    assert page.status_code == 200, f"{identifier} -> {page.status_code}"
+    assert page.headers["content-type"].startswith("text/html")

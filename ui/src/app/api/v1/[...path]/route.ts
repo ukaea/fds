@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
+import { API_BASE, API_VERSION } from '@/lib/api-version';
 
 // This API route acts as a proxy to the backend FastAPI server
 // It handles all /api/v1/* requests and forwards them to the backend
@@ -27,8 +28,9 @@ export async function PATCH(request: NextRequest) {
 async function proxyRequest(request: NextRequest) {
   const backendUrl = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
 
-  // This route's own path is /api/v1/*; FDS serves /v1/*.
-  const path = request.nextUrl.pathname.replace('/api/v1', '/v1');
+  // This route's own path is under API_BASE; FDS serves the same path under
+  // API_VERSION.
+  const path = request.nextUrl.pathname.replace(API_BASE, API_VERSION);
   const search = request.nextUrl.search;
 
   const targetUrl = `${backendUrl}${path}${search}`;

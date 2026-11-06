@@ -4,6 +4,7 @@ DATASET = "/datasets/{id}"
 COLLECTION = "/collections/{id}"
 SOURCE = "/sources/{id}"
 ACTIVITY = "/activities/{id}"
+CATALOG = "/catalog"
 
 
 class Identifiers:
@@ -27,6 +28,9 @@ class Identifiers:
 
     def activity(self, id: object) -> str:
         return self.base + ACTIVITY.format(id=id)
+
+    def catalog(self) -> str:
+        return self.base + CATALOG
 
 
 def resolve_base(configured: str, request_origin: str) -> str:

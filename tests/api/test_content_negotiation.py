@@ -290,7 +290,7 @@ def test_openapi_offers_json_ld_on_negotiated_routes(path: str):
     assert set(answer["content"]) == {"application/json", "application/ld+json"}
 
 
-@pytest.mark.parametrize("path", ["/datasets/{id}", "/v1/catalog"])
+@pytest.mark.parametrize("path", ["/datasets/{id}", "/catalog", "/v1/catalog"])
 def test_openapi_gives_json_ld_only_routes_as_json_ld(path: str):
     answer = app.openapi()["paths"][path]["get"]["responses"]["200"]
 
