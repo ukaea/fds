@@ -1,3 +1,5 @@
+from pyld import jsonld
+
 from app.auth.security import AuthenticatedUser
 from app.models.dataset import DatasetCreate
 from app.models.policy import AccessLevel
@@ -267,3 +269,126 @@ def test_shot_is_a_catalog_carrying_no_distribution():
     assert "dcat:dataset" not in ld
     # Properties valid on a Dataset remain valid on a Catalog.
     assert ld["creator"] == "MAST Team"
+
+
+def test_a_group_publishes_the_properties_inside_it_under_its_value():
+    """A stored group carries "value": null, which is not published."""
+    stored = [
+        {
+            "name": "nbi",
+            "value": None,
+            "description": "Neutral beam heating.",
+            "properties": [
+                {
+                    "name": "beam",
+                    "value": None,
+                    "properties": [
+                        {"name": "source", "value": "SS", "properties": None},
+                        {
+                            "name": "power",
+                            "value": 1.6,
+                            "unit": "MW",
+                            "properties": None,
+                        },
+                    ],
+                }
+            ],
+        }
+    ]
+    nbi = _map_scientific_metadata_to_jsonld(stored)[0]
+
+    assert nbi["schema:name"] == "nbi"
+    assert nbi["schema:description"] == "Neutral beam heating."
+    assert "schema:unitText" not in nbi
+    beam = nbi["schema:value"][0]
+    assert beam["@type"] == "schema:PropertyValue"
+    assert beam["schema:name"] == "beam"
+    assert beam["schema:value"] == [
+        {
+            "@type": "schema:PropertyValue",
+            "schema:name": "source",
+            "schema:value": "SS",
+        },
+        {
+            "@type": "schema:PropertyValue",
+            "schema:name": "power",
+            "schema:value": 1.6,
+            "schema:unitText": "MW",
+        },
+    ]
+
+
+def test_a_repeated_group_publishes_a_node_for_each_instance():
+    props = [
+        ScientificProperty(
+            name="beam",
+            properties=[
+                ScientificProperty(name="source", value="SS"),
+                ScientificProperty(name="power", value=1.6, unit="MW"),
+            ],
+        ),
+        ScientificProperty(
+            name="beam",
+            properties=[
+                ScientificProperty(name="source", value="SW"),
+                ScientificProperty(name="power", value=1.4, unit="MW"),
+            ],
+        ),
+    ]
+    result = _map_scientific_metadata_to_jsonld(props)
+
+    assert len(result) == 2
+    assert result[0]["schema:value"][0]["schema:value"] == "SS"
+    assert result[0]["schema:value"][1]["schema:value"] == 1.6
+    assert result[1]["schema:value"][0]["schema:value"] == "SW"
+    assert result[1]["schema:value"][1]["schema:value"] == 1.4
+
+
+def test_a_group_extent_localises_the_group():
+    """Its extent covers the properties inside it, which carry none."""
+    props = [
+        ScientificProperty(
+            name="elm",
+            extent=Extent(dimension="time", start=0.20, end=0.45, unit="s"),
+            properties=[
+                ScientificProperty(name="count", value=14),
+                ScientificProperty(name="frequency", value=56, unit="Hz"),
+            ],
+        )
+    ]
+    elm = _map_scientific_metadata_to_jsonld(props)[0]
+
+    interval = elm["time:hasTime"]
+    assert (
+        interval["time:hasBeginning"]["time:inTimePosition"]["time:numericPosition"]
+        == 0.20
+    )
+    assert (
+        interval["time:hasEnd"]["time:inTimePosition"]["time:numericPosition"] == 0.45
+    )
+    assert "time:hasTime" not in elm["schema:value"][0]
+    assert "time:hasTime" not in elm["schema:value"][1]
+
+
+def test_a_group_expands_to_property_value_nodes_not_literals():
+    """A JSON-LD processor reads the nested properties as nodes it can query."""
+    shot = Shot(
+        id="30421",
+        device_name="MAST",
+        scientific_metadata=[
+            ScientificProperty(
+                name="nbi",
+                properties=[ScientificProperty(name="source", value="SS")],
+            )
+        ],
+    )
+    expanded = jsonld.expand(map_shot_to_dcat(shot, BASE))
+    shot_node = next(
+        node for node in expanded if "https://schema.org/additionalProperty" in node
+    )
+    nbi = shot_node["https://schema.org/additionalProperty"][0]
+    source = nbi["https://schema.org/value"][0]
+
+    assert source["@type"] == ["https://schema.org/PropertyValue"]
+    assert source["https://schema.org/name"] == [{"@value": "source"}]
+    assert source["https://schema.org/value"] == [{"@value": "SS"}]

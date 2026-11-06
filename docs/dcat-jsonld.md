@@ -396,6 +396,36 @@ The response:
 }
 ```
 
+A [group](data-model/index.md#groups) is a `schema:PropertyValue` too. Its name, description and extent are published as any property's are, and the properties inside it are `schema:PropertyValue` nodes under its `schema:value`, which schema.org allows because a `PropertyValue` is a `StructuredValue`. A group that repeats is one node per instance, so each beam's source stays with its power:
+
+```json
+{
+  "@type": "schema:PropertyValue",
+  "schema:name": "nbi",
+  "schema:description": "Neutral beam heating, one group per beam line.",
+  "schema:value": [
+    {
+      "@type": "schema:PropertyValue",
+      "schema:name": "beam",
+      "schema:value": [
+        {"@type": "schema:PropertyValue", "schema:name": "source", "schema:value": "SS"},
+        {"@type": "schema:PropertyValue", "schema:name": "power", "schema:value": 1.6, "schema:unitText": "MW"}
+      ]
+    },
+    {
+      "@type": "schema:PropertyValue",
+      "schema:name": "beam",
+      "schema:value": [
+        {"@type": "schema:PropertyValue", "schema:name": "source", "schema:value": "SW"},
+        {"@type": "schema:PropertyValue", "schema:name": "power", "schema:value": 1.4, "schema:unitText": "MW"}
+      ]
+    }
+  ]
+}
+```
+
+The path FDS filters by, such as `nbi.beam.power`, is not published. A reader finds a property inside a group by following `schema:value` down from the group.
+
 ## Collection as catalogue and entity
 
 A **Collection** is typed as both `dcat:Catalog` and `prov:Collection`, so its `@type` is an array. The two vocabularies answer different questions and both are wanted: DCAT catalogues it for discovery, publisher and distribution, while PROV makes it an entity whose contents and origin can be reasoned over. A consumer must therefore read `@type` as a list rather than a string.
