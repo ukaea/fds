@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation';
 import { Calendar, ChevronRight, Cpu } from 'lucide-react';
 import { fetcher, API_BASE, FetchError } from '@/lib/api';
 import { AvailableProperties, Collection, Shot } from '@/lib/types';
-import { propertyQuery, withQuery } from '@/lib/properties';
+import { propertyQuery, Ranges, withQuery } from '@/lib/properties';
+import { usePossible } from '@/lib/use-possible';
 import { pageUrl, usePagedList } from '@/lib/use-paged-list';
 import { PropertyFilter } from '@/components/property-filter';
 import { SidePanelLayout } from '@/components/side-panel-layout';
@@ -107,10 +108,10 @@ export function ShotList({
   // The query for a selection of values, with the ranges and ID prefix as they
   // stand. Both the requests below and the prefetch on hover build it here, so
   // a prefetch is always for exactly the request a click then makes.
-  const queryFor = (tokens: string[]) =>
+  const queryFor = (tokens: string[], rangesFor: Ranges = ranges) =>
     [
       propertyQuery('property', tokens),
-      rangeQuery(ranges),
+      rangeQuery(rangesFor),
       idPrefix.trim() ? `id_prefix=${encodeURIComponent(idPrefix.trim())}` : '',
     ].filter(Boolean);
 
@@ -136,6 +137,13 @@ export function ShotList({
   } = usePagedList<Shot>(
     deviceName ? withQuery(shotsUrl(deviceName), ...filterQuery) : null,
     PAGE_SIZE
+  );
+
+  // What each row can still be alongside the picks in the others.
+  const possible = usePossible(
+    (tokens, rangesFor) => withQuery(shotPropertiesUrl(deviceName), ...queryFor(tokens, rangesFor)),
+    propertyTokens,
+    ranges
   );
 
   const total = properties?.total ?? 0;
@@ -185,6 +193,7 @@ export function ShotList({
                 valuesUrl={shotPropertyValuesUrl(deviceName)}
                 noun="shot"
                 onPreview={preview}
+                possible={possible}
               />
             )}
             {aside}

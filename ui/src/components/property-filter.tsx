@@ -1,16 +1,28 @@
 'use client';
 
-import { useId, useRef, useState } from 'react';
+import { Fragment, useId, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
 import { AvailableProperty, PropertyValues } from '@/lib/types';
-import { propertyToken } from '@/lib/properties';
+import { PATH_SEPARATOR, Possible, propertyToken, Remaining } from '@/lib/properties';
 import { DESCRIBED, DescribedName } from '@/components/described-name';
 
 const PILL = 'text-xs px-2.5 py-1 rounded-full border transition-colors';
 const IDLE = 'bg-card text-muted-foreground border-border hover:text-foreground hover:border-foreground/40';
 const ACTIVE = 'bg-foreground text-background border-foreground';
+const RULED_OUT = 'bg-card text-muted-foreground/40 border-border/50 cursor-not-allowed';
+
+// What a disabled option says on hover or focus.
+const NO_MATCH = 'Matches nothing alongside your other picks';
+
+// Whether the picks in other rows rule a value out. An answer not yet in, or a
+// source that cannot list the values, rules nothing out.
+function ruledOut(remaining: Remaining | null | undefined, value: string): boolean {
+  if (remaining === undefined) return false;
+  if (remaining === null) return true;
+  return remaining.values !== undefined && !remaining.values.includes(value);
+}
 const HEADING = 'text-muted-foreground uppercase text-[11px] font-bold tracking-wider';
 
 // Shown after a short rest rather than at once, so moving the pointer along a
@@ -62,7 +74,8 @@ function countText(count: number, noun: string): string {
  *
  * The count is for the whole scope, not the current selection: it says what
  * the value describes, and the shot count above the list already says what
- * the selection returns.
+ * the selection returns. A value the other picks rule out is disabled and says
+ * so instead.
  */
 function Pill({
   label,
@@ -71,6 +84,7 @@ function Pill({
   count,
   noun = 'record',
   onPreview,
+  disabled = false,
 }: {
   label: string;
   active: boolean;
@@ -78,27 +92,30 @@ function Pill({
   count?: number;
   noun?: string;
   onPreview?: () => void;
+  disabled?: boolean;
 }) {
   const id = useId();
   const preview = usePreview();
+  const tip = disabled ? NO_MATCH : count !== undefined ? countText(count, noun) : null;
   const button = (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-pressed={active}
-      aria-describedby={count !== undefined ? id : undefined}
-      {...preview(onPreview)}
-      className={`${PILL} ${active ? ACTIVE : IDLE}`}
+      aria-describedby={tip ? id : undefined}
+      {...preview(disabled ? undefined : onPreview)}
+      className={`${PILL} ${active ? ACTIVE : disabled ? RULED_OUT : IDLE}`}
     >
       {label}
     </button>
   );
-  if (count === undefined) return button;
+  if (!tip) return button;
   return (
     <span className="relative inline-block group">
       {button}
       <span role="tooltip" id={id} className={COUNT}>
-        {countText(count, noun)}
+        {tip}
       </span>
     </span>
   );
@@ -106,8 +123,35 @@ function Pill({
 
 const NAME = 'text-xs text-foreground font-medium';
 
+// A property's own name, the last of its path: `power` for `nbi.beam.power`.
+// The block it sits in is headed by the group's path.
+function ownName(path: string): string {
+  return path.slice(path.lastIndexOf(PATH_SEPARATOR) + 1);
+}
+
+// The path of the group a property sits in: `nbi.beam` for `nbi.beam.power`,
+// and '' for a property at the top level.
+function groupPath(path: string): string {
+  const end = path.lastIndexOf(PATH_SEPARATOR);
+  return end === -1 ? '' : path.slice(0, end);
+}
+
+// Properties gathered by the group they sit in, the top level first and then
+// each group in order of its path, so `nbi` comes before `nbi.beam`. Each
+// group keeps the order the properties came in.
+function byGroup(props: AvailableProperty[]): [string, AvailableProperty[]][] {
+  const groups = new Map<string, AvailableProperty[]>();
+  for (const prop of props) {
+    const path = groupPath(prop.name);
+    groups.set(path, [...(groups.get(path) ?? []), prop]);
+  }
+  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
 function PropertyName({ prop }: { prop: AvailableProperty }) {
-  return <DescribedName name={prop.name} description={prop.description} className={NAME} />;
+  return (
+    <DescribedName name={ownName(prop.name)} description={prop.description} className={NAME} />
+  );
 }
 
 /**
@@ -128,6 +172,7 @@ function TriState({
   counts,
   noun = 'record',
   onPreview,
+  remaining,
 }: {
   name: string;
   selected: string[];
@@ -135,6 +180,7 @@ function TriState({
   counts: Map<string, number>;
   noun?: string;
   onPreview?: (selected: string[]) => void;
+  remaining?: Remaining | null;
 }) {
   const id = useId();
   const preview = usePreview();
@@ -147,41 +193,50 @@ function TriState({
     return token ? [...without, token] : without;
   };
 
-  const options: [string, string | null, number | undefined][] = [
-    ['any', null, undefined],
-    ['yes', yes, counts.get('true')],
-    ['no', no, counts.get('false')],
+  // "any" is never ruled out, and neither is the state already chosen.
+  const options: [string, string | null, number | undefined, boolean][] = [
+    ['any', null, undefined, false],
+    ['yes', yes, counts.get('true'), current !== yes && ruledOut(remaining, 'true')],
+    ['no', no, counts.get('false'), current !== no && ruledOut(remaining, 'false')],
   ];
 
   return (
     <div className="inline-flex rounded-full border border-border">
-      {options.map(([label, token, count], index) => (
-        <span key={label} className="relative inline-flex group">
-          <button
-            type="button"
-            aria-pressed={current === token}
-            aria-describedby={count !== undefined ? `${id}-${label}` : undefined}
-            onClick={() => onChange(after(token))}
-            {...preview(
-              onPreview && current !== token ? () => onPreview(after(token)) : undefined
+      {options.map(([label, token, count, disabled], index) => {
+        const tip = disabled ? NO_MATCH : count !== undefined ? countText(count, noun) : null;
+        return (
+          <span key={label} className="relative inline-flex group">
+            <button
+              type="button"
+              disabled={disabled}
+              aria-pressed={current === token}
+              aria-describedby={tip ? `${id}-${label}` : undefined}
+              onClick={() => onChange(after(token))}
+              {...preview(
+                onPreview && current !== token && !disabled
+                  ? () => onPreview(after(token))
+                  : undefined
+              )}
+              className={`text-xs px-2.5 py-1 transition-colors ${
+                index === 0 ? 'rounded-l-full' : ''
+              } ${index === options.length - 1 ? 'rounded-r-full' : ''} ${
+                current === token
+                  ? 'bg-foreground text-background'
+                  : disabled
+                    ? 'bg-card text-muted-foreground/40 cursor-not-allowed'
+                    : 'bg-card text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {label}
+            </button>
+            {tip && (
+              <span role="tooltip" id={`${id}-${label}`} className={COUNT}>
+                {tip}
+              </span>
             )}
-            className={`text-xs px-2.5 py-1 transition-colors ${
-              index === 0 ? 'rounded-l-full' : ''
-            } ${index === options.length - 1 ? 'rounded-r-full' : ''} ${
-              current === token
-                ? 'bg-foreground text-background'
-                : 'bg-card text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {label}
-          </button>
-          {count !== undefined && (
-            <span role="tooltip" id={`${id}-${label}`} className={COUNT}>
-              {countText(count, noun)}
-            </span>
-          )}
-        </span>
-      ))}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -245,7 +300,7 @@ function ValueSearch({
           title={prop.description ?? undefined}
           className={`${NAME} ${prop.description ? DESCRIBED : ''}`}
         >
-          {prop.name}
+          {ownName(prop.name)}
         </span>
         {chosen.length > 0 && (
           <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-foreground text-background">
@@ -278,7 +333,7 @@ function ValueSearch({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Search ${prop.name}\u2026`}
+            placeholder={`Search ${ownName(prop.name)}\u2026`}
             className="w-full px-2 py-1 text-xs bg-card border border-border rounded-sm text-foreground placeholder-muted-foreground focus:outline-hidden focus:border-foreground/40"
           />
           <div className="mt-2 max-h-56 overflow-y-auto space-y-0.5">
@@ -340,19 +395,25 @@ function RangeInput({
   prop,
   range,
   onChange,
+  remaining,
 }: {
   prop: AvailableProperty;
   range: { min?: number; max?: number };
   onChange: (range: { min?: number; max?: number }) => void;
+  remaining?: Remaining | null;
 }) {
   const track = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<'min' | 'max' | null>(null);
 
-  const low = prop.min ?? 0;
-  const high = prop.max ?? 0;
+  // The ends are what the other picks leave possible, and the whole span
+  // before there are any. A bound already set stays as typed, even outside.
+  const ruledOutEntirely =
+    remaining === null || (remaining !== undefined && (remaining.min == null || remaining.max == null));
+  const low = remaining?.min ?? prop.min ?? 0;
+  const high = remaining?.max ?? prop.max ?? 0;
   const span = high - low || 1;
-  const from = range.min ?? low;
-  const to = range.max ?? high;
+  const from = Math.min(high, Math.max(low, range.min ?? low));
+  const to = Math.min(high, Math.max(low, range.max ?? high));
 
   const pct = (value: number) => ((value - low) / span) * 100;
   const clamp = (value: number) => Math.min(high, Math.max(low, value));
@@ -443,43 +504,48 @@ function RangeInput({
     '[&::-webkit-inner-spin-button]:appearance-none';
 
   return (
-    <div className="max-w-xs">
+    <div
+      className={`max-w-xs ${ruledOutEntirely ? 'opacity-40 cursor-not-allowed' : ''}`}
+      title={ruledOutEntirely ? NO_MATCH : undefined}
+    >
       {/* No separate range text: the empty inputs show it as placeholders. */}
       <PropertyName prop={prop} />
 
-      <div
-        ref={track}
-        onPointerMove={onPointerMove}
-        onPointerUp={() => setDragging(null)}
-        onPointerCancel={() => setDragging(null)}
-        className="relative h-4 mt-2 mb-2.5 touch-none"
-      >
-        <div className="absolute top-1/2 -translate-y-1/2 w-full h-1 rounded-full bg-muted" />
+      <div inert={ruledOutEntirely}>
         <div
-          className="absolute top-1/2 -translate-y-1/2 h-1 rounded-full bg-foreground/60"
-          style={{ left: `${pct(from)}%`, width: `${pct(to) - pct(from)}%` }}
-        />
-        {handle('min', from)}
-        {handle('max', to)}
-      </div>
+          ref={track}
+          onPointerMove={onPointerMove}
+          onPointerUp={() => setDragging(null)}
+          onPointerCancel={() => setDragging(null)}
+          className="relative h-4 mt-2 mb-2.5 touch-none"
+        >
+          <div className="absolute top-1/2 -translate-y-1/2 w-full h-1 rounded-full bg-muted" />
+          <div
+            className="absolute top-1/2 -translate-y-1/2 h-1 rounded-full bg-foreground/60"
+            style={{ left: `${pct(from)}%`, width: `${pct(to) - pct(from)}%` }}
+          />
+          {handle('min', from)}
+          {handle('max', to)}
+        </div>
 
-      <div className="flex items-center gap-2">
-        <input
-          type="number"
-          value={range.min ?? ''}
-          placeholder={String(Number(low.toPrecision(10)))}
-          onChange={(e) => onChange({ ...range, min: parse(e.target.value) })}
-          className={NUMBER_INPUT}
-        />
-        <span className="text-xs text-muted-foreground">to</span>
-        <input
-          type="number"
-          value={range.max ?? ''}
-          placeholder={String(Number(high.toPrecision(10)))}
-          onChange={(e) => onChange({ ...range, max: parse(e.target.value) })}
-          className={NUMBER_INPUT}
-        />
-        {prop.unit && <span className="text-xs text-muted-foreground">{prop.unit}</span>}
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            value={range.min ?? ''}
+            placeholder={String(Number(low.toPrecision(10)))}
+            onChange={(e) => onChange({ ...range, min: parse(e.target.value) })}
+            className={NUMBER_INPUT}
+          />
+          <span className="text-xs text-muted-foreground">to</span>
+          <input
+            type="number"
+            value={range.max ?? ''}
+            placeholder={String(Number(high.toPrecision(10)))}
+            onChange={(e) => onChange({ ...range, max: parse(e.target.value) })}
+            className={NUMBER_INPUT}
+          />
+          {prop.unit && <span className="text-xs text-muted-foreground">{prop.unit}</span>}
+        </div>
       </div>
     </div>
   );
@@ -498,6 +564,7 @@ function TermRow({
   onChange,
   noun,
   onPreview,
+  remaining,
 }: {
   prop: AvailableProperty;
   valuesUrl: (name: string, query: string) => string;
@@ -505,6 +572,8 @@ function TermRow({
   onChange: (selected: string[]) => void;
   noun?: string;
   onPreview?: (selected: string[]) => void;
+  // What the picks in other rows leave possible for this one.
+  remaining?: Remaining | null;
 }) {
   // The summary lists a property's values without how many records carry
   // each, so the counts come from its values endpoint: one request per row,
@@ -534,6 +603,7 @@ function TermRow({
           counts={counts}
           noun={noun}
           onPreview={onPreview}
+          remaining={remaining}
         />
       </div>
     );
@@ -569,6 +639,7 @@ function TermRow({
               count={counts.get(value)}
               noun={noun}
               onPreview={onPreview && (() => onPreview(toggled(token)))}
+              disabled={!selected.includes(token) && ruledOut(remaining, value)}
             />
           );
         })}
@@ -580,13 +651,17 @@ function TermRow({
 /**
  * Filter controls for one scope's scientific metadata.
  *
- * Three sections, because the panel used to treat every property as the same
- * kind of thing and they are not. An annotation is a claim about a region of the
- * data and carries a dimension; a term is drawn from a vocabulary and is picked
- * from; a quantity is a magnitude and is bounded. Prose never appears: it
+ * Three kinds of control, because the panel used to treat every property as the
+ * same kind of thing and they are not. An annotation is a claim about a region
+ * of the data and carries a dimension; a term is drawn from a vocabulary and is
+ * picked from; a quantity is a magnitude and is bounded. Prose never appears: it
  * describes one record rather than classifying it, which is what made the old
  * presence row a dumping ground. Only annotations carry a heading: chips and
  * range controls already show which of the other two a property is.
+ *
+ * The properties inside a group are gathered into a block headed by the group's
+ * path and labelled by their own names, so `nbi.beam.source` and
+ * `nbi.beam.power` sit together under "nbi › beam". The top level comes first.
  *
  * Values of one property OR together and different properties AND, which is
  * what the server does with repeated parameters and what selecting two chips in
@@ -602,6 +677,7 @@ export function PropertyFilter({
   valuesUrl,
   noun,
   onPreview,
+  possible,
 }: {
   // Only needed where two panels sit together and must be told apart.
   label?: string;
@@ -616,12 +692,14 @@ export function PropertyFilter({
   // Called with the selection a click on the option under the pointer would
   // make, so the caller can fetch that selection's results ahead of the click.
   onPreview?: (selected: string[]) => void;
+  // What remains possible alongside the picks, for disabling the options that
+  // cannot match. Without it no option is disabled.
+  possible?: Possible;
 }) {
   if (properties.length === 0) return null;
 
   const annotations = properties.filter((f) => f.dimension);
-  const terms = properties.filter((f) => !f.dimension && f.kind === 'term');
-  const quantities = properties.filter((f) => !f.dimension && f.kind === 'quantity');
+  const others = properties.filter((f) => !f.dimension);
 
   const noValues = () => '';
   const boundedRanges = Object.values(ranges).filter(
@@ -656,6 +734,98 @@ export function PropertyFilter({
     </button>
   );
 
+  const annotationRow = (prop: AvailableProperty) => (
+    <TermRow
+      key={prop.name}
+      prop={prop}
+      valuesUrl={valuesUrl ?? noValues}
+      selected={selected}
+      onChange={onChange}
+      noun={noun}
+      onPreview={onPreview}
+      remaining={possible?.(prop.name)}
+    />
+  );
+
+  const hasControl = (prop: AvailableProperty) =>
+    prop.kind === 'term' || (prop.kind === 'quantity' && !!onRangesChange);
+
+  // The chip rows, the vocabularies you open, then the ranges: the controls for
+  // the properties at the top level, or for those in one group.
+  const controls = (props: AvailableProperty[]) => {
+    const terms = props.filter((f) => f.kind === 'term');
+    const quantities = props.filter((f) => f.kind === 'quantity');
+    return (
+      <>
+        {terms.length > 0 && (
+          <div>
+            <div className="space-y-3">
+              {terms
+                .filter((f) => f.values)
+                .map((prop) => (
+                  <TermRow
+                    key={prop.name}
+                    prop={prop}
+                    valuesUrl={valuesUrl ?? noValues}
+                    selected={selected}
+                    onChange={onChange}
+                    noun={noun}
+                    onPreview={onPreview}
+                    remaining={possible?.(prop.name)}
+                  />
+                ))}
+            </div>
+            {/* A vocabulary you open is a different control from a row of chips,
+                so it gets its own block rather than reading as one more row. */}
+            <div className="mt-6 space-y-2.5">
+              {terms
+                .filter((f) => !f.values)
+                .map((prop) => (
+                  <TermRow
+                    key={prop.name}
+                    prop={prop}
+                    valuesUrl={valuesUrl ?? noValues}
+                    selected={selected}
+                    onChange={onChange}
+                    noun={noun}
+                    onPreview={onPreview}
+                    remaining={possible?.(prop.name)}
+                  />
+                ))}
+            </div>
+          </div>
+        )}
+        {quantities.length > 0 && onRangesChange && (
+          <div>
+            {/* As many columns as the panel has room for: one in the side column,
+                several across a full-width page, where a single stacked column
+                left a tall thin strip beside empty space. */}
+            <div className="grid gap-x-12 gap-y-8 grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
+              {quantities.map((prop) => (
+                <RangeInput
+                  key={prop.name}
+                  prop={prop}
+                  range={ranges[prop.name] ?? {}}
+                  onChange={(range) => onRangesChange({ ...ranges, [prop.name]: range })}
+                  remaining={possible?.(prop.name)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  // A group's properties under its path, set in under a rule as the metadata
+  // card sets in what a group holds.
+  const groupBlock = (path: string, body: React.ReactNode) => (
+    <div key={path}>
+      <p className={HEADING}>{path.split(PATH_SEPARATOR).join(' \u203a ')}</p>
+      <div className="mt-3.5 pl-4 border-l border-border space-y-6">{body}</div>
+    </div>
+  );
+
   return (
     <div className="card relative p-6 mb-6 space-y-10">
       {label && (
@@ -669,77 +839,24 @@ export function PropertyFilter({
         section(
           'Annotations',
           'localised in the data',
-          annotations.map((prop) => (
-            <div key={prop.name} className="flex items-center gap-3 flex-wrap">
-              <TermRow
-                prop={prop}
-                valuesUrl={valuesUrl ?? noValues}
-                selected={selected}
-                onChange={onChange}
-                noun={noun}
-                onPreview={onPreview}
-              />
-              <span className="text-[11px] text-muted-foreground">
-                on {prop.dimension}
-              </span>
-            </div>
-          ))
+          byGroup(annotations).map(([path, props]) =>
+            path === '' ? (
+              <Fragment key="top-level">{props.map(annotationRow)}</Fragment>
+            ) : (
+              groupBlock(path, <div className="space-y-3">{props.map(annotationRow)}</div>)
+            )
+          )
         )}
 
-      {terms.length > 0 && (
-        <div>
-          <div className="space-y-3">
-            {terms
-              .filter((f) => f.values)
-              .map((prop) => (
-                <TermRow
-                  key={prop.name}
-                  prop={prop}
-                  valuesUrl={valuesUrl ?? noValues}
-                  selected={selected}
-                  onChange={onChange}
-                  noun={noun}
-                  onPreview={onPreview}
-                />
-              ))}
-          </div>
-          {/* A vocabulary you open is a different control from a row of chips,
-              so it gets its own block rather than reading as one more row. */}
-          <div className="mt-6 space-y-2.5">
-            {terms
-              .filter((f) => !f.values)
-              .map((prop) => (
-                <TermRow
-                  key={prop.name}
-                  prop={prop}
-                  valuesUrl={valuesUrl ?? noValues}
-                  selected={selected}
-                  onChange={onChange}
-                  noun={noun}
-                  onPreview={onPreview}
-                />
-              ))}
-          </div>
-        </div>
-      )}
-
-      {quantities.length > 0 && onRangesChange && (
-        <div>
-          {/* As many columns as the panel has room for: one in the side column,
-              several across a full-width page, where a single stacked column
-              left a tall thin strip beside empty space. */}
-          <div className="grid gap-x-12 gap-y-8 grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
-            {quantities.map((prop) => (
-              <RangeInput
-                key={prop.name}
-                prop={prop}
-                range={ranges[prop.name] ?? {}}
-                onChange={(range) => onRangesChange({ ...ranges, [prop.name]: range })}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      {byGroup(others)
+        .filter(([, props]) => props.some(hasControl))
+        .map(([path, props]) =>
+          path === '' ? (
+            <Fragment key="top-level">{controls(props)}</Fragment>
+          ) : (
+            groupBlock(path, controls(props))
+          )
+        )}
 
       {/* Last, so its arrival does not add space-y margin above the first
           section: it is positioned out of the flow anyway. */}

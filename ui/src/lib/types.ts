@@ -28,15 +28,20 @@ export interface Extent {
 }
 
 // An entry in scientific_metadata. With an extent it is an *annotation*: the same
-// property, localised on one axis. Without one it is a plain scalar property.
+// property, localised on one axis. Without one it describes the whole record.
+//
+// A property holds either a value or `properties`. One that holds `properties`
+// is a group, such as `nbi` holding a `beam` per beam line. A group has no
+// value, unit or kind, and its extent covers everything inside it.
 export interface ScientificProperty {
   name: string;
-  value: unknown;
+  value?: string | number | boolean | null;
   unit?: string | null;
   description?: string | null;
   extent?: Extent | null;
   // What the value is, as the producer declared it. Absent means FDS infers it.
   kind?: MetadataKind | null;
+  properties?: ScientificProperty[] | null;
 }
 
 // What a scientific property's value is, as the producer declared it or as FDS
@@ -44,11 +49,13 @@ export interface ScientificProperty {
 // follows from the kind together with how many distinct values there are.
 export type MetadataKind = 'term' | 'quantity' | 'text';
 
-// One scientific-metadata name in scope. `values` is absent when there are too
-// many to enumerate; `distinct` is always present, so absence is never
-// ambiguous. `dimension` is set when the property carries an extent, which
-// makes it an annotation: a claim about a region of the data rather than the whole
-// record. `text` names never appear, because prose describes a record rather than
+// One scientific-metadata property in scope. `name` is its path: its own name
+// after those of the groups it sits in, joined by `.`, as `nbi.beam.power`.
+// `values` is absent when there are too many to enumerate; `distinct` is always
+// present, so absence is never ambiguous. `dimension` is set when the property
+// carries an extent, or sits in a group that does, which makes it an
+// annotation: a claim about a region of the data rather than the whole record.
+// `text` names never appear, because prose describes a record rather than
 // classifying it.
 export interface AvailableProperty {
   name: string;

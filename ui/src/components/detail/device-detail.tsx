@@ -7,7 +7,13 @@ import { fetcher, API_BASE } from '@/lib/api';
 import { AvailableProperties, Dataset } from '@/lib/types';
 import { Database, ChevronRight, Server } from 'lucide-react';
 import { useDeviceLabel } from '@/lib/use-device-label';
-import { availableProperties, propertyQuery, withQuery } from '@/lib/properties';
+import {
+  availableProperties,
+  possibleFromRecords,
+  propertyQuery,
+  withQuery,
+} from '@/lib/properties';
+import { usePossible } from '@/lib/use-possible';
 import { PropertyFilter } from '@/components/property-filter';
 import { DatasetResults } from '@/components/dataset-results';
 import { SidePanelLayout } from '@/components/side-panel-layout';
@@ -90,6 +96,15 @@ function ShotDatasets({
   const datasetProperties = availableProperties(firstPage);
   const shotPropertyList = shotProperties?.properties ?? [];
 
+  // Each panel disables what its own other picks rule out. The dataset chips
+  // are worked out from the first page they are read from; the shot chips ask
+  // the shots' properties endpoint.
+  const possibleDatasets = possibleFromRecords(firstPage, propertyTokens);
+  const possibleShots = usePossible(
+    (tokens) => withQuery(shotPropertiesUrl(deviceName), propertyQuery('property', tokens)),
+    shotPropertyTokens
+  );
+
   const {
     items: datasets,
     error,
@@ -125,12 +140,14 @@ function ShotDatasets({
               properties={datasetProperties}
               selected={propertyTokens}
               onChange={setPropertyTokens}
+              possible={possibleDatasets}
             />
             <PropertyFilter
               label="Filter by shot property"
               properties={shotPropertyList}
               selected={shotPropertyTokens}
               onChange={setShotPropertyTokens}
+              possible={possibleShots}
             />
             {aside}
           </>

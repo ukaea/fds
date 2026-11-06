@@ -69,6 +69,18 @@ plasma_current_max                 -995,852 A to 1,418,442 A
     [ -995852 ]  to  [ 1418442 ]  A
 ```
 
+The properties inside a **group** are gathered under the group's path, each labelled by its own name, and take whichever control their kind calls for:
+
+```text
+NBI › BEAM
+  |  source    SS   SW
+  |  power     1.4 MW   1.6 MW
+```
+
+On a record's page a group is a section holding what is inside it, and in a list of records it is one pill with its name and how many values it holds.
+
+Once something is picked, every option that can no longer match alongside the picks in other rows is disabled, and a range narrows to the values that remain. Inside a group, each entry is judged on its own: with `nbi.beam.source` set to `SW`, `nbi.beam.power` narrows to the SW beam's power, not both beams'. A row's own options stay available, since picking two values of one property asks for either.
+
 ## If you do not declare a kind
 
 FDS infers one from the values it can see. The inference is good enough that no provider is obliged to do anything, and it is documented here so you can tell when it will get you wrong.
