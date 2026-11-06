@@ -1,7 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Query, status
 
 from app.api.deps import (
     DEFAULT_PAGE_SIZE,
@@ -12,6 +11,12 @@ from app.api.deps import (
     Limit,
     Offset,
     SourceServiceDep,
+    WantsJSONLDDep,
+)
+from app.api.negotiation import (
+    JSONLD_ALTERNATIVE,
+    VARY_ACCEPT,
+    JSONLDResponse,
 )
 from app.models.activity import ActivityRead, ActivityType
 from app.models.dataset import (
@@ -276,10 +281,11 @@ def read_dataset_by_name(
     "/datasets/id/{id}",
     response_model=DatasetRead,
     response_model_exclude_none=True,
+    responses=JSONLD_ALTERNATIVE,
 )
 def read_dataset_by_id(
     *,
-    request: Request,
+    jsonld: WantsJSONLDDep,
     id: int,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
@@ -288,7 +294,7 @@ def read_dataset_by_id(
     include_calibration: bool = False,
     include_annotations: bool = False,
     base: BaseURLDep,
-) -> DatasetRead | JSONResponse:
+) -> DatasetRead | JSONLDResponse:
     """
     Retrieve a single dataset by its internal integer ID.
     Supports Content Negotiation:
@@ -299,7 +305,7 @@ def read_dataset_by_id(
         raise ResourceNotFoundError(f"Dataset {id} not found")
     dataset_service.check_read_access(dataset, user)
 
-    if "application/ld+json" in request.headers.get("accept", ""):
+    if jsonld:
         dcat_metadata = dataset_service.to_dcat(
             dataset,
             base,
@@ -308,7 +314,7 @@ def read_dataset_by_id(
             include_annotations=include_annotations,
             user=user,
         )
-        return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
+        return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
 
     return dataset_service.to_read_model(
         dataset,

@@ -21,6 +21,20 @@ GET /v1/devices/{device}/shots/{shot_id}/collections/{name}
 Accept: application/ld+json
 ```
 
+FDS answers in JSON-LD when the `Accept` header prefers it to plain JSON, by the header's q-values:
+
+| `Accept` header | Answer |
+| --- | --- |
+| `application/ld+json` | JSON-LD |
+| `application/ld+json, application/json;q=0.9` | JSON-LD |
+| `application/json, application/ld+json;q=0.5` | JSON |
+| `application/ld+json;q=0` | JSON |
+| `*/*`, or no header | JSON |
+
+When the two have the same q-value, a header that names `application/ld+json` itself gets JSON-LD,
+and one that reaches both only through `*/*` or `application/*` gets JSON. Both answers carry
+`Vary: Accept`, so a cache in front of FDS keeps them apart.
+
 ## Identifiers
 
 The `@id` of every entity is the name FDS publishes for it: what another catalogue stores when it
@@ -105,6 +119,11 @@ interface serves a page there and passes `application/ld+json` requests through 
 there is no interface, the API answers those paths itself with the JSON-LD above. This matters for
 DOIs, which must land a reader on something readable: registering one means having an interface
 that answers the identifier.
+
+The reference UI chooses between its page and the JSON-LD by the same q-value rule, comparing
+`application/ld+json` with `text/html`, so a browser gets the page and `Accept: application/ld+json`
+gets the JSON-LD. The JSON-LD carries `Vary: Accept`, and the page is sent as `no-store`, so a cache
+in front of the UI never answers one with the other.
 
 ## The resource and FDS's record of it
 

@@ -24,9 +24,11 @@ export async function GET(
 
   try {
     const upstream = await fetch(`${backend}/${path.join('/')}`, { headers, cache: 'no-store' });
+    // The landing page answers the same address for a browser, so a cache has to
+    // keep this answer apart by the Accept header.
     return new NextResponse(await upstream.text(), {
       status: upstream.status,
-      headers: { 'content-type': upstream.headers.get('content-type') ?? LD_JSON },
+      headers: { 'content-type': upstream.headers.get('content-type') ?? LD_JSON, vary: 'Accept' },
     });
   } catch (error) {
     console.error('[Identifiers] Error:', error);

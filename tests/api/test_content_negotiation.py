@@ -1,13 +1,18 @@
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
+from app.api.negotiation import prefers_jsonld
+from app.main import app
+from app.models.collection import CollectionCreate
 from app.models.dataset import DatasetCreate
 from app.models.device import Device, DeviceCreate
 from app.models.identity import AuthenticatedUser
 from app.models.policy import AccessLevel
 from app.models.shot import ShotCreate
+from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.shot_service import ShotService
@@ -171,3 +176,116 @@ def test_content_negotiation_dataset(test_client: TestClient, session: Session):
     assert "@type" in data
     assert data["@type"] == "dcat:Dataset"
     assert data["title"] == "Negotiation Test Dataset"
+
+
+@pytest.mark.parametrize(
+    ("accept", "jsonld"),
+    [
+        (None, False),
+        ("*/*", False),
+        ("text/html,application/xhtml+xml,*/*;q=0.8", False),
+        ("application/*", False),
+        ("application/json", False),
+        ("application/ld+json", True),
+        ('application/ld+json;profile="http://www.w3.org/ns/json-ld#compacted"', True),
+        ("application/ld+json, application/json", True),
+        ("application/ld+json, */*;q=0.1", True),
+        ("application/ld+json, application/json;q=0.9", True),
+        ("application/json, application/ld+json;q=0.5", False),
+        ("application/ld+json;q=0", False),
+        ("application/ld+json;q=0, */*", False),
+        ("application/ld+json;q=high", False),
+    ],
+)
+def test_prefers_jsonld(accept: str | None, jsonld: bool):
+    assert prefers_jsonld(accept) is jsonld
+
+
+@pytest.fixture
+def negotiated(session: Session, admin_user: AuthenticatedUser) -> dict[str, int]:
+    """A public device and shot, a dataset on the shot, and a collection at each
+    level, for the routes that answer in JSON or JSON-LD. Returns the dataset's
+    and the global collection's ids."""
+    DeviceService(session).create(
+        DeviceCreate(name="MAST", type="Tokamak", access_level=AccessLevel.PUBLIC),
+        admin_user,
+    )
+    ShotService(session).create(ShotCreate(id="30421", device_name="MAST"), admin_user)
+    dataset = DatasetService(session).create(
+        DatasetCreate(
+            name="efit",
+            device_name="MAST",
+            shot_id="30421",
+            url="s3://mast/30421/efit",
+            access_level=AccessLevel.PUBLIC,
+        ),
+        admin_user,
+    )
+    collections = CollectionService(session)
+    campaign = collections.create(
+        CollectionCreate(name="campaign", access_level=AccessLevel.PUBLIC), admin_user
+    )
+    collections.create(CollectionCreate(name="coils", device_name="MAST"), admin_user)
+    collections.create(
+        CollectionCreate(name="jintrac", device_name="MAST", shot_id="30421"),
+        admin_user,
+    )
+    session.commit()
+    assert dataset.id is not None
+    assert campaign.id is not None
+    return {"dataset": dataset.id, "collection": campaign.id}
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/v1/devices/MAST",
+        "/v1/devices/MAST/shots/30421",
+        "/v1/datasets/id/{dataset}",
+        "/v1/collections/id/{collection}",
+        "/v1/collections/campaign",
+        "/v1/devices/MAST/collections/coils",
+        "/v1/devices/MAST/shots/30421/collections/jintrac",
+    ],
+)
+def test_negotiated_routes_answer_as_the_caller_prefers(
+    test_client: TestClient, negotiated: dict[str, int], path: str
+):
+    url = path.format(**negotiated)
+
+    plain = test_client.get(url)
+    linked = test_client.get(url, headers={"Accept": "application/ld+json"})
+    rather_json = test_client.get(
+        url, headers={"Accept": "application/json, application/ld+json;q=0.5"}
+    )
+
+    assert plain.headers["content-type"] == "application/json"
+    assert linked.headers["content-type"] == "application/ld+json"
+    assert rather_json.headers["content-type"] == "application/json"
+    assert plain.headers["vary"] == "Accept"
+    assert linked.headers["vary"] == "Accept"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/v1/devices/{device_name}",
+        "/v1/devices/{device_name}/shots/{shot_id}",
+        "/v1/datasets/id/{id}",
+        "/v1/collections/id/{id}",
+        "/v1/collections/{name}",
+        "/v1/devices/{device_name}/collections/{name}",
+        "/v1/devices/{device_name}/shots/{shot_id}/collections/{name}",
+    ],
+)
+def test_openapi_offers_json_ld_on_negotiated_routes(path: str):
+    answer = app.openapi()["paths"][path]["get"]["responses"]["200"]
+
+    assert set(answer["content"]) == {"application/json", "application/ld+json"}
+
+
+@pytest.mark.parametrize("path", ["/datasets/{id}", "/v1/catalog"])
+def test_openapi_gives_json_ld_only_routes_as_json_ld(path: str):
+    answer = app.openapi()["paths"][path]["get"]["responses"]["200"]
+
+    assert set(answer["content"]) == {"application/ld+json"}

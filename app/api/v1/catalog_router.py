@@ -3,12 +3,13 @@ from typing import Any
 from fastapi import APIRouter
 
 from app.api.deps import BaseURLDep, CurrentUserDep, DeviceServiceDep
+from app.api.negotiation import JSONLDResponse
 from app.services.jsonld import device_node, generate_context
 
 router = APIRouter()
 
 
-@router.get("/catalog", response_model=dict[str, Any])
+@router.get("/catalog", response_model=dict[str, Any], response_class=JSONLDResponse)
 def get_catalog(
     device_service: DeviceServiceDep,
     user: CurrentUserDep,

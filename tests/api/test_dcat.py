@@ -52,6 +52,7 @@ def test_get_catalog(test_client: TestClient, session: Session):
 
     response = test_client.get("/v1/catalog")
     assert response.status_code == 200
+    assert response.headers["content-type"] == "application/ld+json"
     data = response.json()
 
     # Check Root Catalog properties

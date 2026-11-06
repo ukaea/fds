@@ -76,9 +76,21 @@ async function proxyRequest(request: NextRequest) {
       responseData = responseText;
     }
 
-    // Return JSON response
+    // FDS answers some routes in JSON or JSON-LD by the Accept header. Keep the
+    // JSON-LD media type it chose, and its Vary, so that a cache keeps the two
+    // answers apart.
+    const answerHeaders = new Headers();
+    const vary = response.headers.get('vary');
+    if (vary) {
+      answerHeaders.set('vary', vary);
+    }
+    if (response.headers.get('content-type')?.startsWith('application/ld+json')) {
+      answerHeaders.set('content-type', 'application/ld+json');
+    }
+
     return NextResponse.json(responseData, {
       status: response.status,
+      headers: answerHeaders,
     });
   } catch (error) {
     console.error(`[API Proxy] Error:`, error);

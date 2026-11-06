@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, status
 
 from app.api.deps import (
     DEFAULT_PAGE_SIZE,
@@ -9,6 +8,12 @@ from app.api.deps import (
     Limit,
     Offset,
     SourceServiceDep,
+    WantsJSONLDDep,
+)
+from app.api.negotiation import (
+    JSONLD_ALTERNATIVE,
+    VARY_ACCEPT,
+    JSONLDResponse,
 )
 from app.models.device import DeviceCreate, DeviceRead, DeviceUpdate
 from app.models.source import SourceCreate, SourceRead
@@ -46,15 +51,15 @@ def read_devices(
     return [device_service.to_read_model(d) for d in devices]
 
 
-@router.get("/{device_name}", response_model=DeviceRead)
+@router.get("/{device_name}", response_model=DeviceRead, responses=JSONLD_ALTERNATIVE)
 def read_device(
     *,
-    request: Request,
+    jsonld: WantsJSONLDDep,
     device_service: DeviceServiceDep,
     device_name: str,
     user: CurrentUserDep,
     base: BaseURLDep,
-) -> DeviceRead | JSONResponse:
+) -> DeviceRead | JSONLDResponse:
     """
     Retrieve a single device by name.
     Supports Content Negotiation:
@@ -63,9 +68,9 @@ def read_device(
     device = device_service.get_by_name(device_name, user=user)
 
     # Content Negotiation
-    if "application/ld+json" in request.headers.get("accept", ""):
+    if jsonld:
         dcat_metadata = map_device_to_dcat(device, base)
-        return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
+        return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
 
     return device_service.to_read_model(device)
 

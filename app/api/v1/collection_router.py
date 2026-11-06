@@ -1,7 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Query, status
 
 from app.api.deps import (
     DEFAULT_PAGE_SIZE,
@@ -11,6 +10,12 @@ from app.api.deps import (
     DatasetServiceDep,
     Limit,
     Offset,
+    WantsJSONLDDep,
+)
+from app.api.negotiation import (
+    JSONLD_ALTERNATIVE,
+    VARY_ACCEPT,
+    JSONLDResponse,
 )
 from app.models.activity import ActivityRead, ActivityType
 from app.models.available_properties import AvailableProperties
@@ -156,16 +161,17 @@ def read_collection_properties(
     "/collections/id/{id}",
     response_model=CollectionRead,
     response_model_exclude_none=True,
+    responses=JSONLD_ALTERNATIVE,
 )
 def read_collection_by_id(
     *,
-    request: Request,
+    jsonld: WantsJSONLDDep,
     id: int,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
     base: BaseURLDep,
-) -> CollectionRead | JSONResponse:
+) -> CollectionRead | JSONLDResponse:
     """Retrieve a single Collection by its internal integer ID.
 
     This is the URI the semantic projection names a Collection by, so it has to
@@ -179,9 +185,9 @@ def read_collection_by_id(
         raise ResourceNotFoundError(f"Collection {id} not found")
     collection_service.check_read_access(collection, user)
 
-    if "application/ld+json" in request.headers.get("accept", ""):
+    if jsonld:
         dcat_metadata = collection_service.to_dcat(collection, base, user)
-        return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
+        return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
     return collection_service.to_read_model(collection, include_storage_options, user)
 
 
@@ -189,16 +195,17 @@ def read_collection_by_id(
     "/collections/{name}",
     response_model=CollectionRead,
     response_model_exclude_none=True,
+    responses=JSONLD_ALTERNATIVE,
 )
 def read_collection_global_by_name(
     *,
-    request: Request,
+    jsonld: WantsJSONLDDep,
     name: str,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
     base: BaseURLDep,
-) -> CollectionRead | JSONResponse:
+) -> CollectionRead | JSONLDResponse:
     """Retrieve a specific global Collection by name.
 
     Supports content negotiation:
@@ -207,9 +214,9 @@ def read_collection_global_by_name(
     collection = collection_service.get_by_name_in_context_or_raise(
         name=name, user=user
     )
-    if "application/ld+json" in request.headers.get("accept", ""):
+    if jsonld:
         dcat_metadata = collection_service.to_dcat(collection, base, user)
-        return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
+        return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
     return collection_service.to_read_model(collection, include_storage_options, user)
 
 
@@ -344,17 +351,18 @@ def read_collection_properties_device(
     "/devices/{device_name}/collections/{name}",
     response_model=CollectionRead,
     response_model_exclude_none=True,
+    responses=JSONLD_ALTERNATIVE,
 )
 def read_collection_device_by_name(
     *,
-    request: Request,
+    jsonld: WantsJSONLDDep,
     device_name: str,
     name: str,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
     base: BaseURLDep,
-) -> CollectionRead | JSONResponse:
+) -> CollectionRead | JSONLDResponse:
     """Retrieve a specific device-level Collection by name.
 
     Supports content negotiation:
@@ -363,9 +371,9 @@ def read_collection_device_by_name(
     collection = collection_service.get_by_name_in_context_or_raise(
         name=name, user=user, device_name=device_name
     )
-    if "application/ld+json" in request.headers.get("accept", ""):
+    if jsonld:
         dcat_metadata = collection_service.to_dcat(collection, base, user)
-        return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
+        return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
     return collection_service.to_read_model(collection, include_storage_options, user)
 
 
@@ -448,10 +456,11 @@ def read_collections_shot(
     "/devices/{device_name}/shots/{shot_id}/collections/{name}",
     response_model=CollectionRead,
     response_model_exclude_none=True,
+    responses=JSONLD_ALTERNATIVE,
 )
 def read_collection_shot_by_name(
     *,
-    request: Request,
+    jsonld: WantsJSONLDDep,
     device_name: str,
     shot_id: str,
     name: str,
@@ -459,7 +468,7 @@ def read_collection_shot_by_name(
     user: CurrentUserDep,
     include_storage_options: bool = False,
     base: BaseURLDep,
-) -> CollectionRead | JSONResponse:
+) -> CollectionRead | JSONLDResponse:
     """Retrieve a specific shot-scoped Collection by name.
 
     Supports content negotiation:
@@ -468,9 +477,9 @@ def read_collection_shot_by_name(
     collection = collection_service.get_by_name_in_context_or_raise(
         name=name, user=user, device_name=device_name, shot_id=shot_id
     )
-    if "application/ld+json" in request.headers.get("accept", ""):
+    if jsonld:
         dcat_metadata = collection_service.to_dcat(collection, base, user)
-        return JSONResponse(content=dcat_metadata, media_type="application/ld+json")
+        return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
     return collection_service.to_read_model(collection, include_storage_options, user)
 
 
