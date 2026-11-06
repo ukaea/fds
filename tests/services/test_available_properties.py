@@ -965,3 +965,128 @@ def test_values_are_listed_for_a_path(
         ("water", 1),
     ]
     assert service.property_values("RIG", "coolant").values == []
+
+
+def test_a_group_is_summarised_from_the_instances_meeting_the_filter(
+    session: Session, admin_user: AuthenticatedUser
+) -> None:
+    """Scoped to T2, the maximum reported is T2's, not that of T1 on the same shot."""
+    seed(
+        session,
+        admin_user,
+        "RIG",
+        [
+            (
+                "1001",
+                {
+                    "access_level": AccessLevel.PUBLIC,
+                    "scientific_metadata": [
+                        ScientificProperty(
+                            name="coolant",
+                            properties=[
+                                ScientificProperty(
+                                    name="thermocouple",
+                                    properties=[
+                                        ScientificProperty(name="id", value="T1"),
+                                        ScientificProperty(
+                                            name="max",
+                                            value=850,
+                                            kind=MetadataKind.QUANTITY,
+                                        ),
+                                    ],
+                                ),
+                                ScientificProperty(
+                                    name="thermocouple",
+                                    properties=[
+                                        ScientificProperty(name="id", value="T2"),
+                                        ScientificProperty(
+                                            name="max",
+                                            value=400,
+                                            kind=MetadataKind.QUANTITY,
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        )
+                    ],
+                },
+            ),
+            (
+                "1002",
+                {
+                    "access_level": AccessLevel.PUBLIC,
+                    "scientific_metadata": [
+                        ScientificProperty(
+                            name="coolant",
+                            properties=[
+                                ScientificProperty(
+                                    name="thermocouple",
+                                    properties=[
+                                        ScientificProperty(name="id", value="T1"),
+                                        ScientificProperty(
+                                            name="max",
+                                            value=350,
+                                            kind=MetadataKind.QUANTITY,
+                                        ),
+                                    ],
+                                )
+                            ],
+                        )
+                    ],
+                },
+            ),
+        ],
+    )
+    service = ShotService(session)
+
+    t2 = service.available_properties(
+        "RIG", properties=["coolant.thermocouple.id:T2"], include_constant=True
+    )
+    t1 = service.available_properties(
+        "RIG", properties=["coolant.thermocouple.id:T1"], include_constant=True
+    )
+    hot = service.available_properties(
+        "RIG", minimums=["coolant.thermocouple.max:800"], include_constant=True
+    )
+
+    assert prop(t2, "coolant.thermocouple.max").min == 400
+    assert prop(t2, "coolant.thermocouple.max").max == 400
+    assert prop(t1, "coolant.thermocouple.max").min == 350
+    assert prop(t1, "coolant.thermocouple.max").max == 850
+    assert prop(hot, "coolant.thermocouple.id").values == ["T1"]
+
+
+def test_a_constant_property_is_listed_only_when_asked_for(
+    session: Session, admin_user: AuthenticatedUser
+) -> None:
+    """Every shot is in campaign M9, which cannot narrow anything."""
+    seed(
+        session,
+        admin_user,
+        MAST,
+        [
+            (
+                "30421",
+                {
+                    "access_level": AccessLevel.PUBLIC,
+                    "scientific_metadata": [
+                        ScientificProperty(name="campaign", value="M9")
+                    ],
+                },
+            ),
+            (
+                "30422",
+                {
+                    "access_level": AccessLevel.PUBLIC,
+                    "scientific_metadata": [
+                        ScientificProperty(name="campaign", value="M9")
+                    ],
+                },
+            ),
+        ],
+    )
+    service = ShotService(session)
+
+    assert "campaign" not in names(service.available_properties(MAST))
+    kept = service.available_properties(MAST, include_constant=True)
+    assert prop(kept, "campaign").values == ["M9"]

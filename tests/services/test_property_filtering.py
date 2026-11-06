@@ -360,19 +360,43 @@ def test_a_range_bound_on_a_path(session: Session):
     assert [s.id for s in cool] == ["1002"]
 
 
-def test_each_condition_matches_any_instance_of_a_repeated_group(session: Session):
-    """On 1001, T1 reached 850 and T2 only 400.
-
-    Asking for T2 with a maximum of at least 800 still returns 1001, because
-    each condition is met by one thermocouple or the other. Requiring both of
-    the same thermocouple belongs with the structured search.
-    """
-    shots = ShotService(session).get_multi_by_device_name(
+def test_conditions_on_one_group_are_met_by_one_instance(session: Session):
+    """On 1001, T1 reached 850 and T2 only 400, so no thermocouple is T2 at 800."""
+    shots = ShotService(session)
+    t2_hot = shots.get_multi_by_device_name(
         RIG,
         properties=["coolant.thermocouple.id:T2"],
         minimums=["coolant.thermocouple.max:800"],
     )
-    assert [s.id for s in shots] == ["1001"]
+    t1_hot = shots.get_multi_by_device_name(
+        RIG,
+        properties=["coolant.thermocouple.id:T1"],
+        minimums=["coolant.thermocouple.max:800"],
+    )
+    assert [s.id for s in t2_hot] == []
+    assert [s.id for s in t1_hot] == ["1001"]
+
+
+def test_two_values_of_one_path_in_a_group_are_alternatives(session: Session):
+    """A thermocouple that is T1 or T2, and that same thermocouple at 800."""
+    shots = ShotService(session)
+    either = ["coolant.thermocouple.id:T1", "coolant.thermocouple.id:T2"]
+    either_hot = shots.get_multi_by_device_name(
+        RIG, properties=either, minimums=["coolant.thermocouple.max:800"]
+    )
+    assert shot_ids(shots, RIG, either) == ["1001", "1002"]
+    assert [s.id for s in either_hot] == ["1001"]
+
+
+def test_a_condition_on_a_group_and_one_inside_it_meet_in_one_instance(
+    session: Session,
+):
+    shots = ShotService(session).get_multi_by_device_name(
+        RIG,
+        properties=["coolant.type:water"],
+        maximums=["coolant.thermocouple.max:380"],
+    )
+    assert [s.id for s in shots] == ["1002"]
 
 
 def test_shot_property_follows_a_path(session: Session):

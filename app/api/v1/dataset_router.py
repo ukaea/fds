@@ -96,7 +96,7 @@ def read_datasets_global(
     `property` filters on the dataset's own `scientific_metadata`. Use `elm` to
     match any dataset that carries that property, or `elm:type-I` to match a
     particular value. A property inside a group is named by its path, the names
-    joined by `.`: `coolant.type:Water`. Repeat the parameter to require all of
+    joined by `.`: `nbi.beam.source:SW`. Repeat the parameter to require all of
     them.
 
     `shot_property` takes the same forms but applies them to the parent shot, so
@@ -227,7 +227,7 @@ def read_datasets_shot(
     `property` filters on each dataset's own `scientific_metadata`. Use `ufo` to
     match any dataset that carries that property, or `ufo:true` to match a
     particular value. A property inside a group is named by its path, the names
-    joined by `.`: `coolant.type:Water`. Repeat the parameter to require all of
+    joined by `.`: `nbi.beam.source:SW`. Repeat the parameter to require all of
     them.
 
     `activity_type`, `source` and `activity_id` filter on the Activity that
@@ -435,7 +435,7 @@ def read_datasets_device(
     `property` filters on each dataset's own `scientific_metadata`. Use `elm` to
     match any dataset that carries that property, or `elm:type-I` to match a
     particular value. A property inside a group is named by its path, the names
-    joined by `.`: `coolant.type:Water`. Repeat the parameter to require all of
+    joined by `.`: `nbi.beam.source:SW`. Repeat the parameter to require all of
     them.
 
     `shot_property` takes the same forms but applies them to the parent shot,

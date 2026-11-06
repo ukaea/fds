@@ -18,7 +18,7 @@ from sqlmodel import (
 from app.models.available_properties import AvailableProperties, AvailableProperty
 from app.models.scientific_metadata import MetadataKind
 from app.services.exceptions import FDSValidationError
-from app.services.filters import property_entries
+from app.services.filters import NUMERIC_TEXT, PropertyCondition, property_entries
 
 # A name with thousands of values is not something to pick from a list, so
 # enumeration is capped rather than paged: past this many distinct values a
@@ -37,10 +37,6 @@ PROSE_RATIO = 0.5
 # Below this many records the ratio is noise, because three records with three
 # values look exactly like prose, so cardinality alone decides.
 RATIO_FLOOR = 20
-
-# Matches the text PostgreSQL renders for a JSON number, so a value that is not
-# numeric is skipped rather than aborting the cast for the whole query.
-_NUMERIC_TEXT = r"^-?\d+(\.\d+)?([eE][-+]?\d+)?$"
 
 
 def infer_kind(distinct_values: int, records: int, numeric: bool) -> MetadataKind:
@@ -72,7 +68,9 @@ def available_properties(
     column: Any,
     *,
     where: Sequence[ColumnElement[bool]] = (),
+    conditions: Sequence[PropertyCondition] = (),
     max_values: int = DEFAULT_MAX_VALUES,
+    include_constant: bool = False,
 ) -> AvailableProperties:
     """Summarise the scientific metadata carried by the records ``where`` selects.
 
@@ -83,6 +81,16 @@ def available_properties(
     Aggregates rather than listings: a device's shots hold tens of thousands of
     distinct values between them and none of them need to leave the database to
     be counted.
+
+    ``conditions`` are the parsed property filters that ``where`` was built
+    from. They decide which group entries are summarised: with a filter on
+    ``nbi.beam.source:SW``, the values reported for ``nbi.beam.power`` are the
+    SW beam's alone, not those of every beam on the same shot.
+
+    A property is left out when every record in scope has the same single value
+    for it, because picking that value would not narrow anything.
+    ``include_constant`` lists it anyway, for a filter panel working out which
+    options are still possible once something has been picked.
     """
     if not 0 <= max_values <= MAX_VALUES_LIMIT:
         raise FDSValidationError(
@@ -93,7 +101,7 @@ def available_properties(
 
     # Every property at every depth, each under its full path. A group is only
     # the start of its children's paths, so it is not summarised itself.
-    entries = property_entries(column)
+    entries = property_entries(column, conditions=conditions)
     name = entries.c.path
     value = entries.c.entry.op("->>")("value")
     unit = entries.c.entry.op("->>")("unit")
@@ -102,7 +110,7 @@ def available_properties(
     # The extent of the group a property sits in, when it has none of its own,
     # so a property inside an annotated group lists among the annotations.
     dimension = entries.c.extent.op("->>")("dimension")
-    is_numeric = value.op("~")(_NUMERIC_TEXT)
+    is_numeric = value.op("~")(NUMERIC_TEXT)
     numeric = cast(value, Numeric)
 
     # Counting records, not entries: one shot annotated twice under the same
@@ -166,7 +174,7 @@ def available_properties(
             # Prose describes one record; it does not classify it. Offering it
             # as a filter is what made the panel a dumping ground.
             continue
-        if distinct_values <= 1 and records == total:
+        if distinct_values <= 1 and records == total and not include_constant:
             # One value, on every record in scope: selecting it returns the
             # scope unchanged. A filter that cannot divide anything is not a
             # filter, whatever it says about the data.
@@ -187,7 +195,7 @@ def available_properties(
             )
         )
 
-    _attach_values(session, model, column, where, properties, max_values)
+    _attach_values(session, model, column, where, conditions, properties, max_values)
 
     # Annotations first: they carry a where, and they are the ones that grow. Then
     # terms before quantities, and within each the short rows lead, so the order
@@ -210,6 +218,7 @@ def _attach_values(
     model: type[SQLModel],
     column: Any,
     where: Sequence[ColumnElement[bool]],
+    conditions: Sequence[PropertyCondition],
     properties: list[AvailableProperty],
     max_values: int,
 ) -> None:
@@ -222,7 +231,7 @@ def _attach_values(
     if not enumerable or max_values == 0:
         return
 
-    pairs = property_entries(column)
+    pairs = property_entries(column, conditions=conditions)
     pair_name = pairs.c.path
     pair_value = pairs.c.entry.op("->>")("value")
     found: dict[str, list[str]] = {name: [] for name in enumerable}

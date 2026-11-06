@@ -4,10 +4,10 @@ from typing import Self
 from pydantic import field_validator, model_validator
 from sqlmodel import Field, SQLModel
 
-# Joins the names of nested properties into a path: `coolant.thermocouple.max`.
+# Joins the names of nested properties into a path: `nbi.beam.power`.
 PATH_SEPARATOR = "."
 
-# Separates a path from a value in a filter: `property=coolant.type:Water`.
+# Separates a path from a value in a filter: `property=nbi.beam.source:SW`.
 PROPERTY_SEPARATOR = ":"
 
 
@@ -53,8 +53,8 @@ class ScientificProperty(SQLModel):
     """One claim in a record's scientific metadata.
 
     A property holds either a ``value`` or a list of ``properties``. One that
-    holds ``properties`` is a group, such as ``coolant`` holding ``type`` and
-    ``temperature_in``. A group has no value, unit or kind, because those
+    holds ``properties`` is a group, such as ``nbi`` holding a ``beam`` for
+    each beam line. A group has no value, unit or kind, because those
     describe a value; its name, description and extent describe the group.
 
     A value is a single scalar: text, a number, true or false, or null. Several

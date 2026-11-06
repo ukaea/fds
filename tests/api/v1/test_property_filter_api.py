@@ -452,3 +452,15 @@ def test_values_of_a_path(test_client: TestClient):
         "distinct": 1,
         "values": [{"value": "850", "records": 1}],
     }
+
+
+def test_properties_keep_constant_ones_when_asked(test_client: TestClient):
+    """Scoped to 1001, every property inside its coolant has one value."""
+    url = f"/v1/devices/{RIG}/shots/properties"
+    scoped = {"property": "coolant.type:water"}
+
+    dropped = test_client.get(url, params=scoped).json()
+    kept = test_client.get(url, params={**scoped, "include_constant": "true"}).json()
+
+    assert "coolant.thermocouple.max" not in {f["name"] for f in dropped["properties"]}
+    assert _prop(kept, "coolant.thermocouple.max")["min"] == 850

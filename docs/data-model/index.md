@@ -180,7 +180,7 @@ GET /v1/devices/mast/shots?property_min=nbi.beam.power:1.5
 
 A path names one place: `?property=source:SW` does not match `nbi.beam.source`. A group's own path, such as `?property=nbi`, matches the records that carry the group. With a value it matches nothing, because a group has none.
 
-When a group repeats, each condition is checked against every instance separately. `?property=nbi.beam.source:SW&property_min=nbi.beam.power:1.5` matches a shot whose SW beam ran at 1.4 MW and whose SS beam ran at 1.6 MW, because one beam meets each condition. Requiring both of the same beam is, like a shot in L-mode and later in H-mode, more than a query string can express.
+When several filters name properties in the same group, one entry of that group has to match all of them. `?property=nbi.beam.source:SW&property_min=nbi.beam.power:1.5` asks for a beam that is SW and ran at 1.5 MW or more, so a shot whose SW beam ran at 1.4 MW does not match, even though its SS beam ran at 1.6 MW. Two values of one path are alternatives: `?property=nbi.beam.source:SS&property=nbi.beam.source:SW` asks for a beam that is either. Asking for two beams at once, such as a shot on which both ran above 1.5 MW, is like asking for a shot in L-mode and later in H-mode: more than a query string can express.
 
 `property_min` and `property_max` bound a numeric value:
 
@@ -238,7 +238,7 @@ Each entry gives the number of shots carrying that name, the number of distinct 
 | `quantity` | a magnitude on a scale | range, with `property_min` / `property_max` |
 | `text` | prose written for a human | not filterable; never listed |
 
-A group is not an entry. Each property inside it is, named by its path, such as `nbi.beam.power`.
+A group is not an entry. Each property inside it is, named by its path, such as `nbi.beam.power`. When a filter names a property inside a group, the summary describes only the group entries that match it: with `?property=nbi.beam.source:SW`, `nbi.beam.power` reports the SW beam's power, not both beams'.
 
 A producer sets `kind` on the property to say what a value is. When they have not, FDS infers it from the values in scope: a handful of repeated values is a term whether or not those values are numbers, a number that differs on nearly every record is a quantity, and text that is near-unique per record is prose. [Scientific Metadata](scientific-metadata.md) covers what to declare and how each kind is presented.
 
@@ -255,6 +255,8 @@ That returns each matching value with the number of shots carrying it, most comm
 ```text
 GET /v1/devices/mast/shots/properties?property=campaign:M9
 ```
+
+A property is left out when every shot in scope has the same single value for it, because picking that value would not narrow anything. Add `include_constant=true` to list it anyway. A filter panel uses this to see which options are still possible once something has been picked.
 
 Values a caller is not permitted to read never appear, so two callers can see different properties over the same device.
 

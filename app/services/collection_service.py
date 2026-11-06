@@ -47,6 +47,7 @@ from app.services.exceptions import (
 from app.services.filters import (
     activity_clauses,
     property_clauses,
+    property_conditions,
     scope_clauses,
     shot_id_prefix_clauses,
 )
@@ -379,6 +380,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         activity_id: int | None = None,
         include_replaced: bool = False,
         max_values: int = DEFAULT_MAX_VALUES,
+        include_constant: bool = False,
     ) -> AvailableProperties:
         """The properties the matching collections carry, for building a filter.
 
@@ -409,7 +411,9 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             Collection,
             col(Collection.scientific_metadata),
             where=where,
+            conditions=property_conditions(properties),
             max_values=max_values,
+            include_constant=include_constant,
         )
 
     def get_by_name_in_context(

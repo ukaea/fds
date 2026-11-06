@@ -83,7 +83,7 @@ def read_collections_global(
     `property` filters on the Collection's own `scientific_metadata`. Use `elm`
     to match any collection that carries that property, or `elm:type-I` to match
     a particular value. A property inside a group is named by its path, the
-    names joined by `.`: `coolant.type:Water`. Repeat it with a *different* name
+    names joined by `.`: `nbi.beam.source:SW`. Repeat it with a *different* name
     to require both:
     `?property=disruption&property=elm` matches only collections carrying
     each.
@@ -136,6 +136,7 @@ def read_collection_properties(
     include_replaced: bool = False,
     shot_id_prefix: str | None = None,
     max_values: int = DEFAULT_MAX_VALUES,
+    include_constant: bool = False,
 ) -> AvailableProperties:
     """
     The properties the listed collections carry, for building a filter.
@@ -143,9 +144,20 @@ def read_collection_properties(
     One entry per property, named by its path, with how many collections carry
     it, how many distinct values it has, and the values themselves when there
     are at most `max_values` of them. A group is not an entry: each property
-    inside it is, as `coolant.type`. Takes the same filters as `/collections`,
+    inside it is, as `nbi.beam.source`. Takes the same filters as `/collections`,
     so `total` is the number of matching collections: with
     `?activity_type=simulation` it summarises what simulation runs were about.
+
+    When a filter names a property inside a group, the summary describes only
+    the group entries that match it. Say a collection records two neutral beams,
+    SS at 1.6 MW and SW at 1.4 MW. Filtered by `property=nbi.beam.source:SW`,
+    the summary gives `nbi.beam.power` as 1.4, the SW beam's power, rather
+    than 1.4 to 1.6.
+
+    A property is normally left out when every collection in scope has the same
+    single value for it, because picking that value would not narrow anything.
+    `include_constant=true` lists it anyway. A filter panel uses this to see
+    which options are still possible once something has been picked.
     """
     return collection_service.available_properties(
         user=user,
@@ -157,6 +169,7 @@ def read_collection_properties(
         include_replaced=include_replaced,
         shot_id_prefix=shot_id_prefix,
         max_values=max_values,
+        include_constant=include_constant,
     )
 
 
@@ -273,7 +286,7 @@ def read_collections_device(
     `property` filters on the Collection's own `scientific_metadata`. Use `elm`
     to match any collection that carries that property, or `elm:type-I` to match
     a particular value. A property inside a group is named by its path, the
-    names joined by `.`: `coolant.type:Water`. Repeat it with a *different* name
+    names joined by `.`: `nbi.beam.source:SW`. Repeat it with a *different* name
     to require both:
     `?property=disruption&property=elm` matches only collections carrying
     each.
@@ -328,6 +341,7 @@ def read_collection_properties_device(
     include_replaced: bool = False,
     shot_id_prefix: str | None = None,
     max_values: int = DEFAULT_MAX_VALUES,
+    include_constant: bool = False,
 ) -> AvailableProperties:
     """
     The properties a device's listed collections carry, for building a filter.
@@ -335,9 +349,20 @@ def read_collection_properties_device(
     One entry per property, named by its path, with how many collections carry
     it, how many distinct values it has, and the values themselves when there
     are at most `max_values` of them. A group is not an entry: each property
-    inside it is, as `coolant.type`. Takes the same filters as
+    inside it is, as `nbi.beam.source`. Takes the same filters as
     `/devices/{device_name}/collections`, so `total` is the number of matching
     collections.
+
+    When a filter names a property inside a group, the summary describes only
+    the group entries that match it. Say a collection records two neutral beams,
+    SS at 1.6 MW and SW at 1.4 MW. Filtered by `property=nbi.beam.source:SW`,
+    the summary gives `nbi.beam.power` as 1.4, the SW beam's power, rather
+    than 1.4 to 1.6.
+
+    A property is normally left out when every collection in scope has the same
+    single value for it, because picking that value would not narrow anything.
+    `include_constant=true` lists it anyway. A filter panel uses this to see
+    which options are still possible once something has been picked.
     """
     return collection_service.available_properties(
         user=user,
@@ -350,6 +375,7 @@ def read_collection_properties_device(
         include_replaced=include_replaced,
         shot_id_prefix=shot_id_prefix,
         max_values=max_values,
+        include_constant=include_constant,
     )
 
 
@@ -430,7 +456,7 @@ def read_collections_shot(
     `property` filters on the Collection's own `scientific_metadata`. Use `elm`
     to match any collection that carries that property, or `elm:type-I` to match
     a particular value. A property inside a group is named by its path, the
-    names joined by `.`: `coolant.type:Water`. Repeat it with a *different* name
+    names joined by `.`: `nbi.beam.source:SW`. Repeat it with a *different* name
     to require both:
     `?property=disruption&property=elm` matches only collections carrying
     each.
