@@ -712,12 +712,9 @@ export function PropertyFilter({
     onRangesChange?.({});
   };
 
-  const section = (title: string, hint: string | null, rows: React.ReactNode) => (
+  const section = (title: string, rows: React.ReactNode) => (
     <div>
-      <p className={HEADING}>
-        {title}
-        {hint && <span className="ml-2 font-normal normal-case opacity-70">{hint}</span>}
-      </p>
+      <p className={HEADING}>{title}</p>
       <div className="mt-3.5 space-y-3">{rows}</div>
     </div>
   );
@@ -838,7 +835,6 @@ export function PropertyFilter({
       {annotations.length > 0 &&
         section(
           'Annotations',
-          'localised in the data',
           byGroup(annotations).map(([path, props]) =>
             path === '' ? (
               <Fragment key="top-level">{props.map(annotationRow)}</Fragment>
