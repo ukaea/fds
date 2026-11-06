@@ -6,7 +6,12 @@ import Link from 'next/link';
 import { Database, Server, Search } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
 import { Device, Dataset } from '@/lib/types';
-import { availableProperties, propertyQuery, withQuery } from '@/lib/properties';
+import {
+  availableProperties,
+  possibleFromRecords,
+  propertyQuery,
+  withQuery,
+} from '@/lib/properties';
 import { PropertyFilter } from '@/components/property-filter';
 import { DatasetCard } from '@/components/dataset-card';
 import { DatasetResults } from '@/components/dataset-results';
@@ -102,6 +107,7 @@ export default function DatasetsPage() {
         properties={availableProperties(allDatasets)}
         selected={propertyTokens}
         onChange={setPropertyTokens}
+        possible={possibleFromRecords(allDatasets, propertyTokens)}
       />
 
       {/* An annotation filter is a query, not a browse, so it answers with one

@@ -6,6 +6,7 @@ import { Cpu, Database, Globe, Layers } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
 import { AvailableProperties, Collection, Dataset, Device, Source } from '@/lib/types';
 import { propertyQuery, withQuery } from '@/lib/properties';
+import { usePossible } from '@/lib/use-possible';
 import { usePagedList } from '@/lib/use-paged-list';
 import { PropertyFilter } from '@/components/property-filter';
 import { SidePanelLayout } from '@/components/side-panel-layout';
@@ -186,6 +187,15 @@ export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
     withQuery(`${base}/collections/properties`, ...simulationFilters),
     fetcher
   );
+  const possible = usePossible(
+    (tokens) =>
+      withQuery(
+        `${base}/collections/properties`,
+        ...simulationFilters,
+        propertyQuery('property', tokens)
+      ),
+    propertyTokens
+  );
   const simulations = usePagedList<Collection>(
     withQuery(`${base}/collections`, ...simulationFilters, propertyQuery('property', propertyTokens)),
     PAGE_SIZE
@@ -253,6 +263,7 @@ export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
         properties={simulationProperties?.properties ?? []}
         selected={propertyTokens}
         onChange={setPropertyTokens}
+        possible={possible}
       />
     </>
   );

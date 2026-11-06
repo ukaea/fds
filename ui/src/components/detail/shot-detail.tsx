@@ -7,7 +7,12 @@ import { fetcher, API_BASE, FetchError } from '@/lib/api';
 import { Dataset, Collection, Shot } from '@/lib/types';
 import { useDeviceLabel } from '@/lib/use-device-label';
 import { Database, ChevronRight, Globe, Layers, MapPin, SlidersHorizontal, Highlighter } from 'lucide-react';
-import { availableProperties, propertyQuery, withQuery } from '@/lib/properties';
+import {
+  availableProperties,
+  possibleFromRecords,
+  propertyQuery,
+  withQuery,
+} from '@/lib/properties';
 import { dedupeById } from '@/components/resolved-ref';
 import { PropertyFilter } from '@/components/property-filter';
 import { JsonLdPanel } from '@/components/jsonld-panel';
@@ -211,6 +216,7 @@ export default function ShotDetail({
               properties={availableProperties(datasets)}
               selected={propertyTokens}
               onChange={setPropertyTokens}
+              possible={possibleFromRecords(datasets, propertyTokens)}
             />
 
             <JsonLdPanel url={`${API_BASE}/devices/${deviceName}/shots/${shotId}`} />
