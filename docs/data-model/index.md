@@ -49,17 +49,19 @@ The `scientific_metadata` field on Shot, Dataset and Collection holds a structur
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `name` | string | Yes | Property identifier (e.g. `plasma_current`) |
-| `value` | any | Yes | Any JSON-compatible type: number, string, boolean, or list |
+| `value` | string, number, boolean or null | Unless a group | A single value. An object is written as a [group](#groups), and several values as several properties with the same name |
 | `unit` | string | No | Unit for physical quantities (e.g. `MA`, `T`) |
 | `description` | string | No | Free-text explanation |
 | `extent` | object | No | Optional 1D range that localises the property on one named axis, making it an *annotation* (see below) |
+| `properties` | list | No | The properties inside a [group](#groups), in place of a `value` |
 
 ```json
 "scientific_metadata": [
   {"name": "plasma_current", "value": 0.8, "unit": "MA"},
   {"name": "toroidal_field", "value": -0.5, "unit": "T"},
   {"name": "confinement_mode", "value": "H-mode"},
-  {"name": "heating_schemes", "value": ["NBI", "ECRH"]},
+  {"name": "heating", "value": "NBI"},
+  {"name": "heating", "value": "ECRH"},
   {"name": "disrupted", "value": false}
 ]
 ```
@@ -90,6 +92,37 @@ A property may carry an optional `extent`: a 1D range on one named axis of the d
 Only 1D localisation can be stored in the metadata. Multi-dimensional regions (a mask, a 2D shape) and dense series (every ELM in a shot) are referenced as [annotation datasets](reference-datasets.md#annotation-datasets).
 
 A `time` extent projects to a [W3C Time](https://www.w3.org/TR/owl-time/) `time:Interval` in JSON-LD; an extent on any other axis projects to a numeric range.
+
+### Groups
+
+A property can hold a list of `properties` instead of a `value`. It is then a group, which keeps together what belongs together: here each beam's source stays with its power.
+
+```json
+"scientific_metadata": [
+  {"name": "nbi", "description": "Neutral beam heating, one group per beam line.",
+   "properties": [
+     {"name": "beam", "properties": [
+       {"name": "source", "value": "SS"},
+       {"name": "power", "value": 1.6, "unit": "MW"}]},
+     {"name": "beam", "properties": [
+       {"name": "source", "value": "SW"},
+       {"name": "power", "value": 1.4, "unit": "MW"}]}]}
+]
+```
+
+A group has a `name`, at least one property, and optionally a `description` and an `extent`. It has no `value`, `unit` or `kind`, since those describe a value. A group can hold groups, to any depth, and can repeat, as `beam` does.
+
+A group's `extent` covers everything inside it, and the properties inside a group have no extent of their own. An annotation with several attributes is one group that states once where it applies:
+
+```json
+{"name": "elm",
+ "extent": {"dimension": "time", "start": 0.20, "end": 0.45, "unit": "s"},
+ "properties": [
+   {"name": "count", "value": 14},
+   {"name": "frequency", "value": 56, "unit": "Hz"}]}
+```
+
+A property inside a group is named by its **path**: the names from the outermost group down, joined by `.`, as `nbi.beam.power` or `elm.frequency`. Names cannot contain `.`, or `:`, which separates a path from a value in a filter.
 
 ### Finding annotated records
 
@@ -135,6 +168,17 @@ Requiring *several values of one property at once*, such as a shot that was in L
 Only the first `:` separates name from value, so a value may itself contain one (`?property=mode:n=1:tearing` looks for the value `n=1:tearing`). A trailing separator with no value is rejected: omit it to filter on presence alone.
 
 Values are compared against the text you supply or its natural type, so `?property=disruption:true` matches a stored boolean `true` as well as the string `"true"`.
+
+Every form takes a path in place of a name, to reach a property inside a [group](#groups):
+
+```text
+GET /v1/devices/mast/shots?property=nbi.beam.source:SW
+GET /v1/devices/mast/shots?property_min=nbi.beam.power:1.5
+```
+
+A path names one place: `?property=source:SW` does not match `nbi.beam.source`. A group's own path, such as `?property=nbi`, matches the records that carry the group. With a value it matches nothing, because a group has none.
+
+When a group repeats, each condition is checked against every instance separately. `?property=nbi.beam.source:SW&property_min=nbi.beam.power:1.5` matches a shot whose SW beam ran at 1.4 MW and whose SS beam ran at 1.6 MW, because one beam meets each condition. Requiring both of the same beam is, like a shot in L-mode and later in H-mode, more than a query string can express.
 
 `property_min` and `property_max` bound a numeric value:
 
@@ -192,6 +236,8 @@ Each entry gives the number of shots carrying that name, the number of distinct 
 | `quantity` | a magnitude on a scale | range, with `property_min` / `property_max` |
 | `text` | prose written for a human | not filterable; never listed |
 
+A group is not an entry. Each property inside it is, named by its path, such as `nbi.beam.power`.
+
 A producer sets `kind` on the property to say what a value is. When they have not, FDS infers it from the values in scope: a handful of repeated values is a term whether or not those values are numbers, a number that differs on nearly every record is a quantity, and text that is near-unique per record is prose. [Scientific Metadata](scientific-metadata.md) covers what to declare and how each kind is presented.
 
 A `term`'s values appear only when there are at most `max_values` of them, 20 by default and at most 200. Above that, fetch them a page at a time:
@@ -200,7 +246,7 @@ A `term`'s values appear only when there are at most `max_values` of them, 20 by
 GET /v1/devices/mast/shots/properties/objective/values?q=conditioning
 ```
 
-That returns each matching value with the number of shots carrying it, most common first. `unit` appears only when every record agrees on one, and `min`/`max` are set for quantities. A property carrying an extent also reports the `dimension` it is localised on, which makes it an annotation: a claim about a region of the data rather than about the shot as a whole.
+That returns each matching value with the number of shots carrying it, most common first. The name in the URL is a path for a property inside a group: `/v1/devices/mast/shots/properties/nbi.beam.source/values`. `unit` appears only when every record agrees on one, and `min`/`max` are set for quantities. A property carrying an extent, or inside a group that carries one, also reports the `dimension` it is localised on, which makes it an annotation: a claim about a region of the data rather than about the shot as a whole.
 
 `total` counts the shots you may read, and the endpoint accepts the same `property` parameter as the listing, so a filtered scope can be counted exactly:
 

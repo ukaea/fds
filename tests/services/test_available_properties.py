@@ -802,3 +802,166 @@ def test_the_same_name_is_offered_when_only_some_records_carry_it(
     assert (
         prop(ShotService(session).available_properties(MAST), "flat_top").records == 15
     )
+
+
+def test_properties_inside_a_group_are_listed_by_path(
+    session: Session, admin_user: AuthenticatedUser
+) -> None:
+    """A group is not listed itself, only the properties inside it."""
+    seed(
+        session,
+        admin_user,
+        "RIG",
+        [
+            (
+                "1001",
+                {
+                    "access_level": AccessLevel.PUBLIC,
+                    "scientific_metadata": [
+                        ScientificProperty(
+                            name="coolant",
+                            properties=[
+                                ScientificProperty(name="type", value="water"),
+                                ScientificProperty(
+                                    name="thermocouple",
+                                    properties=[
+                                        ScientificProperty(name="id", value="T1"),
+                                        ScientificProperty(
+                                            name="max", value=850, unit="°C"
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        )
+                    ],
+                },
+            ),
+            (
+                "1002",
+                {
+                    "access_level": AccessLevel.PUBLIC,
+                    "scientific_metadata": [
+                        ScientificProperty(
+                            name="coolant",
+                            properties=[
+                                ScientificProperty(name="type", value="oil"),
+                                ScientificProperty(
+                                    name="thermocouple",
+                                    properties=[
+                                        ScientificProperty(name="id", value="T2"),
+                                        ScientificProperty(
+                                            name="max", value=400, unit="°C"
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        )
+                    ],
+                },
+            ),
+            ("1003", {"access_level": AccessLevel.PUBLIC}),
+        ],
+    )
+    summary = ShotService(session).available_properties("RIG")
+
+    assert names(summary) == {
+        "coolant.type",
+        "coolant.thermocouple.id",
+        "coolant.thermocouple.max",
+    }
+    assert prop(summary, "coolant.type").values == ["oil", "water"]
+    assert prop(summary, "coolant.thermocouple.max").records == 2
+    assert prop(summary, "coolant.thermocouple.max").unit == "°C"
+
+
+def test_a_property_inside_an_annotated_group_is_an_annotation(
+    session: Session, admin_user: AuthenticatedUser
+) -> None:
+    """The group's extent covers what is inside it, so its dimension is reported."""
+    seed(
+        session,
+        admin_user,
+        "RIG",
+        [
+            (
+                "1001",
+                {
+                    "access_level": AccessLevel.PUBLIC,
+                    "scientific_metadata": [
+                        ScientificProperty(
+                            name="elm",
+                            extent=Extent(
+                                dimension="time", start=0.20, end=0.45, unit="s"
+                            ),
+                            properties=[
+                                ScientificProperty(name="count", value=14),
+                                ScientificProperty(
+                                    name="frequency", value=56, unit="Hz"
+                                ),
+                            ],
+                        )
+                    ],
+                },
+            ),
+            ("1002", {"access_level": AccessLevel.PUBLIC}),
+        ],
+    )
+    summary = ShotService(session).available_properties("RIG")
+
+    assert prop(summary, "elm.count").dimension == "time"
+    assert prop(summary, "elm.frequency").dimension == "time"
+
+
+def test_values_are_listed_for_a_path(
+    session: Session, admin_user: AuthenticatedUser
+) -> None:
+    """`type` at the top level of 1003 is not `coolant.type`, so it is not counted."""
+    seed(
+        session,
+        admin_user,
+        "RIG",
+        [
+            (
+                "1001",
+                {
+                    "access_level": AccessLevel.PUBLIC,
+                    "scientific_metadata": [
+                        ScientificProperty(
+                            name="coolant",
+                            properties=[ScientificProperty(name="type", value="water")],
+                        )
+                    ],
+                },
+            ),
+            (
+                "1002",
+                {
+                    "access_level": AccessLevel.PUBLIC,
+                    "scientific_metadata": [
+                        ScientificProperty(
+                            name="coolant",
+                            properties=[ScientificProperty(name="type", value="oil")],
+                        )
+                    ],
+                },
+            ),
+            (
+                "1003",
+                {
+                    "access_level": AccessLevel.PUBLIC,
+                    "scientific_metadata": [
+                        ScientificProperty(name="type", value="oil")
+                    ],
+                },
+            ),
+        ],
+    )
+    service = ShotService(session)
+
+    values = service.property_values("RIG", "coolant.type")
+    assert values.distinct == 2
+    assert [(v.value, v.records) for v in values.values] == [
+        ("oil", 1),
+        ("water", 1),
+    ]
+    assert service.property_values("RIG", "coolant").values == []

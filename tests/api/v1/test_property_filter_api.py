@@ -16,6 +16,7 @@ from app.services.shot_service import ShotService
 
 MAST = "MAST"
 MAST_U = "MAST-U"
+RIG = "RIG"
 
 # Every test here reads from the seeded catalogue, so request it once for the
 # module rather than as an unused argument on each test.
@@ -30,7 +31,7 @@ def annotated_api_catalogue_fixture(
     shots = ShotService(session)
     datasets = DatasetService(session)
 
-    for device in (MAST, MAST_U):
+    for device in (MAST, MAST_U, RIG):
         devices.create(
             DeviceCreate(name=device, type="Tokamak", access_level=AccessLevel.PUBLIC),
             admin_user,
@@ -49,6 +50,26 @@ def annotated_api_catalogue_fixture(
         ),
         (MAST_U, "50000", [ScientificProperty(name="elm", value="type-I")]),
         (MAST_U, "50001", None),
+        (
+            RIG,
+            "1001",
+            [
+                ScientificProperty(
+                    name="coolant",
+                    properties=[
+                        ScientificProperty(name="type", value="water"),
+                        ScientificProperty(
+                            name="thermocouple",
+                            properties=[
+                                ScientificProperty(name="id", value="T1"),
+                                ScientificProperty(name="max", value=850, unit="°C"),
+                            ],
+                        ),
+                    ],
+                )
+            ],
+        ),
+        (RIG, "1002", [ScientificProperty(name="type", value="water")]),
     ]:
         shots.create(
             ShotCreate(
@@ -388,3 +409,46 @@ def test_properties_count_the_shots_an_id_prefix_matches(test_client: TestClient
 
     assert resp.status_code == 200
     assert resp.json()["total"] == 1
+
+
+def test_shots_filtered_by_a_path(test_client: TestClient):
+    resp = test_client.get(
+        f"/v1/devices/{RIG}/shots",
+        params={"property": "coolant.type:water"},
+    )
+
+    assert resp.status_code == 200
+    assert [s["id"] for s in resp.json()] == ["1001"]
+
+
+def test_shots_filtered_by_a_range_on_a_path(test_client: TestClient):
+    resp = test_client.get(
+        f"/v1/devices/{RIG}/shots",
+        params={"property_min": "coolant.thermocouple.max:800"},
+    )
+
+    assert [s["id"] for s in resp.json()] == ["1001"]
+
+
+def test_properties_list_a_group_by_the_paths_inside_it(test_client: TestClient):
+    body = test_client.get(f"/v1/devices/{RIG}/shots/properties").json()
+
+    assert {f["name"] for f in body["properties"]} == {
+        "coolant.type",
+        "coolant.thermocouple.id",
+        "coolant.thermocouple.max",
+        "type",
+    }
+
+
+def test_values_of_a_path(test_client: TestClient):
+    resp = test_client.get(
+        f"/v1/devices/{RIG}/shots/properties/coolant.thermocouple.max/values"
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "name": "coolant.thermocouple.max",
+        "distinct": 1,
+        "values": [{"value": "850", "records": 1}],
+    }

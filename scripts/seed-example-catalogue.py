@@ -131,6 +131,29 @@ def register_devices_and_shots(client: httpx.Client, base_url: str) -> None:
             "the elm_times annotation dataset.",
             "extent": {"dimension": "time", "start": 0.205, "end": 0.45, "unit": "s"},
         },
+        # A group: each beam's source and power stay together, which two flat
+        # lists of sources and powers could not say. Filtered by path, as
+        # ?property=nbi.beam.source:SW.
+        {
+            "name": "nbi",
+            "description": "Neutral beam heating, one group per beam line.",
+            "properties": [
+                {
+                    "name": "beam",
+                    "properties": [
+                        {"name": "source", "value": "SS"},
+                        {"name": "power", "value": 1.6, "unit": "MW"},
+                    ],
+                },
+                {
+                    "name": "beam",
+                    "properties": [
+                        {"name": "source", "value": "SW"},
+                        {"name": "power", "value": 1.4, "unit": "MW"},
+                    ],
+                },
+            ],
+        },
     ]
     # The two MAST-U shots are a matched pair for catalogue filtering: 50000 ran up in
     # L-mode, transitioned to H-mode and ELMed; 50001 never left L-mode, so has no ELMs

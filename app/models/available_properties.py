@@ -4,7 +4,11 @@ from app.models.scientific_metadata import MetadataKind
 
 
 class AvailableProperty(SQLModel):
-    """One scientific-metadata name in scope, and what can be said about it.
+    """One scientific-metadata property in scope, and what can be said about it.
+
+    ``name`` is the property's path: its own name after the names of the groups
+    it sits in, joined by ``.``, as ``coolant.type``. A group is not listed
+    itself, only the properties inside it.
 
     ``kind`` is the provider's declaration where there is one and FDS's
     inference otherwise. It says what the values *are*, and the client chooses a
@@ -19,7 +23,7 @@ class AvailableProperty(SQLModel):
     a name recorded in both A and kA has no single unit. ``description`` follows
     the same rule, so the meaning of a name can sit beside its filter.
     ``min``/``max`` are set for quantities. ``dimension`` is set when the
-    property carries an extent,
+    property carries an extent, or sits in a group that does,
     marking it an annotation: a statement about a region of the data rather than
     about the record as a whole.
     """
@@ -44,7 +48,7 @@ class PropertyValue(SQLModel):
 
 
 class PropertyValues(SQLModel):
-    """A page of a name's values, for a vocabulary too large to enumerate."""
+    """A page of one property's values, for a vocabulary too large to enumerate."""
 
     name: str
     distinct: int
