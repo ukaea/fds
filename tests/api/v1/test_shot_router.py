@@ -67,6 +67,76 @@ def test_shot_at_with_an_offset_is_returned_in_utc(
     assert response.json()["shot_at"] == "2012-07-03T09:15:00Z"
 
 
+def test_create_shot_with_grouped_metadata(
+    test_client: TestClient,
+    session: Session,
+    admin_user_token: dict,
+):
+    DeviceService(session).create(DeviceCreate(name="RIG"), user=admin_user)
+    session.commit()
+
+    coolant = {
+        "name": "coolant",
+        "properties": [
+            {"name": "type", "value": "water"},
+            {
+                "name": "thermocouple",
+                "properties": [
+                    {"name": "id", "value": "T1"},
+                    {"name": "max", "value": 850, "unit": "°C"},
+                ],
+            },
+        ],
+    }
+    response = test_client.post(
+        "/v1/devices/RIG/shots/",
+        headers=admin_user_token,
+        json={"id": "1001", "scientific_metadata": [coolant]},
+    )
+    assert response.status_code == 201
+
+    shot = test_client.get("/v1/devices/RIG/shots/1001").json()
+    assert shot["scientific_metadata"] == [coolant]
+
+
+def test_create_shot_rejects_a_property_name_containing_a_dot(
+    test_client: TestClient,
+    session: Session,
+    admin_user_token: dict,
+):
+    DeviceService(session).create(DeviceCreate(name="RIG"), user=admin_user)
+    session.commit()
+
+    response = test_client.post(
+        "/v1/devices/RIG/shots/",
+        headers=admin_user_token,
+        json={
+            "id": "1001",
+            "scientific_metadata": [{"name": "coolant.type", "value": "water"}],
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_create_shot_rejects_an_object_value(
+    test_client: TestClient,
+    session: Session,
+    admin_user_token: dict,
+):
+    DeviceService(session).create(DeviceCreate(name="RIG"), user=admin_user)
+    session.commit()
+
+    response = test_client.post(
+        "/v1/devices/RIG/shots/",
+        headers=admin_user_token,
+        json={
+            "id": "1001",
+            "scientific_metadata": [{"name": "coolant", "value": {"type": "water"}}],
+        },
+    )
+    assert response.status_code == 422
+
+
 def test_create_shot_conflict(
     test_client: TestClient,
     session: Session,

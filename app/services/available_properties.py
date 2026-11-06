@@ -18,7 +18,7 @@ from sqlmodel import (
 from app.models.available_properties import AvailableProperties, AvailableProperty
 from app.models.scientific_metadata import MetadataKind
 from app.services.exceptions import FDSValidationError
-from app.services.filters import entries_of
+from app.services.filters import property_entries
 
 # A name with thousands of values is not something to pick from a list, so
 # enumeration is capped rather than paged: past this many distinct values a
@@ -91,15 +91,17 @@ def available_properties(
 
     total = session.exec(select(func.count()).select_from(model).where(*where)).one()
 
-    entries = entries_of(column)
-    name = entries.c.value.op("->>")("name")
-    value = entries.c.value.op("->>")("value")
-    unit = entries.c.value.op("->>")("unit")
-    description = entries.c.value.op("->>")("description")
-    declared = entries.c.value.op("->>")("kind")
-    # -> then ->> rather than the #>> path operator, which wants a text[] on
-    # the right and so cannot take a bound parameter.
-    dimension = entries.c.value.op("->")("extent").op("->>")("dimension")
+    # Every property at every depth, each under its full path. A group is only
+    # the start of its children's paths, so it is not summarised itself.
+    entries = property_entries(column)
+    name = entries.c.path
+    value = entries.c.entry.op("->>")("value")
+    unit = entries.c.entry.op("->>")("unit")
+    description = entries.c.entry.op("->>")("description")
+    declared = entries.c.entry.op("->>")("kind")
+    # The extent of the group a property sits in, when it has none of its own,
+    # so a property inside an annotated group lists among the annotations.
+    dimension = entries.c.extent.op("->>")("dimension")
     is_numeric = value.op("~")(_NUMERIC_TEXT)
     numeric = cast(value, Numeric)
 
@@ -145,7 +147,7 @@ def available_properties(
         )
         .select_from(model)
         .join(entries, onclause=true())
-        .where(*where)
+        .where(*where, ~entries.c.is_group)
         .group_by(name)
     ).all()
 
@@ -220,9 +222,9 @@ def _attach_values(
     if not enumerable or max_values == 0:
         return
 
-    pairs = entries_of(column)
-    pair_name = pairs.c.value.op("->>")("name")
-    pair_value = pairs.c.value.op("->>")("value")
+    pairs = property_entries(column)
+    pair_name = pairs.c.path
+    pair_value = pairs.c.entry.op("->>")("value")
     found: dict[str, list[str]] = {name: [] for name in enumerable}
     for row_name, row_value in session.exec(
         select(pair_name.label("name"), pair_value.label("value"))

@@ -15,6 +15,8 @@ Shots, Datasets and Collections all carry `scientific_metadata`: a list of claim
 
 A property with an `extent` is an **annotation**: the same claim, localised on one named axis of the data. Everything else describes the record as a whole.
 
+A property can also be a **group** that holds other properties instead of a value, such as one group per beam line. A property inside a group is named by its path, as `nbi.beam.power`, and is filtered and summarised under that path. [Groups](index.md#groups) describes them.
+
 ## Declaring a kind
 
 `kind` says what a value *is*. It is optional, and it is the single most useful thing you can add, because it decides how the property can be filtered and how an interface presents it.

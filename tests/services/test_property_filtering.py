@@ -14,6 +14,7 @@ from app.services.shot_service import ShotService
 
 MAST = "MAST"
 MAST_U = "MAST-U"
+RIG = "RIG"
 
 # Every test here reads from the seeded catalogue, so request it once for the
 # module rather than as an unused argument on each test.
@@ -44,6 +45,42 @@ H_MODE_LATE = ScientificProperty(
     value="H-mode",
     extent=Extent(dimension="time", start=0.18, end=0.40, unit="s"),
 )
+# A coolant loop read by two thermocouples: a group can repeat inside a group.
+COOLANT_HOT = ScientificProperty(
+    name="coolant",
+    properties=[
+        ScientificProperty(name="type", value="water"),
+        ScientificProperty(
+            name="thermocouple",
+            properties=[
+                ScientificProperty(name="id", value="T1"),
+                ScientificProperty(name="max", value=850, unit="°C"),
+            ],
+        ),
+        ScientificProperty(
+            name="thermocouple",
+            properties=[
+                ScientificProperty(name="id", value="T2"),
+                ScientificProperty(name="max", value=400, unit="°C"),
+            ],
+        ),
+    ],
+)
+COOLANT_COOL = ScientificProperty(
+    name="coolant",
+    properties=[
+        ScientificProperty(name="type", value="water"),
+        ScientificProperty(
+            name="thermocouple",
+            properties=[
+                ScientificProperty(name="id", value="T1"),
+                ScientificProperty(name="max", value=350, unit="°C"),
+            ],
+        ),
+    ],
+)
+# The same name as the property inside `coolant`, but at the top level.
+TOP_LEVEL_TYPE = ScientificProperty(name="type", value="water")
 
 
 @pytest.fixture(name="annotated_catalogue")
@@ -55,7 +92,7 @@ def annotated_catalogue_fixture(
     shots = ShotService(session)
     datasets = DatasetService(session)
 
-    for device in (MAST, MAST_U):
+    for device in (MAST, MAST_U, RIG):
         devices.create(
             DeviceCreate(name=device, type="Tokamak", access_level=AccessLevel.PUBLIC),
             admin_user,
@@ -68,6 +105,9 @@ def annotated_catalogue_fixture(
         (MAST, "30423", [L_MODE_EARLY, H_MODE_LATE]),
         (MAST_U, "50000", [ELM]),
         (MAST_U, "50001", None),
+        (RIG, "1001", [COOLANT_HOT]),
+        (RIG, "1002", [COOLANT_COOL]),
+        (RIG, "1003", [TOP_LEVEL_TYPE]),
     ]:
         shots.create(
             ShotCreate(
@@ -92,6 +132,19 @@ def annotated_catalogue_fixture(
                 ),
                 admin_user,
             )
+
+    for shot_id in ("1001", "1003"):
+        datasets.create(
+            DatasetCreate(
+                name="thermal",
+                level=1,
+                device_name=RIG,
+                shot_id=shot_id,
+                access_level=AccessLevel.PUBLIC,
+                url=f"s3://data/{shot_id}/thermal.nc",
+            ),
+            admin_user,
+        )
 
     # A device-level dataset with no shot: must never match a shot_annotations filter.
     datasets.create(
@@ -263,3 +316,67 @@ def test_dataset_own_annotations_are_independent_of_shot_annotations(
     # The dataset carries `ufo`; its shot (50001) carries no annotations at all.
     assert [d.name for d in datasets.get_multi(properties=["ufo"])] == ["camera"]
     assert datasets.get_multi(properties=["ufo"], shot_properties=["elm"]) == []
+
+
+def test_a_path_matches_a_property_inside_a_group(session: Session):
+    shots = ShotService(session)
+    assert shot_ids(shots, RIG, ["coolant.type:water"]) == [
+        "1001",
+        "1002",
+    ]
+
+
+def test_a_path_names_one_place_in_the_tree(session: Session):
+    """`type` at the top level and `type` inside `coolant` are different properties."""
+    shots = ShotService(session)
+    assert shot_ids(shots, RIG, ["type:water"]) == ["1003"]
+    assert shot_ids(shots, RIG, ["thermocouple"]) == []
+
+
+def test_a_path_reaches_a_group_inside_a_group(session: Session):
+    shots = ShotService(session)
+    assert shot_ids(shots, RIG, ["coolant.thermocouple.id:T2"]) == ["1001"]
+
+
+def test_a_group_path_matches_records_carrying_the_group(session: Session):
+    shots = ShotService(session)
+    assert shot_ids(shots, RIG, ["coolant"]) == ["1001", "1002"]
+    assert shot_ids(shots, RIG, ["coolant.thermocouple"]) == ["1001", "1002"]
+
+
+def test_a_value_on_a_group_path_matches_nothing(session: Session):
+    """A group has no value of its own to match."""
+    shots = ShotService(session)
+    assert shot_ids(shots, RIG, ["coolant:water"]) == []
+
+
+def test_a_range_bound_on_a_path(session: Session):
+    shots = ShotService(session)
+    hot = shots.get_multi_by_device_name(RIG, minimums=["coolant.thermocouple.max:800"])
+    cool = shots.get_multi_by_device_name(
+        RIG, maximums=["coolant.thermocouple.max:380"]
+    )
+    assert [s.id for s in hot] == ["1001"]
+    assert [s.id for s in cool] == ["1002"]
+
+
+def test_each_condition_matches_any_instance_of_a_repeated_group(session: Session):
+    """On 1001, T1 reached 850 and T2 only 400.
+
+    Asking for T2 with a maximum of at least 800 still returns 1001, because
+    each condition is met by one thermocouple or the other. Requiring both of
+    the same thermocouple belongs with the structured search.
+    """
+    shots = ShotService(session).get_multi_by_device_name(
+        RIG,
+        properties=["coolant.thermocouple.id:T2"],
+        minimums=["coolant.thermocouple.max:800"],
+    )
+    assert [s.id for s in shots] == ["1001"]
+
+
+def test_shot_property_follows_a_path(session: Session):
+    results = DatasetService(session).get_datasets_for_device(
+        RIG, shot_properties=["coolant.type:water"]
+    )
+    assert [(d.name, d.shot_id) for d in results] == [("thermal", "1001")]

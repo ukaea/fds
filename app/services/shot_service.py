@@ -33,9 +33,9 @@ from app.services.exceptions import (
     ResourceNotFoundError,
 )
 from app.services.filters import (
-    entries_of,
     property_bound_clauses,
     property_clauses,
+    property_entries,
 )
 from app.services.jsonld import map_shot_to_dcat
 from app.services.reference_service import REFERENCE_KINDS, ReferenceService
@@ -278,7 +278,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         query: str | None = None,
         limit: int = 50,
     ) -> PropertyValues:
-        """The values one name takes, with counts, for a vocabulary too big to list.
+        """The values at one path, with counts, for a vocabulary too big to list.
 
         Searched here rather than in the client: a device's `objective` runs to
         hundreds of values several hundred characters long, and shipping all of
@@ -288,10 +288,9 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
             raise FDSValidationError(f"limit must be between 1 and 500, got {limit}.")
 
         where = self._readable_scope(device_name, user)
-        entries = entries_of(col(Shot.scientific_metadata))
-        entry_name = entries.c.value.op("->>")("name")
-        entry_value = entries.c.value.op("->>")("value")
-        conditions = [*where, entry_name == name, entry_value.is_not(None)]
+        entries = property_entries(col(Shot.scientific_metadata), name)
+        entry_value = entries.c.entry.op("->>")("value")
+        conditions = [*where, entry_value.is_not(None)]
         if query:
             conditions.append(entry_value.ilike(f"%{query}%"))
 

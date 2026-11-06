@@ -95,7 +95,9 @@ def read_datasets_global(
 
     `property` filters on the dataset's own `scientific_metadata`. Use `elm` to
     match any dataset that carries that property, or `elm:type-I` to match a
-    particular value. Repeat the parameter to require all of them.
+    particular value. A property inside a group is named by its path, the names
+    joined by `.`: `coolant.type:Water`. Repeat the parameter to require all of
+    them.
 
     `shot_property` takes the same forms but applies them to the parent shot, so
     a dataset with no shot never matches it.
@@ -224,7 +226,9 @@ def read_datasets_shot(
 
     `property` filters on each dataset's own `scientific_metadata`. Use `ufo` to
     match any dataset that carries that property, or `ufo:true` to match a
-    particular value. Repeat the parameter to require all of them.
+    particular value. A property inside a group is named by its path, the names
+    joined by `.`: `coolant.type:Water`. Repeat the parameter to require all of
+    them.
 
     `activity_type`, `source` and `activity_id` filter on the Activity that
     generated each dataset: `?activity_id=6` lists what Activity 6 generated, and
@@ -430,7 +434,9 @@ def read_datasets_device(
 
     `property` filters on each dataset's own `scientific_metadata`. Use `elm` to
     match any dataset that carries that property, or `elm:type-I` to match a
-    particular value. Repeat the parameter to require all of them.
+    particular value. A property inside a group is named by its path, the names
+    joined by `.`: `coolant.type:Water`. Repeat the parameter to require all of
+    them.
 
     `shot_property` takes the same forms but applies them to the parent shot,
     which is what spans both levels: `?name=equilibrium&shot_property=elm` finds

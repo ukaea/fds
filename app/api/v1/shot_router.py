@@ -71,9 +71,10 @@ def read_shots(
 
     `property` filters on the shot's `scientific_metadata`. Use `disruption`
     to match any shot carrying that name, or `confinement_mode:H-mode` to match
-    a value. Repeat the parameter to give more than one: two values of the same
-    property match a shot with either, while values of different properties must
-    all match.
+    a value. A property inside a group is named by its path, the names joined by
+    `.`: `coolant.type:Water`. Repeat the parameter to give more than one: two
+    values of the same property match a shot with either, while values of
+    different properties must all match.
 
     `property_min` and `property_max` bound a numeric value, as
     `plasma_current_max:700000`. Values that are not numbers are skipped rather
@@ -123,10 +124,12 @@ def read_shot_properties(
     """
     The properties this device's shots carry, for building a filter.
 
-    One entry per property name, with how many shots carry it, how many
-    distinct values it has, and the values themselves when there are at most
-    `max_values` of them. A missing `values` alongside a large `distinct` marks
-    a measurement or free text: filter on the name's presence, not on a value.
+    One entry per property, named by its path, with how many shots carry it,
+    how many distinct values it has, and the values themselves when there are
+    at most `max_values` of them. A group is not an entry: each property inside
+    it is, as `coolant.type`. A missing `values` alongside a large `distinct`
+    marks a measurement or free text: filter on the property's presence, not on
+    a value.
 
     `property` takes the same forms as the listing and narrows the scope, so
     `total` is the number of matching shots. So does `id_prefix`.
@@ -159,10 +162,12 @@ def read_shot_property_values(
     limit: int = 50,
 ) -> PropertyValues:
     """
-    The values one scientific-metadata name takes, with a count per value.
+    The values one scientific-metadata property takes, with a count per value.
 
-    For a vocabulary too large for the properties listing to enumerate. `q` matches
-    values containing it, case-insensitively, and the most common come first.
+    `name` is the property's path, so a property inside a group is
+    `coolant.type`. For a vocabulary too large for the properties listing to
+    enumerate. `q` matches values containing it, case-insensitively, and the
+    most common come first.
     """
     return shot_service.property_values(
         device_name=device_name,

@@ -14,24 +14,28 @@ from sqlmodel import (
     literal_column,
     or_,
     select,
+    true,
 )
 
 from app.models.activity import Activity, ActivityType
 from app.models.policy import AccessLevel
+from app.models.scientific_metadata import PATH_SEPARATOR, PROPERTY_SEPARATOR
 from app.models.scope import CatalogueScope, DeviceScope
 from app.models.source import Source
 from app.services.exceptions import FDSValidationError
 
-PROPERTY_SEPARATOR = ":"
-
 
 def parse_property(raw: str) -> tuple[str, str | None]:
-    """Split an ``property`` query parameter into a name and optional value.
+    """Split a ``property`` query parameter into a path and optional value.
 
-    Splits on the *first* separator only, so a value may itself contain one
-    (``mode:n=1:tearing`` is the value ``n=1:tearing``).
+    The path names a property, or a property inside a group with the names
+    joined by ``.``: ``coolant.type``. Splits on the *first* separator only, so
+    a value may itself contain one (``mode:n=1:tearing`` is the value
+    ``n=1:tearing``). A name cannot contain one, so the first always ends the
+    path.
 
-    Returns ``(name, None)`` for a presence filter, ``(name, value)`` for equality.
+    Returns ``(path, None)`` for a presence filter, ``(path, value)`` for
+    equality.
     """
     name, separator, value = raw.partition(PROPERTY_SEPARATOR)
 
@@ -80,46 +84,124 @@ def _value_candidates(value: str) -> list[str]:
     return list(dict.fromkeys(candidates))
 
 
-def entries_of(column: Any) -> Any:
-    """The JSON array in ``column`` as a set of entries, one row per property.
+def _array_or_empty(value: Any) -> Any:
+    """``value`` when it is a JSON array, and an empty array otherwise.
 
-    A NULL column, a JSON ``null`` or a scalar yields no entries rather than an
-    error, because ``json_array_elements`` rejects anything that is not an
-    array. An unannotated record therefore matches nothing instead of raising.
+    ``json_array_elements`` rejects anything that is not an array. A record
+    with no metadata holds SQL NULL or a JSON ``null``, and a property that is
+    not a group holds no ``properties``, so each yields no rows instead of
+    raising.
+    """
+    return case(
+        (func.json_typeof(value) == "array", value),
+        else_=literal_column("'[]'::json"),
+    )
+
+
+def _properties_in(array: Any) -> Any:
+    """The properties in a JSON array, one row each, in a column named ``value``.
 
     Built fresh on each call: two ``json_array_elements`` in one statement would
     otherwise alias into each other.
     """
-    array_only = case(
-        (func.json_typeof(column) == "array", column),
-        else_=literal_column("'[]'::json"),
+    return func.json_array_elements(_array_or_empty(array)).table_valued("value")
+
+
+def _is_group(entry: Any) -> ColumnElement[bool]:
+    """Whether a property holds a list of properties rather than a value."""
+    return func.json_typeof(entry.op("->")("properties")).is_not_distinct_from("array")
+
+
+def property_entries(column: Any, path: str | None = None) -> Any:
+    """The properties in a ``scientific_metadata`` column, one row each.
+
+    Each row has the property's ``path`` (its name, after the names of the
+    groups it sits in, joined by ``.``), the property itself as JSON in
+    ``entry``, the ``extent`` that localises it, and whether it ``is_group``.
+    A property inside a group has no extent of its own, so it carries the
+    extent of the outermost group it sits in.
+
+    With no ``path``, every property at every depth is returned, for the
+    properties summary. With a ``path``, only the properties at that path are,
+    found by following its names down through each group's ``properties``.
+    Following one path costs about what reading a flat list does, and walking
+    every depth to find it costs several times more, so a filter, which names
+    one path, follows it. Both read a group's children with ``_properties_in``,
+    so they cannot disagree about where the children are.
+
+    Returned as a lateral subquery, to join to the table ``column`` belongs to
+    or to select from inside an EXISTS.
+    """
+    if path is not None:
+        return _entries_at(column, path)
+
+    top = _properties_in(column)
+    walk = select(
+        top.c.value.op("->>")("name").label("path"),
+        top.c.value.label("entry"),
+        top.c.value.op("->")("extent").label("extent"),
+    ).cte(recursive=True, nesting=True)
+    children = _properties_in(walk.c.entry.op("->")("properties"))
+    walk = walk.union_all(
+        select(
+            func.concat(
+                walk.c.path, PATH_SEPARATOR, children.c.value.op("->>")("name")
+            ),
+            children.c.value,
+            walk.c.extent,
+        )
+        .select_from(walk)
+        .join(children, true())
     )
-    return func.json_array_elements(array_only).table_valued("value")
+    return select(
+        walk.c.path,
+        walk.c.entry,
+        walk.c.extent,
+        _is_group(walk.c.entry).label("is_group"),
+    ).lateral()
+
+
+def _entries_at(column: Any, path: str) -> Any:
+    """The properties at ``path``, in the shape ``property_entries`` returns."""
+    names = path.split(PATH_SEPARATOR)
+    levels = [_properties_in(column)]
+    for _ in names[1:]:
+        levels.append(_properties_in(levels[-1].c.value.op("->")("properties")))
+    top, bottom = levels[0], levels[-1]
+
+    statement = select(
+        literal(path).label("path"),
+        bottom.c.value.label("entry"),
+        top.c.value.op("->")("extent").label("extent"),
+        _is_group(bottom.c.value).label("is_group"),
+    ).select_from(top)
+    for level in levels[1:]:
+        statement = statement.join(level, true())
+    return statement.where(
+        *(
+            level.c.value.op("->>")("name") == name
+            for level, name in zip(levels, names, strict=True)
+        )
+    ).lateral()
 
 
 def property_clause(
-    column: Any, name: str, value: str | None = None
+    column: Any, path: str, value: str | None = None
 ) -> ColumnElement[bool]:
-    """Build an EXISTS over the JSON array in ``column`` matching one property.
+    """Build an EXISTS matching records that carry a property at ``path``.
 
-    ``column`` is a ``scientific_metadata`` column on Shot or Dataset. A NULL
-    column yields no rows rather than an error, so unannotated records simply do not
-    match.
+    ``column`` is a ``scientific_metadata`` column. Without a ``value``, any
+    property at the path matches, a group included. With one, the property's
+    value has to match, so a group, which has no value, never does.
 
-    Each call builds its own ``json_array_elements`` so that several clauses can be
-    ANDed together in one query without aliasing into each other.
-
-    An unannotated record holds SQL NULL or a JSON ``null``, and
-    ``json_array_elements`` rejects anything that is not an array, so the column is
-    replaced by an empty array unless it really is one. Such a record then matches
-    nothing instead of raising.
+    Each call builds its own subquery, so several clauses can be ANDed together
+    in one query without aliasing into each other.
     """
-    entries = entries_of(column)
-    entry = entries.c.value
-    conditions = [entry.op("->>")("name") == name]
+    entries = property_entries(column, path)
+    conditions: list[ColumnElement[bool]] = []
 
     if value is not None:
-        extracted = entry.op("->>")("value")
+        extracted = entries.c.entry.op("->>")("value")
         conditions.append(or_(*(extracted == c for c in _value_candidates(value))))
 
     return sa_select(1).select_from(entries).where(*conditions).exists()
@@ -130,7 +212,7 @@ def property_clauses(
 ) -> list[ColumnElement[bool]]:
     """Parse and build the clauses for a set of ``property`` parameters.
 
-    Values of the **same** name OR together; **different** names AND. So
+    Values of the **same** path OR together; **different** paths AND. So
     ``?property=heating:SS&property=heating:SW&property=pellets:true``
     asks for (SS or SW) and pellets, which is what selecting two chips in one
     prop and one in another means.
@@ -140,21 +222,26 @@ def property_clauses(
     simultaneously is a different question, and a richer one; it belongs with
     the extent predicates in a structured search rather than in a query string.
 
-    A bare name still means presence, and mixing presence with values under one
-    name ORs them too: a record carrying the name at all satisfies the presence
+    A bare path still means presence, and mixing presence with values under one
+    path ORs them too: a record carrying the path at all satisfies the presence
     term.
+
+    In a group that repeats, each clause is matched against every instance on
+    its own. ``coolant.thermocouple.id:T1`` and
+    ``coolant.thermocouple.max:850`` match a shot where one thermocouple is
+    T1 and another reached 850.
     """
     if not properties:
         return []
 
-    by_name: dict[str, list[str | None]] = {}
+    by_path: dict[str, list[str | None]] = {}
     for prop in properties:
-        name, value = parse_property(prop)
-        by_name.setdefault(name, []).append(value)
+        path, value = parse_property(prop)
+        by_path.setdefault(path, []).append(value)
 
     clauses: list[ColumnElement[bool]] = []
-    for name, values in by_name.items():
-        alternatives = [property_clause(column, name, value) for value in values]
+    for path, values in by_path.items():
+        alternatives = [property_clause(column, path, value) for value in values]
         clauses.append(
             alternatives[0] if len(alternatives) == 1 else or_(*alternatives)
         )
@@ -162,18 +249,18 @@ def property_clauses(
 
 
 def parse_property_bound(raw: str) -> tuple[str, float]:
-    """Split an ``property_min``/``property_max`` parameter into name and number.
+    """Split a ``property_min``/``property_max`` parameter into path and number.
 
-    Same ``name:value`` shape as ``property``, but the value has to be a
+    Same ``path:value`` shape as ``property``, but the value has to be a
     number: a range over a value that is not a magnitude means nothing.
     """
-    name, separator, value = raw.partition(PROPERTY_SEPARATOR)
-    if not name or not separator or not value:
+    path, separator, value = raw.partition(PROPERTY_SEPARATOR)
+    if not path or not separator or not value:
         raise FDSValidationError(
             f"Invalid range filter '{raw}': expected 'name{PROPERTY_SEPARATOR}number'."
         )
     try:
-        return name, float(value)
+        return path, float(value)
     except ValueError:
         raise FDSValidationError(
             f"Invalid range filter '{raw}': '{value}' is not a number."
@@ -181,21 +268,18 @@ def parse_property_bound(raw: str) -> tuple[str, float]:
 
 
 def property_bound_clause(
-    column: Any, name: str, bound: float, *, lower: bool
+    column: Any, path: str, bound: float, *, lower: bool
 ) -> ColumnElement[bool]:
-    """Match records whose numeric value for ``name`` is at or beyond ``bound``.
+    """Match records whose numeric value at ``path`` is at or beyond ``bound``.
 
-    ``scientific_metadata`` values are arbitrary JSON, so a name may hold a
-    number on one record and a string on another. The comparison is guarded to
-    numeric-looking values, because casting a stray string to numeric aborts the
-    whole query rather than skipping the row.
+    A path may hold a number on one record and a string on another. The
+    comparison is guarded to numeric-looking values, because casting a stray
+    string to numeric aborts the whole query rather than skipping the row.
     """
-    entries = entries_of(column)
-    entry = entries.c.value
-    extracted = entry.op("->>")("value")
+    entries = property_entries(column, path)
+    extracted = entries.c.entry.op("->>")("value")
     numeric = cast(extracted, Numeric)
     conditions: list[ColumnElement[bool]] = [
-        entry.op("->>")("name") == name,
         extracted.op("~")(r"^-?\d+(\.\d+)?([eE][-+]?\d+)?$"),
         numeric >= bound if lower else numeric <= bound,
     ]
