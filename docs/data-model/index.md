@@ -124,6 +124,8 @@ A group's `extent` covers everything inside it, and the properties inside a grou
 
 A property inside a group is named by its **path**: the names from the outermost group down, joined by `.`, as `nbi.beam.power` or `elm.frequency`. Names cannot contain `.`, or `:`, which separates a path from a value in a filter.
 
+In JSON-LD a group is a `schema:PropertyValue` whose `schema:value` holds the properties inside it. See [Shot as `dcat:Catalog`](../dcat-jsonld.md#shot-as-dcatcatalog).
+
 ### Finding annotated records
 
 Shot, Dataset and Collection list endpoints accept a `property` parameter that filters on `scientific_metadata`, in one of two forms:

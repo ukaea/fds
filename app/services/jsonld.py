@@ -342,17 +342,30 @@ def _generated_at(activity: "Activity") -> dict[str, str] | None:
 
 
 def _map_scientific_metadata_to_jsonld(metadata: list[Any]) -> list[dict[str, Any]]:
+    """Each property as a ``schema:PropertyValue``, nesting a group's properties.
+
+    A group publishes its name, description and extent as a property with a
+    value does, and the properties inside it as ``schema:PropertyValue`` nodes
+    under ``schema:value``, whose range includes ``schema:StructuredValue``. A
+    repeated group stays one node per instance, so what each holds stays
+    together. The path FDS filters by is not published in
+    ``schema:propertyID``, which names the vocabulary term a property stands
+    for.
+    """
     result = []
     for prop in metadata:
         name = prop["name"] if isinstance(prop, dict) else prop.name
-        value = prop["value"] if isinstance(prop, dict) else prop.value
+        value = prop.get("value") if isinstance(prop, dict) else prop.value
         unit = prop.get("unit") if isinstance(prop, dict) else prop.unit
         desc = prop.get("description") if isinstance(prop, dict) else prop.description
         extent = prop.get("extent") if isinstance(prop, dict) else prop.extent
+        inside = prop.get("properties") if isinstance(prop, dict) else prop.properties
         node: dict[str, Any] = {
             "@type": "schema:PropertyValue",
             "schema:name": name,
-            "schema:value": value,
+            "schema:value": (
+                value if inside is None else _map_scientific_metadata_to_jsonld(inside)
+            ),
         }
         if unit is not None:
             node["schema:unitText"] = unit
