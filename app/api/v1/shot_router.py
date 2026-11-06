@@ -72,7 +72,7 @@ def read_shots(
     `property` filters on the shot's `scientific_metadata`. Use `disruption`
     to match any shot carrying that name, or `confinement_mode:H-mode` to match
     a value. A property inside a group is named by its path, the names joined by
-    `.`: `coolant.type:Water`. Repeat the parameter to give more than one: two
+    `.`: `nbi.beam.source:SW`. Repeat the parameter to give more than one: two
     values of the same property match a shot with either, while values of
     different properties must all match.
 
@@ -120,6 +120,7 @@ def read_shot_properties(
     property_max: Annotated[list[str] | None, Query()] = None,
     max_values: int = DEFAULT_MAX_VALUES,
     id_prefix: str | None = None,
+    include_constant: bool = False,
 ) -> AvailableProperties:
     """
     The properties this device's shots carry, for building a filter.
@@ -127,12 +128,23 @@ def read_shot_properties(
     One entry per property, named by its path, with how many shots carry it,
     how many distinct values it has, and the values themselves when there are
     at most `max_values` of them. A group is not an entry: each property inside
-    it is, as `coolant.type`. A missing `values` alongside a large `distinct`
+    it is, as `nbi.beam.source`. A missing `values` alongside a large `distinct`
     marks a measurement or free text: filter on the property's presence, not on
     a value.
 
     `property` takes the same forms as the listing and narrows the scope, so
     `total` is the number of matching shots. So does `id_prefix`.
+
+    When a filter names a property inside a group, the summary describes only
+    the group entries that match it. Say a shot records two neutral beams,
+    SS at 1.6 MW and SW at 1.4 MW. Filtered by `property=nbi.beam.source:SW`,
+    the summary gives `nbi.beam.power` as 1.4, the SW beam's power, rather
+    than 1.4 to 1.6.
+
+    A property is normally left out when every shot in scope has the same
+    single value for it, because picking that value would not narrow anything.
+    `include_constant=true` lists it anyway. A filter panel uses this to see
+    which options are still possible once something has been picked.
     """
     return shot_service.available_properties(
         device_name=device_name,
@@ -142,6 +154,7 @@ def read_shot_properties(
         maximums=property_max,
         max_values=max_values,
         id_prefix=id_prefix,
+        include_constant=include_constant,
     )
 
 
@@ -165,7 +178,7 @@ def read_shot_property_values(
     The values one scientific-metadata property takes, with a count per value.
 
     `name` is the property's path, so a property inside a group is
-    `coolant.type`. For a vocabulary too large for the properties listing to
+    `nbi.beam.source`. For a vocabulary too large for the properties listing to
     enumerate. `q` matches values containing it, case-insensitively, and the
     most common come first.
     """

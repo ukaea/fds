@@ -33,8 +33,8 @@ from app.services.exceptions import (
     ResourceNotFoundError,
 )
 from app.services.filters import (
-    property_bound_clauses,
     property_clauses,
+    property_conditions,
     property_entries,
 )
 from app.services.jsonld import map_shot_to_dcat
@@ -241,9 +241,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         """
         clauses = [
             Shot.device_name == device,
-            *property_clauses(Shot.scientific_metadata, properties),
-            *property_bound_clauses(Shot.scientific_metadata, minimums, lower=True),
-            *property_bound_clauses(Shot.scientific_metadata, maximums, lower=False),
+            *property_clauses(Shot.scientific_metadata, properties, minimums, maximums),
         ]
         if id_prefix:
             clauses.append(col(Shot.id).startswith(id_prefix, autoescape=True))
@@ -338,6 +336,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         maximums: list[str] | None = None,
         max_values: int = DEFAULT_MAX_VALUES,
         id_prefix: str | None = None,
+        include_constant: bool = False,
     ) -> AvailableProperties:
         """The properties a device's shots carry, for building a filter.
 
@@ -352,7 +351,9 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
             Shot,
             col(Shot.scientific_metadata),
             where=where,
+            conditions=property_conditions(properties, minimums, maximums),
             max_values=max_values,
+            include_constant=include_constant,
         )
 
     def update(

@@ -7,7 +7,7 @@ class AvailableProperty(SQLModel):
     """One scientific-metadata property in scope, and what can be said about it.
 
     ``name`` is the property's path: its own name after the names of the groups
-    it sits in, joined by ``.``, as ``coolant.type``. A group is not listed
+    it sits in, joined by ``.``, as ``nbi.beam.source``. A group is not listed
     itself, only the properties inside it.
 
     ``kind`` is the provider's declaration where there is one and FDS's

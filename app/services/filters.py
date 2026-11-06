@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 from typing import Any
 
 from sqlalchemy import ColumnElement
@@ -29,7 +31,7 @@ def parse_property(raw: str) -> tuple[str, str | None]:
     """Split a ``property`` query parameter into a path and optional value.
 
     The path names a property, or a property inside a group with the names
-    joined by ``.``: ``coolant.type``. Splits on the *first* separator only, so
+    joined by ``.``: ``nbi.beam.source``. Splits on the *first* separator only, so
     a value may itself contain one (``mode:n=1:tearing`` is the value
     ``n=1:tearing``). A name cannot contain one, so the first always ends the
     path.
@@ -112,7 +114,219 @@ def _is_group(entry: Any) -> ColumnElement[bool]:
     return func.json_typeof(entry.op("->")("properties")).is_not_distinct_from("array")
 
 
-def property_entries(column: Any, path: str | None = None) -> Any:
+# Matches the text PostgreSQL renders for a JSON number.
+NUMERIC_TEXT = r"^-?\d+(\.\d+)?([eE][-+]?\d+)?$"
+
+
+@dataclass(frozen=True)
+class PropertyCondition:
+    """One ``property``, ``property_min`` or ``property_max`` parameter, parsed.
+
+    ``names`` is the path split into its names. With neither ``value`` nor
+    ``bound`` the condition asks only that the property is there. ``value``
+    asks for that value, and ``bound`` for a number at or above it when
+    ``lower``, at or below it otherwise.
+    """
+
+    names: tuple[str, ...]
+    value: str | None = None
+    bound: float | None = None
+    lower: bool = True
+
+
+def parse_property_bound(raw: str) -> tuple[str, float]:
+    """Split a ``property_min``/``property_max`` parameter into path and number.
+
+    Same ``path:value`` shape as ``property``, but the value has to be a
+    number: a range over a value that is not a magnitude means nothing.
+    """
+    path, separator, value = raw.partition(PROPERTY_SEPARATOR)
+    if not path or not separator or not value:
+        raise FDSValidationError(
+            f"Invalid range filter '{raw}': expected 'name{PROPERTY_SEPARATOR}number'."
+        )
+    try:
+        return path, float(value)
+    except ValueError:
+        raise FDSValidationError(
+            f"Invalid range filter '{raw}': '{value}' is not a number."
+        ) from None
+
+
+def property_conditions(
+    properties: list[str] | None = None,
+    minimums: list[str] | None = None,
+    maximums: list[str] | None = None,
+) -> list[PropertyCondition]:
+    """Parse the ``property``, ``property_min`` and ``property_max`` parameters."""
+    conditions = []
+    for raw in properties or []:
+        path, value = parse_property(raw)
+        conditions.append(
+            PropertyCondition(tuple(path.split(PATH_SEPARATOR)), value=value)
+        )
+    for bounds, lower in ((minimums, True), (maximums, False)):
+        for raw in bounds or []:
+            path, bound = parse_property_bound(raw)
+            conditions.append(
+                PropertyCondition(
+                    tuple(path.split(PATH_SEPARATOR)), bound=bound, lower=lower
+                )
+            )
+    return conditions
+
+
+def _meets(condition: PropertyCondition, entry: Any) -> ColumnElement[bool]:
+    """Whether the property ``entry`` meets ``condition``, its name aside.
+
+    A bound compares only values that read as numbers: the CASE leaves any
+    other value NULL, where casting it would abort the whole query.
+    """
+    value = entry.op("->>")("value")
+    if condition.bound is not None:
+        number = case((value.op("~")(NUMERIC_TEXT), cast(value, Numeric)))
+        return (
+            number >= condition.bound if condition.lower else number <= condition.bound
+        )
+    if condition.value is None:
+        return true()
+    return or_(*(value == c for c in _value_candidates(condition.value)))
+
+
+def _clauses_on(
+    array: Any, conditions: Sequence[PropertyCondition]
+) -> list[ColumnElement[bool]]:
+    """The clauses the properties in a JSON ``array`` must meet for ``conditions``.
+
+    A condition on a property in the array is met by any property of that name.
+    Presence and values of one name are alternatives and OR together, and each
+    bound is a clause of its own. The conditions on properties inside a group
+    must all be met by one entry of the group, so they go in a single EXISTS
+    over the group's entries, built the same way one level down.
+    """
+    here: dict[str, list[PropertyCondition]] = {}
+    inside: dict[str, list[PropertyCondition]] = {}
+    for condition in conditions:
+        named = here if len(condition.names) == 1 else inside
+        named.setdefault(condition.names[0], []).append(condition)
+
+    clauses: list[ColumnElement[bool]] = []
+    for name, named_here in here.items():
+        alternatives = [c for c in named_here if c.bound is None]
+        if alternatives:
+            entries = _properties_in(array)
+            entry = entries.c.value
+            clauses.append(
+                sa_select(1)
+                .select_from(entries)
+                .where(
+                    entry.op("->>")("name") == name,
+                    or_(*(_meets(c, entry) for c in alternatives)),
+                )
+                .exists()
+            )
+        for bound in (c for c in named_here if c.bound is not None):
+            entries = _properties_in(array)
+            entry = entries.c.value
+            clauses.append(
+                sa_select(1)
+                .select_from(entries)
+                .where(entry.op("->>")("name") == name, _meets(bound, entry))
+                .exists()
+            )
+    for name, named_inside in inside.items():
+        instances = _properties_in(array)
+        instance = instances.c.value
+        within = [replace(c, names=c.names[1:]) for c in named_inside]
+        clauses.append(
+            sa_select(1)
+            .select_from(instances)
+            .where(
+                instance.op("->>")("name") == name,
+                *_clauses_on(instance.op("->")("properties"), within),
+            )
+            .exists()
+        )
+    return clauses
+
+
+def property_clauses(
+    column: Any,
+    properties: list[str] | None,
+    minimums: list[str] | None = None,
+    maximums: list[str] | None = None,
+) -> list[ColumnElement[bool]]:
+    """Parse and build the clauses for the ``property`` filters on a column.
+
+    Values of the **same** path OR together; **different** paths AND. So
+    ``?property=heating:SS&property=heating:SW&property=pellets:true``
+    asks for (SS or SW) and pellets, which is what selecting two chips in one
+    prop and one in another means. A bare path means presence, and mixing it
+    with values of the same path ORs them too. ``minimums`` and ``maximums``
+    bound numeric values, each bound a condition of its own.
+
+    When several filters name properties in the same group, one entry of that
+    group has to match all of them. ``nbi.beam.source:SW`` with a minimum of
+    1.5 on ``nbi.beam.power`` asks for a beam that is SW and ran at 1.5 MW or
+    more. A shot where the SW beam ran at 1.4 MW while the SS beam ran at
+    1.6 MW does not match. Asking about two entries at once, such as two beams
+    that both ran above 1.5 MW, belongs with the extent predicates in a
+    structured search rather than in a query string.
+    """
+    return _clauses_on(column, property_conditions(properties, minimums, maximums))
+
+
+def _group_conditions(
+    conditions: Sequence[PropertyCondition],
+) -> dict[str, list[PropertyCondition]]:
+    """The filters that apply inside each group, keyed by the group's path.
+
+    A filter on ``nbi.beam.power`` applies inside ``nbi``, where it is a filter
+    on ``beam.power``, and inside ``nbi.beam``, where it is a filter on
+    ``power``.
+    """
+    by_group: dict[str, list[PropertyCondition]] = {}
+    for condition in conditions:
+        for depth in range(1, len(condition.names)):
+            group = PATH_SEPARATOR.join(condition.names[:depth])
+            by_group.setdefault(group, []).append(
+                replace(condition, names=condition.names[depth:])
+            )
+    return by_group
+
+
+def _in_a_matching_instance(
+    path: Any, entry: Any, by_group: dict[str, list[PropertyCondition]]
+) -> ColumnElement[bool]:
+    """Whether the summary should look at this property, given the filters.
+
+    A group entry is looked at only if it matches the filters that apply
+    inside it, and when it is skipped so is everything in it. With a filter on
+    ``nbi.beam.source:SW``, the entry for the SS beam is skipped, and with it
+    the SS beam's ``power``. Every property that is not a group is looked at.
+    """
+    if not by_group:
+        return true()
+    return or_(
+        ~_is_group(entry),
+        case(
+            *(
+                (
+                    path == group,
+                    and_(*_clauses_on(entry.op("->")("properties"), within)),
+                )
+                for group, within in by_group.items()
+            ),
+            else_=true(),
+        ),
+    )
+
+
+def property_entries(
+    column: Any,
+    path: str | None = None,
+    conditions: Sequence[PropertyCondition] = (),
+) -> Any:
     """The properties in a ``scientific_metadata`` column, one row each.
 
     Each row has the property's ``path`` (its name, after the names of the
@@ -125,9 +339,15 @@ def property_entries(column: Any, path: str | None = None) -> Any:
     properties summary. With a ``path``, only the properties at that path are,
     found by following its names down through each group's ``properties``.
     Following one path costs about what reading a flat list does, and walking
-    every depth to find it costs several times more, so a filter, which names
-    one path, follows it. Both read a group's children with ``_properties_in``,
-    so they cannot disagree about where the children are.
+    every depth to find it costs several times more, so the values listing,
+    which names one path, follows it. Both read a group's children with
+    ``_properties_in``, so they cannot disagree about where the children are.
+
+    ``conditions`` are the filters the summary is scoped by. When walking every
+    depth, a group entry that does not match the filters inside it is skipped
+    along with everything in it. With a filter on ``nbi.beam.source:SW``, the
+    walk skips the SS beam's entry, so the summary reports the SW beam's
+    ``power`` and not the SS beam's.
 
     Returned as a lateral subquery, to join to the table ``column`` belongs to
     or to select from inside an EXISTS.
@@ -135,23 +355,27 @@ def property_entries(column: Any, path: str | None = None) -> Any:
     if path is not None:
         return _entries_at(column, path)
 
+    by_group = _group_conditions(conditions)
     top = _properties_in(column)
-    walk = select(
-        top.c.value.op("->>")("name").label("path"),
-        top.c.value.label("entry"),
-        top.c.value.op("->")("extent").label("extent"),
-    ).cte(recursive=True, nesting=True)
-    children = _properties_in(walk.c.entry.op("->")("properties"))
-    walk = walk.union_all(
+    top_path = top.c.value.op("->>")("name")
+    walk = (
         select(
-            func.concat(
-                walk.c.path, PATH_SEPARATOR, children.c.value.op("->>")("name")
-            ),
-            children.c.value,
-            walk.c.extent,
+            top_path.label("path"),
+            top.c.value.label("entry"),
+            top.c.value.op("->")("extent").label("extent"),
         )
+        .where(_in_a_matching_instance(top_path, top.c.value, by_group))
+        .cte(recursive=True, nesting=True)
+    )
+    children = _properties_in(walk.c.entry.op("->")("properties"))
+    child_path = func.concat(
+        walk.c.path, PATH_SEPARATOR, children.c.value.op("->>")("name")
+    )
+    walk = walk.union_all(
+        select(child_path, children.c.value, walk.c.extent)
         .select_from(walk)
         .join(children, true())
+        .where(_in_a_matching_instance(child_path, children.c.value, by_group))
     )
     return select(
         walk.c.path,
@@ -183,119 +407,6 @@ def _entries_at(column: Any, path: str) -> Any:
             for level, name in zip(levels, names, strict=True)
         )
     ).lateral()
-
-
-def property_clause(
-    column: Any, path: str, value: str | None = None
-) -> ColumnElement[bool]:
-    """Build an EXISTS matching records that carry a property at ``path``.
-
-    ``column`` is a ``scientific_metadata`` column. Without a ``value``, any
-    property at the path matches, a group included. With one, the property's
-    value has to match, so a group, which has no value, never does.
-
-    Each call builds its own subquery, so several clauses can be ANDed together
-    in one query without aliasing into each other.
-    """
-    entries = property_entries(column, path)
-    conditions: list[ColumnElement[bool]] = []
-
-    if value is not None:
-        extracted = entries.c.entry.op("->>")("value")
-        conditions.append(or_(*(extracted == c for c in _value_candidates(value))))
-
-    return sa_select(1).select_from(entries).where(*conditions).exists()
-
-
-def property_clauses(
-    column: Any, properties: list[str] | None
-) -> list[ColumnElement[bool]]:
-    """Parse and build the clauses for a set of ``property`` parameters.
-
-    Values of the **same** path OR together; **different** paths AND. So
-    ``?property=heating:SS&property=heating:SW&property=pellets:true``
-    asks for (SS or SW) and pellets, which is what selecting two chips in one
-    prop and one in another means.
-
-    This is the convention faceted search settled on, and the one ESGF uses for
-    the same shape of catalogue. Requiring several values of one name
-    simultaneously is a different question, and a richer one; it belongs with
-    the extent predicates in a structured search rather than in a query string.
-
-    A bare path still means presence, and mixing presence with values under one
-    path ORs them too: a record carrying the path at all satisfies the presence
-    term.
-
-    In a group that repeats, each clause is matched against every instance on
-    its own. ``coolant.thermocouple.id:T1`` and
-    ``coolant.thermocouple.max:850`` match a shot where one thermocouple is
-    T1 and another reached 850.
-    """
-    if not properties:
-        return []
-
-    by_path: dict[str, list[str | None]] = {}
-    for prop in properties:
-        path, value = parse_property(prop)
-        by_path.setdefault(path, []).append(value)
-
-    clauses: list[ColumnElement[bool]] = []
-    for path, values in by_path.items():
-        alternatives = [property_clause(column, path, value) for value in values]
-        clauses.append(
-            alternatives[0] if len(alternatives) == 1 else or_(*alternatives)
-        )
-    return clauses
-
-
-def parse_property_bound(raw: str) -> tuple[str, float]:
-    """Split a ``property_min``/``property_max`` parameter into path and number.
-
-    Same ``path:value`` shape as ``property``, but the value has to be a
-    number: a range over a value that is not a magnitude means nothing.
-    """
-    path, separator, value = raw.partition(PROPERTY_SEPARATOR)
-    if not path or not separator or not value:
-        raise FDSValidationError(
-            f"Invalid range filter '{raw}': expected 'name{PROPERTY_SEPARATOR}number'."
-        )
-    try:
-        return path, float(value)
-    except ValueError:
-        raise FDSValidationError(
-            f"Invalid range filter '{raw}': '{value}' is not a number."
-        ) from None
-
-
-def property_bound_clause(
-    column: Any, path: str, bound: float, *, lower: bool
-) -> ColumnElement[bool]:
-    """Match records whose numeric value at ``path`` is at or beyond ``bound``.
-
-    A path may hold a number on one record and a string on another. The
-    comparison is guarded to numeric-looking values, because casting a stray
-    string to numeric aborts the whole query rather than skipping the row.
-    """
-    entries = property_entries(column, path)
-    extracted = entries.c.entry.op("->>")("value")
-    numeric = cast(extracted, Numeric)
-    conditions: list[ColumnElement[bool]] = [
-        extracted.op("~")(r"^-?\d+(\.\d+)?([eE][-+]?\d+)?$"),
-        numeric >= bound if lower else numeric <= bound,
-    ]
-    return sa_select(1).select_from(entries).where(*conditions).exists()
-
-
-def property_bound_clauses(
-    column: Any, bounds: list[str] | None, *, lower: bool
-) -> list[ColumnElement[bool]]:
-    """Parse and build a clause per range bound. Bounds AND together."""
-    if not bounds:
-        return []
-    return [
-        property_bound_clause(column, *parse_property_bound(bound), lower=lower)
-        for bound in bounds
-    ]
 
 
 def policy_tuple_clause(
