@@ -4,7 +4,7 @@ from sqlmodel import Session
 from app.core.audit import ACTIONS
 from app.core.context import request_context, set_actor
 from app.models.collection import CollectionCreate
-from app.models.dataset import DatasetCreate
+from app.models.dataset import DatasetCreate, DatasetUpdate
 from app.models.device import Device, DeviceCreate, DeviceUpdate
 from app.models.identity import AuthenticatedUser
 from app.models.policy import AccessLevel
@@ -140,6 +140,23 @@ class TestPolicyChanges:
         (line,) = audit_lines(log_lines(), "device.update")
         assert "description" in line["changed_fields"]
         assert "a very long description" not in str(line)
+
+
+class TestRenames:
+    def test_old_and_new_name_are_both_recorded(self, session, admin_user, log_lines):
+        service = DatasetService(session)
+        dataset = service.create(DatasetCreate(name="ip"), admin_user)
+        assert dataset.id is not None
+        log_lines()
+
+        service.update(
+            id=dataset.id, obj_in=DatasetUpdate(name="plasma_current"), user=admin_user
+        )
+
+        (line,) = audit_lines(log_lines(), "dataset.update")
+        assert line["name_before"] == "ip"
+        assert line["name_after"] == "plasma_current"
+        assert "name" in line["changed_fields"]
 
 
 class TestTransactionBoundaries:

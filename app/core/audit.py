@@ -18,10 +18,13 @@ from app.models.policy import AccessLevel
 
 logger = structlog.get_logger("fds.audit")
 
-# Recorded with their before and after values. Everything else contributes its
-# name to changed_fields and nothing more, so descriptions and scientific
-# metadata stay out of the log and the line stays a bounded size.
-POLICY_FIELDS = ("access_level", "required_scopes", "allowed_idps")
+# Recorded with their before and after values: the policy fields, because who
+# opened a record up and when is what the audit trail exists to answer, and
+# name, so a renamed record can be traced from a name it no longer has.
+# Everything else contributes its name to changed_fields and nothing more, so
+# descriptions and scientific metadata stay out of the log and the line stays a
+# bounded size.
+BEFORE_AFTER_FIELDS = ("access_level", "required_scopes", "allowed_idps", "name")
 
 # The listener sees table writes, not API calls, so link-table rows are named
 # after the operation that produces them. Anything absent falls back to
@@ -58,7 +61,7 @@ def _identity(obj: SQLModel) -> dict[str, object]:
 
 
 def _changes(obj: SQLModel) -> tuple[list[str], dict[str, object]]:
-    """Changed column names, and before/after values for policy fields."""
+    """Changed column names, and before/after values for policy fields and name."""
     changed: list[str] = []
     values: dict[str, object] = {}
     state = instance_state(obj)
@@ -67,7 +70,7 @@ def _changes(obj: SQLModel) -> tuple[list[str], dict[str, object]]:
         if not history.has_changes():
             continue
         changed.append(attr.key)
-        if attr.key in POLICY_FIELDS:
+        if attr.key in BEFORE_AFTER_FIELDS:
             values[f"{attr.key}_before"] = _scalar(history.deleted)
             values[f"{attr.key}_after"] = _scalar(history.added)
     return changed, values

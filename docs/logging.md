@@ -21,9 +21,10 @@ Every create, update and delete leaves a record naming the person who made it, t
 changed, and which fields they changed.
 
 For most fields only the name of the field is recorded, not its contents. So changing a
-description records that the description changed, and nothing about what it now says. Access
-policy fields are the exception: for those, both the old and new values are kept, because
-"who opened this up, and when" is the question the record exists to answer.
+description records that the description changed, and nothing about what it now says. Two kinds
+of field keep both the old and new values: access policy fields, because "who opened this up,
+and when" is the question the record exists to answer, and `name`, so a renamed dataset or
+collection can be traced from a name it no longer has.
 
 A change that fails partway through, and is undone, records nothing. Only changes that actually
 took effect are kept.

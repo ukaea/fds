@@ -82,7 +82,7 @@ Only the fields you send change, and the response is the updated dataset. Device
  "logger": "fds.audit", "timestamp": "2026-10-19T12:02:09.877085Z"}
 ```
 
-It records the old and new values only for the fields that control access: `access_level`, `required_scopes` and `allowed_idps`. For any other field it records that the field changed, not what it said before. See [Logging & Auditing](../logging.md).
+It records the old and new values only for `name` and for the fields that control access: `access_level`, `required_scopes` and `allowed_idps`. For any other field it records that the field changed, not what it said before. See [Logging & Auditing](../logging.md).
 
 **A collection's members are part of the collection's record.** Adding a dataset to a collection, or removing one, changes the collection in place. It keeps its id and DOI, and the audit trail records each dataset added or removed.
 
