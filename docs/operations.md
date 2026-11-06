@@ -169,6 +169,26 @@ the provider's `storage_account`.
 ]
 ```
 
+### Federation
+
+| Setting | Effect |
+| --- | --- |
+| `FDS_FEDERATION_MEMBERS` | JSON list of the other catalogues FDS asks when someone searches across catalogues. Empty (the default) asks none. See [Searching Other Catalogues](federation.md). |
+| `FDS_FEDERATION_TIMEOUT` | Seconds FDS waits for a member before reporting that it did not answer. Default `5`. |
+
+Each member has an `id`, the most persistent identifier the catalogue has, with its address as the fallback; a `title`, shown with its answers; a `kind`; and a `url`. The only kind so far is `fds`, another FDS, whose `url` is the address of its API without a version: FDS asks it at `/v1`, the version it speaks. FDS refuses to start if two members share an `id`.
+
+```json
+[
+  {
+    "id": "https://fds.example.org",
+    "title": "Example FDS",
+    "kind": "fds",
+    "url": "https://api.fds.example.org"
+  }
+]
+```
+
 ### Serving
 
 Read by the web server and the tracing library rather than by FDS itself.

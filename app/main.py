@@ -10,6 +10,7 @@ from app.api.v1 import (
     collection_router,
     dataset_router,
     device_router,
+    federation_router,
     file_access_router,
     shot_router,
     source_router,
@@ -47,6 +48,7 @@ v1.include_router(catalog_router.router, tags=["catalog"])
 v1.include_router(
     file_access_router.router, prefix="/file-access", tags=["file-access"]
 )
+v1.include_router(federation_router.router, prefix="/federation", tags=["federation"])
 
 app.include_router(identifier_router)
 app.include_router(v1)

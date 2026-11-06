@@ -99,6 +99,26 @@ StorageProvider = Annotated[
 ]
 
 
+class FederationMember(BaseModel):
+    """Another catalogue FDS asks when someone searches across catalogues.
+
+    ``id`` is the most persistent identifier the catalogue has, with its address
+    as the fallback. ``kind`` says what sort of catalogue it is, and so how FDS
+    asks it: ``fds`` is another FDS, and ``url`` is then the address of its API,
+    without a version.
+    """
+
+    id: str
+    title: str
+    kind: Literal["fds"]
+    url: str
+
+    @field_validator("url")
+    @classmethod
+    def strip_trailing_slash(cls, url: str) -> str:
+        return url.rstrip("/")
+
+
 class Config(BaseSettings):
     # Configuration for Pydantic Settings
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -187,6 +207,27 @@ class Config(BaseSettings):
             ),
             None,
         )
+
+    FEDERATION_MEMBERS: list[FederationMember] = Field(
+        default=[], validation_alias="FDS_FEDERATION_MEMBERS"
+    )
+    FEDERATION_TIMEOUT: float = Field(
+        default=5.0, validation_alias="FDS_FEDERATION_TIMEOUT"
+    )
+
+    @field_validator("FEDERATION_MEMBERS")
+    @classmethod
+    def validate_federation_members(
+        cls, members: list[FederationMember]
+    ) -> list[FederationMember]:
+        seen: set[str] = set()
+        for member in members:
+            if member.id in seen:
+                raise ValueError(
+                    f"FEDERATION_MEMBERS contains a duplicate member: '{member.id}'"
+                )
+            seen.add(member.id)
+        return members
 
     @property
     def db_url(self) -> str:

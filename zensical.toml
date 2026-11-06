@@ -24,6 +24,7 @@ nav = [
     { "Scientific Metadata" = "data-model/scientific-metadata.md" },
   ]},
   { "Semantic Metadata (DCAT & JSON-LD)" = "dcat-jsonld.md" },
+  { "Searching Other Catalogues" = "federation.md" },
   { "Provenance" = "provenance.md" },
 ]
 

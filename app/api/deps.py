@@ -5,6 +5,7 @@ from fastapi import Depends, Query
 from app.api.base_url import get_base_url
 from app.api.negotiation import wants_jsonld
 from app.auth.security import get_current_user
+from app.core.config import config
 from app.core.db import SessionDep
 from app.models.identity import AuthenticatedUser
 from app.services.activity_service import ActivityService
@@ -12,6 +13,7 @@ from app.services.collection_service import CollectionService
 from app.services.dataset_service import DatasetService
 from app.services.device_service import DeviceService
 from app.services.distribution_service import DistributionService
+from app.services.federation_service import FederationService
 from app.services.file_access_service import FileAccessService
 from app.services.shot_service import ShotService
 from app.services.source_service import SourceService
@@ -53,6 +55,10 @@ def get_distribution_service(session: SessionDep) -> DistributionService:
     return DistributionService(session)
 
 
+def get_federation_service() -> FederationService:
+    return FederationService(config.FEDERATION_MEMBERS, config.FEDERATION_TIMEOUT)
+
+
 FileAccessServiceDep = Annotated[FileAccessService, Depends(get_file_access_service)]
 DeviceServiceDep = Annotated[DeviceService, Depends(get_device_service)]
 ShotServiceDep = Annotated[ShotService, Depends(get_shot_service)]
@@ -63,6 +69,7 @@ ActivityServiceDep = Annotated[ActivityService, Depends(get_activity_service)]
 DistributionServiceDep = Annotated[
     DistributionService, Depends(get_distribution_service)
 ]
+FederationServiceDep = Annotated[FederationService, Depends(get_federation_service)]
 
 CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]
 BaseURLDep = Annotated[str, Depends(get_base_url)]

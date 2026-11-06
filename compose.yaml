@@ -51,6 +51,9 @@ services:
       - FDS_DB_USER=fds
       - FDS_DB_PASSWORD=fds
       - FDS_DB_NAME=fds
+      # The other catalogues a federated search asks, as a JSON list, taken from
+      # the shell that starts the stack. None by default.
+      - FDS_FEDERATION_MEMBERS=${FDS_FEDERATION_MEMBERS:-[]}
     volumes:
       - ./dev/local-issuer.jwks.json:/fds/dev/local-issuer.jwks.json:ro
     depends_on:
