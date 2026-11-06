@@ -98,7 +98,9 @@ class CollectionBase(
     URI paths.
 
     Fields:
-        name: Stable, URL-safe identifier within its scope (device/shot).
+        name: Short, URL-safe name. Two collections can share a name only if
+            they belong to different shots or devices. A collection is
+            identified by its id, so its name can be corrected by an update.
         device_name: Device that scopes this collection. ``None`` for Global.
         access_level: Direct access policy. ``None`` means inherit from the
             enclosing Shot or device policy.

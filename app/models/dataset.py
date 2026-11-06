@@ -49,8 +49,10 @@ class DatasetBase(
     are inlined here for convenience; alternatives are exposed in ``formats``.
 
     Fields:
-        name: Stable, URL-safe identifier within the scope of a Shot/device.
-            Immutable once created.
+        name: Short, URL-safe name, such as ``equilibrium``. Several datasets
+            on one shot can share a name when different Activities produced
+            them. A dataset is identified by its id, so its name can be
+            corrected by an update.
         level: Numeric processing level.  Optional: there is no controlled
             vocabulary for processing levels yet, so a dataset carries one only
             where the producer has a meaning for it.
