@@ -467,6 +467,117 @@ def test_list_datasets_by_shot_id_prefix(
     assert [ds["name"] for ds in response.json()] == ["eq_30520"]
 
 
+def test_dataset_listing_answers_in_jsonld(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    DeviceService(session).create(
+        DeviceCreate(name="MAST", type="Spherical"), user=admin_user
+    )
+    ShotService(session).create(
+        ShotCreate(id="30421", device_name="MAST"), user=admin_user
+    )
+    code = SourceService(session).create(
+        SourceCreate(name="jetto", kind=SourceKind.SOFTWARE), user=admin_user
+    )
+    activity = ActivityService(session).create(
+        ActivityCreate(source_id=code.id, activity_type=ActivityType.SIMULATION),
+        user=admin_user,
+    )
+    datasets = DatasetService(session)
+    simulated = datasets.create(
+        DatasetCreate(
+            name="profiles",
+            device_name="MAST",
+            shot_id="30421",
+            url="s3://mast/30421/profiles",
+            activity_id=activity.id,
+        ),
+        user=admin_user,
+    )
+    datasets.create(
+        DatasetCreate(
+            name="camera",
+            device_name="MAST",
+            shot_id="30421",
+            url="s3://mast/30421/camera",
+        ),
+        user=admin_user,
+    )
+    session.commit()
+
+    response = test_client.get(
+        "/v1/devices/MAST/shots/30421/datasets",
+        params={"activity_type": "simulation"},
+        headers={**admin_user_token, "Accept": "application/ld+json"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/ld+json")
+    document = response.json()
+    assert document["@context"]["dcat"] == "http://www.w3.org/ns/dcat#"
+    (node,) = document["@graph"]
+    assert node["@type"] == "dcat:Dataset"
+    assert node["@id"] == f"http://testserver/datasets/{simulated.id}"
+    assert node["title"] == "profiles"
+    agent = node["prov:wasGeneratedBy"]["prov:wasAssociatedWith"]
+    assert agent["dct:title"] == "jetto"
+
+
+def test_dataset_listing_in_jsonld_names_only_the_activity_inputs_the_caller_may_read(
+    test_client: TestClient, session: Session
+):
+    code = SourceService(session).create(
+        SourceCreate(name="jetto", kind=SourceKind.SOFTWARE), user=admin_user
+    )
+    datasets = DatasetService(session)
+    public_input = datasets.create(
+        DatasetCreate(
+            name="equilibrium",
+            url="s3://global/equilibrium",
+            access_level=AccessLevel.PUBLIC,
+        ),
+        user=admin_user,
+    )
+    restricted_input = datasets.create(
+        DatasetCreate(
+            name="interferometer",
+            url="s3://global/interferometer",
+            access_level=AccessLevel.RESTRICTED,
+        ),
+        user=admin_user,
+    )
+    assert public_input.id is not None
+    assert restricted_input.id is not None
+    activity = ActivityService(session).create(
+        ActivityCreate(
+            source_id=code.id,
+            activity_type=ActivityType.SIMULATION,
+            inputs=[public_input.id, restricted_input.id],
+        ),
+        user=admin_user,
+    )
+    datasets.create(
+        DatasetCreate(
+            name="profiles",
+            url="s3://global/profiles",
+            access_level=AccessLevel.PUBLIC,
+            activity_id=activity.id,
+        ),
+        user=admin_user,
+    )
+    session.commit()
+
+    response = test_client.get(
+        "/v1/datasets",
+        params={"activity_type": "simulation"},
+        headers={"Accept": "application/ld+json"},
+    )
+
+    (node,) = response.json()["@graph"]
+    used = node["prov:wasGeneratedBy"]["prov:used"]
+    assert [entity["dct:title"] for entity in used] == ["equilibrium"]
+
+
 def test_dataset_read_includes_a_summary_of_its_run(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
@@ -1426,3 +1537,30 @@ def test_replacements_link_each_other_in_jsonld(
     assert old_node["dct:isReplacedBy"] == [{"@id": new_node["@id"]}]
     assert "dct:replaces" not in old_node
     assert "dct:isReplacedBy" not in new_node
+
+
+def test_dataset_listing_in_jsonld_leaves_out_and_links_replaced_datasets(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    reprocessing = _activity(session)
+    old = _register(test_client, admin_user_token).json()
+    new = _register(
+        test_client, admin_user_token, activity_id=reprocessing, replaces=[old["id"]]
+    ).json()
+    ld = {**admin_user_token, "Accept": "application/ld+json"}
+
+    listed = test_client.get(
+        "/v1/devices/mast/shots/30421/datasets", headers=ld
+    ).json()["@graph"]
+    everything = test_client.get(
+        "/v1/devices/mast/shots/30421/datasets?include_replaced=true", headers=ld
+    ).json()["@graph"]
+
+    # The JSON-LD page leaves out a replaced dataset, as the JSON page does.
+    assert [node["identifier"] for node in listed] == [str(new["id"])]
+    by_identifier = {node["identifier"]: node for node in everything}
+    new_node = by_identifier[str(new["id"])]
+    old_node = by_identifier[str(old["id"])]
+    assert new_node["dct:replaces"] == [{"@id": old_node["@id"]}]
+    assert old_node["dct:isReplacedBy"] == [{"@id": new_node["@id"]}]

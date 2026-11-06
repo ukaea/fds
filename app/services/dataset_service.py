@@ -6,6 +6,7 @@ from typing import Any
 import structlog
 from sqlalchemy import ColumnElement
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import QueryableAttribute, selectinload
 from sqlmodel import Session, col, select, tuple_
 
 from app.auth.access_control import (
@@ -17,7 +18,12 @@ from app.auth.permissions import check_device_admin, check_is_admin
 from app.core.config import AzureStorageProvider, S3StorageProvider, config
 from app.core.context import ReadTier
 from app.core.naming import normalise_device_name
-from app.models.activity import Activity, ActivitySummary, ActivityType
+from app.models.activity import (
+    Activity,
+    ActivityAgent,
+    ActivitySummary,
+    ActivityType,
+)
 from app.models.dataset import (
     Dataset,
     DatasetCreate,
@@ -54,7 +60,7 @@ from app.services.filters import (
     scope_clauses,
     shot_id_prefix_clauses,
 )
-from app.services.jsonld import map_dataset_to_dcat
+from app.services.jsonld import dataset_node, generate_context, map_dataset_to_dcat
 from app.services.reference_service import (
     CALIBRATION,
     GEOMETRY,
@@ -75,6 +81,17 @@ def _listed(
     if include_replaced:
         return []
     return [replacements.not_replaced(session, Dataset, DatasetReplacement, user)]
+
+
+def _attribute(relationship: object) -> QueryableAttribute[Any]:
+    """A relationship on a model class, typed as SQLAlchemy's loader options take it.
+
+    SQLModel types a relationship as the objects it holds, but read from the
+    class it is SQLAlchemy's attribute.
+    """
+    if not isinstance(relationship, QueryableAttribute):
+        raise TypeError(f"Not a SQLAlchemy relationship: {relationship!r}")
+    return relationship
 
 
 @dataclass
@@ -912,6 +929,103 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             replaces=enriched.replaces or [],
             replaced_by=enriched.replaced_by or [],
         )
+
+    def to_dcat_listing(
+        self,
+        datasets: Sequence[Dataset],
+        base_url: str,
+        *,
+        include_geometry: bool = False,
+        include_calibration: bool = False,
+        include_annotations: bool = False,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+    ) -> dict[str, Any]:
+        """A page of a dataset listing as one JSON-LD document.
+
+        Its ``@graph`` holds each dataset's ``dcat:Dataset`` node, in order,
+        without FDS's record of it. The Activities, distributions and derivations
+        the nodes describe, and the related datasets asked for, are loaded for
+        all the datasets at once, and each Activity lists only the inputs
+        ``user`` may read.
+        """
+        self._load_jsonld_relations(datasets)
+        enriched = self.to_read_models(
+            datasets,
+            user=user,
+            include_geometry=include_geometry,
+            include_calibration=include_calibration,
+            include_annotations=include_annotations,
+        )
+        inputs = self._readable_activity_inputs(datasets, user)
+        return {
+            "@context": generate_context(),
+            "@graph": [
+                dataset_node(
+                    dataset,
+                    base_url,
+                    geometry=model.geometry if include_geometry else None,
+                    calibration=model.calibration if include_calibration else None,
+                    annotations=model.annotations if include_annotations else None,
+                    activity_inputs=activity_inputs,
+                    replaces=model.replaces or [],
+                    replaced_by=model.replaced_by or [],
+                )
+                for dataset, model, activity_inputs in zip(
+                    datasets, enriched, inputs, strict=True
+                )
+            ],
+        }
+
+    def _load_jsonld_relations(self, datasets: Sequence[Dataset]) -> None:
+        """Load what the JSON-LD of ``datasets`` reads, for all of them at once.
+
+        Mapping a dataset follows its Activity, distributions and derivations, and
+        the Activity's agents, instruments and inputs. Left to load as the mapping reaches
+        them, each would cost a statement per dataset.
+        """
+        ids = [dataset.id for dataset in datasets]
+        if not ids:
+            return
+        activity = selectinload(_attribute(Dataset.activity))
+        self.session.exec(
+            select(Dataset)
+            .where(col(Dataset.id).in_(ids))
+            .options(
+                selectinload(_attribute(Dataset.distributions)),
+                selectinload(_attribute(Dataset.derivations)),
+                activity.selectinload(_attribute(Activity.source)),
+                activity.selectinload(_attribute(Activity.instruments)),
+                activity.selectinload(_attribute(Activity.input_datasets)),
+                activity.selectinload(_attribute(Activity.delegation_links)),
+                activity.selectinload(_attribute(Activity.agent_links)).selectinload(
+                    _attribute(ActivityAgent.source)
+                ),
+            )
+        ).all()
+
+    def _readable_activity_inputs(
+        self, datasets: Sequence[Dataset], user: AuthenticatedUser
+    ) -> list[list[Dataset]]:
+        """For each of ``datasets``, the inputs ``user`` may read of the Activity
+        that generated it. The inputs of every Activity are checked together."""
+        every_input = {
+            input_dataset.id: input_dataset
+            for dataset in datasets
+            if dataset.activity
+            for input_dataset in dataset.activity.input_datasets
+        }
+        readable = {
+            input_dataset.id
+            for input_dataset in readable_only(
+                self.session, list(every_input.values()), user
+            )
+        }
+        return [
+            [d for d in dataset.activity.input_datasets if d.id in readable]
+            if dataset.activity
+            else []
+            for dataset in datasets
+        ]
 
     def readable_read_models(
         self,

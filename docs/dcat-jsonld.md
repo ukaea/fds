@@ -21,6 +21,8 @@ GET /v1/devices/{device}/shots/{shot_id}/collections/{name}
 Accept: application/ld+json
 ```
 
+and on the dataset listings, described [below](#dataset-listings).
+
 FDS answers in JSON-LD when the `Accept` header prefers it to plain JSON, by the header's q-values:
 
 | `Accept` header | Answer |
@@ -252,6 +254,66 @@ Each version of a dataset is a `dcat:Dataset` of its own. A version names each d
 A collection that replaces another carries the same two terms.
 
 FDS does not publish DCAT's version chain (`dcat:previousVersion`, `dcat:hasVersion`, `dcat:hasCurrentVersion`). Those assume one line of versions with one current version, while two FDS datasets can each replace the same one. Nor does it publish `prov:wasRevisionOf`: PROV defines a revision as a derivation that keeps substantial content from the original, and a reprocessed dataset is usually made again from the same inputs instead.
+
+## Dataset listings
+
+The dataset listings answer in JSON-LD as well:
+
+```http
+GET /v1/datasets
+GET /v1/devices/{device}/datasets
+GET /v1/devices/{device}/shots/{shot_id}/datasets
+Accept: application/ld+json
+```
+
+They take the same filters, and are paged with the same `offset` and `limit`, as in JSON. A page is
+one document whose `@graph` holds a `dcat:Dataset` node for each dataset on it, in listing order:
+
+```json
+{
+  "@context": { "...": "..." },
+  "@graph": [
+    {
+      "@type": "dcat:Dataset",
+      "@id": "https://example.org/datasets/13",
+      "title": "Kinetic profiles",
+      "fuel:device": "mast",
+      "fuel:shot": "30421",
+      "prov:wasGeneratedBy": {"@type": "prov:Activity", "prov:type": "simulation", "...": "..."}
+    },
+    {
+      "@type": "dcat:Dataset",
+      "@id": "https://example.org/datasets/14",
+      "title": "Equilibrium",
+      "fuel:device": "mast",
+      "fuel:shot": "30421",
+      "prov:wasGeneratedBy": {"@type": "prov:Activity", "prov:type": "simulation", "...": "..."}
+    }
+  ]
+}
+```
+
+Each node is the one the dataset's own document holds, so it carries the same provenance and
+distributions. FDS's records of the datasets are left out, as in any listing; each one is in the
+dataset's own document. A page with no datasets has an empty `@graph`.
+
+=== "curl"
+
+    ```bash
+    curl -H "Accept: application/ld+json" \
+      "$API/devices/mast/shots/30421/datasets?activity_type=simulation"
+    ```
+
+=== "Python (httpx)"
+
+    ```python
+    page = httpx.get(
+        f"{API}/devices/mast/shots/30421/datasets",
+        params={"activity_type": "simulation"},
+        headers={"Accept": "application/ld+json"},
+    ).json()
+    nodes = page["@graph"]
+    ```
 
 ## Shot as `dcat:Catalog`
 

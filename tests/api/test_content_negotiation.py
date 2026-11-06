@@ -246,6 +246,9 @@ def negotiated(session: Session, admin_user: AuthenticatedUser) -> dict[str, int
         "/v1/collections/campaign",
         "/v1/devices/MAST/collections/coils",
         "/v1/devices/MAST/shots/30421/collections/jintrac",
+        "/v1/datasets",
+        "/v1/devices/MAST/datasets",
+        "/v1/devices/MAST/shots/30421/datasets",
     ],
 )
 def test_negotiated_routes_answer_as_the_caller_prefers(
@@ -276,6 +279,9 @@ def test_negotiated_routes_answer_as_the_caller_prefers(
         "/v1/collections/{name}",
         "/v1/devices/{device_name}/collections/{name}",
         "/v1/devices/{device_name}/shots/{shot_id}/collections/{name}",
+        "/v1/datasets",
+        "/v1/devices/{device_name}/datasets",
+        "/v1/devices/{device_name}/shots/{shot_id}/datasets",
     ],
 )
 def test_openapi_offers_json_ld_on_negotiated_routes(path: str):

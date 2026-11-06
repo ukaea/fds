@@ -62,9 +62,11 @@ def create_dataset_global(
     "/datasets",
     response_model=list[DatasetRead],
     response_model_exclude_none=True,
+    responses=JSONLD_ALTERNATIVE,
 )
 def read_datasets_global(
     *,
+    jsonld: WantsJSONLDDep,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     scope: CatalogueScope = CatalogueScope.ALL,
@@ -82,7 +84,8 @@ def read_datasets_global(
     activity_id: int | None = None,
     shot_id_prefix: str | None = None,
     include_replaced: bool = False,
-) -> list[DatasetRead]:
+    base: BaseURLDep,
+) -> list[DatasetRead] | JSONLDResponse:
     """
     Retrieve every dataset accessible to the current user.
 
@@ -108,6 +111,9 @@ def read_datasets_global(
     unless `include_replaced=true`.
 
     To scope to a single device, use `/devices/{device_name}/datasets`.
+
+    With `Accept: application/ld+json` the page is one JSON-LD document whose
+    `@graph` holds each dataset's `dcat:Dataset` node, in listing order.
     """
     datasets = dataset_service.get_multi(
         user=user,
@@ -123,6 +129,16 @@ def read_datasets_global(
         shot_id_prefix=shot_id_prefix,
         include_replaced=include_replaced,
     )
+    if jsonld:
+        document = dataset_service.to_dcat_listing(
+            datasets,
+            base,
+            include_geometry=include_geometry,
+            include_calibration=include_calibration,
+            include_annotations=include_annotations,
+            user=user,
+        )
+        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
     return dataset_service.to_read_models(
         datasets,
         include_storage_options=include_storage_options,
@@ -181,9 +197,11 @@ def create_dataset_shot(
     "/devices/{device_name}/shots/{shot_id}/datasets",
     response_model=list[DatasetRead],
     response_model_exclude_none=True,
+    responses=JSONLD_ALTERNATIVE,
 )
 def read_datasets_shot(
     *,
+    jsonld: WantsJSONLDDep,
     device_name: str,
     shot_id: str,
     dataset_service: DatasetServiceDep,
@@ -199,7 +217,8 @@ def read_datasets_shot(
     source: str | None = None,
     activity_id: int | None = None,
     include_replaced: bool = False,
-) -> list[DatasetRead]:
+    base: BaseURLDep,
+) -> list[DatasetRead] | JSONLDResponse:
     """
     Retrieve all datasets for a specific shot.
 
@@ -213,6 +232,9 @@ def read_datasets_shot(
 
     A dataset is left out when you may read a dataset that replaces it,
     unless `include_replaced=true`.
+
+    With `Accept: application/ld+json` the page is one JSON-LD document whose
+    `@graph` holds each dataset's `dcat:Dataset` node, in listing order.
     """
     datasets = dataset_service.get_datasets_for_shot(
         shot_id,
@@ -226,6 +248,16 @@ def read_datasets_shot(
         activity_id=activity_id,
         include_replaced=include_replaced,
     )
+    if jsonld:
+        document = dataset_service.to_dcat_listing(
+            datasets,
+            base,
+            include_geometry=include_geometry,
+            include_calibration=include_calibration,
+            include_annotations=include_annotations,
+            user=user,
+        )
+        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
     return dataset_service.to_read_models(
         datasets,
         include_storage_options=include_storage_options,
@@ -363,9 +395,11 @@ def read_dataset_global_by_name(
     "/devices/{device_name}/datasets",
     response_model=list[DatasetRead],
     response_model_exclude_none=True,
+    responses=JSONLD_ALTERNATIVE,
 )
 def read_datasets_device(
     *,
+    jsonld: WantsJSONLDDep,
     device_name: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
@@ -384,7 +418,8 @@ def read_datasets_device(
     activity_id: int | None = None,
     shot_id_prefix: str | None = None,
     include_replaced: bool = False,
-) -> list[DatasetRead]:
+    base: BaseURLDep,
+) -> list[DatasetRead] | JSONLDResponse:
     """
     Retrieve datasets hosted by a device.
 
@@ -411,6 +446,9 @@ def read_datasets_device(
 
     A dataset is left out when you may read a dataset that replaces it,
     unless `include_replaced=true`.
+
+    With `Accept: application/ld+json` the page is one JSON-LD document whose
+    `@graph` holds each dataset's `dcat:Dataset` node, in listing order.
     """
     datasets = dataset_service.get_datasets_for_device(
         device_name,
@@ -427,6 +465,16 @@ def read_datasets_device(
         shot_id_prefix=shot_id_prefix,
         include_replaced=include_replaced,
     )
+    if jsonld:
+        document = dataset_service.to_dcat_listing(
+            datasets,
+            base,
+            include_geometry=include_geometry,
+            include_calibration=include_calibration,
+            include_annotations=include_annotations,
+            user=user,
+        )
+        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
     return dataset_service.to_read_models(
         datasets,
         include_storage_options=include_storage_options,
