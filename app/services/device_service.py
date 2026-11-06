@@ -16,7 +16,7 @@ from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from app.models.shot import Shot
 from app.models.source import Source
 from app.services.base_service import BaseService
-from app.services.exceptions import ConflictError, DeviceNotFoundError
+from app.services.exceptions import ConflictError, DeviceNotFoundError, ForbiddenError
 from app.services.visibility import read_page
 
 
@@ -125,6 +125,8 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         if obj_in.name is not None:
             obj_in.name = normalise_device_name(obj_in.name)
         update_data = obj_in.model_dump(exclude_unset=True)
+        if "name" in update_data and update_data["name"] != db_obj.name:
+            raise ForbiddenError("Cannot rename a device")
         validate_policy_fields(
             update_data.get("access_level", db_obj.access_level),
             update_data.get("required_scopes", db_obj.required_scopes),

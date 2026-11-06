@@ -1346,7 +1346,7 @@ def test_a_dataset_cannot_replace_one_that_already_replaces_it(
     response = test_client.patch(
         f"/v1/datasets/{first['id']}",
         headers=admin_user_token,
-        json={"replaces": [third["id"]], "activity_id": reprocessing},
+        json={"replaces": [third["id"]], "activity_id": _activity(session)},
     )
 
     assert response.status_code == 422

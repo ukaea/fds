@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
+from psycopg.errors import UniqueViolation
 from sqlalchemy import ColumnElement
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import QueryableAttribute, selectinload
@@ -255,7 +256,13 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         self._resolve_and_authorize_context(obj_in, user)
 
         origin = obj_in.origin
-        self._reject_duplicate(obj_in, origin)
+        self._reject_duplicate(
+            name=obj_in.name,
+            device_name=obj_in.device_name,
+            shot_id=obj_in.shot_id,
+            activity_id=obj_in.activity_id,
+            origin=origin,
+        )
         self._validate_references(obj_in)
         self._validate_replacements(
             obj_in.replaces,
@@ -316,26 +323,35 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 raise DeviceNotFoundError(f"Device '{obj_in.device_name}' not found")
         self._authorize_write(obj_in.device_name, user)
 
-    def _reject_duplicate(self, obj_in: DatasetCreate, origin: str | None) -> None:
+    def _reject_duplicate(
+        self,
+        *,
+        name: str,
+        device_name: str | None,
+        shot_id: str | None,
+        activity_id: int | None,
+        origin: str | None,
+        exclude_id: int | None = None,
+    ) -> None:
         """Reject an exact duplicate up front so a re-POST of an identical dataset
         reads as 409 (already exists) rather than the reference-overlap 422 that
         validation would raise first — a version trivially overlaps itself, which
         would otherwise mask the duplicate behind a misleading error."""
         duplicate = select(Dataset).where(
-            Dataset.name == obj_in.name,
-            Dataset.device_name == obj_in.device_name,
-            Dataset.shot_id == obj_in.shot_id,
+            Dataset.name == name,
+            Dataset.device_name == device_name,
+            Dataset.shot_id == shot_id,
         )
-        if obj_in.activity_id is not None:
-            duplicate = duplicate.where(Dataset.activity_id == obj_in.activity_id)
+        if exclude_id is not None:
+            duplicate = duplicate.where(Dataset.id != exclude_id)
+        if activity_id is not None:
+            duplicate = duplicate.where(Dataset.activity_id == activity_id)
         else:
             duplicate = duplicate.where(
                 col(Dataset.activity_id).is_(None), Dataset.origin == origin
             )
         if self.session.exec(duplicate).first() is not None:
-            raise ConflictError(
-                f"Dataset '{obj_in.name}' already exists in this context"
-            )
+            raise ConflictError(f"Dataset '{name}' already exists in this context")
 
     def _validate_references(self, obj_in: DatasetCreate) -> None:
         """Enforce reference (geometry / calibration) write rules before any DB work."""
@@ -592,6 +608,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             self.session.commit()
         except IntegrityError as e:
             self.session.rollback()
+            if not isinstance(e.orig, UniqueViolation):
+                raise
             raise ConflictError(
                 f"Dataset '{name}' already exists in this context"
             ) from e
@@ -636,6 +654,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         # Validate updated policy fields against the resulting effective state.
         # Use incoming value if provided, else fall back to the stored value.
         update_data = obj_in.model_dump(exclude_unset=True)
+        if "name" in update_data and update_data["name"] is None:
+            raise FDSValidationError("Dataset name cannot be null")
         effective_access_level = update_data.get("access_level", db_obj.access_level)
         effective_required_scopes = update_data.get(
             "required_scopes", db_obj.required_scopes
@@ -645,6 +665,15 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             effective_access_level,
             effective_required_scopes,
             effective_allowed_idps,
+        )
+
+        self._reject_duplicate(
+            name=update_data.get("name", db_obj.name),
+            device_name=update_data.get("device_name", db_obj.device_name),
+            shot_id=update_data.get("shot_id", db_obj.shot_id),
+            activity_id=update_data.get("activity_id", db_obj.activity_id),
+            origin=db_obj.origin,
+            exclude_id=id,
         )
 
         # Re-validate reference resources against the merged state.
@@ -697,7 +726,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                     self.session, DatasetReplacement, db_obj.id, wanted
                 )
 
-        return self.update_unchecked(db_obj=db_obj, obj_in=obj_in)
+        db_obj.sqlmodel_update(update_data)
+        return self._persist(db_obj, db_obj.name)
 
     def delete(self, id: int, user: AuthenticatedUser) -> bool:
         """

@@ -37,11 +37,12 @@ def test_update_device(
     response = test_client.patch(
         f"/v1/devices/{device.name}",
         headers=admin_user_token,
-        json={"name": "Updated Name"},
+        json={"title": "Updated Name"},
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["name"] == "updated name"
+    assert data["name"] == "initial"
+    assert data["title"] == "Updated Name"
 
 
 def test_delete_device(

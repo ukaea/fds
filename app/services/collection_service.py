@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 
 import structlog
+from psycopg.errors import UniqueViolation
 from sqlalchemy import ColumnElement
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
@@ -196,6 +197,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
 
         # Validate the merged policy state
         update_data = obj_in.model_dump(exclude_unset=True)
+        if "name" in update_data and update_data["name"] is None:
+            raise FDSValidationError("Collection name cannot be null")
         effective_access_level = update_data.get("access_level", db_obj.access_level)
         effective_required_scopes = update_data.get(
             "required_scopes", db_obj.required_scopes
@@ -206,6 +209,17 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             effective_required_scopes,
             effective_allowed_idps,
         )
+
+        name = update_data.get("name", db_obj.name)
+        duplicate = select(Collection).where(
+            Collection.id != id,
+            Collection.name == name,
+            Collection.device_name
+            == update_data.get("device_name", db_obj.device_name),
+            Collection.shot_id == update_data.get("shot_id", db_obj.shot_id),
+        )
+        if self.session.exec(duplicate).first() is not None:
+            raise ConflictError(f"Collection '{name}' already exists in this context")
 
         # ``replaces`` is kept in the collectionreplacement table, not on the
         # collection row, so the update below skips it and the links are
@@ -226,7 +240,15 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 self.session, CollectionReplacement, db_obj.id, wanted
             )
 
-        return self.update_unchecked(db_obj=db_obj, obj_in=obj_in)
+        try:
+            return self.update_unchecked(db_obj=db_obj, obj_in=obj_in)
+        except IntegrityError as e:
+            self.session.rollback()
+            if not isinstance(e.orig, UniqueViolation):
+                raise
+            raise ConflictError(
+                f"Collection '{name}' already exists in this context"
+            ) from e
 
     def delete(self, id: int, user: AuthenticatedUser) -> bool:
         """Delete a Collection by internal ID.

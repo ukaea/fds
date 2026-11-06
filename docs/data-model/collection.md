@@ -4,7 +4,7 @@ A named, citable group of Datasets.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `name` | string | Yes | Short name, unique within its scope (e.g. `analysed-data`, `jintrac-30420-56`) |
+| `name` | string | Yes | Short name, unique within its scope (e.g. `analysed-data`, `jintrac-30420-56`). Renaming to a name taken in the same device/shot context returns 409; the existing name may be sent unchanged. `PATCH` rejects `null` with 422 |
 | `title` | string | No | Human-readable title |
 | `persistent_identifier` | string | No | A DOI or other persistent identifier registered for the collection. See [Persistent identifiers](../dcat-jsonld.md#persistent-identifiers) |
 | `issued` | date | No | When the collection was formally published, the date a citation gives (`dct:issued`). Not when FDS listed it |

@@ -4,7 +4,7 @@ Represents a physical machine or facility.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `name` | string | Yes | Short, unique name (e.g. `mast`, `mastu`). Stored lower-cased, so `/devices/MAST` and `/devices/mast` resolve the same device |
+| `name` | string | Yes | Short, unique name (e.g. `mast`, `mastu`). Stored lower-cased, so `/devices/MAST` and `/devices/mast` resolve the same device. Cannot be changed after creation; set `title` instead. `PATCH` returns 403 for a changed or `null` name; case-only changes are allowed |
 | `title` | string | No | Display name, e.g. `MAST Upgrade` for the device named `mastu`. Clients show this in preference to `name` |
 | `description` | string | No | Extended description |
 | `persistent_identifier` | string | No | An instrument identifier (PIDINST) registered for the device. See [Persistent identifiers](../dcat-jsonld.md#persistent-identifiers) |

@@ -125,18 +125,20 @@ def test_update_device(session: Session, admin_user: AuthenticatedUser):
     created_device = service.create(device_create, user=admin_user)
     assert created_device.id is not None
 
-    device_update = DeviceUpdate(name="Updated Test", status="Updated Status")
+    device_update = DeviceUpdate(title="Updated Test", status="Updated Status")
     updated_device = service.update(
         device_name="Update Test", obj_in=device_update, user=admin_user
     )
     assert updated_device is not None
-    assert updated_device.name == "updated test"
+    assert updated_device.name == "update test"
+    assert updated_device.title == "Updated Test"
     assert updated_device.type == "Initial"
     assert updated_device.status == "Updated Status"
 
     db_device = session.get(Device, created_device.id)
     assert db_device is not None
-    assert db_device.name == "updated test"
+    assert db_device.name == "update test"
+    assert db_device.title == "Updated Test"
 
 
 def test_delete_device(session: Session, admin_user: AuthenticatedUser):
