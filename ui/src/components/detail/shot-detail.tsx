@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { fetcher, API_BASE, FetchError } from '@/lib/api';
 import { Dataset, Collection, Shot } from '@/lib/types';
 import { useDeviceLabel } from '@/lib/use-device-label';
-import { Database, ChevronRight, Layers, MapPin, SlidersHorizontal, Highlighter } from 'lucide-react';
+import { Database, ChevronRight, Globe, Layers, MapPin, SlidersHorizontal, Highlighter } from 'lucide-react';
 import { availableProperties, propertyQuery, withQuery } from '@/lib/properties';
 import { dedupeById } from '@/components/resolved-ref';
 import { PropertyFilter } from '@/components/property-filter';
@@ -17,6 +17,10 @@ import { DatasetResults } from '@/components/dataset-results';
 import { PropertyBadges, ScientificMetadata } from '@/components/properties';
 import { RelatedGroup } from '@/components/related-data';
 import { ActivityBadge } from '@/components/activity-label';
+import { MemberAnswers, useFederationMembers } from '@/components/member-datasets';
+
+// At most this many datasets are shown from each other catalogue.
+const MEMBER_PAGE_SIZE = 50;
 
 function formatDate(iso?: string): string {
   if (!iso) return '';
@@ -113,6 +117,15 @@ export default function ShotDetail({
   const { data: collections } = useSWR<Collection[]>(
     deviceName && shotId ? `${API_BASE}/devices/${deviceName}/shots/${shotId}/collections` : null,
     fetcher
+  );
+
+  // The same shot in the other catalogues FDS searches, with the same annotation
+  // filter as this shot's own datasets.
+  const members = useFederationMembers();
+  const memberDatasetsUrl = withQuery(
+    `${API_BASE}/federation/devices/${deviceName}/shots/${shotId}/datasets`,
+    propertyQuery('property', propertyTokens),
+    `limit=${MEMBER_PAGE_SIZE}`
   );
 
   // Datasets already shown inside a collection
@@ -291,6 +304,19 @@ export default function ShotDetail({
         {!isLoading && !error && datasets?.length === 0 && (
           <div className="py-12 text-center text-muted-foreground border border-dashed border-border rounded-lg">
             No datasets found for this shot.
+          </div>
+        )}
+
+        {!!members?.length && (
+          <div className="mt-10">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-muted p-2 rounded-lg text-foreground">
+                <Globe className="w-5 h-5" />
+              </div>
+              <h2 className="text-xl font-semibold text-foreground">Datasets in Other Catalogues</h2>
+              <span className="text-sm text-muted-foreground">on this shot, kept where they are</span>
+            </div>
+            <MemberAnswers members={members} url={memberDatasetsUrl} limit={MEMBER_PAGE_SIZE} />
           </div>
         )}
       </SidePanelLayout>

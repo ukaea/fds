@@ -236,3 +236,36 @@ export interface ActivityDelegation {
   subordinate_source: number;
   responsible_source: number;
 }
+
+// Another catalogue FDS asks when someone searches across catalogues.
+export interface FederationMember {
+  id: string;
+  title: string;
+}
+
+// A dataset another catalogue holds, as the JSON-LD node FDS passes on, written
+// with FDS's context. Only the terms the UI reads are named; a member may send
+// any others.
+export interface MemberDataset {
+  '@id': string;
+  '@type'?: string | string[];
+  title?: unknown;
+  'fuel:device'?: unknown;
+  'fuel:shot'?: unknown;
+  'dcat:distribution'?: unknown;
+  'prov:wasGeneratedBy'?: unknown;
+  [term: string]: unknown;
+}
+
+// One member's answer to a federated search: its datasets, or why it gave none.
+export interface MemberAnswer {
+  member: FederationMember;
+  status: 'answered' | 'failed';
+  detail?: string;
+  datasets: MemberDataset[];
+}
+
+export interface FederatedSearch {
+  '@context': Record<string, unknown>;
+  answers: MemberAnswer[];
+}

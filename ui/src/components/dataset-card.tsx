@@ -6,7 +6,8 @@ import { Dataset } from '@/lib/types';
 import { PropertyBadges } from '@/components/properties';
 import { ActivityBadge } from '@/components/activity-label';
 
-const BADGE = 'text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border';
+export const BADGE =
+  'text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border';
 
 // Friendly file-format label. Matched on substring rather than by table so that
 // the compound types (application/vnd.icechunk+zarr) land in the right bucket.

@@ -4,6 +4,8 @@ FDS can search other catalogues as well as its own. When a search arrives, FDS a
 
 Whoever runs FDS chooses the members (see [Operations](operations.md#federation)). So far a member can be another FDS, recent enough to answer its dataset listings in JSON-LD.
 
+In the reference UI, a shot's page lists the datasets each member holds on that shot, and the Simulations page lists each member's simulated datasets with the page's filters. Both come after this FDS's own datasets, member by member, and each card opens the dataset in its own catalogue.
+
 ## Asking the members
 
 The federated listings follow FDS's own dataset listings, under `/v1/federation`:

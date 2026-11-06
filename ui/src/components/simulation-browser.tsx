@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
-import { Cpu, Database, Layers } from 'lucide-react';
+import { Cpu, Database, Globe, Layers } from 'lucide-react';
 import { fetcher, API_BASE } from '@/lib/api';
 import { AvailableProperties, Collection, Dataset, Device, Source } from '@/lib/types';
 import { propertyQuery, withQuery } from '@/lib/properties';
@@ -13,6 +13,7 @@ import { LoadMore } from '@/components/load-more';
 import { DatasetCard } from '@/components/dataset-card';
 import { ActivityCard } from '@/components/activity-card';
 import { SearchBox } from '@/components/search-box';
+import { MemberAnswers, useFederationMembers } from '@/components/member-datasets';
 
 const PAGE_SIZE = 50;
 const DOCS = 'https://ukaea.github.io/fds/data-model/collection/#making-an-activity-discoverable';
@@ -155,6 +156,9 @@ function shown(items: unknown[] | undefined, done: boolean): string | undefined 
  * With `deviceName`, only that device's simulations are listed and the device
  * filter is hidden. Both lists then include simulations that modelled no shot,
  * such as predictive scenarios.
+ *
+ * Where FDS is configured to search other catalogues, their simulated datasets
+ * are listed last, member by member, asked with the same filters.
  */
 export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
   const [source, setSource] = useState<string | null>(null);
@@ -165,6 +169,7 @@ export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
 
   const { data: sources } = useSWR<Source[]>(`${API_BASE}/sources/`, fetcher);
   const { data: devices } = useSWR<Device[]>(deviceName ? null : `${API_BASE}/devices/`, fetcher);
+  const members = useFederationMembers();
 
   const scope = deviceName ?? device;
   const base = scope ? `${API_BASE}/devices/${scope}` : API_BASE;
@@ -188,6 +193,11 @@ export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
   const datasets = usePagedList<Dataset>(
     withQuery(`${base}/datasets`, ...simulationFilters),
     PAGE_SIZE
+  );
+  const memberDatasetsUrl = withQuery(
+    `${API_BASE}/federation${scope ? `/devices/${scope}` : ''}/datasets`,
+    ...simulationFilters,
+    `limit=${PAGE_SIZE}`
   );
 
   const codes = (sources ?? []).filter((s) => s.kind === 'software').map((s) => s.name);
@@ -319,6 +329,17 @@ export function SimulationBrowser({ deviceName }: { deviceName?: string }) {
         )}
         <LoadMore onLoad={datasets.loadMore} loading={datasets.loadingMore} done={datasets.done} />
       </section>
+
+      {!!members?.length && (
+        <section className="mt-12">
+          <SectionHeading
+            icon={Globe}
+            title="Simulated datasets in other catalogues"
+            hint="Asked with the same filters whenever they change, and kept where they are: each card opens the dataset in its own catalogue."
+          />
+          <MemberAnswers members={members} url={memberDatasetsUrl} limit={PAGE_SIZE} showContext />
+        </section>
+      )}
     </SidePanelLayout>
   );
 }
