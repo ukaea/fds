@@ -458,24 +458,22 @@ function RangeInput({
     setDragging(handle);
   };
 
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!dragging) return;
-    const value = snap(positionFrom(e.clientX));
-    onChange(
-      dragging === 'min'
-        ? { ...range, min: Math.min(value, to) }
-        : { ...range, max: Math.max(value, from) }
-    );
-  };
-
-  const nudge = (handle: 'min' | 'max', by: number) => {
-    const value = snap((handle === 'min' ? from : to) + by * step);
+  // A handle back at its end of the track sets no bound. A bound at the
+  // observed extreme would still leave out every record without the property.
+  const moveTo = (handle: 'min' | 'max', value: number) =>
     onChange(
       handle === 'min'
-        ? { ...range, min: Math.min(value, to) }
-        : { ...range, max: Math.max(value, from) }
+        ? { ...range, min: value <= low ? undefined : Math.min(value, to) }
+        : { ...range, max: value >= high ? undefined : Math.max(value, from) }
     );
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragging) return;
+    moveTo(dragging, snap(positionFrom(e.clientX)));
   };
+
+  const nudge = (handle: 'min' | 'max', by: number) =>
+    moveTo(handle, snap((handle === 'min' ? from : to) + by * step));
 
   const parse = (raw: string) => (raw === '' ? undefined : Number(raw));
 
