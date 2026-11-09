@@ -12,12 +12,13 @@ from app.api.deps import (
     Offset,
     WantsJSONLDDep,
 )
+from app.api.listings import LocalFilters, ShotSpanFilters
 from app.api.negotiation import (
     JSONLD_ALTERNATIVE,
     VARY_ACCEPT,
     JSONLDResponse,
 )
-from app.models.activity import ActivityRead, ActivityType
+from app.models.activity import ActivityRead
 from app.models.available_properties import AvailableProperties
 from app.models.collection import (
     CollectionCreate,
@@ -69,46 +70,16 @@ def read_collections_global(
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
-    name: str | None = None,
-    properties: Annotated[list[str] | None, Query(alias="property")] = None,
-    activity_type: ActivityType | None = None,
-    source: str | None = None,
-    activity_id: int | None = None,
-    include_replaced: bool = False,
-    shot_id_prefix: str | None = None,
+    filters: Annotated[LocalFilters, Query()],
+    span: Annotated[ShotSpanFilters, Query()],
     base: BaseURLDep,
 ) -> list[CollectionRead] | JSONLDResponse:
     """Retrieve every Collection accessible to the current user.
 
     A collection is attached to a shot, to a device as a whole, or to neither,
     in which case it is global. All of them are listed unless `scope` asks for
-    one kind: `global`, `device` or `shot`.
-
-    `name` keeps the collections with that name, so
-    `?scope=global&name=jintrac-42` finds a global collection by name. A name
-    that matches nothing gives an empty page.
-
-    `property` filters on the Collection's own `scientific_metadata`. Use `elm`
-    to match any collection that carries that property, or `elm:type-I` to match
-    a particular value. A property inside a group is named by its path, the
-    names joined by `.`: `nbi.beam.source:SW`. Repeat it with a *different* name
-    to require both:
-    `?property=disruption&property=elm` matches only collections carrying
-    each.
-
-    `activity_type`, `source` and `activity_id` filter on the Activity each
-    collection bundles, the one its `activity_id` names:
-    `?activity_type=simulation` lists the bundles of simulations. A bundle can
-    also hold datasets its Activity did not generate, such as the Activity's
-    inputs. To list only what an Activity generated, filter the dataset listings
-    on `activity_id`.
-
-    A collection is left out when you may read a collection that replaces
-    it, unless `include_replaced=true`.
-
-    `shot_id_prefix` keeps the collections on a shot whose ID starts with it, so
-    `304` finds those on shots 30420 and 30421. A collection on no shot never
-    matches.
+    one kind: `global`, `device` or `shot`. A collection's `activity_id` names
+    the Activity it bundles, and the Activity filters match that one.
 
     With `Accept: application/ld+json` the page is one JSON-LD document whose
     `@graph` holds each collection's `dcat:Catalog` node, in listing order.
@@ -118,13 +89,8 @@ def read_collections_global(
         scope=scope,
         offset=offset,
         limit=limit,
-        name=name,
-        properties=properties,
-        activity_type=activity_type,
-        source=source,
-        activity_id=activity_id,
-        include_replaced=include_replaced,
-        shot_id_prefix=shot_id_prefix,
+        **filters.model_dump(),
+        **span.model_dump(),
     )
     if jsonld:
         document = collection_service.to_dcat_listing(collections, base, user)
@@ -142,13 +108,8 @@ def read_collection_properties(
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     scope: CatalogueScope = CatalogueScope.ALL,
-    name: str | None = None,
-    properties: Annotated[list[str] | None, Query(alias="property")] = None,
-    activity_type: ActivityType | None = None,
-    source: str | None = None,
-    activity_id: int | None = None,
-    include_replaced: bool = False,
-    shot_id_prefix: str | None = None,
+    filters: Annotated[LocalFilters, Query()],
+    span: Annotated[ShotSpanFilters, Query()],
     max_values: int = DEFAULT_MAX_VALUES,
     include_constant: bool = False,
 ) -> AvailableProperties:
@@ -176,15 +137,10 @@ def read_collection_properties(
     return collection_service.available_properties(
         user=user,
         scope=scope,
-        name=name,
-        properties=properties,
-        activity_type=activity_type,
-        source=source,
-        activity_id=activity_id,
-        include_replaced=include_replaced,
-        shot_id_prefix=shot_id_prefix,
         max_values=max_values,
         include_constant=include_constant,
+        **filters.model_dump(),
+        **span.model_dump(),
     )
 
 
@@ -258,13 +214,8 @@ def read_collections_device(
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
-    name: str | None = None,
-    properties: Annotated[list[str] | None, Query(alias="property")] = None,
-    activity_type: ActivityType | None = None,
-    source: str | None = None,
-    activity_id: int | None = None,
-    include_replaced: bool = False,
-    shot_id_prefix: str | None = None,
+    filters: Annotated[LocalFilters, Query()],
+    span: Annotated[ShotSpanFilters, Query()],
     base: BaseURLDep,
 ) -> list[CollectionRead] | JSONLDResponse:
     """Retrieve a device's Collections that the current user may read.
@@ -272,31 +223,6 @@ def read_collections_device(
     These are the collections attached to the device as a whole and those
     attached to its shots. `scope=device` lists only the first, `scope=shot`
     only the second.
-
-    `name` keeps the collections with that name, so `?scope=device&name=coils`
-    finds a device-level collection by name.
-
-    `property` filters on the Collection's own `scientific_metadata`. Use `elm`
-    to match any collection that carries that property, or `elm:type-I` to match
-    a particular value. A property inside a group is named by its path, the
-    names joined by `.`: `nbi.beam.source:SW`. Repeat it with a *different* name
-    to require both:
-    `?property=disruption&property=elm` matches only collections carrying
-    each.
-
-    `activity_type`, `source` and `activity_id` filter on the Activity each
-    collection bundles, the one its `activity_id` names:
-    `?activity_type=simulation` lists the bundles of simulations. A bundle can
-    also hold datasets its Activity did not generate, such as the Activity's
-    inputs. To list only what an Activity generated, filter the dataset listings
-    on `activity_id`.
-
-    A collection is left out when you may read a collection that replaces
-    it, unless `include_replaced=true`.
-
-    `shot_id_prefix` keeps the collections on a shot whose ID starts with it, so
-    `304` finds those on shots 30420 and 30421. A collection on no shot never
-    matches.
 
     With `Accept: application/ld+json` the page is one JSON-LD document whose
     `@graph` holds each collection's `dcat:Catalog` node, in listing order.
@@ -307,13 +233,8 @@ def read_collections_device(
         scope=scope,
         offset=offset,
         limit=limit,
-        name=name,
-        properties=properties,
-        activity_type=activity_type,
-        source=source,
-        activity_id=activity_id,
-        include_replaced=include_replaced,
-        shot_id_prefix=shot_id_prefix,
+        **filters.model_dump(),
+        **span.model_dump(),
     )
     if jsonld:
         document = collection_service.to_dcat_listing(collections, base, user)
@@ -332,50 +253,26 @@ def read_collection_properties_device(
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     scope: DeviceScope = DeviceScope.ALL,
-    name: str | None = None,
-    properties: Annotated[list[str] | None, Query(alias="property")] = None,
-    activity_type: ActivityType | None = None,
-    source: str | None = None,
-    activity_id: int | None = None,
-    include_replaced: bool = False,
-    shot_id_prefix: str | None = None,
+    filters: Annotated[LocalFilters, Query()],
+    span: Annotated[ShotSpanFilters, Query()],
     max_values: int = DEFAULT_MAX_VALUES,
     include_constant: bool = False,
 ) -> AvailableProperties:
     """
     The properties a device's listed collections carry, for building a filter.
 
-    One entry per property, named by its path, with how many collections carry
-    it, how many distinct values it has, and the values themselves when there
-    are at most `max_values` of them. A group is not an entry: each property
-    inside it is, as `nbi.beam.source`. Takes the same filters as
-    `/devices/{device_name}/collections`, so `total` is the number of matching
-    collections.
-
-    When a filter names a property inside a group, the summary describes only
-    the group entries that match it. Say a collection records two neutral beams,
-    SS at 1.6 MW and SW at 1.4 MW. Filtered by `property=nbi.beam.source:SW`,
-    the summary gives `nbi.beam.power` as 1.4, the SW beam's power, rather
-    than 1.4 to 1.6.
-
-    A property is normally left out when every collection in scope has the same
-    single value for it, because picking that value would not narrow anything.
-    `include_constant=true` lists it anyway. A filter panel uses this to see
-    which options are still possible once something has been picked.
+    Takes the same filters as `/devices/{device_name}/collections`, so `total` is
+    the number of matching collections, and answers as `/collections/properties`
+    does.
     """
     return collection_service.available_properties(
         user=user,
         device_name=device_name,
         scope=scope,
-        name=name,
-        properties=properties,
-        activity_type=activity_type,
-        source=source,
-        activity_id=activity_id,
-        include_replaced=include_replaced,
-        shot_id_prefix=shot_id_prefix,
         max_values=max_values,
         include_constant=include_constant,
+        **filters.model_dump(),
+        **span.model_dump(),
     )
 
 
@@ -417,36 +314,13 @@ def read_collections_shot(
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
-    name: str | None = None,
-    properties: Annotated[list[str] | None, Query(alias="property")] = None,
-    activity_type: ActivityType | None = None,
-    source: str | None = None,
-    activity_id: int | None = None,
-    include_replaced: bool = False,
+    filters: Annotated[LocalFilters, Query()],
     base: BaseURLDep,
 ) -> list[CollectionRead] | JSONLDResponse:
     """Retrieve all Collections scoped to a specific shot.
 
-    `name` keeps the collection with that name. Names are unique on a shot, so
-    the page holds one collection, or none.
-
-    `property` filters on the Collection's own `scientific_metadata`. Use `elm`
-    to match any collection that carries that property, or `elm:type-I` to match
-    a particular value. A property inside a group is named by its path, the
-    names joined by `.`: `nbi.beam.source:SW`. Repeat it with a *different* name
-    to require both:
-    `?property=disruption&property=elm` matches only collections carrying
-    each.
-
-    `activity_type`, `source` and `activity_id` filter on the Activity each
-    collection bundles, the one its `activity_id` names:
-    `?activity_type=simulation` lists the bundles of simulations. A bundle can
-    also hold datasets its Activity did not generate, such as the Activity's
-    inputs. To list only what an Activity generated, filter the dataset listings
-    on `activity_id`.
-
-    A collection is left out when you may read a collection that replaces
-    it, unless `include_replaced=true`.
+    Collection names are unique on a shot, so `name` gives a page holding one
+    collection, or none.
 
     With `Accept: application/ld+json` the page is one JSON-LD document whose
     `@graph` holds each collection's `dcat:Catalog` node, in listing order.
@@ -457,12 +331,7 @@ def read_collections_shot(
         user=user,
         offset=offset,
         limit=limit,
-        name=name,
-        properties=properties,
-        activity_type=activity_type,
-        source=source,
-        activity_id=activity_id,
-        include_replaced=include_replaced,
+        **filters.model_dump(),
     )
     if jsonld:
         document = collection_service.to_dcat_listing(collections, base, user)
