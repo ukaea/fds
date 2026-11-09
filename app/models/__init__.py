@@ -42,6 +42,7 @@ from .distribution import (
     DistributionUpdate,
 )
 from .policy import AccessLevel
+from .property_rows import CollectionProperty, DatasetProperty, ShotProperty
 from .scientific_metadata import Extent, ScientificProperty
 from .shot import Shot, ShotCreate, ShotRead, ShotUpdate
 from .source import Source, SourceCreate, SourceKind, SourceRead, SourceUpdate
@@ -78,6 +79,7 @@ __all__ = [
     "CollectionDatasetRead",
     "CollectionMember",
     "CollectionMemberRead",
+    "CollectionProperty",
     "CollectionRead",
     "CollectionReplacement",
     "CollectionUpdate",
@@ -88,6 +90,7 @@ __all__ = [
     "DatasetDerivationCreate",
     "DatasetDerivationRead",
     "DatasetLineageNode",
+    "DatasetProperty",
     "DatasetRead",
     "DatasetReplacement",
     "DatasetUpdate",
@@ -104,6 +107,7 @@ __all__ = [
     "ScientificProperty",
     "Shot",
     "ShotCreate",
+    "ShotProperty",
     "ShotRange",
     "ShotRead",
     "ShotUpdate",

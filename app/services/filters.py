@@ -6,15 +6,15 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import ColumnElement
-from sqlalchemy import select as sa_select
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import aliased
 from sqlmodel import (
-    Numeric,
+    SQLModel,
+    Text,
     and_,
-    case,
     cast,
     col,
-    func,
+    exists,
     literal,
     literal_column,
     or_,
@@ -23,9 +23,18 @@ from sqlmodel import (
 )
 
 from app.models.activity import Activity, ActivityType
+from app.models.collection import Collection
+from app.models.dataset import Dataset
 from app.models.policy import AccessLevel
+from app.models.property_rows import (
+    CollectionProperty,
+    DatasetProperty,
+    PropertyRowMixin,
+    ShotProperty,
+)
 from app.models.scientific_metadata import PATH_SEPARATOR, PROPERTY_SEPARATOR
 from app.models.scope import CatalogueScope, DeviceScope
+from app.models.shot import Shot
 from app.models.source import Source
 from app.services.exceptions import FDSValidationError
 
@@ -77,7 +86,8 @@ def _value_candidates(value: str) -> list[str]:
     return candidates
 
 
-# Matches a number written in decimal or scientific notation.
+# Matches a number written in decimal or scientific notation. The SQL function
+# that fills the property tables holds a copy, to read stored values with.
 NUMERIC_TEXT = r"^-?\d+(\.\d+)?([eE][-+]?\d+)?$"
 
 # The most digits PostgreSQL's numeric holds before and after the decimal point.
@@ -103,33 +113,6 @@ def _json_number(value: str) -> str | None:
     ):
         return None
     return str(number)
-
-
-def _array_or_empty(value: Any) -> Any:
-    """``value`` when it is a JSON array, and an empty array otherwise.
-
-    ``jsonb_array_elements`` rejects anything that is not an array. A record
-    with no metadata holds SQL NULL, and a property that is not a group holds
-    no ``properties``, so each yields no rows instead of raising.
-    """
-    return case(
-        (func.jsonb_typeof(value) == "array", value),
-        else_=literal_column("'[]'::jsonb"),
-    )
-
-
-def _properties_in(array: Any) -> Any:
-    """The properties in a JSON array, one row each, in a column named ``value``.
-
-    Built fresh on each call: two ``jsonb_array_elements`` in one statement would
-    otherwise alias into each other.
-    """
-    return func.jsonb_array_elements(_array_or_empty(array)).table_valued("value")
-
-
-def _is_group(entry: Any) -> ColumnElement[bool]:
-    """Whether a property holds a list of properties rather than a value."""
-    return func.jsonb_typeof(entry.op("->")("properties")).is_not_distinct_from("array")
 
 
 @dataclass(frozen=True)
@@ -190,39 +173,116 @@ def property_conditions(
     return conditions
 
 
-def _meets(condition: PropertyCondition, entry: Any) -> ColumnElement[bool]:
-    """Whether the property ``entry`` meets ``condition``, its name aside.
+PROPERTY_ROWS: dict[type[SQLModel], type[PropertyRowMixin]] = {
+    Shot: ShotProperty,
+    Dataset: DatasetProperty,
+    Collection: CollectionProperty,
+}
 
-    A bound compares only values that read as numbers: the CASE leaves any
-    other value NULL, where casting it would abort the whole query.
+
+def _record_key(rows: type[PropertyRowMixin]) -> list[tuple[str, str]]:
+    """Each column of ``rows`` naming its record, with the record's column it holds."""
+    (constraint,) = rows.__table__.foreign_key_constraints  # type: ignore[attr-defined]
+    return [(key.parent.name, key.column.name) for key in constraint.elements]
+
+
+def property_rows(
+    model: type[SQLModel],
+) -> tuple[type[PropertyRowMixin], ColumnElement[bool]]:
+    """The table of the properties of ``model``'s records, and the clause joining
+    a row of it to its record."""
+    rows = PROPERTY_ROWS[model]
+    return rows, and_(
+        *(
+            getattr(rows, ours) == getattr(model, theirs)
+            for ours, theirs in _record_key(rows)
+        )
+    )
+
+
+def record_columns(rows: Any) -> list[Any]:
+    """The columns of a property row that name its record."""
+    return [getattr(rows, ours) for ours, _ in _record_key(rows)]
+
+
+def value_text(value: Any) -> ColumnElement[str]:
+    """A property's JSON value as text: a string without its quotes, a number
+    or boolean as written, and nothing for no value."""
+    return value.op("#>>", return_type=Text)(literal_column("'{}'"))
+
+
+@dataclass(frozen=True)
+class _Within:
+    """Where the properties that conditions name are looked for.
+
+    In one record, whose key ``record`` gives as columns of the query around
+    the conditions, or in one instance of a group in it: ``group`` is the
+    group's path and ``position`` the instance's position.
     """
-    value = entry.op("->>")("value")
+
+    rows: type[PropertyRowMixin]
+    record: tuple[Any, ...]
+    group: str | None = None
+    position: Any = None
+
+    def path(self, name: str) -> str:
+        return name if self.group is None else f"{self.group}{PATH_SEPARATOR}{name}"
+
+    def properties(self, name: str) -> tuple[Any, list[ColumnElement[bool]]]:
+        """A fresh alias of the rows, and the clauses keeping the properties
+        named ``name`` here."""
+        row = aliased(self.rows)
+        clauses = [
+            getattr(row, ours) == key
+            for (ours, _), key in zip(_record_key(self.rows), self.record, strict=True)
+        ]
+        clauses.append(col(row.path) == self.path(name))
+        if self.group is not None:
+            depth = self.group.count(PATH_SEPARATOR) + 1
+            clauses.append(col(row.position)[1:depth] == self.position)
+        return row, clauses
+
+    def inside(self, instance: Any, name: str) -> "_Within":
+        """Within ``instance``, a row of the group named ``name`` here.
+
+        The record is named by ``instance``'s own columns: SQLAlchemy
+        correlates a subquery only with the query directly around it.
+        """
+        return _Within(
+            self.rows,
+            tuple(record_columns(instance)),
+            self.path(name),
+            col(instance.position),
+        )
+
+
+def _meets(condition: PropertyCondition, row: Any) -> ColumnElement[bool]:
+    """Whether the property ``row`` meets ``condition``, its path aside."""
     if condition.bound is not None:
-        number = case((value.op("~")(NUMERIC_TEXT), cast(value, Numeric)))
+        number = col(row.number)
         return (
             number >= condition.bound if condition.lower else number <= condition.bound
         )
     if condition.value is None:
         return true()
-    stored = entry.op("->")("value")
     return or_(
         *(
-            stored == cast(literal(candidate), JSONB)
+            col(row.value) == cast(literal(candidate), JSONB)
             for candidate in _value_candidates(condition.value)
         )
     )
 
 
-def _clauses_on(
-    array: Any, conditions: Sequence[PropertyCondition]
+def _clauses_within(
+    within: _Within, conditions: Sequence[PropertyCondition]
 ) -> list[ColumnElement[bool]]:
-    """The clauses the properties in a JSON ``array`` must meet for ``conditions``.
+    """The clauses the properties ``within`` must meet for ``conditions``.
 
-    A condition on a property in the array is met by any property of that name.
-    Presence and values of one name are alternatives and OR together, and each
+    A condition on a property here is met by any property at its path.
+    Presence and values of one path are alternatives and OR together, and each
     bound is a clause of its own. The conditions on properties inside a group
-    must all be met by one entry of the group, so they go in a single EXISTS
-    over the group's entries, built the same way one level down.
+    must all be met in one instance of it, so they go in a single EXISTS over
+    the group's instances, built the same way one level down.
     """
     here: dict[str, list[PropertyCondition]] = {}
     inside: dict[str, list[PropertyCondition]] = {}
@@ -234,49 +294,29 @@ def _clauses_on(
     for name, named_here in here.items():
         alternatives = [c for c in named_here if c.bound is None]
         if alternatives:
-            entries = _properties_in(array)
-            entry = entries.c.value
+            row, at = within.properties(name)
             clauses.append(
-                sa_select(1)
-                .select_from(entries)
-                .where(
-                    entry.op("->>")("name") == name,
-                    or_(*(_meets(c, entry) for c in alternatives)),
-                )
-                .exists()
+                exists().where(*at, or_(*(_meets(c, row) for c in alternatives)))
             )
         for bound in (c for c in named_here if c.bound is not None):
-            entries = _properties_in(array)
-            entry = entries.c.value
-            clauses.append(
-                sa_select(1)
-                .select_from(entries)
-                .where(entry.op("->>")("name") == name, _meets(bound, entry))
-                .exists()
-            )
+            row, at = within.properties(name)
+            clauses.append(exists().where(*at, _meets(bound, row)))
     for name, named_inside in inside.items():
-        instances = _properties_in(array)
-        instance = instances.c.value
-        within = [replace(c, names=c.names[1:]) for c in named_inside]
+        instance, at = within.properties(name)
+        inner = [replace(c, names=c.names[1:]) for c in named_inside]
         clauses.append(
-            sa_select(1)
-            .select_from(instances)
-            .where(
-                instance.op("->>")("name") == name,
-                *_clauses_on(instance.op("->")("properties"), within),
-            )
-            .exists()
+            exists().where(*at, *_clauses_within(within.inside(instance, name), inner))
         )
     return clauses
 
 
 def property_clauses(
-    column: Any,
+    model: type[SQLModel],
     properties: list[str] | None,
     minimums: list[str] | None = None,
     maximums: list[str] | None = None,
 ) -> list[ColumnElement[bool]]:
-    """Parse and build the clauses for the ``property`` filters on a column.
+    """Parse and build the clauses for the ``property`` filters on ``model``.
 
     Values of the **same** path OR together; **different** paths AND. So
     ``?property=heating:SS&property=heating:SW&property=pellets:true``
@@ -293,7 +333,11 @@ def property_clauses(
     that both ran above 1.5 MW, belongs with the extent predicates in a
     structured search rather than in a query string.
     """
-    return _clauses_on(column, property_conditions(properties, minimums, maximums))
+    rows = PROPERTY_ROWS[model]
+    record = tuple(getattr(model, theirs) for _, theirs in _record_key(rows))
+    return _clauses_within(
+        _Within(rows, record), property_conditions(properties, minimums, maximums)
+    )
 
 
 def _group_conditions(
@@ -315,118 +359,28 @@ def _group_conditions(
     return by_group
 
 
-def _in_a_matching_instance(
-    path: Any, entry: Any, by_group: dict[str, list[PropertyCondition]]
-) -> ColumnElement[bool]:
-    """Whether the summary should look at this property, given the filters.
+def in_matching_instances(
+    rows: type[PropertyRowMixin], conditions: Sequence[PropertyCondition]
+) -> list[ColumnElement[bool]]:
+    """Whether the summary should look at a row of ``rows``, given the filters.
 
-    A group entry is looked at only if it matches the filters that apply
-    inside it, and when it is skipped so is everything in it. With a filter on
-    ``nbi.beam.source:SW``, the entry for the SS beam is skipped, and with it
-    the SS beam's ``power``. Every property that is not a group is looked at.
+    A property inside a group is looked at only if the instance of the group it
+    sits in matches the filters that apply inside that group, at every level.
+    With a filter on ``nbi.beam.source:SW``, the SS beam's ``power`` is
+    skipped. Every property outside a filtered group is looked at.
     """
-    if not by_group:
-        return true()
-    return or_(
-        ~_is_group(entry),
-        case(
-            *(
-                (
-                    path == group,
-                    and_(*_clauses_on(entry.op("->")("properties"), within)),
-                )
-                for group, within in by_group.items()
-            ),
-            else_=true(),
-        ),
-    )
-
-
-def property_entries(
-    column: Any,
-    path: str | None = None,
-    conditions: Sequence[PropertyCondition] = (),
-) -> Any:
-    """The properties in a ``scientific_metadata`` column, one row each.
-
-    Each row has the property's ``path`` (its name, after the names of the
-    groups it sits in, joined by ``.``), the property itself as JSON in
-    ``entry``, the ``extent`` that localises it, and whether it ``is_group``.
-    A property inside a group has no extent of its own, so it carries the
-    extent of the outermost group it sits in.
-
-    With no ``path``, every property at every depth is returned, for the
-    properties summary. With a ``path``, only the properties at that path are,
-    found by following its names down through each group's ``properties``.
-    Following one path costs about what reading a flat list does, and walking
-    every depth to find it costs several times more, so the values listing,
-    which names one path, follows it. Both read a group's children with
-    ``_properties_in``, so they cannot disagree about where the children are.
-
-    ``conditions`` are the filters the summary is scoped by. When walking every
-    depth, a group entry that does not match the filters inside it is skipped
-    along with everything in it. With a filter on ``nbi.beam.source:SW``, the
-    walk skips the SS beam's entry, so the summary reports the SW beam's
-    ``power`` and not the SS beam's.
-
-    Returned as a lateral subquery, to join to the table ``column`` belongs to
-    or to select from inside an EXISTS.
-    """
-    if path is not None:
-        return _entries_at(column, path)
-
-    by_group = _group_conditions(conditions)
-    top = _properties_in(column)
-    top_path = top.c.value.op("->>")("name")
-    walk = (
-        select(
-            top_path.label("path"),
-            top.c.value.label("entry"),
-            top.c.value.op("->")("extent").label("extent"),
+    record = tuple(record_columns(rows))
+    clauses: list[ColumnElement[bool]] = []
+    for group, inner in _group_conditions(conditions).items():
+        depth = group.count(PATH_SEPARATOR) + 1
+        instance = _Within(rows, record, group, col(rows.position)[1:depth])
+        clauses.append(
+            or_(
+                ~col(rows.path).startswith(f"{group}{PATH_SEPARATOR}", autoescape=True),
+                and_(*_clauses_within(instance, inner)),
+            )
         )
-        .where(_in_a_matching_instance(top_path, top.c.value, by_group))
-        .cte(recursive=True, nesting=True)
-    )
-    children = _properties_in(walk.c.entry.op("->")("properties"))
-    child_path = func.concat(
-        walk.c.path, PATH_SEPARATOR, children.c.value.op("->>")("name")
-    )
-    walk = walk.union_all(
-        select(child_path, children.c.value, walk.c.extent)
-        .select_from(walk)
-        .join(children, true())
-        .where(_in_a_matching_instance(child_path, children.c.value, by_group))
-    )
-    return select(
-        walk.c.path,
-        walk.c.entry,
-        walk.c.extent,
-        _is_group(walk.c.entry).label("is_group"),
-    ).lateral()
-
-
-def _entries_at(column: Any, path: str) -> Any:
-    """The properties at ``path``, in the shape ``property_entries`` returns."""
-    names = path.split(PATH_SEPARATOR)
-    levels = [_properties_in(column)]
-    for _ in names[1:]:
-        levels.append(_properties_in(levels[-1].c.value.op("->")("properties")))
-    top, bottom = levels[0], levels[-1]
-
-    statement = select(
-        literal(path).label("path"),
-        bottom.c.value.label("entry"),
-        top.c.value.op("->")("extent").label("extent"),
-        _is_group(bottom.c.value).label("is_group"),
-    ).select_from(top)
-    for level in levels[1:]:
-        statement = statement.join(level, true())
-    return statement.where(
-        *(
-            level.c.value.op("->>")("name") == name
-            for level, name in zip(levels, names, strict=True)
-        )
-    ).lateral()
+    return clauses
 
 
 def policy_tuple_clause(
