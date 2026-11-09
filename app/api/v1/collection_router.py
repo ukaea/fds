@@ -4,18 +4,16 @@ from fastapi import APIRouter, Query, status
 
 from app.api.deps import (
     DEFAULT_PAGE_SIZE,
-    BaseURLDep,
+    AnswerDep,
     CollectionServiceDep,
     CurrentUserDep,
     DatasetServiceDep,
     Limit,
     Offset,
-    WantsJSONLDDep,
 )
 from app.api.listings import LocalFilters, ShotSpanFilters
 from app.api.negotiation import (
     JSONLD_ALTERNATIVE,
-    VARY_ACCEPT,
     JSONLDResponse,
 )
 from app.models.activity import ActivityRead
@@ -63,7 +61,7 @@ def create_collection_global(
 )
 def read_collections_global(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     scope: CatalogueScope = CatalogueScope.ALL,
@@ -72,7 +70,6 @@ def read_collections_global(
     include_storage_options: bool = False,
     filters: Annotated[LocalFilters, Query()],
     span: Annotated[ShotSpanFilters, Query()],
-    base: BaseURLDep,
 ) -> list[CollectionRead] | JSONLDResponse:
     """Retrieve every Collection accessible to the current user.
 
@@ -92,10 +89,12 @@ def read_collections_global(
         **filters.model_dump(),
         **span.model_dump(),
     )
-    if jsonld:
-        document = collection_service.to_dcat_listing(collections, base, user)
-        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
-    return collection_service.to_read_models(collections, include_storage_options, user)
+    return answer(
+        json=lambda: collection_service.to_read_models(
+            collections, include_storage_options, user
+        ),
+        jsonld=lambda base: collection_service.to_dcat_listing(collections, base, user),
+    )
 
 
 @router.get(
@@ -152,12 +151,11 @@ def read_collection_properties(
 )
 def read_collection(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     id: int,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     include_storage_options: bool = False,
-    base: BaseURLDep,
 ) -> CollectionRead | JSONLDResponse:
     """Retrieve a single Collection by its ID.
 
@@ -172,10 +170,12 @@ def read_collection(
         raise ResourceNotFoundError(f"Collection {id} not found")
     collection_service.check_read_access(collection, user)
 
-    if jsonld:
-        dcat_metadata = collection_service.to_dcat(collection, base, user)
-        return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
-    return collection_service.to_read_model(collection, include_storage_options, user)
+    return answer(
+        json=lambda: collection_service.to_read_model(
+            collection, include_storage_options, user
+        ),
+        jsonld=lambda base: collection_service.to_dcat(collection, base, user),
+    )
 
 
 @router.post(
@@ -206,7 +206,7 @@ def create_collection_device(
 )
 def read_collections_device(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     device_name: str,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
@@ -216,7 +216,6 @@ def read_collections_device(
     include_storage_options: bool = False,
     filters: Annotated[LocalFilters, Query()],
     span: Annotated[ShotSpanFilters, Query()],
-    base: BaseURLDep,
 ) -> list[CollectionRead] | JSONLDResponse:
     """Retrieve a device's Collections that the current user may read.
 
@@ -236,10 +235,12 @@ def read_collections_device(
         **filters.model_dump(),
         **span.model_dump(),
     )
-    if jsonld:
-        document = collection_service.to_dcat_listing(collections, base, user)
-        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
-    return collection_service.to_read_models(collections, include_storage_options, user)
+    return answer(
+        json=lambda: collection_service.to_read_models(
+            collections, include_storage_options, user
+        ),
+        jsonld=lambda base: collection_service.to_dcat_listing(collections, base, user),
+    )
 
 
 @router.get(
@@ -306,7 +307,7 @@ def create_collection_shot(
 )
 def read_collections_shot(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     device_name: str,
     shot_id: str,
     collection_service: CollectionServiceDep,
@@ -315,7 +316,6 @@ def read_collections_shot(
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
     filters: Annotated[LocalFilters, Query()],
-    base: BaseURLDep,
 ) -> list[CollectionRead] | JSONLDResponse:
     """Retrieve all Collections scoped to a specific shot.
 
@@ -333,10 +333,12 @@ def read_collections_shot(
         limit=limit,
         **filters.model_dump(),
     )
-    if jsonld:
-        document = collection_service.to_dcat_listing(collections, base, user)
-        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
-    return collection_service.to_read_models(collections, include_storage_options, user)
+    return answer(
+        json=lambda: collection_service.to_read_models(
+            collections, include_storage_options, user
+        ),
+        jsonld=lambda base: collection_service.to_dcat_listing(collections, base, user),
+    )
 
 
 @router.patch(

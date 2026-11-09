@@ -4,14 +4,13 @@ from fastapi import APIRouter, Query, status
 
 from app.api.deps import (
     DEFAULT_PAGE_SIZE,
-    BaseURLDep,
+    AnswerDep,
     CurrentUserDep,
     DatasetServiceDep,
     DistributionServiceDep,
     Limit,
     Offset,
     SourceServiceDep,
-    WantsJSONLDDep,
 )
 from app.api.listings import (
     DatasetIncludes,
@@ -20,7 +19,6 @@ from app.api.listings import (
 )
 from app.api.negotiation import (
     JSONLD_ALTERNATIVE,
-    VARY_ACCEPT,
     JSONLDResponse,
 )
 from app.models.activity import ActivityRead
@@ -71,7 +69,7 @@ def create_dataset_global(
 )
 def read_datasets_global(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     scope: CatalogueScope = CatalogueScope.ALL,
@@ -80,7 +78,6 @@ def read_datasets_global(
     filters: Annotated[LocalFilters, Query()],
     span: Annotated[DatasetShotSpanFilters, Query()],
     includes: Annotated[DatasetIncludes, Query()],
-    base: BaseURLDep,
 ) -> list[DatasetRead] | JSONLDResponse:
     """
     Retrieve every dataset accessible to the current user.
@@ -101,17 +98,19 @@ def read_datasets_global(
         **filters.model_dump(),
         **span.model_dump(),
     )
-    if jsonld:
-        document = dataset_service.to_dcat_listing(
+    return answer(
+        json=lambda: dataset_service.to_read_models(
+            datasets, user=user, **includes.model_dump()
+        ),
+        jsonld=lambda base: dataset_service.to_dcat_listing(
             datasets,
             base,
             user=user,
             include_geometry=includes.include_geometry,
             include_calibration=includes.include_calibration,
             include_annotations=includes.include_annotations,
-        )
-        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
-    return dataset_service.to_read_models(datasets, user=user, **includes.model_dump())
+        ),
+    )
 
 
 @router.post(
@@ -166,7 +165,7 @@ def create_dataset_shot(
 )
 def read_datasets_shot(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     device_name: str,
     shot_id: str,
     dataset_service: DatasetServiceDep,
@@ -175,7 +174,6 @@ def read_datasets_shot(
     limit: Limit = DEFAULT_PAGE_SIZE,
     filters: Annotated[LocalFilters, Query()],
     includes: Annotated[DatasetIncludes, Query()],
-    base: BaseURLDep,
 ) -> list[DatasetRead] | JSONLDResponse:
     """
     Retrieve all datasets for a specific shot.
@@ -194,17 +192,19 @@ def read_datasets_shot(
         limit=limit,
         **filters.model_dump(),
     )
-    if jsonld:
-        document = dataset_service.to_dcat_listing(
+    return answer(
+        json=lambda: dataset_service.to_read_models(
+            datasets, user=user, **includes.model_dump()
+        ),
+        jsonld=lambda base: dataset_service.to_dcat_listing(
             datasets,
             base,
             user=user,
             include_geometry=includes.include_geometry,
             include_calibration=includes.include_calibration,
             include_annotations=includes.include_annotations,
-        )
-        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
-    return dataset_service.to_read_models(datasets, user=user, **includes.model_dump())
+        ),
+    )
 
 
 @router.get(
@@ -215,12 +215,11 @@ def read_datasets_shot(
 )
 def read_dataset(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     id: int,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     includes: Annotated[DatasetIncludes, Query()],
-    base: BaseURLDep,
 ) -> DatasetRead | JSONLDResponse:
     """
     Retrieve a single dataset by its ID.
@@ -236,17 +235,19 @@ def read_dataset(
         raise ResourceNotFoundError(f"Dataset {id} not found")
     dataset_service.check_read_access(dataset, user)
 
-    if jsonld:
-        dcat_metadata = dataset_service.to_dcat(
+    return answer(
+        json=lambda: dataset_service.to_read_model(
+            dataset, user=user, **includes.model_dump()
+        ),
+        jsonld=lambda base: dataset_service.to_dcat(
             dataset,
             base,
             user=user,
             include_geometry=includes.include_geometry,
             include_calibration=includes.include_calibration,
             include_annotations=includes.include_annotations,
-        )
-        return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
-    return dataset_service.to_read_model(dataset, user=user, **includes.model_dump())
+        ),
+    )
 
 
 @router.get(
@@ -257,7 +258,7 @@ def read_dataset(
 )
 def read_datasets_device(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     device_name: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
@@ -267,7 +268,6 @@ def read_datasets_device(
     filters: Annotated[LocalFilters, Query()],
     span: Annotated[DatasetShotSpanFilters, Query()],
     includes: Annotated[DatasetIncludes, Query()],
-    base: BaseURLDep,
 ) -> list[DatasetRead] | JSONLDResponse:
     """
     Retrieve datasets hosted by a device.
@@ -290,17 +290,19 @@ def read_datasets_device(
         **filters.model_dump(),
         **span.model_dump(),
     )
-    if jsonld:
-        document = dataset_service.to_dcat_listing(
+    return answer(
+        json=lambda: dataset_service.to_read_models(
+            datasets, user=user, **includes.model_dump()
+        ),
+        jsonld=lambda base: dataset_service.to_dcat_listing(
             datasets,
             base,
             user=user,
             include_geometry=includes.include_geometry,
             include_calibration=includes.include_calibration,
             include_annotations=includes.include_annotations,
-        )
-        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
-    return dataset_service.to_read_models(datasets, user=user, **includes.model_dump())
+        ),
+    )
 
 
 @router.patch(

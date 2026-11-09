@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.api.negotiation import prefers_jsonld
+from app.api.negotiation import Answer
 from app.main import app
 from app.models.collection import CollectionCreate
 from app.models.dataset import DatasetCreate
@@ -198,7 +198,7 @@ def test_content_negotiation_dataset(test_client: TestClient, session: Session):
     ],
 )
 def test_prefers_jsonld(accept: str | None, jsonld: bool):
-    assert prefers_jsonld(accept) is jsonld
+    assert Answer.prefers_jsonld(accept) is jsonld
 
 
 @pytest.fixture

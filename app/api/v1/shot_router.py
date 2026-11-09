@@ -4,16 +4,14 @@ from fastapi import APIRouter, Query, status
 
 from app.api.deps import (
     DEFAULT_PAGE_SIZE,
-    BaseURLDep,
+    AnswerDep,
     CurrentUserDep,
     Limit,
     Offset,
     ShotServiceDep,
-    WantsJSONLDDep,
 )
 from app.api.negotiation import (
     JSONLD_ALTERNATIVE,
-    VARY_ACCEPT,
     JSONLDResponse,
 )
 from app.models.available_properties import AvailableProperties, PropertyValues
@@ -198,31 +196,31 @@ def read_shot_property_values(
 )
 def read_shot(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     device_name: str,
     shot_service: ShotServiceDep,
     shot_id: str,
     user: CurrentUserDep,
     include_annotations: bool = False,
-    base: BaseURLDep,
 ) -> ShotRead | JSONLDResponse:
     """
     Retrieve a shot specifically for a device context.
     Supports content negotiation: Accept: application/ld+json returns DCAT JSON-LD.
     """
     shot = shot_service.get_by_device_name(shot_id, device_name, user)
-    if jsonld:
-        return JSONLDResponse(
-            content=shot_service.to_dcat(
-                shot,
-                base,
-                include_annotations=include_annotations,
-                user=user,
-            ),
-            headers=VARY_ACCEPT,
-        )
-    return shot_service.to_read_model(
-        shot, include_device=True, include_annotations=include_annotations, user=user
+    return answer(
+        json=lambda: shot_service.to_read_model(
+            shot,
+            include_device=True,
+            include_annotations=include_annotations,
+            user=user,
+        ),
+        jsonld=lambda base: shot_service.to_dcat(
+            shot,
+            base,
+            include_annotations=include_annotations,
+            user=user,
+        ),
     )
 
 
