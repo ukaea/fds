@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.1.0](https://github.com/ukaea/fds/compare/v0.0.9...v0.1.0) (2026-11-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* Address records by id and find them by name through listings ([#272](https://github.com/ukaea/fds/issues/272))
+* a scientific metadata value must be text, a number, a boolean or null; an object or a list is rejected. Write an object as a group of properties, and several values as several properties with the same name. A property name can no longer contain `.` or `:`.
+
+### Features
+
+* Answer dataset listings in JSON-LD when asked ([#220](https://github.com/ukaea/fds/issues/220)) ([e75a668](https://github.com/ukaea/fds/commit/e75a668cd557902ee6f078bbaa426e1788678448))
+* Find simulation runs by shot ([#215](https://github.com/ukaea/fds/issues/215)) ([4307d70](https://github.com/ukaea/fds/commit/4307d700c5f6b945b68a6ac1e83190ffd1d8b0df))
+* Keep a renamed record's old and new name in the audit trail ([#262](https://github.com/ukaea/fds/issues/262)) ([23fb0e8](https://github.com/ukaea/fds/commit/23fb0e8fe9ccb21b0773d6216610b8b5550bc44b))
+* Let a collection replace an earlier pass ([#254](https://github.com/ukaea/fds/issues/254)) ([ff94c8a](https://github.com/ukaea/fds/commit/ff94c8ab86dc0754d68bf57690f2078f899fd5b6))
+* Let a dataset replace earlier versions, and name a point in a store's history ([#253](https://github.com/ukaea/fds/issues/253)) ([d6c9cd9](https://github.com/ukaea/fds/commit/d6c9cd9a4f1a42eeaeed4a5ceed9f9468e47ffb4))
+* Let scientific metadata properties nest in groups ([#263](https://github.com/ukaea/fds/issues/263)) ([384283c](https://github.com/ukaea/fds/commit/384283cda5c0759b6ba1633f3b3573e1630fd7c2))
+* Match a group's filters within one entry of it ([#266](https://github.com/ukaea/fds/issues/266)) ([331dc80](https://github.com/ukaea/fds/commit/331dc801a20de5ea953c096a2a6e8eb76ac43312))
+* Name a dataset's device and shot in its JSON-LD ([#219](https://github.com/ukaea/fds/issues/219)) ([ce00e07](https://github.com/ukaea/fds/commit/ce00e07f1c4386d1b6782424c926bca525242418))
+* Publish grouped scientific metadata as nested PropertyValues ([#264](https://github.com/ukaea/fds/issues/264)) ([662cf32](https://github.com/ukaea/fds/commit/662cf32d684a30321e039bf28be7168e9885d88e))
+* Say when each run started, and keep run badges inside their cards ([#214](https://github.com/ukaea/fds/issues/214)) ([43e76f5](https://github.com/ukaea/fds/commit/43e76f5d0b55320efc19d0bb2efdf4fa0f0d6378))
+* Search other FDS catalogues alongside this one ([#257](https://github.com/ukaea/fds/issues/257)) ([ef71304](https://github.com/ukaea/fds/commit/ef71304b76a704cfbfdf59c0d37c36146360aa9c))
+* Show how many shots each filter value describes ([#207](https://github.com/ukaea/fds/issues/207)) ([6305f0a](https://github.com/ukaea/fds/commit/6305f0a0ad845f594858064de58ed29608be3dfe))
+* Show metadata groups in the UI and disable filter options that cannot match ([#267](https://github.com/ukaea/fds/issues/267)) ([de9f670](https://github.com/ukaea/fds/commit/de9f670504b36419484a138d90329c161c901ae3))
+* Show other catalogues' datasets on the Simulations and shot pages ([#259](https://github.com/ukaea/fds/issues/259)) ([fe18cb4](https://github.com/ukaea/fds/commit/fe18cb4cbec9188102dbe84c9e2bb7c7f74b556f))
+
+
+### Bug Fixes
+
+* Accept minted tokens when FDS runs from a checkout ([#234](https://github.com/ukaea/fds/issues/234)) ([132fcac](https://github.com/ukaea/fds/commit/132fcac7b1b5970bb061a5739a6b43565ee69fb1))
+* Address records by id and find them by name through listings ([#272](https://github.com/ukaea/fds/issues/272)) ([aa5e2ca](https://github.com/ukaea/fds/commit/aa5e2ca14ab86dae5ed114289923b172582b8b26))
+* Choose JSON or JSON-LD by the Accept header's preferences ([#255](https://github.com/ukaea/fds/issues/255)) ([05ba8d5](https://github.com/ukaea/fds/commit/05ba8d52a3301a779fe32ee6d31ac69a2f0630d1))
+* Give each key mint-token.py makes an ID of its own ([#243](https://github.com/ukaea/fds/issues/243)) ([e8f68ab](https://github.com/ukaea/fds/commit/e8f68abba354ee2a7df33fe6b5af4e3af009c15a))
+* Keep a run's parameters whole when its JSON-LD is read as linked data ([#216](https://github.com/ukaea/fds/issues/216)) ([9863223](https://github.com/ukaea/fds/commit/986322314721420f5085bfb8635a4875ee1678ed))
+* Keep the shot range filter responsive ([#274](https://github.com/ukaea/fds/issues/274)) ([4bb97a3](https://github.com/ukaea/fds/commit/4bb97a3a8d2ae8b1df5a9a40523bdfc7d8a228fd))
+* Name the catalogue without the API version ([#258](https://github.com/ukaea/fds/issues/258)) ([144c9c7](https://github.com/ukaea/fds/commit/144c9c749af6c20ff28dd7c6121b6b5659b61a84))
+* Refuse a null device or shot when updating a dataset or collection ([#250](https://github.com/ukaea/fds/issues/250)) ([d723ae3](https://github.com/ukaea/fds/commit/d723ae3858f9cf212f82c7cf125c7e676771afc4))
+* Reject cycles in collection nesting ([#237](https://github.com/ukaea/fds/issues/237)) ([e59cf55](https://github.com/ukaea/fds/commit/e59cf55a4d8af6ba3408859e8f06fbc846ede1cf))
+* validate record renames before updating ([#236](https://github.com/ukaea/fds/issues/236)) ([6240309](https://github.com/ukaea/fds/commit/6240309acbd46179c88ad5cf5eddc2c62b7ac321))
+
+
+### Documentation
+
+* Badge only the CI check on main ([#247](https://github.com/ukaea/fds/issues/247)) ([850d95a](https://github.com/ukaea/fds/commit/850d95abf107d07b1d7842431f6e22de4391183a))
+* Say dataset and collection names can be corrected ([#260](https://github.com/ukaea/fds/issues/260)) ([5fb5e0f](https://github.com/ukaea/fds/commit/5fb5e0f2103f8b42e43d32b151730ea1a3c24ad1))
+
 ## [0.0.9](https://github.com/ukaea/fds/compare/v0.0.8...v0.0.9) (2026-10-14)
 
 
