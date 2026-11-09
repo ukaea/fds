@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, Self
 
 from pydantic import model_validator
 from sqlmodel import (
-    JSON,
     Column,
     Field,
     ForeignKeyConstraint,
@@ -18,6 +17,7 @@ from app.core.timeutils import UTCDatetime
 from .coverage import Coverage
 from .distribution import SchemaURI
 from .mixins import (
+    JSONB_COLUMN,
     DescriptiveMixin,
     IssuedMixin,
     PersistentIdentifierMixin,
@@ -88,7 +88,7 @@ class DatasetBase(
             "If null, scope requirements inherit from the enclosing shot or device "
             "policy."
         ),
-        sa_column=Column(JSON, nullable=True),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
     )
     allowed_idps: list[str] | None = Field(
         default=None,
@@ -96,7 +96,7 @@ class DatasetBase(
             "Trusted issuer allowlist for this dataset. If null, allowed issuers "
             "inherit from the enclosing shot or device policy."
         ),
-        sa_column=Column(JSON, nullable=True),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
     )
 
     geometry_references: list[str] | None = Field(
@@ -106,7 +106,7 @@ class DatasetBase(
             "['thomson_positions']). Names roles, not versions; resolution finds "
             "the correct version per shot at read time."
         ),
-        sa_column=Column(JSON, nullable=True),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
     )
     geometry_roles: list[str] | None = Field(
         default=None,
@@ -115,7 +115,7 @@ class DatasetBase(
             "components it provides. Usually one, but a bundled store may provide "
             "several."
         ),
-        sa_column=Column(JSON, nullable=True),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
     )
     calibration_references: list[str] | None = Field(
         default=None,
@@ -125,7 +125,7 @@ class DatasetBase(
             "time. A role may resolve to an ordered chain of stages (see "
             "calibration_stage)."
         ),
-        sa_column=Column(JSON, nullable=True),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
     )
     calibration_roles: list[str] | None = Field(
         default=None,
@@ -133,7 +133,7 @@ class DatasetBase(
             "For a calibration version (a device-level dataset): the calibration "
             "components it provides."
         ),
-        sa_column=Column(JSON, nullable=True),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
     )
     calibration_stage: int | None = Field(
         default=None,
@@ -151,7 +151,7 @@ class DatasetBase(
             "shots this version covers. Shared across kinds; coverage must not "
             "overlap another version of the same role within a kind."
         ),
-        sa_column=Column(JSON, nullable=True),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
     )
     annotates: str | None = Field(
         default=None,

@@ -1,11 +1,12 @@
 from datetime import date
 from typing import TYPE_CHECKING
 
-from sqlmodel import JSON, Column, Field, PrimaryKeyConstraint, Relationship, SQLModel
+from sqlmodel import Column, Field, PrimaryKeyConstraint, Relationship, SQLModel
 
 from app.core.timeutils import UTCDatetime
 
 from .mixins import (
+    JSONB_COLUMN,
     IssuedMixin,
     PersistentIdentifierMixin,
     ScientificMetadataMixin,
@@ -50,7 +51,7 @@ class ShotBase(
             "OAuth scopes required to read this shot when access is restricted. "
             "If null, scope requirements inherit from the enclosing device policy."
         ),
-        sa_column=Column(JSON, nullable=True),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
     )
     allowed_idps: list[str] | None = Field(
         default=None,
@@ -58,7 +59,7 @@ class ShotBase(
             "Trusted issuer allowlist for this shot. If null, allowed issuers "
             "inherit from the enclosing device policy."
         ),
-        sa_column=Column(JSON, nullable=True),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
     )
 
 

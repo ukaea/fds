@@ -33,22 +33,25 @@ def test_parse_property_rejects_empty_value():
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
-        ("H-mode", ["H-mode"]),
-        ("true", ["true"]),
-        ("FALSE", ["FALSE", "false"]),
-        ("42", ["42"]),
-        ("0.5", ["0.5"]),
-        # A stored 1.50 reads back as "1.5", so both spellings have to match.
-        ("1.50", ["1.50", "1.5"]),
-        ("n=1 tearing", ["n=1 tearing"]),
+        ("H-mode", ['"H-mode"']),
+        ("true", ['"true"', "true"]),
+        ("FALSE", ['"FALSE"', "false"]),
+        ("42", ['"42"', "42"]),
+        ("0.5", ['"0.5"', "0.5"]),
+        ("1e-05", ['"1e-05"', "0.00001"]),
+        # JSON has no leading zeros.
+        ("042", ['"042"', "42"]),
+        ("n=1 tearing", ['"n=1 tearing"']),
+        ('say "hi"', ['"say \\"hi\\""']),
+        # At PostgreSQL's numeric limits, and past them, where casting would fail
+        # the query.
+        ("1e131071", ['"1e131071"', "1E+131071"]),
+        ("1e131072", ['"1e131072"']),
+        ("1e-16383", ['"1e-16383"', "1E-16383"]),
+        ("1e-16384", ['"1e-16384"']),
+        ("1.5e-16383", ['"1.5e-16383"']),
     ],
 )
 def test_value_candidates(value: str, expected: list[str]):
-    """Comparison happens on the JSON value as text, so candidates are text too."""
+    """The string itself, then the boolean or number it spells, as JSON."""
     assert _value_candidates(value) == expected
-
-
-def test_value_candidates_always_keeps_the_raw_string():
-    """So a property genuinely storing the string "true" still matches."""
-    assert "true" in _value_candidates("true")
-    assert "42" in _value_candidates("42")

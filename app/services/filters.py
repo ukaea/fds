@@ -1,5 +1,8 @@
+import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import ColumnElement
@@ -57,65 +60,76 @@ def parse_property(raw: str) -> tuple[str, str | None]:
 
 
 def _value_candidates(value: str) -> list[str]:
-    """Forms a query-string value might take in stored JSON, as text.
+    """The stored JSON values a query-string value matches, as JSON text.
 
-    Query parameters are always strings, but a stored property value keeps its JSON
-    type, so ``?property=disruption:true`` must still match a stored ``true``.
-    Comparison happens on the JSON value rendered as text (``->>``), so each
-    candidate is the text PostgreSQL produces for that form: a stored ``true``
-    reads as ``true``, a stored ``12`` as ``12``, a stored ``1.50`` as ``1.5``.
-    Rather than guess the provider's intended type, match against the raw string
-    *or* its coerced form. Matching more broadly avoids false negatives; the cost is
-    that ``:true`` would also match a stored ``1``, which is acceptable while values
-    are an open vocabulary.
+    Query parameters are always strings, but a stored property value keeps its
+    JSON type, so ``?property=disruption:true`` must still match a stored
+    ``true``. Rather than guess the provider's intended type, the value matches
+    as a string *or* as the boolean or number it spells. Numbers compare as
+    numbers, so ``1e-05``, ``0.00001`` and ``1.0e-5`` are one value, and ``12``
+    matches a stored ``12.0``.
     """
-    candidates: list[str] = [value]
-    lowered = value.lower()
+    candidates = [json.dumps(value)]
+    if value.lower() in ("true", "false"):
+        candidates.append(value.lower())
+    elif (number := _json_number(value)) is not None:
+        candidates.append(number)
+    return candidates
 
-    if lowered in ("true", "false"):
-        candidates.append(lowered)
-    else:
-        try:
-            candidates.append(str(int(value)))
-        except ValueError:
-            try:
-                candidates.append(str(float(value)))
-            except ValueError:
-                pass
 
-    return list(dict.fromkeys(candidates))
+# Matches a number written in decimal or scientific notation.
+NUMERIC_TEXT = r"^-?\d+(\.\d+)?([eE][-+]?\d+)?$"
+
+# The most digits PostgreSQL's numeric holds before and after the decimal point.
+NUMERIC_DIGITS_BEFORE_POINT = 131072
+NUMERIC_DIGITS_AFTER_POINT = 16383
+
+
+def _json_number(value: str) -> str | None:
+    """``value`` as a JSON number, when it spells one PostgreSQL can hold.
+
+    Written through Decimal, which keeps every digit and drops the leading
+    zeros JSON forbids. A number past PostgreSQL's limits would fail the whole
+    query, and no stored number can be one, so it is left out.
+    """
+    if not re.fullmatch(NUMERIC_TEXT, value):
+        return None
+    number = Decimal(value)
+    before_point = number.adjusted() + 1
+    after_point = -int(number.as_tuple().exponent)
+    if (
+        before_point > NUMERIC_DIGITS_BEFORE_POINT
+        or after_point > NUMERIC_DIGITS_AFTER_POINT
+    ):
+        return None
+    return str(number)
 
 
 def _array_or_empty(value: Any) -> Any:
     """``value`` when it is a JSON array, and an empty array otherwise.
 
-    ``json_array_elements`` rejects anything that is not an array. A record
-    with no metadata holds SQL NULL or a JSON ``null``, and a property that is
-    not a group holds no ``properties``, so each yields no rows instead of
-    raising.
+    ``jsonb_array_elements`` rejects anything that is not an array. A record
+    with no metadata holds SQL NULL, and a property that is not a group holds
+    no ``properties``, so each yields no rows instead of raising.
     """
     return case(
-        (func.json_typeof(value) == "array", value),
-        else_=literal_column("'[]'::json"),
+        (func.jsonb_typeof(value) == "array", value),
+        else_=literal_column("'[]'::jsonb"),
     )
 
 
 def _properties_in(array: Any) -> Any:
     """The properties in a JSON array, one row each, in a column named ``value``.
 
-    Built fresh on each call: two ``json_array_elements`` in one statement would
+    Built fresh on each call: two ``jsonb_array_elements`` in one statement would
     otherwise alias into each other.
     """
-    return func.json_array_elements(_array_or_empty(array)).table_valued("value")
+    return func.jsonb_array_elements(_array_or_empty(array)).table_valued("value")
 
 
 def _is_group(entry: Any) -> ColumnElement[bool]:
     """Whether a property holds a list of properties rather than a value."""
-    return func.json_typeof(entry.op("->")("properties")).is_not_distinct_from("array")
-
-
-# Matches the text PostgreSQL renders for a JSON number.
-NUMERIC_TEXT = r"^-?\d+(\.\d+)?([eE][-+]?\d+)?$"
+    return func.jsonb_typeof(entry.op("->")("properties")).is_not_distinct_from("array")
 
 
 @dataclass(frozen=True)
@@ -190,7 +204,13 @@ def _meets(condition: PropertyCondition, entry: Any) -> ColumnElement[bool]:
         )
     if condition.value is None:
         return true()
-    return or_(*(value == c for c in _value_candidates(condition.value)))
+    stored = entry.op("->")("value")
+    return or_(
+        *(
+            stored == cast(literal(candidate), JSONB)
+            for candidate in _value_candidates(condition.value)
+        )
+    )
 
 
 def _clauses_on(
@@ -422,35 +442,17 @@ def policy_tuple_clause(
     Null means "inherit from the parent", not "no value", so a null component
     is matched by absence rather than equality. Equality would never match an
     inheriting row, which is the most common policy of all.
-
-    Absence has two spellings and both occur. SQLAlchemy's ``JSON`` type
-    serialises a Python ``None`` to a JSON ``null`` rather than SQL NULL, so an
-    unset ``required_scopes`` is almost always the JSON one; SQL NULL appears in
-    rows written by other paths. ``IS NULL`` alone matches only the second and
-    would exclude nearly every row, so both are tested.
-
-    ``required_scopes`` and ``allowed_idps`` are ``JSON`` columns, and
-    PostgreSQL gives ``json`` no equality operator, so comparing a set has to go
-    through ``jsonb``. That cast also canonicalises, so two spellings of one list
-    compare equal instead of forming two tuples.
     """
-    conditions: list[ColumnElement[bool]] = []
-
-    if access_level is None:
-        conditions.append(access_level_column.is_(None))
-    else:
-        conditions.append(access_level_column == access_level)
-
-    for column, value in (
-        (scopes_column, required_scopes),
-        (idps_column, allowed_idps),
-    ):
-        if value is None:
-            conditions.append(or_(column.is_(None), func.json_typeof(column) == "null"))
-        else:
-            conditions.append(cast(column, JSONB) == literal(value, JSONB))
-
-    return and_(*conditions)
+    return and_(
+        *(
+            column.is_(None) if value is None else column == value
+            for column, value in (
+                (access_level_column, access_level),
+                (scopes_column, required_scopes),
+                (idps_column, allowed_idps),
+            )
+        )
+    )
 
 
 def scope_clauses(

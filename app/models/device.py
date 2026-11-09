@@ -1,8 +1,13 @@
 from typing import TYPE_CHECKING
 
-from sqlmodel import JSON, Column, Field, Relationship, SQLModel
+from sqlmodel import Column, Field, Relationship, SQLModel
 
-from .mixins import DescriptiveMixin, PersistentIdentifierMixin, TimestampMixin
+from .mixins import (
+    JSONB_COLUMN,
+    DescriptiveMixin,
+    PersistentIdentifierMixin,
+    TimestampMixin,
+)
 from .policy import AccessLevel
 
 if TYPE_CHECKING:
@@ -23,7 +28,7 @@ class DeviceBase(DescriptiveMixin, PersistentIdentifierMixin, SQLModel):
             "is restricted. If null, scope requirements are inherited by narrower "
             "contexts only when they do not define their own policy."
         ),
-        sa_column=Column(JSON, nullable=True),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
     )
     allowed_idps: list[str] | None = Field(
         default=None,
@@ -32,7 +37,7 @@ class DeviceBase(DescriptiveMixin, PersistentIdentifierMixin, SQLModel):
             "globally trusted issuer is permitted unless a narrower context defines "
             "its own issuer policy."
         ),
-        sa_column=Column(JSON, nullable=True),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
     )
 
 

@@ -10,7 +10,7 @@ import pytest
 from alembic.config import Config as AlembicConfig
 from fastapi.testclient import TestClient
 from sqlalchemy import event
-from sqlmodel import Session, create_engine
+from sqlmodel import Session
 
 from alembic import command
 from app.auth.security import (
@@ -18,7 +18,7 @@ from app.auth.security import (
     get_token_claims,
 )
 from app.core.config import TrustedIdP, config
-from app.core.db import _json_serializer, get_session
+from app.core.db import get_session, make_engine
 from app.core.logging import setup_logging
 from app.main import app
 
@@ -59,7 +59,7 @@ def engine(database_url: str):
     alembic_config.set_main_option("sqlalchemy.url", database_url)
     command.upgrade(alembic_config, "head")
 
-    engine = create_engine(database_url, json_serializer=_json_serializer)
+    engine = make_engine(database_url)
     yield engine
     engine.dispose()
 
