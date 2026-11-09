@@ -254,7 +254,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         statement = select(Dataset).where(
             *scope_clauses(col(Dataset.device_name), col(Dataset.shot_id), scope),
             *_listed(self.session, include_replaced, user),
-            *property_clauses(Dataset.scientific_metadata, properties),
+            *property_clauses(Dataset, properties),
             *activity_clauses(
                 col(Dataset.activity_id), activity_type, source, activity_id
             ),
@@ -295,7 +295,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         if not shot_properties:
             return statement
-        matching = property_clauses(Shot.scientific_metadata, shot_properties)
+        matching = property_clauses(Shot, shot_properties)
         return statement.join(
             Shot,
             (col(Dataset.shot_id) == col(Shot.id))

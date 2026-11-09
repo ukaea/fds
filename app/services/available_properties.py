@@ -1,24 +1,25 @@
 from collections.abc import Sequence
-from typing import Any
 
 from sqlalchemy import ColumnElement
 from sqlmodel import (
-    Numeric,
     Session,
     SQLModel,
-    cast,
+    col,
     distinct,
     func,
-    inspect,
     select,
-    true,
-    tuple_,
 )
 
 from app.models.available_properties import AvailableProperties, AvailableProperty
 from app.models.scientific_metadata import MetadataKind
 from app.services.exceptions import FDSValidationError
-from app.services.filters import NUMERIC_TEXT, PropertyCondition, property_entries
+from app.services.filters import (
+    PropertyCondition,
+    in_matching_instances,
+    property_rows,
+    record_columns,
+    value_text,
+)
 
 # A name with thousands of values is not something to pick from a list, so
 # enumeration is capped rather than paged: past this many distinct values a
@@ -65,7 +66,6 @@ def infer_kind(distinct_values: int, records: int, numeric: bool) -> MetadataKin
 def available_properties(
     session: Session,
     model: type[SQLModel],
-    column: Any,
     *,
     where: Sequence[ColumnElement[bool]] = (),
     conditions: Sequence[PropertyCondition] = (),
@@ -99,25 +99,25 @@ def available_properties(
 
     total = session.exec(select(func.count()).select_from(model).where(*where)).one()
 
-    # Every property at every depth, each under its full path. A group is only
-    # the start of its children's paths, so it is not summarised itself.
-    entries = property_entries(column, conditions=conditions)
-    name = entries.c.path
-    value = entries.c.entry.op("->>")("value")
-    unit = entries.c.entry.op("->>")("unit")
-    description = entries.c.entry.op("->>")("description")
-    declared = entries.c.entry.op("->>")("kind")
-    # The extent of the group a property sits in, when it has none of its own,
-    # so a property inside an annotated group lists among the annotations.
-    dimension = entries.c.extent.op("->>")("dimension")
-    is_numeric = value.op("~")(NUMERIC_TEXT)
-    numeric = cast(value, Numeric)
-
+    rows, of_record = property_rows(model)
     # Counting records, not entries: one shot annotated twice under the same
-    # name is one record. Shot's key is composite, so the count is over a row
-    # constructor; a single-column key takes the cheaper scalar form.
-    primary_key = list(inspect(model).primary_key)
-    identity = tuple_(*primary_key) if len(primary_key) > 1 else primary_key[0]
+    # name is one record. Counting each record's first row under a path is much
+    # quicker than counting DISTINCT over Shot's composite key, which compares
+    # row values.
+    first = func.row_number().over(partition_by=[col(rows.path), *record_columns(rows)])
+    looked_at = (
+        select(rows, (first == 1).label("first"))
+        .select_from(model)
+        .join(rows, of_record)
+        .where(
+            *where,
+            ~col(rows.is_group),
+            *in_matching_instances(rows, conditions),
+        )
+        .subquery()
+    )
+    value = value_text(looked_at.c.value)
+    number = looked_at.c.number
 
     # Everything else travels in one json_build_object, to stay inside the four
     # typed entities sqlmodel.select() has overloads for. The counts alongside
@@ -125,42 +125,38 @@ def available_properties(
     # several": a name recorded in both A and kA has no single unit, and saying
     # nothing beats saying one of them.
 
-    rows = session.exec(
+    summary = session.exec(
         select(
-            name.label("name"),
-            func.count(distinct(identity)).label("records"),
+            looked_at.c.path.label("name"),
+            func.count().filter(looked_at.c.first).label("records"),
             func.count(distinct(value)).label("distinct"),
             func.json_build_object(
                 "unit",
-                func.max(unit),
+                func.max(looked_at.c.unit),
                 "units",
-                func.count(distinct(unit)),
+                func.count(distinct(looked_at.c.unit)),
                 "description",
-                func.max(description),
+                func.max(looked_at.c.description),
                 "descriptions",
-                func.count(distinct(description)),
+                func.count(distinct(looked_at.c.description)),
                 "kind",
-                func.max(declared),
+                func.max(looked_at.c.kind),
                 "kinds",
-                func.count(distinct(declared)),
+                func.count(distinct(looked_at.c.kind)),
                 "dimension",
-                func.max(dimension),
+                func.max(looked_at.c.dimension),
                 "numeric",
-                func.bool_and(is_numeric),
+                func.bool_and(number.is_not(None)).filter(value.is_not(None)),
                 "min",
-                func.min(numeric).filter(is_numeric),
+                func.min(number),
                 "max",
-                func.max(numeric).filter(is_numeric),
+                func.max(number),
             ).label("extra"),
-        )
-        .select_from(model)
-        .join(entries, onclause=true())
-        .where(*where, ~entries.c.is_group)
-        .group_by(name)
+        ).group_by(looked_at.c.path)
     ).all()
 
     properties: list[AvailableProperty] = []
-    for row_name, records, distinct_values, extra in rows:
+    for row_name, records, distinct_values, extra in summary:
         if row_name is None:
             continue
         # A provider that disagrees with itself about a name's kind is not
@@ -195,7 +191,7 @@ def available_properties(
             )
         )
 
-    _attach_values(session, model, column, where, conditions, properties, max_values)
+    _attach_values(session, model, where, conditions, properties, max_values)
 
     # Annotations first: they carry a where, and they are the ones that grow. Then
     # terms before quantities, and within each the short rows lead, so the order
@@ -216,7 +212,6 @@ def available_properties(
 def _attach_values(
     session: Session,
     model: type[SQLModel],
-    column: Any,
     where: Sequence[ColumnElement[bool]],
     conditions: Sequence[PropertyCondition],
     properties: list[AvailableProperty],
@@ -231,15 +226,19 @@ def _attach_values(
     if not enumerable or max_values == 0:
         return
 
-    pairs = property_entries(column, conditions=conditions)
-    pair_name = pairs.c.path
-    pair_value = pairs.c.entry.op("->>")("value")
-    found: dict[str, list[str]] = {name: [] for name in enumerable}
+    rows, of_record = property_rows(model)
+    value = value_text(col(rows.value))
+    found: dict[str | None, list[str]] = {name: [] for name in enumerable}
     for row_name, row_value in session.exec(
-        select(pair_name.label("name"), pair_value.label("value"))
+        select(col(rows.path), value)
         .select_from(model)
-        .join(pairs, onclause=true())
-        .where(*where, pair_name.in_(enumerable), pair_value.is_not(None))
+        .join(rows, of_record)
+        .where(
+            *where,
+            col(rows.path).in_(enumerable),
+            value.is_not(None),
+            *in_matching_instances(rows, conditions),
+        )
         .distinct()
     ).all():
         found[row_name].append(row_value)

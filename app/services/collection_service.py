@@ -320,7 +320,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         return [
             *clauses,
             *shot_id_prefix_clauses(col(Collection.shot_id), shot_id_prefix),
-            *property_clauses(Collection.scientific_metadata, properties),
+            *property_clauses(Collection, properties),
             *activity_clauses(
                 col(Collection.activity_id), activity_type, source, activity_id
             ),
@@ -425,7 +425,6 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         return available_properties(
             self.session,
             Collection,
-            col(Collection.scientific_metadata),
             where=where,
             conditions=property_conditions(properties),
             max_values=max_values,

@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, col, distinct, func, select, true, tuple_
+from sqlmodel import Session, col, distinct, func, select, tuple_
 
 from app.auth.access_control import (
     check_read,
@@ -35,7 +35,8 @@ from app.services.exceptions import (
 from app.services.filters import (
     property_clauses,
     property_conditions,
-    property_entries,
+    property_rows,
+    value_text,
 )
 from app.services.jsonld import map_shot_to_dcat
 from app.services.reference_service import REFERENCE_KINDS, ReferenceService
@@ -241,7 +242,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         """
         clauses = [
             Shot.device_name == device,
-            *property_clauses(Shot.scientific_metadata, properties, minimums, maximums),
+            *property_clauses(Shot, properties, minimums, maximums),
         ]
         if id_prefix:
             clauses.append(col(Shot.id).startswith(id_prefix, autoescape=True))
@@ -286,44 +287,32 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
             raise FDSValidationError(f"limit must be between 1 and 500, got {limit}.")
 
         where = self._readable_scope(device_name, user)
-        entries = property_entries(col(Shot.scientific_metadata), name)
-        entry_value = entries.c.entry.op("->>")("value")
-        conditions = [*where, entry_value.is_not(None)]
+        rows, of_shot = property_rows(Shot)
+        value = value_text(col(rows.value))
+        conditions = [*where, col(rows.path) == name, value.is_not(None)]
         if query:
-            conditions.append(entry_value.ilike(f"%{query}%"))
+            conditions.append(value.ilike(f"%{query}%"))
 
-        rows = self.session.exec(
-            select(
-                entry_value.label("value"),
-                func.count(distinct(tuple_(col(Shot.device_name), col(Shot.id)))).label(
-                    "records"
-                ),
-            )
+        records = func.count(distinct(tuple_(col(Shot.device_name), col(Shot.id))))
+        # Counted over the groups before the limit applies, so it is every
+        # distinct value, not just those returned.
+        distinct_values = func.count().over()
+        found = self.session.exec(
+            select(value, records, distinct_values)
             .select_from(Shot)
-            .join(entries, onclause=true())
+            .join(rows, of_shot)
             .where(*conditions)
-            .group_by(entry_value)
-            .order_by(
-                func.count(
-                    distinct(tuple_(col(Shot.device_name), col(Shot.id)))
-                ).desc(),
-                entry_value,
-            )
+            .group_by(value)
+            .order_by(records.desc(), value)
             .limit(limit)
         ).all()
 
-        total_distinct = self.session.exec(
-            select(func.count(distinct(entry_value)))
-            .select_from(Shot)
-            .join(entries, onclause=true())
-            .where(*conditions)
-        ).one()
-
         return PropertyValues(
             name=name,
-            distinct=total_distinct,
+            distinct=found[0][2] if found else 0,
             values=[
-                PropertyValue(value=value, records=records) for value, records in rows
+                PropertyValue(value=value, records=records)
+                for value, records, _ in found
             ],
         )
 
@@ -349,7 +338,6 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         return available_properties(
             self.session,
             Shot,
-            col(Shot.scientific_metadata),
             where=where,
             conditions=property_conditions(properties, minimums, maximums),
             max_values=max_values,
