@@ -135,7 +135,7 @@ def test_get_dataset_not_found(dataset_service: DatasetService):
     assert retrieved_dataset is None
 
 
-def test_get_dataset_by_name_in_context(
+def test_get_shot_datasets_by_name(
     device_service: DeviceService,
     shot_service: ShotService,
     dataset_service: DatasetService,
@@ -159,26 +159,19 @@ def test_get_dataset_by_name_in_context(
         user=admin_user,
     )
 
-    results = dataset_service.get_by_name_in_context(
-        name="resolved_dataset",
-        user=admin_user,
-        device_name="Device Resolve",
-        shot_id="shot-resolve",
+    results = dataset_service.get_datasets_for_shot(
+        "shot-resolve", "Device Resolve", user=admin_user, name="resolved_dataset"
     )
 
     assert len(results) == 1
     assert results[0].name == "resolved_dataset"
 
 
-def test_get_dataset_by_name_in_context_returns_empty_when_missing(
+def test_get_datasets_by_absent_name_is_empty(
     dataset_service: DatasetService,
     admin_user: AuthenticatedUser,
 ):
-    results = dataset_service.get_by_name_in_context(
-        name="missing",
-        user=admin_user,
-    )
-    assert results == []
+    assert dataset_service.get_multi(admin_user, name="missing") == []
 
 
 def test_get_datasets(

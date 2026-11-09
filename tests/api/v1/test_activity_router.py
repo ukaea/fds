@@ -529,7 +529,7 @@ def test_activity_json_ld_leaves_out_inputs_the_caller_cannot_read(
 
     activity_document = test_client.get(f"/activities/{activity.id}", headers=ld).json()
     output_document = resource(
-        test_client.get(f"/v1/datasets/id/{output.id}", headers=ld).json()
+        test_client.get(f"/v1/datasets/{output.id}", headers=ld).json()
     )
 
     for used in (

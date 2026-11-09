@@ -16,12 +16,12 @@ JSON-LD is supported on **Device**, **Shot**, **Dataset**, and **Collection** en
 ```http
 GET /v1/devices/{device}
 GET /v1/devices/{device}/shots/{shot_id}
-GET /v1/datasets/id/{id}
-GET /v1/devices/{device}/shots/{shot_id}/collections/{name}
+GET /v1/datasets/{id}
+GET /v1/collections/{id}
 Accept: application/ld+json
 ```
 
-and on the dataset listings, described [below](#dataset-listings).
+and on the dataset and collection listings, described [below](#listings).
 
 FDS answers in JSON-LD when the `Accept` header prefers it to plain JSON, by the header's q-values:
 
@@ -213,16 +213,16 @@ A distribution's `group` is not published. DCAT has no term for a part of a file
   "dcat:distribution": [
     {
       "@type": "dcat:Distribution",
-      "dcat:accessURL": "http://localhost:8000/v1/datasets/id/42",
+      "dcat:accessURL": "http://localhost:8000/datasets/42",
       "dcat:downloadURL": "s3://fds-data/shots/30421/equilibrium",
       "dcat:mediaType": "application/x-zarr"
     }
   ],
   "prov:wasGeneratedBy": {
     "@type": "prov:Activity",
-    "prov:wasAssociatedWith": {"@id": "…/sources/efit", "@type": "prov:SoftwareAgent"},
+    "prov:wasAssociatedWith": {"@id": "…/sources/3", "@type": "prov:SoftwareAgent"},
     "prov:qualifiedAssociation": [
-      {"@type": "prov:Association", "prov:agent": {"@id": "…/sources/efit"}, "prov:hadRole": "executor"}
+      {"@type": "prov:Association", "prov:agent": {"@id": "…/sources/3"}, "prov:hadRole": "executor"}
     ],
     "prov:qualifiedUsage": [
       {"@type": "prov:Usage", "prov:entity": {"@id": "…/datasets/3"}, "prov:hadRole": "input"}
@@ -259,14 +259,17 @@ A collection that replaces another carries the same two terms.
 
 FDS does not publish DCAT's version chain (`dcat:previousVersion`, `dcat:hasVersion`, `dcat:hasCurrentVersion`). Those assume one line of versions with one current version, while two FDS datasets can each replace the same one. Nor does it publish `prov:wasRevisionOf`: PROV defines a revision as a derivation that keeps substantial content from the original, and a reprocessed dataset is usually made again from the same inputs instead.
 
-## Dataset listings
+## Listings
 
-The dataset listings answer in JSON-LD as well:
+The dataset and collection listings answer in JSON-LD as well:
 
 ```http
 GET /v1/datasets
 GET /v1/devices/{device}/datasets
 GET /v1/devices/{device}/shots/{shot_id}/datasets
+GET /v1/collections
+GET /v1/devices/{device}/collections
+GET /v1/devices/{device}/shots/{shot_id}/collections
 Accept: application/ld+json
 ```
 
@@ -300,6 +303,9 @@ one document whose `@graph` holds a `dcat:Dataset` node for each dataset on it, 
 Each node is the one the dataset's own document holds, so it carries the same provenance and
 distributions. FDS's records of the datasets are left out, as in any listing; each one is in the
 dataset's own document. A page with no datasets has an empty `@graph`.
+
+A collection listing is the same, with a `dcat:Catalog` node for each collection: the node its own
+document holds, members and Activity included.
 
 === "curl"
 
@@ -435,15 +441,14 @@ Requesting a collection endpoint with `Accept: application/ld+json` returns the 
 === "curl"
 
     ```bash
-    curl -H "Accept: application/ld+json" \
-      "$API/devices/mast/shots/30420/collections/jintrac-v220922"
+    curl -H "Accept: application/ld+json" "$API/collections/$COLLECTION_ID"
     ```
 
 === "Python (requests)"
 
     ```python
     catalog = requests.get(
-        f"{API}/devices/mast/shots/30420/collections/jintrac-v220922",
+        f"{API}/collections/{collection_id}",
         headers={"Accept": "application/ld+json"},
     ).json()
     ```
@@ -452,7 +457,7 @@ Requesting a collection endpoint with `Accept: application/ld+json` returns the 
 
     ```python
     catalog = httpx.get(
-        f"{API}/devices/mast/shots/30420/collections/jintrac-v220922",
+        f"{API}/collections/{collection_id}",
         headers={"Accept": "application/ld+json"},
     ).json()
     ```
@@ -461,7 +466,7 @@ Requesting a collection endpoint with `Accept: application/ld+json` returns the 
 
     ```javascript
     const catalog = await (
-      await fetch(`${API}/devices/mast/shots/30420/collections/jintrac-v220922`, {
+      await fetch(`${API}/collections/${collectionId}`, {
         headers: { Accept: "application/ld+json" },
       })
     ).json();
@@ -477,14 +482,14 @@ dataset was derived from.
 === "curl"
 
     ```bash
-    curl -H "Accept: application/ld+json" "$API/datasets/id/$DATASET_ID"
+    curl -H "Accept: application/ld+json" "$API/datasets/$DATASET_ID"
     ```
 
 === "Python (requests)"
 
     ```python
     doc = requests.get(
-        f"{API}/datasets/id/{dataset_id}",
+        f"{API}/datasets/{dataset_id}",
         headers={"Accept": "application/ld+json"},
     ).json()
     ```
@@ -493,7 +498,7 @@ dataset was derived from.
 
     ```python
     doc = httpx.get(
-        f"{API}/datasets/id/{dataset_id}",
+        f"{API}/datasets/{dataset_id}",
         headers={"Accept": "application/ld+json"},
     ).json()
     ```
@@ -502,7 +507,7 @@ dataset was derived from.
 
     ```javascript
     const doc = await (
-      await fetch(`${API}/datasets/id/${datasetId}`, {
+      await fetch(`${API}/datasets/${datasetId}`, {
         headers: { Accept: "application/ld+json" },
       })
     ).json();
@@ -597,7 +602,7 @@ See [Provenance](provenance.md) for the model behind these terms.
 
 | FAIR principle | FDS mechanism |
 | --- | --- |
-| **Findable** | Stable URIs (`/datasets/id/{id}`), rich metadata, JSON-LD catalogues, `schema:PropertyValue` indexable by Google Dataset Search |
+| **Findable** | Stable URIs (`/datasets/{id}`), rich metadata, JSON-LD catalogues, `schema:PropertyValue` indexable by Google Dataset Search |
 | **Accessible** | OIDC auth, STS credential vending, open API |
 | **Interoperable** | IMAS/IDS naming conventions, DCAT + PROV-O + schema.org linked data |
 | **Reusable** | Provenance graph, access level declarations, citable Collections, controlled vocabularies |

@@ -2,17 +2,15 @@ from fastapi import APIRouter, status
 
 from app.api.deps import (
     DEFAULT_PAGE_SIZE,
-    BaseURLDep,
+    AnswerDep,
     CurrentUserDep,
     DeviceServiceDep,
     Limit,
     Offset,
     SourceServiceDep,
-    WantsJSONLDDep,
 )
 from app.api.negotiation import (
     JSONLD_ALTERNATIVE,
-    VARY_ACCEPT,
     JSONLDResponse,
 )
 from app.models.device import DeviceCreate, DeviceRead, DeviceUpdate
@@ -54,11 +52,10 @@ def read_devices(
 @router.get("/{device_name}", response_model=DeviceRead, responses=JSONLD_ALTERNATIVE)
 def read_device(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     device_service: DeviceServiceDep,
     device_name: str,
     user: CurrentUserDep,
-    base: BaseURLDep,
 ) -> DeviceRead | JSONLDResponse:
     """
     Retrieve a single device by name.
@@ -66,13 +63,10 @@ def read_device(
     - Accept: application/ld+json -> Returns DCAT Metadata
     """
     device = device_service.get_by_name(device_name, user=user)
-
-    # Content Negotiation
-    if jsonld:
-        dcat_metadata = map_device_to_dcat(device, base)
-        return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
-
-    return device_service.to_read_model(device)
+    return answer(
+        json=lambda: device_service.to_read_model(device),
+        jsonld=lambda base: map_device_to_dcat(device, base),
+    )
 
 
 @router.patch("/{device_name}", response_model=DeviceRead)

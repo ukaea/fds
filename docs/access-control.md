@@ -192,16 +192,16 @@ inline under `storage_options`:
 
     ```bash
     curl -s -H "Authorization: Bearer $TOKEN" \
-      "$API/devices/mastu/shots/50000/datasets/thomson-raw?include_storage_options=true"
+      "$API/devices/mastu/shots/50000/datasets?name=thomson-raw&include_storage_options=true"
     ```
 
 === "Python (requests)"
 
     ```python
     meta = requests.get(
-        f"{API}/devices/mastu/shots/50000/datasets/thomson-raw",
+        f"{API}/devices/mastu/shots/50000/datasets",
         headers=headers,
-        params={"include_storage_options": True},
+        params={"name": "thomson-raw", "include_storage_options": True},
     ).json()[0]
     # meta["storage_options"] holds short-lived, scoped credentials
     ```
@@ -210,9 +210,9 @@ inline under `storage_options`:
 
     ```python
     meta = httpx.get(
-        f"{API}/devices/mastu/shots/50000/datasets/thomson-raw",
+        f"{API}/devices/mastu/shots/50000/datasets",
         headers=headers,
-        params={"include_storage_options": True},
+        params={"name": "thomson-raw", "include_storage_options": True},
     ).json()[0]
     # meta["storage_options"] holds short-lived, scoped credentials
     ```
@@ -221,7 +221,7 @@ inline under `storage_options`:
 
     ```javascript
     const res = await fetch(
-      `${API}/devices/mastu/shots/50000/datasets/thomson-raw?include_storage_options=true`,
+      `${API}/devices/mastu/shots/50000/datasets?name=thomson-raw&include_storage_options=true`,
       { headers: { Authorization: `Bearer ${TOKEN}` } },
     );
     const [meta] = await res.json();

@@ -9,10 +9,11 @@ type Params = { params: Promise<{ device: string; shot: string; collection: stri
 export default async function CollectionInShotPage({ params }: Params) {
   const { device, shot, collection } = await params;
 
-  const record = await fetchJson<{ id?: number }>(
-    `/devices/${device}/shots/${shot}/collections/${collection}`
+  const page = await fetchJson<{ id?: number }[]>(
+    `/devices/${device}/shots/${shot}/collections?name=${encodeURIComponent(collection)}`
   );
-  if (record?.id == null) notFound();
+  const id = page?.[0]?.id;
+  if (id == null) notFound();
 
-  redirect(`/collections/${record.id}`);
+  redirect(`/collections/${id}`);
 }

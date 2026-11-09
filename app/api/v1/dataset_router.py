@@ -4,21 +4,24 @@ from fastapi import APIRouter, Query, status
 
 from app.api.deps import (
     DEFAULT_PAGE_SIZE,
-    BaseURLDep,
+    AnswerDep,
     CurrentUserDep,
     DatasetServiceDep,
     DistributionServiceDep,
     Limit,
     Offset,
     SourceServiceDep,
-    WantsJSONLDDep,
+)
+from app.api.listings import (
+    DatasetIncludes,
+    DatasetShotSpanFilters,
+    LocalFilters,
 )
 from app.api.negotiation import (
     JSONLD_ALTERNATIVE,
-    VARY_ACCEPT,
     JSONLDResponse,
 )
-from app.models.activity import ActivityRead, ActivityType
+from app.models.activity import ActivityRead
 from app.models.dataset import (
     DatasetCreate,
     DatasetDerivationCreate,
@@ -66,53 +69,23 @@ def create_dataset_global(
 )
 def read_datasets_global(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     scope: CatalogueScope = CatalogueScope.ALL,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
-    include_storage_options: bool = False,
-    include_geometry: bool = False,
-    include_calibration: bool = False,
-    include_annotations: bool = False,
-    name: str | None = None,
-    properties: Annotated[list[str] | None, Query(alias="property")] = None,
-    shot_properties: Annotated[list[str] | None, Query(alias="shot_property")] = None,
-    activity_type: ActivityType | None = None,
-    source: str | None = None,
-    activity_id: int | None = None,
-    shot_id_prefix: str | None = None,
-    include_replaced: bool = False,
-    base: BaseURLDep,
+    filters: Annotated[LocalFilters, Query()],
+    span: Annotated[DatasetShotSpanFilters, Query()],
+    includes: Annotated[DatasetIncludes, Query()],
 ) -> list[DatasetRead] | JSONLDResponse:
     """
     Retrieve every dataset accessible to the current user.
 
     A dataset is attached to a shot, to a device as a whole, or to neither, in
     which case it is global. All of them are listed unless `scope` asks for one
-    kind: `global`, `device` or `shot`.
-
-    `property` filters on the dataset's own `scientific_metadata`. Use `elm` to
-    match any dataset that carries that property, or `elm:type-I` to match a
-    particular value. A property inside a group is named by its path, the names
-    joined by `.`: `nbi.beam.source:SW`. Repeat the parameter to require all of
-    them.
-
-    `shot_property` takes the same forms but applies them to the parent shot, so
-    a dataset with no shot never matches it.
-
-    `activity_type`, `source` and `activity_id` filter on the Activity that
-    generated each dataset: `?activity_id=6` lists what Activity 6 generated, and
-    `?activity_type=simulation` lists simulated datasets.
-
-    `shot_id_prefix` keeps the datasets on a shot whose ID starts with it, so `304`
-    finds those on shots 30420 and 30421. A dataset on no shot never matches.
-
-    A dataset is left out when you may read a dataset that replaces it,
-    unless `include_replaced=true`.
-
-    To scope to a single device, use `/devices/{device_name}/datasets`.
+    kind: `global`, `device` or `shot`. To scope to a single device, use
+    `/devices/{device_name}/datasets`.
 
     With `Accept: application/ld+json` the page is one JSON-LD document whose
     `@graph` holds each dataset's `dcat:Dataset` node, in listing order.
@@ -122,32 +95,21 @@ def read_datasets_global(
         scope=scope,
         offset=offset,
         limit=limit,
-        name=name,
-        properties=properties,
-        shot_properties=shot_properties,
-        activity_type=activity_type,
-        source=source,
-        activity_id=activity_id,
-        shot_id_prefix=shot_id_prefix,
-        include_replaced=include_replaced,
+        **filters.model_dump(),
+        **span.model_dump(),
     )
-    if jsonld:
-        document = dataset_service.to_dcat_listing(
+    return answer(
+        json=lambda: dataset_service.to_read_models(
+            datasets, user=user, **includes.model_dump()
+        ),
+        jsonld=lambda base: dataset_service.to_dcat_listing(
             datasets,
             base,
-            include_geometry=include_geometry,
-            include_calibration=include_calibration,
-            include_annotations=include_annotations,
             user=user,
-        )
-        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
-    return dataset_service.to_read_models(
-        datasets,
-        include_storage_options=include_storage_options,
-        user=user,
-        include_geometry=include_geometry,
-        include_calibration=include_calibration,
-        include_annotations=include_annotations,
+            include_geometry=includes.include_geometry,
+            include_calibration=includes.include_calibration,
+            include_annotations=includes.include_annotations,
+        ),
     )
 
 
@@ -203,39 +165,21 @@ def create_dataset_shot(
 )
 def read_datasets_shot(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     device_name: str,
     shot_id: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
-    include_storage_options: bool = False,
-    include_geometry: bool = False,
-    include_calibration: bool = False,
-    include_annotations: bool = False,
-    properties: Annotated[list[str] | None, Query(alias="property")] = None,
-    activity_type: ActivityType | None = None,
-    source: str | None = None,
-    activity_id: int | None = None,
-    include_replaced: bool = False,
-    base: BaseURLDep,
+    filters: Annotated[LocalFilters, Query()],
+    includes: Annotated[DatasetIncludes, Query()],
 ) -> list[DatasetRead] | JSONLDResponse:
     """
     Retrieve all datasets for a specific shot.
 
-    `property` filters on each dataset's own `scientific_metadata`. Use `ufo` to
-    match any dataset that carries that property, or `ufo:true` to match a
-    particular value. A property inside a group is named by its path, the names
-    joined by `.`: `nbi.beam.source:SW`. Repeat the parameter to require all of
-    them.
-
-    `activity_type`, `source` and `activity_id` filter on the Activity that
-    generated each dataset: `?activity_id=6` lists what Activity 6 generated, and
-    `?activity_type=simulation` lists simulated datasets.
-
-    A dataset is left out when you may read a dataset that replaces it,
-    unless `include_replaced=true`.
+    Several datasets can share a name when different Activities produced them,
+    so `?name=equilibrium&source=efit` picks out EFIT's.
 
     With `Accept: application/ld+json` the page is one JSON-LD document whose
     `@graph` holds each dataset's `dcat:Dataset` node, in listing order.
@@ -246,93 +190,43 @@ def read_datasets_shot(
         user=user,
         offset=offset,
         limit=limit,
-        properties=properties,
-        activity_type=activity_type,
-        source=source,
-        activity_id=activity_id,
-        include_replaced=include_replaced,
+        **filters.model_dump(),
     )
-    if jsonld:
-        document = dataset_service.to_dcat_listing(
+    return answer(
+        json=lambda: dataset_service.to_read_models(
+            datasets, user=user, **includes.model_dump()
+        ),
+        jsonld=lambda base: dataset_service.to_dcat_listing(
             datasets,
             base,
-            include_geometry=include_geometry,
-            include_calibration=include_calibration,
-            include_annotations=include_annotations,
             user=user,
-        )
-        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
-    return dataset_service.to_read_models(
-        datasets,
-        include_storage_options=include_storage_options,
-        user=user,
-        include_geometry=include_geometry,
-        include_calibration=include_calibration,
-        include_annotations=include_annotations,
+            include_geometry=includes.include_geometry,
+            include_calibration=includes.include_calibration,
+            include_annotations=includes.include_annotations,
+        ),
     )
 
 
 @router.get(
-    "/devices/{device_name}/shots/{shot_id}/datasets/{name}",
-    response_model=list[DatasetRead],
-    response_model_exclude_none=True,
-)
-def read_dataset_by_name(
-    *,
-    device_name: str,
-    shot_id: str,
-    name: str,
-    dataset_service: DatasetServiceDep,
-    user: CurrentUserDep,
-    include_storage_options: bool = False,
-    include_geometry: bool = False,
-    include_calibration: bool = False,
-    include_annotations: bool = False,
-    include_replaced: bool = False,
-) -> list[DatasetRead]:
-    """
-    Retrieve all datasets with the given name within a shot context.
-    Multiple datasets may share a name when produced by different Activities.
-    A dataset is left out when you may read a dataset that replaces it,
-    unless `include_replaced=true`.
-    """
-    datasets = dataset_service.get_by_name_in_context(
-        name=name,
-        user=user,
-        device_name=device_name,
-        shot_id=shot_id,
-        include_replaced=include_replaced,
-    )
-    return dataset_service.to_read_models(
-        datasets,
-        include_storage_options=include_storage_options,
-        user=user,
-        include_geometry=include_geometry,
-        include_calibration=include_calibration,
-        include_annotations=include_annotations,
-    )
-
-
-@router.get(
-    "/datasets/id/{id}",
+    "/datasets/{id:int}",
     response_model=DatasetRead,
     response_model_exclude_none=True,
     responses=JSONLD_ALTERNATIVE,
 )
-def read_dataset_by_id(
+def read_dataset(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     id: int,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
-    include_storage_options: bool = False,
-    include_geometry: bool = False,
-    include_calibration: bool = False,
-    include_annotations: bool = False,
-    base: BaseURLDep,
+    includes: Annotated[DatasetIncludes, Query()],
 ) -> DatasetRead | JSONLDResponse:
     """
-    Retrieve a single dataset by its internal integer ID.
+    Retrieve a single dataset by its ID.
+
+    To find a dataset by name, filter a listing:
+    `GET /devices/mast/shots/30421/datasets?name=equilibrium`.
+
     Supports Content Negotiation:
     - Accept: application/ld+json -> Returns DCAT Metadata
     """
@@ -341,57 +235,18 @@ def read_dataset_by_id(
         raise ResourceNotFoundError(f"Dataset {id} not found")
     dataset_service.check_read_access(dataset, user)
 
-    if jsonld:
-        dcat_metadata = dataset_service.to_dcat(
+    return answer(
+        json=lambda: dataset_service.to_read_model(
+            dataset, user=user, **includes.model_dump()
+        ),
+        jsonld=lambda base: dataset_service.to_dcat(
             dataset,
             base,
-            include_geometry=include_geometry,
-            include_calibration=include_calibration,
-            include_annotations=include_annotations,
             user=user,
-        )
-        return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
-
-    return dataset_service.to_read_model(
-        dataset,
-        include_storage_options=include_storage_options,
-        user=user,
-        include_geometry=include_geometry,
-        include_calibration=include_calibration,
-        include_annotations=include_annotations,
-    )
-
-
-@router.get(
-    "/datasets/{name}",
-    response_model=list[DatasetRead],
-    response_model_exclude_none=True,
-)
-def read_dataset_global_by_name(
-    *,
-    name: str,
-    dataset_service: DatasetServiceDep,
-    user: CurrentUserDep,
-    include_storage_options: bool = False,
-    include_geometry: bool = False,
-    include_calibration: bool = False,
-    include_annotations: bool = False,
-    include_replaced: bool = False,
-) -> list[DatasetRead]:
-    """
-    Retrieve all global datasets with the given name. A dataset is left out
-    when you may read a dataset that replaces it, unless `include_replaced=true`.
-    """
-    datasets = dataset_service.get_by_name_in_context(
-        name=name, user=user, include_replaced=include_replaced
-    )
-    return dataset_service.to_read_models(
-        datasets,
-        include_storage_options=include_storage_options,
-        user=user,
-        include_geometry=include_geometry,
-        include_calibration=include_calibration,
-        include_annotations=include_annotations,
+            include_geometry=includes.include_geometry,
+            include_calibration=includes.include_calibration,
+            include_annotations=includes.include_annotations,
+        ),
     )
 
 
@@ -403,26 +258,16 @@ def read_dataset_global_by_name(
 )
 def read_datasets_device(
     *,
-    jsonld: WantsJSONLDDep,
+    answer: AnswerDep,
     device_name: str,
     dataset_service: DatasetServiceDep,
     user: CurrentUserDep,
     scope: DeviceScope = DeviceScope.ALL,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
-    include_storage_options: bool = False,
-    include_geometry: bool = False,
-    include_calibration: bool = False,
-    include_annotations: bool = False,
-    name: str | None = None,
-    properties: Annotated[list[str] | None, Query(alias="property")] = None,
-    shot_properties: Annotated[list[str] | None, Query(alias="shot_property")] = None,
-    activity_type: ActivityType | None = None,
-    source: str | None = None,
-    activity_id: int | None = None,
-    shot_id_prefix: str | None = None,
-    include_replaced: bool = False,
-    base: BaseURLDep,
+    filters: Annotated[LocalFilters, Query()],
+    span: Annotated[DatasetShotSpanFilters, Query()],
+    includes: Annotated[DatasetIncludes, Query()],
 ) -> list[DatasetRead] | JSONLDResponse:
     """
     Retrieve datasets hosted by a device.
@@ -430,28 +275,8 @@ def read_datasets_device(
     By default this returns every dataset for the device, device-level and
     shot-level alike. Narrow it with `scope`: `device` for the datasets
     attached to no shot (e.g., reference geometry and calibration versions), `shot`
-    for those belonging to the device's shots.
-
-    `property` filters on each dataset's own `scientific_metadata`. Use `elm` to
-    match any dataset that carries that property, or `elm:type-I` to match a
-    particular value. A property inside a group is named by its path, the names
-    joined by `.`: `nbi.beam.source:SW`. Repeat the parameter to require all of
-    them.
-
-    `shot_property` takes the same forms but applies them to the parent shot,
-    which is what spans both levels: `?name=equilibrium&shot_property=elm` finds
-    the equilibrium datasets of shots that had ELMs. Device-level datasets have no
+    for those belonging to the device's shots. Device-level datasets have no
     shot, so `shot_property` matches nothing under `scope=device`.
-
-    `activity_type`, `source` and `activity_id` filter on the Activity that
-    generated each dataset: `?activity_id=6` lists what Activity 6 generated, and
-    `?activity_type=simulation` lists simulated datasets.
-
-    `shot_id_prefix` keeps the datasets on a shot whose ID starts with it, so `304`
-    finds those on shots 30420 and 30421. A dataset on no shot never matches.
-
-    A dataset is left out when you may read a dataset that replaces it,
-    unless `include_replaced=true`.
 
     With `Accept: application/ld+json` the page is one JSON-LD document whose
     `@graph` holds each dataset's `dcat:Dataset` node, in listing order.
@@ -462,75 +287,26 @@ def read_datasets_device(
         scope=scope,
         offset=offset,
         limit=limit,
-        name=name,
-        properties=properties,
-        shot_properties=shot_properties,
-        activity_type=activity_type,
-        source=source,
-        activity_id=activity_id,
-        shot_id_prefix=shot_id_prefix,
-        include_replaced=include_replaced,
+        **filters.model_dump(),
+        **span.model_dump(),
     )
-    if jsonld:
-        document = dataset_service.to_dcat_listing(
+    return answer(
+        json=lambda: dataset_service.to_read_models(
+            datasets, user=user, **includes.model_dump()
+        ),
+        jsonld=lambda base: dataset_service.to_dcat_listing(
             datasets,
             base,
-            include_geometry=include_geometry,
-            include_calibration=include_calibration,
-            include_annotations=include_annotations,
             user=user,
-        )
-        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
-    return dataset_service.to_read_models(
-        datasets,
-        include_storage_options=include_storage_options,
-        user=user,
-        include_geometry=include_geometry,
-        include_calibration=include_calibration,
-        include_annotations=include_annotations,
-    )
-
-
-@router.get(
-    "/devices/{device_name}/datasets/{name}",
-    response_model=list[DatasetRead],
-    response_model_exclude_none=True,
-)
-def read_dataset_device_by_name(
-    *,
-    device_name: str,
-    name: str,
-    dataset_service: DatasetServiceDep,
-    user: CurrentUserDep,
-    include_storage_options: bool = False,
-    include_geometry: bool = False,
-    include_calibration: bool = False,
-    include_annotations: bool = False,
-    include_replaced: bool = False,
-) -> list[DatasetRead]:
-    """
-    Retrieve all device-level datasets with the given name. A dataset is left
-    out when you may read a dataset that replaces it, unless
-    `include_replaced=true`.
-    """
-    datasets = dataset_service.get_by_name_in_context(
-        name=name,
-        user=user,
-        device_name=device_name,
-        include_replaced=include_replaced,
-    )
-    return dataset_service.to_read_models(
-        datasets,
-        include_storage_options=include_storage_options,
-        user=user,
-        include_geometry=include_geometry,
-        include_calibration=include_calibration,
-        include_annotations=include_annotations,
+            include_geometry=includes.include_geometry,
+            include_calibration=includes.include_calibration,
+            include_annotations=includes.include_annotations,
+        ),
     )
 
 
 @router.patch(
-    "/datasets/{id}",
+    "/datasets/{id:int}",
     response_model=DatasetRead,
     response_model_exclude_none=True,
 )
@@ -549,7 +325,7 @@ def update_dataset(
 
 
 @router.delete(
-    "/datasets/{id}",
+    "/datasets/{id:int}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_dataset(
@@ -565,7 +341,7 @@ def delete_dataset(
 
 
 @router.post(
-    "/datasets/{dataset_id}/derivations",
+    "/datasets/{dataset_id:int}/derivations",
     response_model=DatasetDerivationRead,
     response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
@@ -592,7 +368,7 @@ def create_derivation(
 
 
 @router.get(
-    "/datasets/{dataset_id}/derivations",
+    "/datasets/{dataset_id:int}/derivations",
     response_model=list[DatasetDerivationRead],
     response_model_exclude_none=True,
 )
@@ -616,7 +392,7 @@ def read_derivations(
 
 
 @router.get(
-    "/datasets/{dataset_id}/lineage",
+    "/datasets/{dataset_id:int}/lineage",
     response_model=DatasetLineageNode,
     response_model_exclude_none=True,
 )
@@ -643,7 +419,7 @@ def read_lineage(
 
 
 @router.delete(
-    "/datasets/{dataset_id}/derivations/{derivation_id}",
+    "/datasets/{dataset_id:int}/derivations/{derivation_id:int}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_derivation(
@@ -662,7 +438,7 @@ def delete_derivation(
 
 
 @router.post(
-    "/datasets/{dataset_id}/distributions",
+    "/datasets/{dataset_id:int}/distributions",
     response_model=DistributionRead,
     response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
@@ -683,7 +459,7 @@ def create_distribution(
 
 
 @router.get(
-    "/datasets/{dataset_id}/distributions",
+    "/datasets/{dataset_id:int}/distributions",
     response_model=list[DistributionRead],
     response_model_exclude_none=True,
 )
@@ -703,7 +479,7 @@ def read_distributions(
 
 
 @router.patch(
-    "/distributions/{distribution_id}",
+    "/distributions/{distribution_id:int}",
     response_model=DistributionRead,
     response_model_exclude_none=True,
 )
@@ -724,7 +500,7 @@ def update_distribution(
 
 
 @router.delete(
-    "/distributions/{distribution_id}",
+    "/distributions/{distribution_id:int}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_distribution(
@@ -740,7 +516,7 @@ def delete_distribution(
 
 
 @router.get(
-    "/datasets/{dataset_id}/activity",
+    "/datasets/{dataset_id:int}/activity",
     response_model=ActivityRead,
 )
 def read_dataset_activity(
@@ -758,7 +534,7 @@ def read_dataset_activity(
 
 
 @router.get(
-    "/datasets/{dataset_id}/source",
+    "/datasets/{dataset_id:int}/source",
     response_model=SourceRead,
 )
 def read_dataset_source(

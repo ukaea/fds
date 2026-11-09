@@ -27,7 +27,7 @@ interface VersionSummary {
 // one the reader cannot read; its link then shows only its id, and the fetch is
 // not retried.
 function VersionLink({ kind, id }: { kind: VersionKind; id: number }) {
-  const { data } = useSWR<VersionSummary>(`${API_BASE}/${kind}/id/${id}`, fetcher, {
+  const { data } = useSWR<VersionSummary>(`${API_BASE}/${kind}/${id}`, fetcher, {
     shouldRetryOnError: false,
   });
   return (

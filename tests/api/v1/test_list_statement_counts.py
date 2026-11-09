@@ -196,6 +196,8 @@ def test_listing_issues_the_same_statements_whatever_the_page_size(
         ("/v1/devices/MAST/datasets", {"include_calibration": True}),
         ("/v1/devices/MAST/datasets", {"include_annotations": True}),
         ("/v1/devices/MAST/shots/0/datasets", {}),
+        ("/v1/collections", {}),
+        ("/v1/devices/MAST/collections", {}),
     ],
 )
 def test_jsonld_listing_issues_the_same_statements_whatever_the_page_size(
@@ -250,7 +252,7 @@ def test_reading_annotations_issues_the_same_statements_whatever_their_number(
     for subject_id, count in zip(subjects, (1, 5), strict=True):
         with statements(session) as read:
             response = test_client.get(
-                f"/v1/datasets/id/{subject_id}", params={"include_annotations": True}
+                f"/v1/datasets/{subject_id}", params={"include_annotations": True}
             )
         assert len(response.json()["annotations"]) == count
         issued.append(len(read))

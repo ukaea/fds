@@ -455,7 +455,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
 
   const { data: datasetData } = useSWR<Dataset>(
     id
-      ? `${API_BASE}/datasets/id/${id}?include_geometry=true&include_calibration=true&include_annotations=true`
+      ? `${API_BASE}/datasets/${id}?include_geometry=true&include_calibration=true&include_annotations=true`
       : null,
     fetcher
   );
@@ -469,7 +469,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
   const replacedBy = datasetData?.replaced_by ?? [];
 
   const { data: executor } = useSWR<Source>(
-    activityData?.source_id != null ? `${API_BASE}/sources/id/${activityData.source_id}` : null,
+    activityData?.source_id != null ? `${API_BASE}/sources/${activityData.source_id}` : null,
     fetcher
   );
 
@@ -999,7 +999,7 @@ export default function DatasetDetail({ id, jsonLd }: { id: string; jsonLd?: Jso
                         <span className="text-foreground">{datasetData?.created_at ? new Date(datasetData.created_at).toLocaleDateString(undefined, DATE) : 'Unknown'}</span>
                     </Property>
                 </div>
-                <JsonLdPanel url={`${API_BASE}/datasets/id/${id}`} document={jsonLd} className="-mx-6 -mb-6 mt-4 border-t border-border px-2 py-1.5" />
+                <JsonLdPanel url={`${API_BASE}/datasets/${id}`} document={jsonLd} className="-mx-6 -mb-6 mt-4 border-t border-border px-2 py-1.5" />
             </div>
 
             <div className="card p-6 bg-muted/80 shadow-xl border-border">

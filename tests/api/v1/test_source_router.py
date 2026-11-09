@@ -52,19 +52,25 @@ def test_read_sources(test_client: TestClient, admin_user_token: dict):
     assert len(data) >= 2
 
 
-def test_read_source_by_name(test_client: TestClient, admin_user_token: dict):
-    test_client.post(
-        "/v1/sources/",
-        headers=admin_user_token,
-        json={"name": "LookupName", "kind": "software"},
-    )
+def test_find_source_by_name(test_client: TestClient, admin_user_token: dict):
+    for name in ("LookupName", "OtherName"):
+        test_client.post(
+            "/v1/sources/",
+            headers=admin_user_token,
+            json={"name": name, "kind": "software"},
+        )
 
-    response = test_client.get("/v1/sources/LookupName")
+    response = test_client.get("/v1/sources/?name=LookupName")
     assert response.status_code == 200
-    data = response.json()
-    assert data["name"] == "LookupName"
+    assert [s["name"] for s in response.json()] == ["LookupName"]
+
+
+def test_find_source_by_absent_name(test_client: TestClient):
+    response = test_client.get("/v1/sources/?name=NonExistent")
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_read_source_not_found(test_client: TestClient):
-    response = test_client.get("/v1/sources/NonExistent")
+    response = test_client.get("/v1/sources/999999")
     assert response.status_code == 404

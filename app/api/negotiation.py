@@ -1,7 +1,10 @@
-from typing import Any
+from collections.abc import Callable
+from typing import Annotated, Any
 
-from fastapi import Request, Response
+from fastapi import Depends, Request, Response
 from fastapi.responses import JSONResponse
+
+from app.api.base_url import get_base_url
 
 LD_JSON = "application/ld+json"
 JSON = "application/json"
@@ -24,72 +27,69 @@ class JSONLDResponse(JSONResponse):
     media_type = LD_JSON
 
 
-def _media_ranges(accept: str) -> list[tuple[str, float]]:
-    """Each media range in an Accept header, with its q-value.
+class Answer:
+    """Answers a request in JSON or JSON-LD, whichever its Accept header prefers.
 
-    A range whose q-value is not a number is left out.
+    Routes take it as a dependency, ``AnswerDep``, and call it with both answers
+    as functions, so that only the one sent is built. The JSON-LD one is given
+    the base URL its identifiers are written under.
+
+    FastAPI passes it the response it will send with a plain JSON answer, which
+    is marked as varying with the Accept header. A JSON-LD answer is a
+    ``JSONLDResponse`` of its own, so it carries ``VARY_ACCEPT`` itself.
     """
-    ranges = []
-    for part in accept.split(","):
-        media_range, *parameters = (piece.strip() for piece in part.split(";"))
-        quality = 1.0
-        for parameter in parameters:
-            name, _, value = parameter.partition("=")
-            if name.strip().lower() == "q":
-                try:
-                    quality = float(value)
-                except ValueError:
-                    quality = -1.0
-        if media_range and quality >= 0:
-            ranges.append((media_range.lower(), quality))
-    return ranges
 
+    def __init__(
+        self,
+        request: Request,
+        response: Response,
+        base: Annotated[str, Depends(get_base_url)],
+    ) -> None:
+        response.headers.update(VARY_ACCEPT)
+        self.wants_jsonld = self.prefers_jsonld(request.headers.get("accept"))
+        self.base = base
 
-def _preference(ranges: list[tuple[str, float]], media_type: str) -> tuple[float, int]:
-    """The q-value the Accept header gives ``media_type``, and how closely the
-    range it comes from names it.
+    @staticmethod
+    def prefers_jsonld(accept: str | None) -> bool:
+        """Whether an Accept header asks for JSON-LD rather than plain JSON.
 
-    The most specific range that matches decides: the media type itself (2),
-    then its type with any subtype, such as ``application/*`` (1), then ``*/*``
-    (0). A media type no range matches has q-value 0 and closeness -1.
-    """
-    kind = media_type.split("/")[0]
-    closeness_of = {media_type: 2, f"{kind}/*": 1, "*/*": 0}
-    best = (0.0, -1)
-    for media_range, quality in ranges:
-        closeness = closeness_of.get(media_range, -1)
-        if closeness > best[1]:
-            best = (quality, closeness)
-    return best
+        It does when it gives ``application/ld+json`` a higher q-value than
+        ``application/json``, or the same one while naming ``application/ld+json``
+        itself. A q-value of 0 means "not this", and a range whose q-value is not
+        a number is left out. With no Accept header, or one that reaches both
+        only through ``*/*`` or ``application/*``, the answer is plain JSON.
+        """
+        # Each media type takes the q-value of the most specific range that names
+        # it: the type itself (2), then its type with any subtype (1), then */* (0).
+        best = {LD_JSON: (0.0, -1), JSON: (0.0, -1)}
+        for part in (accept or "").split(","):
+            media_range, *parameters = (p.strip().lower() for p in part.split(";"))
+            quality = 1.0
+            for name, _, value in (
+                parameter.partition("=") for parameter in parameters
+            ):
+                if name.strip() == "q":
+                    try:
+                        quality = float(value)
+                    except ValueError:
+                        quality = -1.0
+            if quality < 0:
+                continue
+            for media_type in best:
+                kind = media_type.split("/")[0]
+                closeness = {media_type: 2, f"{kind}/*": 1, "*/*": 0}.get(
+                    media_range, -1
+                )
+                if closeness > best[media_type][1]:
+                    best[media_type] = (quality, closeness)
+        (jsonld, jsonld_closeness), (plain, _) = best[LD_JSON], best[JSON]
+        if jsonld <= 0:
+            return False
+        return jsonld > plain or (jsonld == plain and jsonld_closeness == 2)
 
-
-def prefers_jsonld(accept: str | None) -> bool:
-    """Whether an Accept header asks for JSON-LD rather than plain JSON.
-
-    It does when it gives ``application/ld+json`` a higher q-value than
-    ``application/json``, or the same one while naming ``application/ld+json``
-    itself. A q-value of 0 means "not this". With no Accept header, or one that
-    reaches both only through ``*/*`` or ``application/*``, the answer is plain
-    JSON.
-    """
-    if not accept:
-        return False
-    ranges = _media_ranges(accept)
-    jsonld, jsonld_closeness = _preference(ranges, LD_JSON)
-    plain, _ = _preference(ranges, JSON)
-    if jsonld <= 0:
-        return False
-    return jsonld > plain or (jsonld == plain and jsonld_closeness == 2)
-
-
-def wants_jsonld(request: Request, response: Response) -> bool:
-    """Whether to answer ``request`` in JSON-LD rather than plain JSON.
-
-    Routes take this as a dependency, ``WantsJSONLDDep``, and FastAPI passes it
-    the request and the response it will send with a plain JSON answer. That
-    response is marked as varying with the Accept header. A JSON-LD answer is
-    returned as a ``JSONLDResponse`` of its own, which has to carry
-    ``VARY_ACCEPT`` itself.
-    """
-    response.headers.update(VARY_ACCEPT)
-    return prefers_jsonld(request.headers.get("accept"))
+    def __call__[T](
+        self, *, json: Callable[[], T], jsonld: Callable[[str], dict[str, Any]]
+    ) -> T | JSONLDResponse:
+        if self.wants_jsonld:
+            return JSONLDResponse(content=jsonld(self.base), headers=VARY_ACCEPT)
+        return json()

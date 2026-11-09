@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from typing import Any
 
 import structlog
 from psycopg.errors import UniqueViolation
@@ -36,7 +37,11 @@ from app.services.available_properties import (
     available_properties,
 )
 from app.services.base_service import BaseService
-from app.services.dataset_service import DatasetService
+from app.services.dataset_service import (
+    DatasetService,
+    activity_node_loads,
+    readable_activity_inputs,
+)
 from app.services.exceptions import (
     ConflictError,
     DeviceNotFoundError,
@@ -51,7 +56,11 @@ from app.services.filters import (
     scope_clauses,
     shot_id_prefix_clauses,
 )
-from app.services.jsonld import map_collection_to_dcat
+from app.services.jsonld import (
+    collection_node,
+    generate_context,
+    map_collection_to_dcat,
+)
 from app.services.shot_service import ShotService
 from app.services.visibility import (
     read_page,
@@ -281,6 +290,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         device_name: str | None = None,
         shot_id: str | None = None,
         scope: CatalogueScope | DeviceScope = CatalogueScope.ALL,
+        name: str | None = None,
         properties: list[str] | None = None,
         activity_type: ActivityType | None = None,
         source: str | None = None,
@@ -305,6 +315,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             )
         if shot_id is not None:
             clauses.append(col(Collection.shot_id) == shot_id)
+        if name is not None:
+            clauses.append(col(Collection.name) == name)
         return [
             *clauses,
             *shot_id_prefix_clauses(col(Collection.shot_id), shot_id_prefix),
@@ -342,6 +354,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         scope: CatalogueScope = CatalogueScope.ALL,
         offset: int = 0,
         limit: int = 100,
+        name: str | None = None,
         properties: list[str] | None = None,
         activity_type: ActivityType | None = None,
         source: str | None = None,
@@ -357,6 +370,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         """
         clauses = self._listing_clauses(
             scope=scope,
+            name=name,
             properties=properties,
             activity_type=activity_type,
             source=source,
@@ -373,6 +387,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         *,
         device_name: str | None = None,
         scope: CatalogueScope | DeviceScope = CatalogueScope.ALL,
+        name: str | None = None,
         properties: list[str] | None = None,
         activity_type: ActivityType | None = None,
         source: str | None = None,
@@ -393,6 +408,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         where = self._listing_clauses(
             device_name=device_name,
             scope=scope,
+            name=name,
             properties=properties,
             activity_type=activity_type,
             source=source,
@@ -438,36 +454,6 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             self.check_read_access(collection, user)
         return collection
 
-    def get_by_name_in_context_or_raise(
-        self,
-        *,
-        name: str,
-        user: AuthenticatedUser = ANONYMOUS_USER,
-        device_name: str | None = None,
-        shot_id: str | None = None,
-    ) -> Collection:
-        """Retrieve a Collection by name within its scope, raising a
-        context-aware ``ResourceNotFoundError`` when absent.
-        """
-        collection = self.get_by_name_in_context(
-            name=name,
-            user=user,
-            device_name=device_name,
-            shot_id=shot_id,
-        )
-        if collection:
-            return collection
-
-        if device_name and shot_id:
-            raise ResourceNotFoundError(
-                f"Collection '{name}' not found in this context"
-            )
-        if device_name:
-            raise ResourceNotFoundError(
-                f"Collection '{name}' not found for device '{device_name}'"
-            )
-        raise ResourceNotFoundError(f"Global collection '{name}' not found")
-
     def get_collections_for_device(
         self,
         device_name: str,
@@ -475,6 +461,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         scope: DeviceScope = DeviceScope.ALL,
         offset: int = 0,
         limit: int = 100,
+        name: str | None = None,
         properties: list[str] | None = None,
         activity_type: ActivityType | None = None,
         source: str | None = None,
@@ -491,6 +478,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         clauses = self._listing_clauses(
             device_name=device_name,
             scope=scope,
+            name=name,
             properties=properties,
             activity_type=activity_type,
             source=source,
@@ -508,6 +496,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         user: AuthenticatedUser = ANONYMOUS_USER,
         offset: int = 0,
         limit: int = 100,
+        name: str | None = None,
         properties: list[str] | None = None,
         activity_type: ActivityType | None = None,
         source: str | None = None,
@@ -518,6 +507,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         clauses = self._listing_clauses(
             device_name=device_name,
             shot_id=shot_id,
+            name=name,
             properties=properties,
             activity_type=activity_type,
             source=source,
@@ -680,17 +670,11 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         (read,) = self.to_read_models([collection], include_storage_options, user)
         return read
 
-    def to_read_models(
-        self,
-        collections: Sequence[Collection],
-        include_storage_options: bool = False,
-        user: AuthenticatedUser = ANONYMOUS_USER,
-    ) -> list[CollectionRead]:
-        """Batch convert Collection ORM objects to ``CollectionRead`` DTOs.
-
-        Members are read for the whole batch at once, so a listing issues the
-        same statements however many collections it returns.
-        """
+    def _inline_members(
+        self, collections: Sequence[Collection], user: AuthenticatedUser
+    ) -> tuple[dict[Any, list[Dataset]], dict[Any, list[Collection]]]:
+        """The first members ``user`` may read of each collection, keyed by its id:
+        its datasets, then its child collections. Read for all of them at once."""
         ids = [c.id for c in collections if c.id is not None]
         members = read_pages_by_group(
             self.session,
@@ -712,6 +696,60 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             user,
             limit=INLINE_MEMBERS,
         )
+        return members, children
+
+    def to_dcat_listing(
+        self,
+        collections: Sequence[Collection],
+        base_url: str,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+    ) -> dict[str, Any]:
+        """A page of a collection listing as one JSON-LD document.
+
+        Its ``@graph`` holds each collection's ``dcat:Catalog`` node, in order,
+        without FDS's record of it. Members, Activities and replacements are
+        loaded for all the collections at once.
+        """
+        ids = [c.id for c in collections if c.id is not None]
+        if ids:
+            self.session.exec(
+                select(Collection)
+                .where(col(Collection.id).in_(ids))
+                .options(*activity_node_loads(Collection.activity))
+            ).all()
+        members, children = self._inline_members(collections, user)
+        links = replacements.replaces_and_replaced_by(
+            self.session, Collection, CollectionReplacement, collections, user
+        )
+        inputs = readable_activity_inputs(self.session, collections, user)
+        return {
+            "@context": generate_context(),
+            "@graph": [
+                collection_node(
+                    collection,
+                    base_url,
+                    datasets=members.get(collection.id, []),
+                    child_collections=children.get(collection.id, []),
+                    activity_inputs=activity_inputs,
+                    replaces=links.get(collection.id, ([], []))[0],
+                    replaced_by=links.get(collection.id, ([], []))[1],
+                )
+                for collection, activity_inputs in zip(collections, inputs, strict=True)
+            ],
+        }
+
+    def to_read_models(
+        self,
+        collections: Sequence[Collection],
+        include_storage_options: bool = False,
+        user: AuthenticatedUser = ANONYMOUS_USER,
+    ) -> list[CollectionRead]:
+        """Batch convert Collection ORM objects to ``CollectionRead`` DTOs.
+
+        Members are read for the whole batch at once, so a listing issues the
+        same statements however many collections it returns.
+        """
+        members, children = self._inline_members(collections, user)
 
         # A dataset or child in several of these collections is read once.
         unique_members = {d.id: d for page in members.values() for d in page}

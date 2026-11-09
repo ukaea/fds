@@ -48,7 +48,7 @@ def create_activity(
     return ActivityRead.model_validate(activity)
 
 
-@router.get("/{activity_id}", response_model=ActivityRead)
+@router.get("/{activity_id:int}", response_model=ActivityRead)
 def read_activity(
     *,
     activity_id: int,
@@ -64,7 +64,7 @@ def read_activity(
     return ActivityRead.model_validate(activity)
 
 
-@router.patch("/{activity_id}", response_model=ActivityRead)
+@router.patch("/{activity_id:int}", response_model=ActivityRead)
 def update_activity(
     *,
     activity_id: int,
@@ -77,7 +77,7 @@ def update_activity(
     return ActivityRead.model_validate(activity)
 
 
-@router.delete("/{activity_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{activity_id:int}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_activity(
     *,
     activity_id: int,
@@ -89,7 +89,7 @@ def delete_activity(
 
 
 @router.post(
-    "/{activity_id}/inputs/{dataset_id}",
+    "/{activity_id:int}/inputs/{dataset_id:int}",
     response_model=ActivityInputRead,
     status_code=status.HTTP_201_CREATED,
 )
@@ -107,7 +107,7 @@ def add_activity_input(
 
 
 @router.get(
-    "/{activity_id}/inputs",
+    "/{activity_id:int}/inputs",
     response_model=list[DatasetRead],
     response_model_exclude_none=True,
 )
@@ -128,7 +128,7 @@ def list_activity_inputs(
 
 
 @router.delete(
-    "/{activity_id}/inputs/{dataset_id}", status_code=status.HTTP_204_NO_CONTENT
+    "/{activity_id:int}/inputs/{dataset_id:int}", status_code=status.HTTP_204_NO_CONTENT
 )
 def remove_activity_input(
     *,
@@ -144,7 +144,7 @@ def remove_activity_input(
 
 
 @router.post(
-    "/{activity_id}/instruments/{source_id}",
+    "/{activity_id:int}/instruments/{source_id:int}",
     response_model=ActivityInstrumentRead,
     status_code=status.HTTP_201_CREATED,
 )
@@ -161,7 +161,7 @@ def add_activity_instrument(
     )
 
 
-@router.get("/{activity_id}/instruments", response_model=list[SourceRead])
+@router.get("/{activity_id:int}/instruments", response_model=list[SourceRead])
 def list_activity_instruments(
     *,
     activity_id: int,
@@ -179,7 +179,8 @@ def list_activity_instruments(
 
 
 @router.delete(
-    "/{activity_id}/instruments/{source_id}", status_code=status.HTTP_204_NO_CONTENT
+    "/{activity_id:int}/instruments/{source_id:int}",
+    status_code=status.HTTP_204_NO_CONTENT,
 )
 def remove_activity_instrument(
     *,
@@ -195,7 +196,7 @@ def remove_activity_instrument(
 
 
 @router.post(
-    "/{activity_id}/agents/{source_id}",
+    "/{activity_id:int}/agents/{source_id:int}",
     response_model=ActivityAgentRead,
     status_code=status.HTTP_201_CREATED,
 )
@@ -213,7 +214,7 @@ def add_activity_agent(
     )
 
 
-@router.get("/{activity_id}/agents", response_model=list[ActivityAgentRead])
+@router.get("/{activity_id:int}/agents", response_model=list[ActivityAgentRead])
 def list_activity_agents(
     *,
     activity_id: int,
@@ -225,7 +226,7 @@ def list_activity_agents(
 
 
 @router.delete(
-    "/{activity_id}/agents/{source_id}", status_code=status.HTTP_204_NO_CONTENT
+    "/{activity_id:int}/agents/{source_id:int}", status_code=status.HTTP_204_NO_CONTENT
 )
 def remove_activity_agent(
     *,
@@ -241,7 +242,7 @@ def remove_activity_agent(
 
 
 @router.post(
-    "/{activity_id}/delegations/{subordinate_source_id}/{responsible_source_id}",
+    "/{activity_id:int}/delegations/{subordinate_source_id:int}/{responsible_source_id:int}",
     response_model=ActivityDelegationRead,
     status_code=status.HTTP_201_CREATED,
 )
@@ -263,7 +264,9 @@ def add_activity_delegation(
     )
 
 
-@router.get("/{activity_id}/delegations", response_model=list[ActivityDelegationRead])
+@router.get(
+    "/{activity_id:int}/delegations", response_model=list[ActivityDelegationRead]
+)
 def list_activity_delegations(
     *,
     activity_id: int,
@@ -275,7 +278,7 @@ def list_activity_delegations(
 
 
 @router.delete(
-    "/{activity_id}/delegations/{subordinate_source_id}/{responsible_source_id}",
+    "/{activity_id:int}/delegations/{subordinate_source_id:int}/{responsible_source_id:int}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def remove_activity_delegation(

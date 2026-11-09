@@ -210,27 +210,6 @@ def test_get_collection_not_found(collection_service: CollectionService):
     assert collection_service.get(9999) is None
 
 
-def test_get_by_name_in_context_global(
-    collection_service: CollectionService, admin_user: AuthenticatedUser
-):
-    """get_by_name_in_context_or_raise resolves a global Collection by name."""
-    collection_service.create(CollectionCreate(name="global-run"), admin_user)
-    col = collection_service.get_by_name_in_context_or_raise(
-        name="global-run", user=admin_user
-    )
-    assert col.name == "global-run"
-
-
-def test_get_by_name_in_context_not_found(
-    collection_service: CollectionService, admin_user: AuthenticatedUser
-):
-    """get_by_name_in_context_or_raise raises ResourceNotFoundError for an absent name."""
-    with pytest.raises(ResourceNotFoundError, match="Global collection"):
-        collection_service.get_by_name_in_context_or_raise(
-            name="missing", user=admin_user
-        )
-
-
 def test_get_multi_global(
     collection_service: CollectionService, admin_user: AuthenticatedUser
 ):

@@ -45,7 +45,7 @@ def test_hybrid_storage_fields(
 
     # 3. Retrieve content negotiation (JSON-LD) — by ID
     response = test_client.get(
-        f"/v1/datasets/id/{dataset_id}",
+        f"/v1/datasets/{dataset_id}",
         headers={"Accept": "application/ld+json"},
     )
     assert response.status_code == 200

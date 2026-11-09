@@ -18,7 +18,7 @@ def test_include_geometry_off_by_default(
 ):
     make_version("thomson_geometry", ["thomson_positions"], THOMSON)
     signal = make_signal(["thomson_positions"])
-    resp = test_client.get(f"/v1/datasets/id/{signal.id}", headers=admin_user_token)
+    resp = test_client.get(f"/v1/datasets/{signal.id}", headers=admin_user_token)
     assert resp.status_code == 200
     assert "geometry" not in resp.json()
 
@@ -29,7 +29,7 @@ def test_include_geometry_surfaces_versions(
     version = make_version("thomson_geometry", ["thomson_positions"], THOMSON)
     signal = make_signal(["thomson_positions"])
     resp = test_client.get(
-        f"/v1/datasets/id/{signal.id}?include_geometry=true",
+        f"/v1/datasets/{signal.id}?include_geometry=true",
         headers=admin_user_token,
     )
     assert resp.status_code == 200
@@ -46,8 +46,7 @@ def test_include_geometry_with_storage_options(
     make_version("thomson_geometry", ["thomson_positions"], THOMSON)
     signal = make_signal(["thomson_positions"])
     resp = test_client.get(
-        f"/v1/datasets/id/{signal.id}"
-        "?include_geometry=true&include_storage_options=true",
+        f"/v1/datasets/{signal.id}?include_geometry=true&include_storage_options=true",
         headers=admin_user_token,
     )
     assert resp.status_code == 200
@@ -63,7 +62,7 @@ def test_multi_role_bundle_deduped(
     bundle = make_version("bundle", roles, Coverage(shots=["150"]))
     signal = make_signal(roles)
     resp = test_client.get(
-        f"/v1/datasets/id/{signal.id}?include_geometry=true",
+        f"/v1/datasets/{signal.id}?include_geometry=true",
         headers=admin_user_token,
     )
     assert resp.status_code == 200
@@ -120,7 +119,7 @@ def test_include_geometry_resolves_only_readable_versions(
     session.commit()
     signal = make_signal(["thomson_positions", "thomson_fibres"])
 
-    resp = test_client.get(f"/v1/datasets/id/{signal.id}?include_geometry=true")
+    resp = test_client.get(f"/v1/datasets/{signal.id}?include_geometry=true")
 
     assert resp.status_code == 200
     ids = [g["id"] for g in resp.json()["geometry"]]

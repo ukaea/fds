@@ -100,15 +100,19 @@ A signal that lists the role in `geometry_references` resolves it with `?include
 === "curl"
 
     ```bash
-    curl "$API/devices/mast/shots/30421/datasets/thomson_scattering?include_geometry=true&include_storage_options=true"
+    curl "$API/devices/mast/shots/30421/datasets?name=thomson_scattering&include_geometry=true&include_storage_options=true"
     ```
 
 === "Python (requests)"
 
     ```python
     signal = requests.get(
-        f"{API}/devices/mast/shots/30421/datasets/thomson_scattering",
-        params={"include_geometry": True, "include_storage_options": True},
+        f"{API}/devices/mast/shots/30421/datasets",
+        params={
+            "name": "thomson_scattering",
+            "include_geometry": True,
+            "include_storage_options": True,
+        },
     ).json()[0]
     geometry = signal["geometry"]  # shot 30421 → thomson_positions_v2
     ```
@@ -117,8 +121,12 @@ A signal that lists the role in `geometry_references` resolves it with `?include
 
     ```python
     signal = httpx.get(
-        f"{API}/devices/mast/shots/30421/datasets/thomson_scattering",
-        params={"include_geometry": True, "include_storage_options": True},
+        f"{API}/devices/mast/shots/30421/datasets",
+        params={
+            "name": "thomson_scattering",
+            "include_geometry": True,
+            "include_storage_options": True,
+        },
     ).json()[0]
     geometry = signal["geometry"]  # shot 30421 → thomson_positions_v2
     ```
@@ -128,8 +136,8 @@ A signal that lists the role in `geometry_references` resolves it with `?include
     ```javascript
     const signal = await (
       await fetch(
-        `${API}/devices/mast/shots/30421/datasets/thomson_scattering` +
-          `?include_geometry=true&include_storage_options=true`,
+        `${API}/devices/mast/shots/30421/datasets?name=thomson_scattering` +
+          `&include_geometry=true&include_storage_options=true`,
       )
     ).json();
     const geometry = signal[0].geometry; // shot 30421 → thomson_positions_v2
