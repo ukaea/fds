@@ -9,6 +9,7 @@ import { fetcher, API_BASE, FetchError } from '@/lib/api';
 import { AvailableProperties, Collection, Shot } from '@/lib/types';
 import { propertyQuery, Ranges, withQuery } from '@/lib/properties';
 import { usePossible } from '@/lib/use-possible';
+import { useSettled } from '@/lib/use-settled';
 import { pageUrl, usePagedList } from '@/lib/use-paged-list';
 import { PropertyFilter } from '@/components/property-filter';
 import { SidePanelLayout } from '@/components/side-panel-layout';
@@ -18,6 +19,11 @@ import { PropertyBadges } from '@/components/properties';
 import { ClientDate } from '@/components/client-date';
 
 const PAGE_SIZE = 100;
+
+// A drag or a typed number changes a range many times a second, and each change
+// costs several summaries that take about a second each, so the requests wait
+// until the ranges have been still this long.
+const RANGE_SETTLE_MS = 400;
 
 function shotUrl(deviceName: string, shotId: string): string {
   return `${API_BASE}/devices/${deviceName}/shots/${encodeURIComponent(shotId)}`;
@@ -76,6 +82,7 @@ export function ShotList({
 }) {
   const [propertyTokens, setPropertyTokens] = useState<string[]>([]);
   const [ranges, setRanges] = useState<Record<string, Range>>({});
+  const settledRanges = useSettled(ranges, RANGE_SETTLE_MS);
   const [idPrefix, setIdPrefix] = useState('');
   const [notFound, setNotFound] = useState<string | null>(null);
   const router = useRouter();
@@ -105,10 +112,11 @@ export function ShotList({
     fetcher
   );
 
-  // The query for a selection of values, with the ranges and ID prefix as they
-  // stand. Both the requests below and the prefetch on hover build it here, so
-  // a prefetch is always for exactly the request a click then makes.
-  const queryFor = (tokens: string[], rangesFor: Ranges = ranges) =>
+  // The query for a selection of values, with the ranges as they last settled
+  // and the ID prefix as it stands. Both the requests below and the prefetch on
+  // hover build it here, so a prefetch is always for exactly the request a
+  // click then makes.
+  const queryFor = (tokens: string[], rangesFor: Ranges = settledRanges) =>
     [
       propertyQuery('property', tokens),
       rangeQuery(rangesFor),
@@ -143,11 +151,13 @@ export function ShotList({
   const possible = usePossible(
     (tokens, rangesFor) => withQuery(shotPropertiesUrl(deviceName), ...queryFor(tokens, rangesFor)),
     propertyTokens,
-    ranges
+    settledRanges
   );
 
   const total = properties?.total ?? 0;
-  const matched = filterQuery.length > 0 ? matching?.total ?? 0 : total;
+  // Unknown until the filtered count first arrives. Showing 0 meanwhile said
+  // that nothing matched.
+  const matched = filterQuery.length > 0 ? matching?.total : total;
 
   // Fetches what selecting a value would show while the pointer rests on it:
   // the count and the first page of shots, under the urls the requests above
@@ -221,9 +231,11 @@ export function ShotList({
 
       {total > 0 && (
         <p className="text-sm text-muted-foreground mb-4">
-          {filterQuery.length > 0
-            ? `${matched} of ${total} shot${total !== 1 ? 's' : ''}`
-            : `${total} shot${total !== 1 ? 's' : ''}`}
+          {matched === undefined
+            ? 'Counting shots…'
+            : filterQuery.length > 0
+              ? `${matched} of ${total} shot${total !== 1 ? 's' : ''}`
+              : `${total} shot${total !== 1 ? 's' : ''}`}
         </p>
       )}
 
