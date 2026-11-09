@@ -2,7 +2,6 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 from sqlmodel import (
-    JSON,
     Column,
     Field,
     ForeignKeyConstraint,
@@ -12,6 +11,7 @@ from sqlmodel import (
 )
 
 from .mixins import (
+    JSONB_COLUMN,
     DescriptiveMixin,
     IssuedMixin,
     PersistentIdentifierMixin,
@@ -138,7 +138,7 @@ class CollectionBase(
             "If null, scope requirements inherit from the enclosing shot or device "
             "policy."
         ),
-        sa_column=Column(JSON, nullable=True),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
     )
     allowed_idps: list[str] | None = Field(
         default=None,
@@ -146,7 +146,7 @@ class CollectionBase(
             "Trusted issuer allowlist for this collection. If null, allowed issuers "
             "inherit from the enclosing shot or device policy."
         ),
-        sa_column=Column(JSON, nullable=True),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
     )
 
 

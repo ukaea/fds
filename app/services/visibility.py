@@ -3,12 +3,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import ColumnElement
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import aliased
 from sqlmodel import (
     Session,
     and_,
-    cast,
     col,
     exists,
     false,
@@ -292,8 +290,8 @@ def _combinations(
     level, scopes, idps = columns.policy
     fields: dict[str, Any] = {
         "level": level,
-        "scopes": cast(scopes, JSONB),
-        "idps": cast(idps, JSONB),
+        "scopes": scopes,
+        "idps": idps,
     }
     if columns.device_name is not None:
         fields["device_name"] = columns.device_name
@@ -301,8 +299,8 @@ def _combinations(
         fields |= {
             "in_shot": columns.shot_id.is_not(None),
             "shot_level": _SHOT.access_level,
-            "shot_scopes": cast(_SHOT.required_scopes, JSONB),
-            "shot_idps": cast(_SHOT.allowed_idps, JSONB),
+            "shot_scopes": _SHOT.required_scopes,
+            "shot_idps": _SHOT.allowed_idps,
         }
 
     statement = select(

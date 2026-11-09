@@ -2,9 +2,11 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Self
 
 from pydantic import model_validator
-from sqlmodel import JSON, Column, Field, Relationship, SQLModel
+from sqlmodel import Column, Field, Relationship, SQLModel
 
 from app.core.timeutils import UTCDatetime
+
+from .mixins import JSONB_COLUMN
 
 
 class ActivityType(str, Enum):
@@ -78,7 +80,9 @@ class ActivityBase(SQLModel):
     source_id: int | None = Field(default=None, foreign_key="source.id", index=True)
     source_version: str | None = None
     activity_type: ActivityType | None = Field(default=None, index=True)
-    parameters: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    parameters: dict[str, Any] | None = Field(
+        default=None, sa_column=Column(JSONB_COLUMN)
+    )
     started_at: UTCDatetime | None = None
     ended_at: UTCDatetime | None = None
 
@@ -232,6 +236,8 @@ class ActivityUpdate(SQLModel):
     source_id: int | None = None
     source_version: str | None = None
     activity_type: ActivityType | None = None
-    parameters: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    parameters: dict[str, Any] | None = Field(
+        default=None, sa_column=Column(JSONB_COLUMN)
+    )
     started_at: UTCDatetime | None = None
     ended_at: UTCDatetime | None = None

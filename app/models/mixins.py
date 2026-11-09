@@ -1,10 +1,15 @@
 from datetime import date
 
-from sqlmodel import JSON, Field, SQLModel
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlmodel import Field, SQLModel
 
 from app.core.timeutils import UTCDatetime, utcnow
 
 from .scientific_metadata import ScientificProperty
+
+# The type of every JSON column. It writes None as SQL NULL rather than a JSON
+# null, so an unset value has one form and IS NULL finds it.
+JSONB_COLUMN = JSONB(none_as_null=True)
 
 
 class PersistentIdentifierMixin(SQLModel):
@@ -69,5 +74,5 @@ class ScientificMetadataMixin(SQLModel):
     # shared by every subclass, and SQLAlchemy rejects the second table it is
     # assigned to. sa_type builds a fresh column per model.
     scientific_metadata: list[ScientificProperty] | None = Field(
-        default=None, sa_type=JSON, nullable=True
+        default=None, sa_type=JSONB_COLUMN, nullable=True
     )

@@ -139,6 +139,50 @@ def test_equality_annotation_filter(test_client: TestClient):
     assert [s["id"] for s in resp.json()] == ["30421"]
 
 
+@pytest.mark.parametrize(
+    ("prop", "expected"),
+    [
+        ("leak_rate:1e-05", ["1003"]),
+        ("leak_rate:1E-5", ["1003"]),
+        ("leak_rate:0.00001", ["1003"]),
+        ("leak_rate:1.0e-5", ["1003"]),
+        ("coolant.thermocouple.max:850.0", ["1001"]),
+    ],
+)
+def test_a_number_matches_however_it_is_written(
+    test_client: TestClient,
+    session: Session,
+    admin_user: AuthenticatedUser,
+    prop: str,
+    expected: list[str],
+):
+    ShotService(session).create(
+        ShotCreate(
+            id="1003",
+            device_name=RIG,
+            access_level=AccessLevel.PUBLIC,
+            scientific_metadata=[ScientificProperty(name="leak_rate", value=1e-05)],
+        ),
+        admin_user,
+    )
+    session.commit()
+
+    resp = test_client.get(f"/v1/devices/{RIG}/shots", params={"property": prop})
+
+    assert resp.status_code == 200
+    assert [s["id"] for s in resp.json()] == expected
+
+
+def test_a_number_out_of_range_matches_nothing(test_client: TestClient):
+    """Rather than fail the query when PostgreSQL cannot read it as a number."""
+    resp = test_client.get(
+        f"/v1/devices/{RIG}/shots", params={"property": "type:1e999999999"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
 def test_malformed_annotation_returns_422(test_client: TestClient):
     resp = test_client.get(
         f"/v1/devices/{MAST}/shots", params={"property": "disruption:"}
