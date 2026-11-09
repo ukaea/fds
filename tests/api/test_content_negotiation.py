@@ -159,7 +159,7 @@ def test_content_negotiation_dataset(test_client: TestClient, session: Session):
     )
 
     # 1. Default (JSON) — by ID
-    response = test_client.get(f"/v1/datasets/id/{dataset.id}")
+    response = test_client.get(f"/v1/datasets/{dataset.id}")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
     data = response.json()
@@ -168,7 +168,7 @@ def test_content_negotiation_dataset(test_client: TestClient, session: Session):
 
     # 2. JSON-LD — by ID
     response = test_client.get(
-        f"/v1/datasets/id/{dataset.id}", headers={"Accept": "application/ld+json"}
+        f"/v1/datasets/{dataset.id}", headers={"Accept": "application/ld+json"}
     )
     assert response.status_code == 200
     assert "application/ld+json" in response.headers["content-type"]
@@ -241,11 +241,11 @@ def negotiated(session: Session, admin_user: AuthenticatedUser) -> dict[str, int
     [
         "/v1/devices/MAST",
         "/v1/devices/MAST/shots/30421",
-        "/v1/datasets/id/{dataset}",
-        "/v1/collections/id/{collection}",
-        "/v1/collections/campaign",
-        "/v1/devices/MAST/collections/coils",
-        "/v1/devices/MAST/shots/30421/collections/jintrac",
+        "/v1/datasets/{dataset}",
+        "/v1/collections/{collection}",
+        "/v1/collections",
+        "/v1/devices/MAST/collections",
+        "/v1/devices/MAST/shots/30421/collections",
         "/v1/datasets",
         "/v1/devices/MAST/datasets",
         "/v1/devices/MAST/shots/30421/datasets",
@@ -274,11 +274,11 @@ def test_negotiated_routes_answer_as_the_caller_prefers(
     [
         "/v1/devices/{device_name}",
         "/v1/devices/{device_name}/shots/{shot_id}",
-        "/v1/datasets/id/{id}",
-        "/v1/collections/id/{id}",
-        "/v1/collections/{name}",
-        "/v1/devices/{device_name}/collections/{name}",
-        "/v1/devices/{device_name}/shots/{shot_id}/collections/{name}",
+        "/v1/datasets/{id}",
+        "/v1/collections/{id}",
+        "/v1/collections",
+        "/v1/devices/{device_name}/collections",
+        "/v1/devices/{device_name}/shots/{shot_id}/collections",
         "/v1/datasets",
         "/v1/devices/{device_name}/datasets",
         "/v1/devices/{device_name}/shots/{shot_id}/datasets",

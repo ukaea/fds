@@ -936,8 +936,31 @@ def map_collection_to_dcat(
     replaces: Sequence[int] = (),
     replaced_by: Sequence[int] = (),
 ) -> dict[str, Any]:
-    """Maps a Collection to a JSON-LD document typed as both ``dcat:Catalog``
-    and ``prov:Collection``.
+    """Maps a Collection to a document with FDS's record of it."""
+    node = collection_node(
+        collection,
+        base_url,
+        datasets=datasets,
+        child_collections=child_collections,
+        activity_inputs=activity_inputs,
+        replaces=replaces,
+        replaced_by=replaced_by,
+    )
+    return _with_catalog_record({"@context": METADATA_CONTEXT, **node}, collection)
+
+
+def collection_node(
+    collection: Collection | CollectionRead,
+    base_url: str,
+    *,
+    datasets: Sequence[Dataset],
+    child_collections: Sequence[Collection],
+    activity_inputs: Sequence[Dataset] = (),
+    replaces: Sequence[int] = (),
+    replaced_by: Sequence[int] = (),
+) -> dict[str, Any]:
+    """A Collection's JSON-LD node, typed as both ``dcat:Catalog`` and
+    ``prov:Collection``.
 
     ``replaces`` are the ids of the collections it replaces, published as
     ``dct:replaces``, and ``replaced_by`` those replacing it that the caller may
@@ -956,7 +979,6 @@ def map_collection_to_dcat(
     collection_uri = names.collection(collection_id) if collection_id else None
 
     data: dict[str, Any] = {
-        "@context": METADATA_CONTEXT,
         "@type": ["dcat:Catalog", "prov:Collection"],
         "@id": collection_uri,
         "title": collection.title or collection.name,
@@ -1036,6 +1058,4 @@ def map_collection_to_dcat(
         )
         data["prov:generatedAtTime"] = _generated_at(activity)
 
-    return _with_catalog_record(
-        {k: v for k, v in data.items() if v is not None}, collection
-    )
+    return {k: v for k, v in data.items() if v is not None}

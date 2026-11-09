@@ -203,7 +203,7 @@ Dataset and collection lists accept `shot_id_prefix` in the same way: it keeps t
 GET /v1/collections?activity_type=simulation&source=jintrac&shot_id_prefix=30420
 ```
 
-Dataset lists additionally accept `name`, plus `shot_property`, which filters on an annotation carried by the dataset's *parent shot* rather than the dataset itself. That answers questions spanning both levels in one request:
+Dataset lists additionally accept `shot_property`, which filters on an annotation carried by the dataset's *parent shot* rather than the dataset itself. With `name` it answers questions spanning both levels in one request:
 
 ```text
 GET /v1/devices/mastu/datasets?name=equilibrium&shot_property=elm
@@ -265,12 +265,14 @@ Collection listings have the same summary. `GET /v1/collections/properties?activ
 ## URL structure
 
 ```text
-GET /v1/devices/{device}/shots/{shot_id}/datasets/{name}
-GET /v1/devices/{device}/shots/{shot_id}/collections/{name}
 GET /v1/devices/{device}/shots/{shot_id}/datasets          # list, one shot
+GET /v1/devices/{device}/shots/{shot_id}/collections       # list, one shot
 GET /v1/devices/{device}/datasets                          # list, whole device
-GET /v1/datasets/id/{id}                                   # stable ID-based lookup
+GET /v1/datasets                                           # list, every dataset
+GET /v1/datasets/{id}                                      # one dataset, by ID
 ```
+
+A path names one record by its ID: `GET`, `PATCH` and `DELETE` on `/v1/datasets/{id}`, `/v1/collections/{id}` and `/v1/sources/{id}` address the same record. Every dataset, collection and source listing takes `name` to find records by name, so `GET /v1/devices/mast/shots/30421/datasets?name=equilibrium` gives the shot's equilibrium datasets. A name that matches nothing gives an empty page.
 
 Datasets and Collections are siblings at each scope level. A Collection does not appear in a Dataset's path.
 

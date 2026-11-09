@@ -149,20 +149,15 @@ def test_delete_source_not_found(session: Session, admin_user: AuthenticatedUser
         service.delete(999, user=admin_user)
 
 
-def test_get_source_by_name(session: Session, admin_user: AuthenticatedUser):
+def test_get_sources_by_name(session: Session, admin_user: AuthenticatedUser):
     service = SourceService(session)
-    service.create(
-        SourceCreate(name="UniqueName", kind=SourceKind.SOFTWARE), user=admin_user
-    )
+    for name in ("UniqueName", "OtherName"):
+        service.create(
+            SourceCreate(name=name, kind=SourceKind.SOFTWARE), user=admin_user
+        )
 
-    retrieved = service.get_by_name("UniqueName")
-    assert retrieved.name == "UniqueName"
-
-
-def test_get_source_by_name_not_found(session: Session):
-    service = SourceService(session)
-    with pytest.raises(ResourceNotFoundError):
-        service.get_by_name("NonExistent")
+    assert [s.name for s in service.get_multi(name="UniqueName")] == ["UniqueName"]
+    assert service.get_multi(name="NonExistent") == []
 
 
 def test_create_source_device_admin(

@@ -56,6 +56,13 @@ STFC_ENDPOINT = "https://s3.echo.stfc.ac.uk"
 STFC_BUCKET = "mast"
 
 
+def find(client: httpx.Client, listing: str, **params: str) -> list[dict]:
+    """The records ``listing`` holds that match ``params``, such as a ``name``."""
+    response = client.get(listing, params=params)
+    response.raise_for_status()
+    return response.json()
+
+
 def get_or_create_source(
     client: httpx.Client,
     base_url: str,
@@ -68,7 +75,7 @@ def get_or_create_source(
     if resp.status_code == 201:
         return resp.json()["id"]
     if resp.status_code == 409:
-        return client.get(f"{base_url}/sources/{name}").json()["id"]
+        return find(client, f"{base_url}/sources/", name=name)[0]["id"]
     resp.raise_for_status()
     raise RuntimeError(f"Unexpected {resp.status_code} creating source {name!r}")
 
@@ -238,11 +245,8 @@ def register_mast_datasets(client: httpx.Client, base_url: str) -> None:
             # Skip a dataset the shot already has. A 409 cannot be relied on: once
             # an Activity is attached to a dataset, posting its name again without
             # one is not a conflict, so the dataset would be registered twice.
-            existing = client.get(
-                f"{base_url}/devices/{device}/shots/{shot_id}/datasets/{ids_name}"
-            )
-            existing.raise_for_status()
-            if existing.json():
+            listing = f"{base_url}/devices/{device}/shots/{shot_id}/datasets"
+            if find(client, listing, name=ids_name):
                 continue
             meta: dict[str, object] = {
                 "name": ids_name,
@@ -384,11 +388,13 @@ def register_experiment_data_collections(
     shot_timestamps = {"30420": "2008-04-17T14:23:45", "30421": "2008-04-17T15:41:22"}
 
     for shot_id, started_at in shot_timestamps.items():
-        existing = client.get(
-            f"{base_url}/devices/mast/shots/{shot_id}/collections/experiment-data"
+        existing = find(
+            client,
+            f"{base_url}/devices/mast/shots/{shot_id}/collections",
+            name="experiment-data",
         )
-        if existing.status_code == 200:
-            result[shot_id] = existing.json()["id"]
+        if existing:
+            result[shot_id] = existing[0]["id"]
             continue
 
         act = client.post(
@@ -437,9 +443,11 @@ def _attach_activity_to_dataset(
     shot_id: str,
     dataset_name: str,
 ) -> None:
-    ds_list = client.get(
-        f"{base_url}/devices/{device}/shots/{shot_id}/datasets/{dataset_name}"
-    ).json()
+    ds_list = find(
+        client,
+        f"{base_url}/devices/{device}/shots/{shot_id}/datasets",
+        name=dataset_name,
+    )
     if not ds_list:
         return
     ds = ds_list[0]
@@ -547,11 +555,10 @@ def register_mast_upgrade_datasets(
     """Registers MAST-U shot 50000 raw + analysed collections. Returns {raw_collection_id, analysed_collection_id}."""
 
     # Raw diagnostics (restricted NetCDF)
-    existing = client.get(
-        f"{base_url}/devices/mastu/shots/50000/collections/raw-diagnostics"
-    )
-    if existing.status_code == 200:
-        raw_collection_id = existing.json()["id"]
+    shot_collections = f"{base_url}/devices/mastu/shots/50000/collections"
+    existing = find(client, shot_collections, name="raw-diagnostics")
+    if existing:
+        raw_collection_id = existing[0]["id"]
     else:
         raw_col = client.post(
             f"{base_url}/devices/mastu/shots/50000/collections",
@@ -588,9 +595,9 @@ def register_mast_upgrade_datasets(
             )
 
     # Analysed experimental data (public, IceChunk)
-    existing = client.get(f"{base_url}/devices/mastu/shots/50000/collections/analysed")
-    if existing.status_code == 200:
-        analysed_collection_id = existing.json()["id"]
+    existing = find(client, shot_collections, name="analysed")
+    if existing:
+        analysed_collection_id = existing[0]["id"]
     else:
         analysed_col = client.post(
             f"{base_url}/devices/mastu/shots/50000/collections",
@@ -722,8 +729,9 @@ def register_mast_upgrade_50001(client: httpx.Client, base_url: str) -> None:
     annotation filter over MAST-U equilibrium datasets returns 50000 and not this one.
     Its datasets follow IMAS DD 4.0.0, and the equilibrium also has a DD 3.42.0 copy.
     """
-    existing = client.get(f"{base_url}/devices/mastu/shots/50001/collections/analysed")
-    if existing.status_code == 200:
+    if find(
+        client, f"{base_url}/devices/mastu/shots/50001/collections", name="analysed"
+    ):
         return
 
     collection = client.post(
@@ -780,11 +788,13 @@ def register_jintrac_collection(
     client: httpx.Client, base_url: str
 ) -> dict[str, int | None]:
     """Registers JINTRAC source, simulation activity, output datasets, and collection. Returns {collection_id, activity_id, source_id}."""
-    existing = client.get(
-        f"{base_url}/devices/mast/shots/30420/collections/jintrac-v220922"
+    existing = find(
+        client,
+        f"{base_url}/devices/mast/shots/30420/collections",
+        name="jintrac-v220922",
     )
-    if existing.status_code == 200:
-        col = existing.json()
+    if existing:
+        col = existing[0]
         return {
             "collection_id": col["id"],
             "activity_id": col["activity_id"],
@@ -813,9 +823,9 @@ def register_jintrac_collection(
     activity_id = act.json()["id"]
 
     for ids_name in ["equilibrium", "magnetics", "thomson_scattering"]:
-        ds_id = client.get(
-            f"{base_url}/devices/mast/shots/30420/datasets/{ids_name}"
-        ).json()[0]["id"]
+        ds_id = find(
+            client, f"{base_url}/devices/mast/shots/30420/datasets", name=ids_name
+        )[0]["id"]
         client.post(f"{base_url}/activities/{activity_id}/inputs/{ds_id}")
 
     dataset_ids = []
@@ -877,11 +887,14 @@ def register_predictive_scenario(client: httpx.Client, base_url: str) -> int:
     its bundle are registered on the device, and the bundle carries what the
     simulation simulated.
     """
-    existing = client.get(
-        f"{base_url}/devices/mastu/collections/jintrac-predictive-h-mode"
+    existing = find(
+        client,
+        f"{base_url}/devices/mastu/collections",
+        scope="device",
+        name="jintrac-predictive-h-mode",
     )
-    if existing.status_code == 200:
-        return existing.json()["id"]
+    if existing:
+        return existing[0]["id"]
 
     source_id = get_or_create_source(
         client, base_url, "jintrac", "Integrated modelling code", "software"
@@ -1004,9 +1017,9 @@ def seed_all(base_url: str, headers: dict[str, str]) -> dict:
         jintrac = register_jintrac_collection(client, base_url)
         predictive_id = register_predictive_scenario(client, base_url)
 
-        eq_id = client.get(
-            f"{base_url}/devices/mast/shots/30421/datasets/equilibrium"
-        ).json()[0]["id"]
+        eq_id = find(
+            client, f"{base_url}/devices/mast/shots/30421/datasets", name="equilibrium"
+        )[0]["id"]
 
     return {
         "mast_30420_experiment_collection_id": experiment_collections["30420"],

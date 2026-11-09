@@ -103,8 +103,7 @@ def read_shots(
 
 
 # Declared before /shots/{shot_id}: the paths have the same shape, so the other
-# order would bind shot_id to the literal "annotations". Reserving a segment this
-# way is what /datasets/id/{id} already does ahead of /datasets/{name}.
+# order would bind shot_id to the literal "properties".
 @router.get(
     "/devices/{device_name}/shots/properties",
     response_model=AvailableProperties,

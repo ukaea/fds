@@ -103,11 +103,11 @@ Data that differs is a new version, even when it describes the same thing. Regis
 
 Dataset 13 then lists the new dataset, 58, in `replaced_by`.
 
-**Listings leave out replaced datasets.** A shot's datasets, a device's, a lookup by name and the property filters leave out a dataset when you may read a dataset that replaces it. If you may not read any of its replacements, it is still listed, as the newest version you can see, and its `replaced_by` is empty. Add `include_replaced=true` to list the replaced ones as well:
+**Listings leave out replaced datasets.** Every dataset listing, whatever it is filtered by, leaves out a dataset when you may read a dataset that replaces it. If you may not read any of its replacements, it is still listed, as the newest version you can see, and its `replaced_by` is empty. Add `include_replaced=true` to list the replaced ones as well:
 
 ```http
-GET /v1/devices/mast/shots/30421/datasets/equilibrium
-GET /v1/devices/mast/shots/30421/datasets/equilibrium?include_replaced=true
+GET /v1/devices/mast/shots/30421/datasets?name=equilibrium
+GET /v1/devices/mast/shots/30421/datasets?name=equilibrium&include_replaced=true
 ```
 
 The first returns dataset 58, and the second 13 and 58.

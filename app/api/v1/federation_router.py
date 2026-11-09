@@ -135,6 +135,7 @@ def search_shot_datasets(
     shot_id: str,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
+    name: str | None = None,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
     activity_type: ActivityType | None = None,
     source: str | None = None,
@@ -160,6 +161,7 @@ def search_shot_datasets(
     query = DatasetQuery(
         device_name=device_name,
         shot_id=shot_id,
+        name=name,
         properties=properties or [],
         activity_type=activity_type,
         source=source,

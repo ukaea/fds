@@ -91,7 +91,7 @@ def test_rename_to_existing_name_is_refused(
     assert response.json()["detail"] == (
         f"{kind[:-1].capitalize()} 'taken' already exists in this context"
     )
-    stored = test_client.get(f"/v1/{kind}/id/{record_id}", headers=admin_user_token)
+    stored = test_client.get(f"/v1/{kind}/{record_id}", headers=admin_user_token)
     assert stored.status_code == 200
     assert stored.json()["name"] == "original"
     assert stored.json()["title"] == "Original title"

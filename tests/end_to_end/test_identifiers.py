@@ -128,7 +128,7 @@ def test_every_published_identifier_resolves(
     http_client: httpx.Client, admin_headers: dict[str, str], dataset_with_provenance
 ):
     response = http_client.get(
-        f"{FDS_URL}/datasets/id/{dataset_with_provenance['id']}",
+        f"{FDS_URL}/datasets/{dataset_with_provenance['id']}",
         headers={**admin_headers, "Accept": "application/ld+json"},
     )
     assert response.status_code == 200
@@ -166,7 +166,7 @@ def test_identifiers_answer_a_browser_with_a_page(
     both. Asking for JSON-LD is what separates them.
     """
     response = http_client.get(
-        f"{FDS_URL}/datasets/id/{dataset_with_provenance['id']}",
+        f"{FDS_URL}/datasets/{dataset_with_provenance['id']}",
         headers={**admin_headers, "Accept": "application/ld+json"},
     )
     identifier = about(response.json())["@id"]

@@ -23,7 +23,7 @@ async function get(path: string, accept: string): Promise<Response | null> {
 }
 
 /**
- * One record from the versioned API, for a page that has to resolve a name to an
+ * JSON from the versioned API, for a page that has to resolve a name to an
  * id. `path` is the route below the API's version, such as `/devices/mast`.
  */
 export async function fetchJson<T>(path: string): Promise<T | null> {

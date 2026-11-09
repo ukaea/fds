@@ -235,11 +235,12 @@ def test_unannotated_collection_is_returned_when_unfiltered(test_client: TestCli
 @pytest.mark.usefixtures("annotated_collections")
 def test_collection_scientific_metadata_round_trips(test_client: TestClient):
     resp = test_client.get(
-        f"/v1/devices/{MAST_U}/shots/50000/collections/jintrac-run-1"
+        f"/v1/devices/{MAST_U}/shots/50000/collections?name=jintrac-run-1"
     )
 
     assert resp.status_code == 200
-    assert resp.json()["scientific_metadata"] == [
+    (collection,) = resp.json()
+    assert collection["scientific_metadata"] == [
         {"name": "confinement_mode", "value": "H-mode"}
     ]
 

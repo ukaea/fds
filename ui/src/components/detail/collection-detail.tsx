@@ -45,7 +45,7 @@ function formatDate(iso?: string): string {
 
 export default function CollectionDetail({ id }: { id: string }) {
   const { data: collection, error, isLoading } = useSWR<Collection>(
-    id ? `${API_BASE}/collections/id/${id}` : null,
+    id ? `${API_BASE}/collections/${id}` : null,
     fetcher
   );
 
@@ -300,7 +300,7 @@ export default function CollectionDetail({ id }: { id: string }) {
             </CollapsibleSection>
           </div>
 
-          <JsonLdPanel url={`${API_BASE}/collections/id/${id}`} />
+          <JsonLdPanel url={`${API_BASE}/collections/${id}`} />
         </div>
       </div>
     </div>

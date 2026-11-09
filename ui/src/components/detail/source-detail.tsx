@@ -23,7 +23,7 @@ const KIND_INFO: Record<SourceKind, { label: string; prov: string; isAgent: bool
 
 export default function SourceDetail({ id }: { id: string }) {
   const { data: source, error, isLoading } = useSWR<Source>(
-    id ? `${API_BASE}/sources/id/${id}` : null,
+    id ? `${API_BASE}/sources/${id}` : null,
     fetcher
   );
 

@@ -117,7 +117,7 @@ def test_restricted_dataset_derivations_are_not_public(
     )
     session.commit()
 
-    assert test_client.get(f"/v1/datasets/id/{secret.id}").status_code == 403
+    assert test_client.get(f"/v1/datasets/{secret.id}").status_code == 403
     resp = test_client.get(f"/v1/datasets/{secret.id}/derivations")
     assert resp.status_code == 403, resp.text
 
@@ -132,7 +132,7 @@ def test_jsonld_exposes_derivation(test_client: TestClient, admin_user_token: di
     )
 
     resp = test_client.get(
-        f"/v1/datasets/id/{derived}",
+        f"/v1/datasets/{derived}",
         headers={**admin_user_token, "Accept": "application/ld+json"},
     )
     assert resp.status_code == 200
@@ -197,4 +197,4 @@ def test_deleting_an_asserted_upstream_returns_409(
 
     assert resp.status_code == 409
     assert str(derived) in resp.json()["detail"]
-    assert test_client.get(f"/v1/datasets/id/{raw}").status_code == 200
+    assert test_client.get(f"/v1/datasets/{raw}").status_code == 200

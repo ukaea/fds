@@ -25,6 +25,7 @@ from app.models.activity import (
     ActivitySummary,
     ActivityType,
 )
+from app.models.collection import Collection
 from app.models.dataset import (
     Dataset,
     DatasetCreate,
@@ -93,6 +94,52 @@ def _attribute(relationship: object) -> QueryableAttribute[Any]:
     if not isinstance(relationship, QueryableAttribute):
         raise TypeError(f"Not a SQLAlchemy relationship: {relationship!r}")
     return relationship
+
+
+def activity_node_loads(relationship: object) -> list[Any]:
+    """Loader options for what an Activity's JSON-LD node reads.
+
+    ``relationship`` leads from a dataset or collection to its Activity, as
+    ``Dataset.activity`` does, so a listing loads every Activity's agents and
+    inputs at once.
+    """
+    activity = selectinload(_attribute(relationship))
+    return [
+        activity.selectinload(_attribute(Activity.source)),
+        activity.selectinload(_attribute(Activity.instruments)),
+        activity.selectinload(_attribute(Activity.input_datasets)),
+        activity.selectinload(_attribute(Activity.delegation_links)),
+        activity.selectinload(_attribute(Activity.agent_links)).selectinload(
+            _attribute(ActivityAgent.source)
+        ),
+    ]
+
+
+def readable_activity_inputs(
+    session: Session,
+    records: Sequence[Dataset] | Sequence[Collection],
+    user: AuthenticatedUser,
+) -> list[list[Dataset]]:
+    """For each of ``records``, the inputs ``user`` may read of its Activity.
+
+    The inputs of every Activity are checked together.
+    """
+    every_input = {
+        input_dataset.id: input_dataset
+        for record in records
+        if record.activity
+        for input_dataset in record.activity.input_datasets
+    }
+    readable = {
+        input_dataset.id
+        for input_dataset in readable_only(session, list(every_input.values()), user)
+    }
+    return [
+        [d for d in record.activity.input_datasets if d.id in readable]
+        if record.activity
+        else []
+        for record in records
+    ]
 
 
 @dataclass
@@ -166,19 +213,61 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         A dataset that ``user`` may read a replacement of is listed only with
         ``include_replaced``.
         """
-        statement = select(self.model).where(
+        return self._list(
+            user,
+            scope=scope,
+            offset=offset,
+            limit=limit,
+            name=name,
+            properties=properties,
+            shot_properties=shot_properties,
+            activity_type=activity_type,
+            source=source,
+            activity_id=activity_id,
+            shot_id_prefix=shot_id_prefix,
+            include_replaced=include_replaced,
+        )
+
+    def _list(
+        self,
+        user: AuthenticatedUser,
+        *,
+        device_name: str | None = None,
+        shot_id: str | None = None,
+        scope: CatalogueScope | DeviceScope = CatalogueScope.ALL,
+        offset: int,
+        limit: int,
+        name: str | None = None,
+        properties: list[str] | None = None,
+        shot_properties: list[str] | None = None,
+        activity_type: ActivityType | None = None,
+        source: str | None = None,
+        activity_id: int | None = None,
+        shot_id_prefix: str | None = None,
+        include_replaced: bool = False,
+    ) -> Sequence[Dataset]:
+        """The page of datasets a listing asks for, filtered by access level.
+
+        Every dataset listing goes through here, so each filter means the same
+        thing wherever it is offered.
+        """
+        statement = select(Dataset).where(
             *scope_clauses(col(Dataset.device_name), col(Dataset.shot_id), scope),
             *_listed(self.session, include_replaced, user),
-        )
-        if name is not None:
-            statement = statement.where(self.model.name == name)
-        statement = statement.where(
-            *property_clauses(self.model.scientific_metadata, properties),
+            *property_clauses(Dataset.scientific_metadata, properties),
             *activity_clauses(
                 col(Dataset.activity_id), activity_type, source, activity_id
             ),
             *shot_id_prefix_clauses(col(Dataset.shot_id), shot_id_prefix),
         )
+        if device_name is not None:
+            statement = statement.where(
+                col(Dataset.device_name) == normalise_device_name(device_name)
+            )
+        if shot_id is not None:
+            statement = statement.where(col(Dataset.shot_id) == shot_id)
+        if name is not None:
+            statement = statement.where(col(Dataset.name) == name)
         statement = self._apply_shot_properties(statement, shot_properties, user)
         return read_page(
             self.session,
@@ -197,8 +286,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     ):
         """Join Dataset to its parent Shot and filter on the shot's properties.
 
-        Shared by the global and per-device listings so the two-level query behaves
-        identically wherever it is offered.
+        Every listing that offers it goes through ``_list``, so the two-level
+        query behaves identically wherever it is offered.
 
         Only shots ``user`` may read can match. A public dataset can belong to a
         restricted shot, and without this the filter would answer questions about
@@ -755,30 +844,6 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 f"{derivation} would be deleted with it."
             )
 
-    def get_by_name_in_context(
-        self,
-        name: str,
-        user: AuthenticatedUser = ANONYMOUS_USER,
-        device_name: str | None = None,
-        shot_id: str | None = None,
-        include_replaced: bool = False,
-    ) -> list[Dataset]:
-        """
-        Return all datasets with the given name in the given context.
-        Multiple datasets may share a name when produced by different Activities.
-        A dataset that ``user`` may read a replacement of is returned only with
-        ``include_replaced``.
-        """
-        statement = select(Dataset).where(
-            Dataset.name == name,
-            Dataset.device_name == normalise_device_name(device_name),
-            Dataset.shot_id == shot_id,
-            *_listed(self.session, include_replaced, user),
-        )
-        return read_page(
-            self.session, Dataset, statement.order_by(col(Dataset.id)), user
-        )
-
     def get_datasets_for_device(
         self,
         device_name: str,
@@ -810,28 +875,20 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         with ``scope=DEVICE`` matches nothing. A dataset that ``user`` may read a
         replacement of is listed only with ``include_replaced``.
         """
-        statement = select(Dataset).where(
-            Dataset.device_name == normalise_device_name(device_name),
-            *scope_clauses(col(Dataset.device_name), col(Dataset.shot_id), scope),
-            *_listed(self.session, include_replaced, user),
-        )
-        if name is not None:
-            statement = statement.where(Dataset.name == name)
-        statement = statement.where(
-            *property_clauses(Dataset.scientific_metadata, properties),
-            *activity_clauses(
-                col(Dataset.activity_id), activity_type, source, activity_id
-            ),
-            *shot_id_prefix_clauses(col(Dataset.shot_id), shot_id_prefix),
-        )
-        statement = self._apply_shot_properties(statement, shot_properties, user)
-        return read_page(
-            self.session,
-            Dataset,
-            statement.order_by(col(Dataset.id)),
+        return self._list(
             user,
+            device_name=device_name,
+            scope=scope,
             offset=offset,
             limit=limit,
+            name=name,
+            properties=properties,
+            shot_properties=shot_properties,
+            activity_type=activity_type,
+            source=source,
+            activity_id=activity_id,
+            shot_id_prefix=shot_id_prefix,
+            include_replaced=include_replaced,
         )
 
     def get_datasets_for_shot(
@@ -841,6 +898,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         user: AuthenticatedUser = ANONYMOUS_USER,
         offset: int = 0,
         limit: int = 100,
+        name: str | None = None,
         properties: list[str] | None = None,
         activity_type: ActivityType | None = None,
         source: str | None = None,
@@ -852,23 +910,18 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         that ``user`` may read a replacement of is listed only with
         ``include_replaced``.
         """
-        statement = (
-            select(Dataset)
-            .where(
-                Dataset.shot_id == shot_id,
-                Dataset.device_name == normalise_device_name(device_name),
-                *_listed(self.session, include_replaced, user),
-            )
-            .where(
-                *property_clauses(Dataset.scientific_metadata, properties),
-                *activity_clauses(
-                    col(Dataset.activity_id), activity_type, source, activity_id
-                ),
-            )
-            .order_by(col(Dataset.id))
-        )
-        return read_page(
-            self.session, Dataset, statement, user, offset=offset, limit=limit
+        return self._list(
+            user,
+            device_name=device_name,
+            shot_id=shot_id,
+            offset=offset,
+            limit=limit,
+            name=name,
+            properties=properties,
+            activity_type=activity_type,
+            source=source,
+            activity_id=activity_id,
+            include_replaced=include_replaced,
         )
 
     def to_read_model(
@@ -986,7 +1039,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             include_calibration=include_calibration,
             include_annotations=include_annotations,
         )
-        inputs = self._readable_activity_inputs(datasets, user)
+        inputs = readable_activity_inputs(self.session, datasets, user)
         return {
             "@context": generate_context(),
             "@graph": [
@@ -1016,46 +1069,15 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         ids = [dataset.id for dataset in datasets]
         if not ids:
             return
-        activity = selectinload(_attribute(Dataset.activity))
         self.session.exec(
             select(Dataset)
             .where(col(Dataset.id).in_(ids))
             .options(
                 selectinload(_attribute(Dataset.distributions)),
                 selectinload(_attribute(Dataset.derivations)),
-                activity.selectinload(_attribute(Activity.source)),
-                activity.selectinload(_attribute(Activity.instruments)),
-                activity.selectinload(_attribute(Activity.input_datasets)),
-                activity.selectinload(_attribute(Activity.delegation_links)),
-                activity.selectinload(_attribute(Activity.agent_links)).selectinload(
-                    _attribute(ActivityAgent.source)
-                ),
+                *activity_node_loads(Dataset.activity),
             )
         ).all()
-
-    def _readable_activity_inputs(
-        self, datasets: Sequence[Dataset], user: AuthenticatedUser
-    ) -> list[list[Dataset]]:
-        """For each of ``datasets``, the inputs ``user`` may read of the Activity
-        that generated it. The inputs of every Activity are checked together."""
-        every_input = {
-            input_dataset.id: input_dataset
-            for dataset in datasets
-            if dataset.activity
-            for input_dataset in dataset.activity.input_datasets
-        }
-        readable = {
-            input_dataset.id
-            for input_dataset in readable_only(
-                self.session, list(every_input.values()), user
-            )
-        }
-        return [
-            [d for d in dataset.activity.input_datasets if d.id in readable]
-            if dataset.activity
-            else []
-            for dataset in datasets
-        ]
 
     def readable_read_models(
         self,

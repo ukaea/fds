@@ -103,7 +103,7 @@ class TestReadTier:
         _, restricted, _ = catalogue
 
         response = test_client.get(
-            f"/v1/datasets/id/{restricted.id}", headers=admin_user_token
+            f"/v1/datasets/{restricted.id}", headers=admin_user_token
         )
         assert response.status_code == 200
 
@@ -152,7 +152,7 @@ class TestNothingToRecord:
     ):
         public, _, _ = catalogue
 
-        response = test_client.get(f"/v1/datasets/id/{public.id}")
+        response = test_client.get(f"/v1/datasets/{public.id}")
         assert response.status_code == 200
 
         line = request_line(log_lines())

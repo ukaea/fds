@@ -166,6 +166,35 @@ def test_search_passes_the_listings_filters_to_members(
     ]
 
 
+def equilibrium_on_shot_30421(request: httpx.Request) -> httpx.Response:
+    if (
+        request.url.path == "/v1/devices/mast/shots/30421/datasets"
+        and request.url.params.get("name") == "equilibrium"
+    ):
+        return httpx.Response(200, json=ANSWER, headers=LD)
+    return httpx.Response(404)
+
+
+def test_shot_search_passes_the_name_to_members(
+    test_client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setitem(
+        app.dependency_overrides,
+        get_federation_service,
+        lambda: FederationService(
+            [FIRST], timeout=5, transport=httpx.MockTransport(equilibrium_on_shot_30421)
+        ),
+    )
+
+    response = test_client.get(
+        "/v1/federation/devices/mast/shots/30421/datasets",
+        params={"name": "equilibrium"},
+    )
+
+    (answer,) = response.json()["answers"]
+    assert answer["status"] == "answered"
+
+
 def test_search_with_no_members_has_no_answers(
     test_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ):

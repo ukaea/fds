@@ -34,20 +34,23 @@ def read_sources(
     source_service: SourceServiceDep,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
+    name: str | None = None,
 ) -> Sequence[SourceRead]:
     """
     Retrieve all sources.
+
+    `name` keeps the source with that name. Source names are unique, so the
+    page holds one source, or none if no source has that name.
     """
-    sources = source_service.get_multi(offset=offset, limit=limit)
+    sources = source_service.get_multi(offset=offset, limit=limit, name=name)
     return source_service.to_read_models(sources)
 
 
-@router.get("/id/{id}", response_model=SourceRead)
-def read_source_by_id(id: int, source_service: SourceServiceDep) -> SourceRead:
-    """Retrieve a single source by its internal integer ID.
+@router.get("/{id:int}", response_model=SourceRead)
+def read_source(id: int, source_service: SourceServiceDep) -> SourceRead:
+    """Retrieve a single source by its ID.
 
-    This is the URI the semantic projection names a Source by, so it has to
-    resolve: a dangling identifier is worse than none.
+    To find a source by name, filter the listing: `GET /sources/?name=efit`.
     """
     source = source_service.get(id)
     if not source:
@@ -55,16 +58,7 @@ def read_source_by_id(id: int, source_service: SourceServiceDep) -> SourceRead:
     return source_service.to_read_model(source)
 
 
-@router.get("/{name}", response_model=SourceRead)
-def read_source_by_name(name: str, source_service: SourceServiceDep) -> SourceRead:
-    """
-    Retrieve a single source by its descriptive name.
-    """
-    source = source_service.get_by_name(name)
-    return source_service.to_read_model(source)
-
-
-@router.patch("/{id}", response_model=SourceRead)
+@router.patch("/{id:int}", response_model=SourceRead)
 def update_source(
     *,
     id: int,
@@ -79,7 +73,7 @@ def update_source(
     return source_service.to_read_model(source)
 
 
-@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{id:int}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_source(
     *,
     id: int,

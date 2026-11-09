@@ -78,4 +78,6 @@ Register it once; reuse it across every Activity:
     ).json();
     ```
 
+Read a source with `GET /sources/{id}`. To find one by name, filter the listing: `GET /sources/?name=efit` gives a page holding that source, or an empty page if no source has the name.
+
 See [Provenance](../provenance.md) for how a Source connects to the Activities and the Datasets they generate.

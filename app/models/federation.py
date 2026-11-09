@@ -19,8 +19,8 @@ class DatasetQuery(BaseModel):
     ``device_name`` and ``shot_id`` say which listing: every dataset, a device's,
     or a shot's. The other fields are the listing's filters and paging, with the
     meanings they have on FDS's own dataset listings. A shot's listing has no
-    ``scope``, ``name``, ``shot_property`` or ``shot_id_prefix``, so they are
-    left unset for one.
+    ``scope``, ``shot_property`` or ``shot_id_prefix``, so they are left unset
+    for one.
     """
 
     device_name: str | None = None

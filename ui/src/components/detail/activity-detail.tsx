@@ -25,7 +25,7 @@ export default function ActivityDetail({ id }: { id: string }) {
   );
 
   const { data: executor } = useSWR<Source>(
-    activity?.source_id != null ? `${API_BASE}/sources/id/${activity.source_id}` : null,
+    activity?.source_id != null ? `${API_BASE}/sources/${activity.source_id}` : null,
     fetcher
   );
 

@@ -145,23 +145,47 @@ def test_read_all_collections_by_scope(
     assert [c["name"] for c in response.json()] == ["shot-col"]
 
 
-def test_read_global_collection_by_name(
+def test_find_global_collection_by_name(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
-    """GET /collections/{name} retrieves a specific global Collection."""
+    """The listing's name filter finds a global Collection by name."""
+    _make_device(session)
     _make_collection(session, "named-run")
+    _make_collection(session, "named-run", device="DEV")
+    _make_collection(session, "other-run")
 
-    response = test_client.get("/v1/collections/named-run", headers=admin_user_token)
+    response = test_client.get(
+        "/v1/collections?scope=global&name=named-run", headers=admin_user_token
+    )
     assert response.status_code == 200
-    assert response.json()["name"] == "named-run"
+    assert [(c["name"], c.get("device_name")) for c in response.json()] == [
+        ("named-run", None)
+    ]
 
 
-def test_read_global_collection_by_name_not_found(
+def test_find_collection_by_absent_name(
     test_client: TestClient, admin_user_token: dict
 ):
-    """GET /collections/{name} returns 404 for an absent Collection."""
-    response = test_client.get("/v1/collections/ghost", headers=admin_user_token)
-    assert response.status_code == 404
+    """A name that matches nothing gives an empty page, not a 404."""
+    response = test_client.get("/v1/collections?name=ghost", headers=admin_user_token)
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_find_device_collection_named_like_a_fixed_route(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    """A device-level Collection named ``properties`` is found through the listing,
+    since its by-name path is the property summary."""
+    _make_device(session)
+    _make_collection(session, "properties", device="DEV")
+
+    response = test_client.get(
+        "/v1/devices/DEV/collections?scope=device&name=properties",
+        headers=admin_user_token,
+    )
+    assert response.status_code == 200
+    assert [c["name"] for c in response.json()] == ["properties"]
 
 
 def test_create_device_collection(
@@ -407,6 +431,13 @@ def test_collection_property_summary_takes_the_listing_filters(
     assert summary["total"] == 2
     assert {p["name"] for p in summary["properties"]} == {"confinement_mode", "stage"}
 
+    for path in ("/v1/collections", "/v1/devices/DEV/collections"):
+        response = test_client.get(
+            f"{path}/properties?name=efit-run", headers=admin_user_token
+        )
+        assert response.status_code == 200
+        assert response.json()["total"] == 1
+
 
 def test_collection_property_summary_leaves_out_what_the_caller_cannot_read(
     test_client: TestClient, session: Session, non_admin_user_token: dict
@@ -546,18 +577,26 @@ def test_collection_read_includes_a_summary_of_its_run(
     assert by_name["curated"]["child_collections"][0]["activity"] == summary
 
 
-def test_read_device_collection_by_name(
+def test_find_device_collection_by_name(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
-    """GET /devices/{device}/collections/{name} retrieves by name."""
+    """A device's listing finds collections by name at both levels, and
+    ``scope=device`` keeps the one attached to the device as a whole."""
     _make_device(session)
-    _make_collection(session, "cfg", device="DEV")
+    _make_shot(session)
+    device_level = _make_collection(session, "cfg", device="DEV")
+    shot_level = _make_collection(session, "cfg", device="DEV", shot_id="s1")
+    _make_collection(session, "other", device="DEV")
 
-    response = test_client.get(
-        "/v1/devices/DEV/collections/cfg", headers=admin_user_token
+    both = test_client.get(
+        "/v1/devices/DEV/collections?name=cfg", headers=admin_user_token
     )
-    assert response.status_code == 200
-    assert response.json()["name"] == "cfg"
+    device_only = test_client.get(
+        "/v1/devices/DEV/collections?scope=device&name=cfg", headers=admin_user_token
+    )
+
+    assert [c["id"] for c in both.json()] == [device_level, shot_level]
+    assert [c["id"] for c in device_only.json()] == [device_level]
 
 
 def test_create_shot_collection(
@@ -598,19 +637,20 @@ def test_read_shot_collections(
     assert "col-s2" not in names
 
 
-def test_read_shot_collection_by_name(
+def test_find_shot_collection_by_name(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
-    """GET /devices/{device}/shots/{shot}/collections/{name} retrieves by name."""
+    """A shot's listing finds its collection by name."""
     _make_device(session)
     _make_shot(session)
     _make_collection(session, "run-out", device="DEV", shot_id="s1")
+    _make_collection(session, "run-in", device="DEV", shot_id="s1")
 
     response = test_client.get(
-        "/v1/devices/DEV/shots/s1/collections/run-out", headers=admin_user_token
+        "/v1/devices/DEV/shots/s1/collections?name=run-out", headers=admin_user_token
     )
     assert response.status_code == 200
-    assert response.json()["name"] == "run-out"
+    assert [c["name"] for c in response.json()] == ["run-out"]
 
 
 def test_update_collection(
@@ -639,7 +679,7 @@ def test_delete_collection(
 
     # Confirm it is gone
     get_response = test_client.get(
-        "/v1/collections/to-delete", headers=admin_user_token
+        f"/v1/collections/{col_id}", headers=admin_user_token
     )
     assert get_response.status_code == 404
 
@@ -662,7 +702,7 @@ def test_add_and_remove_dataset_membership(
     assert add_resp.json() == {"collection": col_id, "dataset": ds_id}
 
     # Verify inlined in GET response
-    get_resp = test_client.get("/v1/collections/run", headers=admin_user_token)
+    get_resp = test_client.get(f"/v1/collections/{col_id}", headers=admin_user_token)
     dataset_ids = [d["id"] for d in get_resp.json().get("datasets", [])]
     assert ds_id in dataset_ids
 
@@ -674,7 +714,7 @@ def test_add_and_remove_dataset_membership(
     assert del_resp.status_code == 204
 
     # Confirm removed
-    get_after = test_client.get("/v1/collections/run", headers=admin_user_token)
+    get_after = test_client.get(f"/v1/collections/{col_id}", headers=admin_user_token)
     assert get_after.json().get("datasets") is None
 
 
@@ -710,7 +750,7 @@ def test_add_and_remove_child_collection(
     assert add_resp.json() == {"parent": parent_id, "child": child_id}
 
     # Verify child appears in parent's read model
-    get_resp = test_client.get("/v1/collections/parent", headers=admin_user_token)
+    get_resp = test_client.get(f"/v1/collections/{parent_id}", headers=admin_user_token)
     child_ids = [c["id"] for c in get_resp.json().get("child_collections", [])]
     assert child_id in child_ids
 
@@ -721,7 +761,9 @@ def test_add_and_remove_child_collection(
     )
     assert del_resp.status_code == 204
 
-    get_after = test_client.get("/v1/collections/parent", headers=admin_user_token)
+    get_after = test_client.get(
+        f"/v1/collections/{parent_id}", headers=admin_user_token
+    )
     assert get_after.json().get("child_collections") is None
 
 
@@ -825,7 +867,7 @@ def test_collection_read_handles_an_existing_cycle(
     session.commit()
 
     response = test_client.get(
-        f"/v1/collections/id/{first}",
+        f"/v1/collections/{first}",
         headers={**admin_user_token, "Accept": accept},
     )
     assert response.status_code == 200
@@ -843,15 +885,44 @@ def test_collection_read_handles_an_existing_cycle(
         ]
 
 
+def test_collection_listing_jsonld_holds_each_collections_node_in_order(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    """A listing in JSON-LD is one document whose ``@graph`` holds the node each
+    collection's own read gives, in listing order."""
+    _make_device(session)
+    _make_shot(session)
+    ds_id = _make_dataset(session, "member-ds", "DEV", "s1")
+    efit = SourceService(session).create(
+        SourceCreate(name="efit", kind=SourceKind.SOFTWARE), user=admin_user
+    )
+    analysis = ActivityService(session).create(
+        ActivityCreate(activity_type=ActivityType.ANALYSIS, source_id=efit.id),
+        user=admin_user,
+    )
+    first = _make_collection(session, "first", activity_id=analysis.id)
+    second = _make_collection(session, "second")
+    CollectionService(session).add_dataset(first, ds_id, user=admin_user)
+    ld = {**admin_user_token, "accept": "application/ld+json"}
+
+    response = test_client.get("/v1/collections?scope=global", headers=ld)
+
+    assert response.headers["content-type"].startswith("application/ld+json")
+    assert response.json()["@graph"] == [
+        resource(test_client.get(f"/v1/collections/{first}", headers=ld).json()),
+        resource(test_client.get(f"/v1/collections/{second}", headers=ld).json()),
+    ]
+
+
 def test_collection_jsonld_response(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
-    """GET /collections/{name} with Accept: application/ld+json returns a
+    """GET /collections/{id} with Accept: application/ld+json returns a
     document typed as both dcat:Catalog and prov:Collection."""
-    _make_collection(session, "ld-col")
+    col_id = _make_collection(session, "ld-col")
 
     response = test_client.get(
-        "/v1/collections/ld-col",
+        f"/v1/collections/{col_id}",
         headers={**admin_user_token, "accept": "application/ld+json"},
     )
     assert response.status_code == 200
@@ -873,7 +944,7 @@ def test_collection_jsonld_members_as_prov_had_member(
     CollectionService(session).add_dataset(col_id, ds_id, user=admin_user)
 
     response = test_client.get(
-        "/v1/collections/prov-col",
+        f"/v1/collections/{col_id}",
         headers={**admin_user_token, "accept": "application/ld+json"},
     )
     assert response.status_code == 200
@@ -889,7 +960,7 @@ def test_collection_jsonld_includes_root_url_distribution(
     node with dcat:accessURL pointing at the store root. A collection backed by a
     single store is addressable as a whole, so the store root is the collection's
     distribution rather than a property of each member."""
-    CollectionService(session).create(
+    collection = CollectionService(session).create(
         CollectionCreate(
             name="ld-col-root",
             root_url="s3://fds-data/shots/50000/analysed",
@@ -898,7 +969,7 @@ def test_collection_jsonld_includes_root_url_distribution(
     )
 
     response = test_client.get(
-        "/v1/collections/ld-col-root",
+        f"/v1/collections/{collection.id}",
         headers={**admin_user_token, "accept": "application/ld+json"},
     )
     assert response.status_code == 200
@@ -997,16 +1068,13 @@ def test_collection_include_storage_options(
     )
 
     # Without flag: datasets inlined but no credentials
-    resp = test_client.get(
-        "/v1/devices/CRED/shots/s99/collections/cred-col",
-        headers=admin_user_token,
-    )
+    resp = test_client.get(f"/v1/collections/{col_id}", headers=admin_user_token)
     assert resp.status_code == 200
     assert resp.json()["datasets"][0].get("storage_options") is None
 
     # With flag: credentials present on every inlined dataset
     resp2 = test_client.get(
-        "/v1/devices/CRED/shots/s99/collections/cred-col?include_storage_options=true",
+        f"/v1/collections/{col_id}?include_storage_options=true",
         headers=admin_user_token,
     )
     assert resp2.status_code == 200
@@ -1019,7 +1087,7 @@ def test_collection_jsonld_carries_scientific_metadata(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
     """An Activity's bundle's claims project the same way a Shot's or a Dataset's do."""
-    CollectionService(session).create(
+    collection = CollectionService(session).create(
         CollectionCreate(
             name="ld-sci-col",
             scientific_metadata=[
@@ -1032,7 +1100,7 @@ def test_collection_jsonld_carries_scientific_metadata(
     session.commit()
 
     response = test_client.get(
-        "/v1/collections/ld-sci-col",
+        f"/v1/collections/{collection.id}",
         headers={**admin_user_token, "accept": "application/ld+json"},
     )
 
@@ -1112,10 +1180,10 @@ def test_collection_read_inlines_only_the_first_page_of_members(
     monkeypatch.setattr(collection_service_module, "INLINE_MEMBERS", 2)
     parent, datasets, children = _public_collection_with_members(session)
 
-    read = test_client.get(f"/v1/collections/id/{parent}").json()
+    read = test_client.get(f"/v1/collections/{parent}").json()
     ld = resource(
         test_client.get(
-            f"/v1/collections/id/{parent}", headers={"accept": "application/ld+json"}
+            f"/v1/collections/{parent}", headers={"accept": "application/ld+json"}
         ).json()
     )
 
@@ -1206,10 +1274,10 @@ def test_collection_members_listed_only_where_readable(
     service.add_dataset(parent, team_ds.id, admin_user)
     service.add_child_collection(parent, team_col.id, admin_user)
 
-    read = test_client.get(f"/v1/collections/id/{parent}").json()
+    read = test_client.get(f"/v1/collections/{parent}").json()
     ld = resource(
         test_client.get(
-            f"/v1/collections/id/{parent}", headers={"accept": "application/ld+json"}
+            f"/v1/collections/{parent}", headers={"accept": "application/ld+json"}
         ).json()
     )
     paged_ds = test_client.get(f"/v1/collections/{parent}/datasets").json()
@@ -1263,12 +1331,10 @@ def test_a_collection_replaces_an_earlier_pass(
 
     assert new.status_code == 201, new.text
     read = test_client.get(
-        f"/v1/collections/id/{new.json()['id']}", headers=admin_user_token
+        f"/v1/collections/{new.json()['id']}", headers=admin_user_token
     )
     assert read.json()["replaces"] == [old["id"]]
-    old_read = test_client.get(
-        f"/v1/collections/id/{old['id']}", headers=admin_user_token
-    )
+    old_read = test_client.get(f"/v1/collections/{old['id']}", headers=admin_user_token)
     assert old_read.json()["replaced_by"] == [new.json()["id"]]
 
 
@@ -1397,7 +1463,7 @@ def test_deleting_the_replaced_collection_clears_the_link(
     )
 
     assert deleted.status_code == 204
-    read = test_client.get(f"/v1/collections/id/{new['id']}", headers=admin_user_token)
+    read = test_client.get(f"/v1/collections/{new['id']}", headers=admin_user_token)
     assert "replaces" not in read.json()
 
 
@@ -1435,9 +1501,7 @@ def test_a_replacement_the_reader_cannot_read_is_not_named(
     _mast_shots(session)
     old, _ = _public_with_restricted_replacement(session)
 
-    as_reader = test_client.get(
-        f"/v1/collections/id/{old}", headers=non_admin_user_token
-    )
+    as_reader = test_client.get(f"/v1/collections/{old}", headers=non_admin_user_token)
 
     assert as_reader.status_code == 200
     assert "replaced_by" not in as_reader.json()
@@ -1468,10 +1532,10 @@ def test_replacements_link_each_other_in_jsonld(
     ld = {**admin_user_token, "Accept": "application/ld+json"}
 
     old_node = resource(
-        test_client.get(f"/v1/collections/id/{old['id']}", headers=ld).json()
+        test_client.get(f"/v1/collections/{old['id']}", headers=ld).json()
     )
     new_node = resource(
-        test_client.get(f"/v1/collections/id/{new['id']}", headers=ld).json()
+        test_client.get(f"/v1/collections/{new['id']}", headers=ld).json()
     )
 
     assert new_node["dct:replaces"] == [{"@id": old_node["@id"]}]

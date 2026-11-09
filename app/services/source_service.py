@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.auth.permissions import check_device_admin, check_is_admin
 from app.core.naming import normalise_device_name
@@ -88,16 +88,14 @@ class SourceService(BaseService[Source, SourceCreate, SourceUpdate]):
             check_is_admin(user)
         return self.delete_unchecked(id)
 
-    def get_by_name(self, name: str) -> Source:
-        """Resolve a source by name.
-
-        Raises ``ResourceNotFoundError`` if the source does not exist.
-        """
-        statement = select(Source).where(Source.name == name)
-        source = self.session.exec(statement).first()
-        if not source:
-            raise ResourceNotFoundError(f"Source '{name}' not found")
-        return source
+    def get_multi(
+        self, *, offset: int = 0, limit: int = 100, name: str | None = None
+    ) -> Sequence[Source]:
+        """A page of sources in id order, only the one called ``name`` if given."""
+        statement = select(Source).order_by(col(Source.id)).offset(offset).limit(limit)
+        if name is not None:
+            statement = statement.where(Source.name == name)
+        return self.session.exec(statement).all()
 
     def get_for_device(
         self, device_name: str, offset: int = 0, limit: int = 100

@@ -58,27 +58,35 @@ def create_collection_global(
     "/collections",
     response_model=list[CollectionRead],
     response_model_exclude_none=True,
+    responses=JSONLD_ALTERNATIVE,
 )
 def read_collections_global(
     *,
+    jsonld: WantsJSONLDDep,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     scope: CatalogueScope = CatalogueScope.ALL,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
+    name: str | None = None,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
     include_replaced: bool = False,
     shot_id_prefix: str | None = None,
-) -> list[CollectionRead]:
+    base: BaseURLDep,
+) -> list[CollectionRead] | JSONLDResponse:
     """Retrieve every Collection accessible to the current user.
 
     A collection is attached to a shot, to a device as a whole, or to neither,
     in which case it is global. All of them are listed unless `scope` asks for
     one kind: `global`, `device` or `shot`.
+
+    `name` keeps the collections with that name, so
+    `?scope=global&name=jintrac-42` finds a global collection by name. A name
+    that matches nothing gives an empty page.
 
     `property` filters on the Collection's own `scientific_metadata`. Use `elm`
     to match any collection that carries that property, or `elm:type-I` to match
@@ -101,12 +109,16 @@ def read_collections_global(
     `shot_id_prefix` keeps the collections on a shot whose ID starts with it, so
     `304` finds those on shots 30420 and 30421. A collection on no shot never
     matches.
+
+    With `Accept: application/ld+json` the page is one JSON-LD document whose
+    `@graph` holds each collection's `dcat:Catalog` node, in listing order.
     """
     collections = collection_service.get_multi(
         user=user,
         scope=scope,
         offset=offset,
         limit=limit,
+        name=name,
         properties=properties,
         activity_type=activity_type,
         source=source,
@@ -114,11 +126,12 @@ def read_collections_global(
         include_replaced=include_replaced,
         shot_id_prefix=shot_id_prefix,
     )
+    if jsonld:
+        document = collection_service.to_dcat_listing(collections, base, user)
+        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
     return collection_service.to_read_models(collections, include_storage_options, user)
 
 
-# Declared before /collections/{name}, which would otherwise take "properties" as
-# the name of a global collection.
 @router.get(
     "/collections/properties",
     response_model=AvailableProperties,
@@ -129,6 +142,7 @@ def read_collection_properties(
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     scope: CatalogueScope = CatalogueScope.ALL,
+    name: str | None = None,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
     activity_type: ActivityType | None = None,
     source: str | None = None,
@@ -162,6 +176,7 @@ def read_collection_properties(
     return collection_service.available_properties(
         user=user,
         scope=scope,
+        name=name,
         properties=properties,
         activity_type=activity_type,
         source=source,
@@ -174,12 +189,12 @@ def read_collection_properties(
 
 
 @router.get(
-    "/collections/id/{id}",
+    "/collections/{id:int}",
     response_model=CollectionRead,
     response_model_exclude_none=True,
     responses=JSONLD_ALTERNATIVE,
 )
-def read_collection_by_id(
+def read_collection(
     *,
     jsonld: WantsJSONLDDep,
     id: int,
@@ -188,10 +203,10 @@ def read_collection_by_id(
     include_storage_options: bool = False,
     base: BaseURLDep,
 ) -> CollectionRead | JSONLDResponse:
-    """Retrieve a single Collection by its internal integer ID.
+    """Retrieve a single Collection by its ID.
 
-    This is the URI the semantic projection names a Collection by, so it has to
-    resolve: a dangling identifier is worse than none.
+    To find a collection by name, filter a listing:
+    `GET /collections?scope=global&name=jintrac-42`.
 
     Supports content negotiation:
     - ``Accept: application/ld+json`` → returns a ``dcat:Catalog`` JSON-LD document.
@@ -201,35 +216,6 @@ def read_collection_by_id(
         raise ResourceNotFoundError(f"Collection {id} not found")
     collection_service.check_read_access(collection, user)
 
-    if jsonld:
-        dcat_metadata = collection_service.to_dcat(collection, base, user)
-        return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
-    return collection_service.to_read_model(collection, include_storage_options, user)
-
-
-@router.get(
-    "/collections/{name}",
-    response_model=CollectionRead,
-    response_model_exclude_none=True,
-    responses=JSONLD_ALTERNATIVE,
-)
-def read_collection_global_by_name(
-    *,
-    jsonld: WantsJSONLDDep,
-    name: str,
-    collection_service: CollectionServiceDep,
-    user: CurrentUserDep,
-    include_storage_options: bool = False,
-    base: BaseURLDep,
-) -> CollectionRead | JSONLDResponse:
-    """Retrieve a specific global Collection by name.
-
-    Supports content negotiation:
-    - ``Accept: application/ld+json`` → returns a ``dcat:Catalog`` JSON-LD document.
-    """
-    collection = collection_service.get_by_name_in_context_or_raise(
-        name=name, user=user
-    )
     if jsonld:
         dcat_metadata = collection_service.to_dcat(collection, base, user)
         return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
@@ -260,9 +246,11 @@ def create_collection_device(
     "/devices/{device_name}/collections",
     response_model=list[CollectionRead],
     response_model_exclude_none=True,
+    responses=JSONLD_ALTERNATIVE,
 )
 def read_collections_device(
     *,
+    jsonld: WantsJSONLDDep,
     device_name: str,
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
@@ -270,18 +258,23 @@ def read_collections_device(
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
+    name: str | None = None,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
     include_replaced: bool = False,
     shot_id_prefix: str | None = None,
-) -> list[CollectionRead]:
+    base: BaseURLDep,
+) -> list[CollectionRead] | JSONLDResponse:
     """Retrieve a device's Collections that the current user may read.
 
     These are the collections attached to the device as a whole and those
     attached to its shots. `scope=device` lists only the first, `scope=shot`
     only the second.
+
+    `name` keeps the collections with that name, so `?scope=device&name=coils`
+    finds a device-level collection by name.
 
     `property` filters on the Collection's own `scientific_metadata`. Use `elm`
     to match any collection that carries that property, or `elm:type-I` to match
@@ -304,6 +297,9 @@ def read_collections_device(
     `shot_id_prefix` keeps the collections on a shot whose ID starts with it, so
     `304` finds those on shots 30420 and 30421. A collection on no shot never
     matches.
+
+    With `Accept: application/ld+json` the page is one JSON-LD document whose
+    `@graph` holds each collection's `dcat:Catalog` node, in listing order.
     """
     collections = collection_service.get_collections_for_device(
         device_name,
@@ -311,6 +307,7 @@ def read_collections_device(
         scope=scope,
         offset=offset,
         limit=limit,
+        name=name,
         properties=properties,
         activity_type=activity_type,
         source=source,
@@ -318,11 +315,12 @@ def read_collections_device(
         include_replaced=include_replaced,
         shot_id_prefix=shot_id_prefix,
     )
+    if jsonld:
+        document = collection_service.to_dcat_listing(collections, base, user)
+        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
     return collection_service.to_read_models(collections, include_storage_options, user)
 
 
-# Declared before /devices/{device_name}/collections/{name}, which would otherwise
-# take "properties" as the name of a device-level collection.
 @router.get(
     "/devices/{device_name}/collections/properties",
     response_model=AvailableProperties,
@@ -334,6 +332,7 @@ def read_collection_properties_device(
     collection_service: CollectionServiceDep,
     user: CurrentUserDep,
     scope: DeviceScope = DeviceScope.ALL,
+    name: str | None = None,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
     activity_type: ActivityType | None = None,
     source: str | None = None,
@@ -368,6 +367,7 @@ def read_collection_properties_device(
         user=user,
         device_name=device_name,
         scope=scope,
+        name=name,
         properties=properties,
         activity_type=activity_type,
         source=source,
@@ -377,36 +377,6 @@ def read_collection_properties_device(
         max_values=max_values,
         include_constant=include_constant,
     )
-
-
-@router.get(
-    "/devices/{device_name}/collections/{name}",
-    response_model=CollectionRead,
-    response_model_exclude_none=True,
-    responses=JSONLD_ALTERNATIVE,
-)
-def read_collection_device_by_name(
-    *,
-    jsonld: WantsJSONLDDep,
-    device_name: str,
-    name: str,
-    collection_service: CollectionServiceDep,
-    user: CurrentUserDep,
-    include_storage_options: bool = False,
-    base: BaseURLDep,
-) -> CollectionRead | JSONLDResponse:
-    """Retrieve a specific device-level Collection by name.
-
-    Supports content negotiation:
-    - ``Accept: application/ld+json`` → returns a ``dcat:Catalog`` JSON-LD document.
-    """
-    collection = collection_service.get_by_name_in_context_or_raise(
-        name=name, user=user, device_name=device_name
-    )
-    if jsonld:
-        dcat_metadata = collection_service.to_dcat(collection, base, user)
-        return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
-    return collection_service.to_read_model(collection, include_storage_options, user)
 
 
 @router.post(
@@ -435,9 +405,11 @@ def create_collection_shot(
     "/devices/{device_name}/shots/{shot_id}/collections",
     response_model=list[CollectionRead],
     response_model_exclude_none=True,
+    responses=JSONLD_ALTERNATIVE,
 )
 def read_collections_shot(
     *,
+    jsonld: WantsJSONLDDep,
     device_name: str,
     shot_id: str,
     collection_service: CollectionServiceDep,
@@ -445,13 +417,18 @@ def read_collections_shot(
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
     include_storage_options: bool = False,
+    name: str | None = None,
     properties: Annotated[list[str] | None, Query(alias="property")] = None,
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
     include_replaced: bool = False,
-) -> list[CollectionRead]:
+    base: BaseURLDep,
+) -> list[CollectionRead] | JSONLDResponse:
     """Retrieve all Collections scoped to a specific shot.
+
+    `name` keeps the collection with that name. Names are unique on a shot, so
+    the page holds one collection, or none.
 
     `property` filters on the Collection's own `scientific_metadata`. Use `elm`
     to match any collection that carries that property, or `elm:type-I` to match
@@ -470,6 +447,9 @@ def read_collections_shot(
 
     A collection is left out when you may read a collection that replaces
     it, unless `include_replaced=true`.
+
+    With `Accept: application/ld+json` the page is one JSON-LD document whose
+    `@graph` holds each collection's `dcat:Catalog` node, in listing order.
     """
     collections = collection_service.get_collections_for_shot(
         shot_id,
@@ -477,48 +457,21 @@ def read_collections_shot(
         user=user,
         offset=offset,
         limit=limit,
+        name=name,
         properties=properties,
         activity_type=activity_type,
         source=source,
         activity_id=activity_id,
         include_replaced=include_replaced,
     )
+    if jsonld:
+        document = collection_service.to_dcat_listing(collections, base, user)
+        return JSONLDResponse(content=document, headers=VARY_ACCEPT)
     return collection_service.to_read_models(collections, include_storage_options, user)
 
 
-@router.get(
-    "/devices/{device_name}/shots/{shot_id}/collections/{name}",
-    response_model=CollectionRead,
-    response_model_exclude_none=True,
-    responses=JSONLD_ALTERNATIVE,
-)
-def read_collection_shot_by_name(
-    *,
-    jsonld: WantsJSONLDDep,
-    device_name: str,
-    shot_id: str,
-    name: str,
-    collection_service: CollectionServiceDep,
-    user: CurrentUserDep,
-    include_storage_options: bool = False,
-    base: BaseURLDep,
-) -> CollectionRead | JSONLDResponse:
-    """Retrieve a specific shot-scoped Collection by name.
-
-    Supports content negotiation:
-    - ``Accept: application/ld+json`` → returns a ``dcat:Catalog`` JSON-LD document.
-    """
-    collection = collection_service.get_by_name_in_context_or_raise(
-        name=name, user=user, device_name=device_name, shot_id=shot_id
-    )
-    if jsonld:
-        dcat_metadata = collection_service.to_dcat(collection, base, user)
-        return JSONLDResponse(content=dcat_metadata, headers=VARY_ACCEPT)
-    return collection_service.to_read_model(collection, include_storage_options, user)
-
-
 @router.patch(
-    "/collections/{id}",
+    "/collections/{id:int}",
     response_model=CollectionRead,
     response_model_exclude_none=True,
 )
@@ -535,7 +488,7 @@ def update_collection(
 
 
 @router.delete(
-    "/collections/{id}",
+    "/collections/{id:int}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_collection(
@@ -549,7 +502,7 @@ def delete_collection(
 
 
 @router.get(
-    "/collections/{collection_id}/datasets",
+    "/collections/{collection_id:int}/datasets",
     response_model=list[DatasetRead],
     response_model_exclude_none=True,
 )
@@ -578,7 +531,7 @@ def read_collection_datasets(
 
 
 @router.get(
-    "/collections/{collection_id}/collections",
+    "/collections/{collection_id:int}/collections",
     response_model=list[CollectionRead],
     response_model_exclude_none=True,
 )
@@ -603,7 +556,7 @@ def read_child_collections(
 
 
 @router.post(
-    "/collections/{collection_id}/datasets/{dataset_id}",
+    "/collections/{collection_id:int}/datasets/{dataset_id:int}",
     response_model=CollectionDatasetRead,
     status_code=status.HTTP_201_CREATED,
 )
@@ -623,7 +576,7 @@ def add_dataset_to_collection(
 
 
 @router.delete(
-    "/collections/{collection_id}/datasets/{dataset_id}",
+    "/collections/{collection_id:int}/datasets/{dataset_id:int}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def remove_dataset_from_collection(
@@ -641,7 +594,7 @@ def remove_dataset_from_collection(
 
 
 @router.post(
-    "/collections/{parent_id}/collections/{child_id}",
+    "/collections/{parent_id:int}/collections/{child_id:int}",
     response_model=CollectionMemberRead,
     status_code=status.HTTP_201_CREATED,
 )
@@ -660,7 +613,7 @@ def add_child_collection(
 
 
 @router.delete(
-    "/collections/{parent_id}/collections/{child_id}",
+    "/collections/{parent_id:int}/collections/{child_id:int}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def remove_child_collection(
@@ -678,7 +631,7 @@ def remove_child_collection(
 
 
 @router.get(
-    "/collections/{collection_id}/activity",
+    "/collections/{collection_id:int}/activity",
     response_model=ActivityRead,
 )
 def read_collection_activity(

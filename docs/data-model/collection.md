@@ -162,6 +162,14 @@ curl "$API/collections?scope=global"               # global collections
 curl "$API/devices/mast/collections?scope=device"  # mast's device-level collections
 ```
 
+Read a collection with `GET /collections/{id}`. Every collection listing takes `name` to find collections by name. A name that matches nothing gives an empty page:
+
+```bash
+curl "$API/collections?scope=global&name=jintrac-42"
+curl "$API/devices/mast/collections?scope=device&name=coils"
+curl "$API/devices/mast/shots/30420/collections?name=jintrac-v220922"
+```
+
 Every collection listing can also be filtered by the Activity each collection bundles, the one its `activity_id` names:
 
 | Parameter | Lists the collections that bundle |
@@ -183,8 +191,6 @@ A collection is left out of every listing when you may read a collection that re
 A collection read includes `activity`, a summary of the Activity it bundles, in the same form as on a [dataset read](dataset.md#recording-a-datasets-provenance). Each dataset inlined in the read carries a summary of its own Activity.
 
 To see what the collections in a listing can be filtered by, ask for its property summary: `GET /collections/properties` or `GET /devices/{device}/collections/properties`. Each takes the same filters as its listing and answers in the same form as the [shot summary](index.md#discovering-what-to-filter-on).
-
-These routes take the name `properties`, so a global or device-level collection with that name cannot be read by name. Read it by id instead, with `GET /collections/id/{id}`.
 
 ## Reading members
 

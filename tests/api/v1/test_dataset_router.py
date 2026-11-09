@@ -78,7 +78,7 @@ def test_create_shot_dataset(
     assert data["shot_id"] == "123"
 
 
-def test_read_dataset_by_name(
+def test_find_shot_dataset_by_name(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
     DeviceService(session).create(
@@ -89,25 +89,25 @@ def test_read_dataset_by_name(
     )
     session.commit()
 
-    # Create via API
-    test_client.post(
-        "/v1/devices/MAST/shots/456/datasets/",
-        headers=admin_user_token,
-        json={"name": "plasma_current", "level": 1, "url": "s3://url"},
-    )
+    for name in ("plasma_current", "density"):
+        test_client.post(
+            "/v1/devices/MAST/shots/456/datasets/",
+            headers=admin_user_token,
+            json={"name": name, "level": 1, "url": f"s3://url/{name}"},
+        )
 
-    response = test_client.get("/v1/devices/MAST/shots/456/datasets/plasma_current")
+    response = test_client.get(
+        "/v1/devices/MAST/shots/456/datasets?name=plasma_current"
+    )
     assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0]["name"] == "plasma_current"
+    assert [d["name"] for d in response.json()] == ["plasma_current"]
 
 
 def test_dataset_same_name_returns_list(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
-    """Same name from different activities is allowed; GET by name returns all matches."""
+    """Same name from different activities is allowed; the name filter returns
+    every match, and an Activity filter picks one out."""
     DeviceService(session).create(
         DeviceCreate(name="MAST", type="Spherical"), user=admin_user
     )
@@ -151,11 +151,17 @@ def test_dataset_same_name_returns_list(
     assert r1.json()["id"] != r2.json()["id"]
 
     response = test_client.get(
-        "/v1/devices/MAST/shots/789/datasets/duplicate",
+        "/v1/devices/MAST/shots/789/datasets?name=duplicate",
         headers=admin_user_token,
     )
     assert response.status_code == 200
     assert len(response.json()) == 2
+
+    one = test_client.get(
+        f"/v1/devices/MAST/shots/789/datasets?name=duplicate&activity_id={act1.id}",
+        headers=admin_user_token,
+    )
+    assert [d["id"] for d in one.json()] == [r1.json()["id"]]
 
 
 def test_unauthorized_device_dataset(
@@ -623,19 +629,16 @@ def test_dataset_read_includes_a_summary_of_its_run(
     }
 
 
-def test_read_global_dataset_by_name(test_client: TestClient, admin_user_token: dict):
+def test_find_global_dataset_by_name(test_client: TestClient, admin_user_token: dict):
     test_client.post(
         "/v1/datasets/",
         headers=admin_user_token,
         json={"name": "global_ref", "level": 1, "url": "url"},
     )
 
-    response = test_client.get("/v1/datasets/global_ref")
+    response = test_client.get("/v1/datasets?scope=global&name=global_ref")
     assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0]["name"] == "global_ref"
+    assert [d["name"] for d in response.json()] == ["global_ref"]
 
 
 def test_update_dataset(
@@ -677,7 +680,7 @@ def test_persistent_identifier_round_trips(
     )
     assert response.status_code == 200
 
-    read = test_client.get(f"/v1/datasets/id/{dataset.id}").json()
+    read = test_client.get(f"/v1/datasets/{dataset.id}").json()
     assert read["persistent_identifier"] == "doi:10.5072/fds.1"
 
 
@@ -698,7 +701,7 @@ def test_issued_round_trips(
     )
     assert response.status_code == 200
 
-    read = test_client.get(f"/v1/datasets/id/{dataset.id}").json()
+    read = test_client.get(f"/v1/datasets/{dataset.id}").json()
     assert read["issued"] == "2024-03-01"
 
 
@@ -718,9 +721,8 @@ def test_delete_dataset(
     )
     assert response.status_code == 204
 
-    response = test_client.get("/v1/datasets/to_delete")
-    assert response.status_code == 200
-    assert response.json() == []
+    response = test_client.get(f"/v1/datasets/{dataset.id}")
+    assert response.status_code == 404
 
 
 def test_delete_dataset_unauthorized(
@@ -784,13 +786,13 @@ def test_get_datasets_with_storage_options(
     )
 
     # Without query param -> no storage_options (protects list latency)
-    resp = test_client.get("/v1/devices/OPTS/shots/1/datasets/data1")
+    resp = test_client.get("/v1/devices/OPTS/shots/1/datasets?name=data1")
     assert resp.status_code == 200
     assert resp.json()[0].get("storage_options") is None
 
     # With query param -> enriched
     resp2 = test_client.get(
-        "/v1/devices/OPTS/shots/1/datasets/data1?include_storage_options=true"
+        "/v1/devices/OPTS/shots/1/datasets?name=data1&include_storage_options=true"
     )
     assert resp2.status_code == 200
     data = resp2.json()[0]
@@ -883,7 +885,7 @@ def test_alternative_distribution_names_its_group(
     assert response.json()["group"] == "equilibrium"
 
     data = test_client.get(
-        f"/v1/datasets/id/{created['id']}", headers=admin_user_token
+        f"/v1/datasets/{created['id']}", headers=admin_user_token
     ).json()
     assert data["url"] == "s3://bucket/30420.zarr/equilibrium"
     assert "group" not in data
@@ -923,7 +925,7 @@ def test_distributions_declare_their_schema(
     assert response.json()["conforms_to"] == DD4
 
     data = test_client.get(
-        f"/v1/datasets/id/{dataset_id}", headers=admin_user_token
+        f"/v1/datasets/{dataset_id}", headers=admin_user_token
     ).json()
     assert data["conforms_to"] == DD3
     assert {d["url"]: d["conforms_to"] for d in data["distributions"]} == {
@@ -933,7 +935,7 @@ def test_distributions_declare_their_schema(
 
     ld = resource(
         test_client.get(
-            f"/v1/datasets/id/{dataset_id}",
+            f"/v1/datasets/{dataset_id}",
             headers={**admin_user_token, "Accept": "application/ld+json"},
         ).json()
     )
@@ -969,7 +971,7 @@ def test_conforms_to_must_be_an_http_url(
     assert response.status_code == 422
 
     distribution_id = test_client.get(
-        f"/v1/datasets/id/{dataset_id}", headers=admin_user_token
+        f"/v1/datasets/{dataset_id}", headers=admin_user_token
     ).json()["distributions"][0]["id"]
     response = test_client.patch(
         f"/v1/distributions/{distribution_id}",
@@ -1008,14 +1010,14 @@ def test_temporal_coverage_roundtrip(
     )
     session.commit()
 
-    response = test_client.get(f"/v1/datasets/id/{dataset.id}")
+    response = test_client.get(f"/v1/datasets/{dataset.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["temporal_start"].startswith("2024-03-15T14:00:00")
     assert data["temporal_end"].startswith("2024-03-15T14:30:00")
 
     response = test_client.get(
-        f"/v1/datasets/id/{dataset.id}", headers={"Accept": "application/ld+json"}
+        f"/v1/datasets/{dataset.id}", headers={"Accept": "application/ld+json"}
     )
     assert response.status_code == 200
     ld = resource(response.json())
@@ -1056,13 +1058,13 @@ def test_dataset_jsonld_names_its_device_and_shot(
     ld = {**admin_user_token, "Accept": "application/ld+json"}
 
     shot_node = resource(
-        test_client.get(f"/v1/datasets/id/{on_shot.id}", headers=ld).json()
+        test_client.get(f"/v1/datasets/{on_shot.id}", headers=ld).json()
     )
     device_node = resource(
-        test_client.get(f"/v1/datasets/id/{on_device.id}", headers=ld).json()
+        test_client.get(f"/v1/datasets/{on_device.id}", headers=ld).json()
     )
     global_node = resource(
-        test_client.get(f"/v1/datasets/id/{on_nothing.id}", headers=ld).json()
+        test_client.get(f"/v1/datasets/{on_nothing.id}", headers=ld).json()
     )
 
     assert shot_node["fuel:device"] == "mast"
@@ -1168,7 +1170,7 @@ def test_a_dataset_replaces_an_earlier_version(
     assert new.status_code == 201, new.text
     assert new.json()["replaces"] == [old["id"]]
     assert "replaced_by" not in new.json()
-    read = test_client.get(f"/v1/datasets/id/{old['id']}", headers=admin_user_token)
+    read = test_client.get(f"/v1/datasets/{old['id']}", headers=admin_user_token)
     assert read.json()["replaced_by"] == [new.json()["id"]]
     assert "replaces" not in read.json()
 
@@ -1187,7 +1189,7 @@ def test_listings_leave_out_replaced_datasets(
     ).json()
 
     by_name = test_client.get(
-        "/v1/devices/mast/shots/30421/datasets/thomson_scattering",
+        "/v1/devices/mast/shots/30421/datasets?name=thomson_scattering",
         headers=admin_user_token,
     ).json()
     everywhere = test_client.get("/v1/datasets/", headers=admin_user_token).json()
@@ -1220,7 +1222,7 @@ def test_two_datasets_can_replace_one(
         replaces=[old["id"]],
     ).json()
 
-    read = test_client.get(f"/v1/datasets/id/{old['id']}", headers=admin_user_token)
+    read = test_client.get(f"/v1/datasets/{old['id']}", headers=admin_user_token)
 
     assert read.json()["replaced_by"] == [recalibrated["id"], refitted["id"]]
     assert _listed(test_client, admin_user_token) == [
@@ -1432,7 +1434,7 @@ def test_deleting_the_replaced_dataset_clears_the_link(
     deleted = test_client.delete(f"/v1/datasets/{old['id']}", headers=admin_user_token)
 
     assert deleted.status_code == 204
-    read = test_client.get(f"/v1/datasets/id/{new['id']}", headers=admin_user_token)
+    read = test_client.get(f"/v1/datasets/{new['id']}", headers=admin_user_token)
     assert read.status_code == 200
     assert "replaces" not in read.json()
 
@@ -1478,7 +1480,7 @@ def test_a_replacement_the_reader_cannot_read_is_not_named(
     original = datasets.get(old)
     assert original is not None
 
-    as_reader = test_client.get(f"/v1/datasets/id/{old}", headers=non_admin_user_token)
+    as_reader = test_client.get(f"/v1/datasets/{old}", headers=non_admin_user_token)
     as_admin = datasets.to_read_model(original, user=admin_user)
 
     assert as_reader.status_code == 200
@@ -1517,12 +1519,8 @@ def test_replacements_link_each_other_in_jsonld(
     ).json()
     ld = {**admin_user_token, "Accept": "application/ld+json"}
 
-    old_node = resource(
-        test_client.get(f"/v1/datasets/id/{old['id']}", headers=ld).json()
-    )
-    new_node = resource(
-        test_client.get(f"/v1/datasets/id/{new['id']}", headers=ld).json()
-    )
+    old_node = resource(test_client.get(f"/v1/datasets/{old['id']}", headers=ld).json())
+    new_node = resource(test_client.get(f"/v1/datasets/{new['id']}", headers=ld).json())
 
     assert old_node["dcat:distribution"] == [
         {
