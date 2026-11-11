@@ -1,8 +1,8 @@
 import pytest
 
-from app.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
-from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
-from app.services.exceptions import ForbiddenError
+from fds.auth.permissions import check_device_admin, check_is_admin, check_shot_operator
+from fds.models.identity import ANONYMOUS_USER, AuthenticatedUser
+from fds.services.exceptions import ForbiddenError
 
 
 def test_scopes_stored_as_tuple_when_given_list():

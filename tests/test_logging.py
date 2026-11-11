@@ -3,7 +3,7 @@ import logging
 
 import structlog
 
-from app.core.logging import mark_logged
+from fds.core.logging import mark_logged
 
 
 class TestRedaction:

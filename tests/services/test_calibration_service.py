@@ -7,9 +7,9 @@ only what calibration adds: ordered chains and per-``(role, stage)`` non-overlap
 
 import pytest
 
-from app.models.coverage import Coverage, ShotRange
-from app.models.dataset import DatasetCreate
-from app.services.exceptions import FDSValidationError
+from fds.models.coverage import Coverage, ShotRange
+from fds.models.dataset import DatasetCreate
+from fds.services.exceptions import FDSValidationError
 
 pytestmark = pytest.mark.usefixtures("device")
 

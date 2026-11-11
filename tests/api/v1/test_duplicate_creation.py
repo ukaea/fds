@@ -3,14 +3,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.activity import ActivityCreate, ActivityType
-from app.models.dataset import Dataset
-from app.models.device import Device
-from app.models.shot import Shot
-from app.models.source import SourceCreate, SourceKind
-from app.services.activity_service import ActivityService
-from app.services.source_service import SourceService
+from fds.auth.security import AuthenticatedUser
+from fds.models.activity import ActivityCreate, ActivityType
+from fds.models.dataset import Dataset
+from fds.models.device import Device
+from fds.models.shot import Shot
+from fds.models.source import SourceCreate, SourceKind
+from fds.services.activity_service import ActivityService
+from fds.services.source_service import SourceService
 
 
 def test_duplicate_device_creation(

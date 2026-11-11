@@ -3,15 +3,15 @@ from datetime import datetime
 import pytest
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.coverage import Coverage
-from app.models.dataset import DatasetCreate
-from app.models.device import DeviceCreate
-from app.models.shot import ShotCreate, ShotUpdate
-from app.services.dataset_service import DatasetService
-from app.services.device_service import DeviceService
-from app.services.reference_service import CALIBRATION, GEOMETRY, ReferenceService
-from app.services.shot_service import ShotService
+from fds.auth.security import AuthenticatedUser
+from fds.models.coverage import Coverage
+from fds.models.dataset import DatasetCreate
+from fds.models.device import DeviceCreate
+from fds.models.shot import ShotCreate, ShotUpdate
+from fds.services.dataset_service import DatasetService
+from fds.services.device_service import DeviceService
+from fds.services.reference_service import CALIBRATION, GEOMETRY, ReferenceService
+from fds.services.shot_service import ShotService
 
 DEVICE = "MAST"
 

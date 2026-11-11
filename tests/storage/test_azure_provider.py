@@ -1,8 +1,8 @@
 import pytest
 
-from app.core.config import AzureStorageProvider
-from app.core.storage.azure_provider import AzureCredentialProvider
-from app.services.exceptions import ConfigurationError
+from fds.core.config import AzureStorageProvider
+from fds.core.storage.azure_provider import AzureCredentialProvider
+from fds.services.exceptions import ConfigurationError
 
 PROVIDER_CONFIG = AzureStorageProvider(storage_account="testaccount")
 
@@ -10,15 +10,15 @@ PROVIDER_CONFIG = AzureStorageProvider(storage_account="testaccount")
 @pytest.fixture
 def mock_azure_blobs(mocker):
     mocker.patch(
-        "app.core.storage.azure_provider.config.CREDENTIAL_TOKEN_DURATION", 3600
+        "fds.core.storage.azure_provider.config.CREDENTIAL_TOKEN_DURATION", 3600
     )
 
-    mocker.patch("app.core.storage.azure_provider.DefaultAzureCredential")
+    mocker.patch("fds.core.storage.azure_provider.DefaultAzureCredential")
     mock_service_client = mocker.patch(
-        "app.core.storage.azure_provider.BlobServiceClient"
+        "fds.core.storage.azure_provider.BlobServiceClient"
     )
     mock_gen_sas = mocker.patch(
-        "app.core.storage.azure_provider.generate_container_sas"
+        "fds.core.storage.azure_provider.generate_container_sas"
     )
 
     mock_client_instance = mocker.MagicMock()

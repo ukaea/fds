@@ -34,7 +34,7 @@ Published at **<https://ukaea.github.io/fds/>**, covering the data model, access
 To preview changes locally before opening a pull request:
 
 ```bash
-uvx zensical serve
+uvx zensical serve -f docs/zensical.toml
 ```
 
 ## Running locally
@@ -90,7 +90,7 @@ the tokens you mint work here as they do against the stack:
 cp .env.example .env               # once
 docker compose up -d postgres
 uv run alembic upgrade head
-uv run uvicorn app.main:app --reload
+uv run uvicorn fds.main:app --reload
 ```
 
 Without those settings FDS trusts no issuer and refuses every token with a 401.
@@ -101,7 +101,7 @@ Without those settings FDS trusts no issuer and refuses every token with a 401.
 To see request traces and browse them in Grafana, add the observability overlay:
 
 ```bash
-docker compose -f compose.yaml -f compose.observability.yaml up -d --build
+docker compose -f compose.yaml -f dev/compose.observability.yaml up -d --build
 ```
 
 That adds Grafana on `http://localhost:3002` and turns on trace export and JSON log output. It is
@@ -191,7 +191,7 @@ prek run
 
 ### Database Migrations
 
-The schema is versioned with Alembic, and the migrations in `alembic/versions/` are the only thing
+The schema is versioned with Alembic, and the migrations in `fds/migrations/versions/` are the only thing
 that creates or changes tables. The container image applies them before starting, so a fresh
 database is built and an existing one brought up to date on every start. To run them yourself:
 

@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.models.activity import ActivityCreate, ActivityType, ActivityUpdate
+from fds.models.activity import ActivityCreate, ActivityType, ActivityUpdate
 
 
 class TestActivityType:

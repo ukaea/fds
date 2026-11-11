@@ -1,10 +1,10 @@
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser, get_token_claims
-from app.main import app
-from app.models.device import DeviceCreate
-from app.services.device_service import DeviceService
+from fds.auth.security import AuthenticatedUser, get_token_claims
+from fds.main import app
+from fds.models.device import DeviceCreate
+from fds.services.device_service import DeviceService
 
 
 def test_create_shot_as_operator_success(

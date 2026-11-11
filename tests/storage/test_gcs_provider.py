@@ -7,15 +7,15 @@ pytest.importorskip("google.auth")
 
 from google.auth.exceptions import DefaultCredentialsError
 
-from app.core.storage.gcs_provider import GCSCredentialProvider
-from app.services.exceptions import ConfigurationError
+from fds.core.storage.gcs_provider import GCSCredentialProvider
+from fds.services.exceptions import ConfigurationError
 
 
 @pytest.fixture
 def mock_google_auth(mocker):
-    mock_auth = mocker.patch("app.core.storage.gcs_provider.google.auth")
+    mock_auth = mocker.patch("fds.core.storage.gcs_provider.google.auth")
     mock_downscoped = mocker.patch(
-        "app.core.storage.gcs_provider.google.auth.downscoped"
+        "fds.core.storage.gcs_provider.google.auth.downscoped"
     )
 
     # Setup base credentials
@@ -85,7 +85,7 @@ def test_urls_for_another_backend_are_skipped(mock_google_auth):
 
 def test_missing_credentials_configuration(mocker):
     """Test proper error when GOOGLE_APPLICATION_CREDENTIALS is missing."""
-    mock_default = mocker.patch("app.core.storage.gcs_provider.google.auth.default")
+    mock_default = mocker.patch("fds.core.storage.gcs_provider.google.auth.default")
     mock_default.side_effect = DefaultCredentialsError("Missing creds")
 
     provider = GCSCredentialProvider(None)

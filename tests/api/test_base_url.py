@@ -11,8 +11,8 @@ from typing import ClassVar
 
 import pytest
 
-from app.api.base_url import _warn_about_guessing, get_base_url
-from app.core.config import config
+from fds.api.base_url import _warn_about_guessing, get_base_url
+from fds.core.config import config
 from tests.conftest import resource
 
 
@@ -83,10 +83,10 @@ def test_every_route_publishes_the_same_name(test_client, monkeypatch, session):
     the projection could have caught that, because each route was self
     consistent.
     """
-    from app.auth.security import AuthenticatedUser
-    from app.models.device import DeviceCreate
-    from app.models.policy import AccessLevel
-    from app.services.device_service import DeviceService
+    from fds.auth.security import AuthenticatedUser
+    from fds.models.device import DeviceCreate
+    from fds.models.policy import AccessLevel
+    from fds.services.device_service import DeviceService
 
     monkeypatch.setattr(config, "base_url", "https://fds.example.org")
     admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))

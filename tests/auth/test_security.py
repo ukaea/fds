@@ -5,7 +5,7 @@ import pytest
 from fastapi import HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 
-from app.auth.security import (
+from fds.auth.security import (
     TokenClaims,
     _extract_scopes,
     _filter_scopes,
@@ -13,7 +13,7 @@ from app.auth.security import (
     get_current_user,
     get_token_claims,
 )
-from app.core.config import TrustedIdP, config
+from fds.core.config import TrustedIdP, config
 
 
 @pytest.mark.asyncio
@@ -74,7 +74,7 @@ async def test_get_current_user_parsing(mocker):
     # If no trusted IDP matches, scopes are STRIPPED.
 
     trusted_idps = [TrustedIdP(issuer="test-idp", allowed_scopes=["*"])]
-    mocker.patch("app.auth.security.config.TRUSTED_IDPS", trusted_idps)
+    mocker.patch("fds.auth.security.config.TRUSTED_IDPS", trusted_idps)
 
     # Case 1: scope is string
     claims: TokenClaims = {"sub": "123", "scope": "A B", "iss": "test-idp"}

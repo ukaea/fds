@@ -1,8 +1,8 @@
 from datetime import UTC, datetime
 
-from app.models.device import Device
-from app.models.shot import Shot
-from app.services.jsonld import device_node, map_device_to_dcat, map_shot_to_dcat
+from fds.models.device import Device
+from fds.models.shot import Shot
+from fds.services.jsonld import device_node, map_device_to_dcat, map_shot_to_dcat
 from tests.conftest import record, resource
 
 BASE = "http://testserver"

@@ -3,27 +3,27 @@ from datetime import UTC
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.activity import (
+from fds.auth.security import AuthenticatedUser
+from fds.models.activity import (
     ActivityAgentInput,
     ActivityCreate,
     ActivityType,
     AgentRole,
 )
-from app.models.dataset import DatasetCreate
-from app.models.device import Device
-from app.models.policy import AccessLevel
-from app.models.shot import Shot
-from app.models.source import SourceCreate, SourceKind
-from app.services.activity_service import ActivityService
-from app.services.dataset_service import DatasetService
-from app.services.jsonld import (
+from fds.models.dataset import DatasetCreate
+from fds.models.device import Device
+from fds.models.policy import AccessLevel
+from fds.models.shot import Shot
+from fds.models.source import SourceCreate, SourceKind
+from fds.services.activity_service import ActivityService
+from fds.services.dataset_service import DatasetService
+from fds.services.jsonld import (
     FUEL_EXECUTOR_ROLE,
     FUEL_INPUT_ROLE,
     FUEL_INSTRUMENT_ROLE,
     FUEL_ORCHESTRATOR_ROLE,
 )
-from app.services.source_service import SourceService
+from fds.services.source_service import SourceService
 from tests.conftest import resource
 
 

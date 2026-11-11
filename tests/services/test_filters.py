@@ -1,7 +1,7 @@
 import pytest
 
-from app.services.exceptions import FDSValidationError
-from app.services.filters import _value_candidates, parse_property
+from fds.services.exceptions import FDSValidationError
+from fds.services.filters import _value_candidates, parse_property
 
 
 @pytest.mark.parametrize(

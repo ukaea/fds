@@ -1,19 +1,19 @@
 import pytest
 from sqlmodel import Session, select
 
-from app.auth.access_control import (
+from fds.auth.access_control import (
     get_effective_policies,
     get_effective_policy,
     resolve_policy,
 )
-from app.auth.security import AuthenticatedUser
-from app.models.dataset import DatasetCreate
-from app.models.device import Device, DeviceCreate
-from app.models.policy import AccessLevel
-from app.models.shot import ShotCreate
-from app.services.dataset_service import DatasetService
-from app.services.device_service import DeviceService
-from app.services.shot_service import ShotService
+from fds.auth.security import AuthenticatedUser
+from fds.models.dataset import DatasetCreate
+from fds.models.device import Device, DeviceCreate
+from fds.models.policy import AccessLevel
+from fds.models.shot import ShotCreate
+from fds.services.dataset_service import DatasetService
+from fds.services.device_service import DeviceService
+from fds.services.shot_service import ShotService
 
 
 @pytest.fixture

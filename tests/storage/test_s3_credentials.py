@@ -16,13 +16,13 @@ from typing import Any
 
 import pytest
 
-from app.core.config import S3StorageProvider
-from app.services.exceptions import ConfigurationError
+from fds.core.config import S3StorageProvider
+from fds.services.exceptions import ConfigurationError
 
 boto3 = pytest.importorskip("boto3")
 moto = pytest.importorskip("moto")
 
-from app.core.storage.s3_provider import S3CredentialProvider
+from fds.core.storage.s3_provider import S3CredentialProvider
 
 ROLE_ARN = "arn:aws:iam::123456789012:role/fds-role"
 

@@ -3,19 +3,19 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.activity import ActivityCreate, ActivityType
-from app.models.coverage import Coverage, ShotRange
-from app.models.dataset import DatasetCreate
-from app.models.device import DeviceCreate
-from app.models.policy import AccessLevel
-from app.models.shot import ShotCreate
-from app.services.activity_service import ActivityService
-from app.services.annotation_service import AnnotationService
-from app.services.dataset_service import DatasetService
-from app.services.device_service import DeviceService
-from app.services.jsonld import map_dataset_to_dcat, map_shot_to_dcat
-from app.services.shot_service import ShotService
+from fds.auth.security import AuthenticatedUser
+from fds.models.activity import ActivityCreate, ActivityType
+from fds.models.coverage import Coverage, ShotRange
+from fds.models.dataset import DatasetCreate
+from fds.models.device import DeviceCreate
+from fds.models.policy import AccessLevel
+from fds.models.shot import ShotCreate
+from fds.services.activity_service import ActivityService
+from fds.services.annotation_service import AnnotationService
+from fds.services.dataset_service import DatasetService
+from fds.services.device_service import DeviceService
+from fds.services.jsonld import map_dataset_to_dcat, map_shot_to_dcat
+from fds.services.shot_service import ShotService
 from tests.conftest import resource
 
 _SHOT_AT = datetime(2016, 8, 3, 14, 32, tzinfo=UTC)

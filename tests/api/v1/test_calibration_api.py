@@ -2,8 +2,8 @@
 
 from fastapi.testclient import TestClient
 
-from app.models.coverage import Coverage
-from app.services.jsonld import map_dataset_to_dcat
+from fds.models.coverage import Coverage
+from fds.services.jsonld import map_dataset_to_dcat
 from tests.conftest import resource
 
 COVERS_150 = Coverage(shots=["150"])

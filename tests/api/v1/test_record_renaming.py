@@ -2,9 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models.activity import Activity
-from app.models.device import Device
-from app.models.shot import Shot
+from fds.models.activity import Activity
+from fds.models.device import Device
+from fds.models.shot import Shot
 
 
 @pytest.fixture

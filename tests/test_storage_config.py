@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.core.config import Config
+from fds.core.config import Config
 
 AWS = {"type": "s3", "endpoint_url": None, "region": "r", "sts_role_arn": "arn:a"}
 

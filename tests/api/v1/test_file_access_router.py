@@ -3,12 +3,12 @@ from datetime import datetime
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.device import DeviceCreate
-from app.models.file_access import S3Credentials
-from app.models.shot import ShotCreate
-from app.services.device_service import DeviceService
-from app.services.shot_service import ShotService
+from fds.auth.security import AuthenticatedUser
+from fds.models.device import DeviceCreate
+from fds.models.file_access import S3Credentials
+from fds.models.shot import ShotCreate
+from fds.services.device_service import DeviceService
+from fds.services.shot_service import ShotService
 
 
 def test_get_credentials(test_client: TestClient, admin_user_token: dict):
@@ -79,7 +79,7 @@ def test_credentials_include_storage_options(
         )
     }
     mocker.patch(
-        "app.services.file_access_service.get_provider_for_endpoint",
+        "fds.services.file_access_service.get_provider_for_endpoint",
         return_value=mock_provider,
     )
 

@@ -2,7 +2,7 @@ from contextvars import ContextVar
 
 from starlette.concurrency import run_in_threadpool
 
-from app.core.context import (
+from fds.core.context import (
     MAX_RECORDED_PER_TIER,
     ReadTier,
     drain_restricted_access,
@@ -11,7 +11,7 @@ from app.core.context import (
     request_context,
     set_actor,
 )
-from app.models.identity import ANONYMOUS_USER
+from fds.models.identity import ANONYMOUS_USER
 
 
 async def test_mutation_from_worker_thread_is_visible_to_caller():
@@ -31,7 +31,7 @@ async def test_rebinding_from_worker_thread_is_lost():
 
     This is the behaviour that makes the obvious simplification wrong. If this
     test ever fails, Python's context semantics have changed and the warnings
-    in app/core/context.py can be revisited.
+    in fds/core/context.py can be revisited.
     """
     var: ContextVar[str] = ContextVar("probe", default="unset")
     var.set("from-caller")

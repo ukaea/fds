@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models.device import Device
-from app.models.shot import Shot
+from fds.models.device import Device
+from fds.models.shot import Shot
 from tests.conftest import resource
 
 

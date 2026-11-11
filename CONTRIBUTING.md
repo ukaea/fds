@@ -120,13 +120,13 @@ one; `0.1.0` is kept for a deliberate milestone.
 Releasing is a pull request like any other change.
 [release-please](https://github.com/googleapis/release-please) keeps one open,
 titled `chore(main): release X.Y.Z`, and updates it after every merge to
-`main`. It bumps the version in `pyproject.toml`, `uv.lock`, `app/__init__.py` and
+`main`. It bumps the version in `pyproject.toml`, `uv.lock`, `fds/__init__.py` and
 `CITATION.cff` and adds the merged changes to `CHANGELOG.md`. Merging it tags
 `vX.Y.Z` and publishes a GitHub release, and the tag publishes the
 `ghcr.io/ukaea/fds` and `ghcr.io/ukaea/fds-ui` images as `X.Y.Z` and `latest`.
 
 To release a specific version instead of the computed one, add
-`"release-as": "0.1.0"` to the package in `release-please-config.json` in an
+`"release-as": "0.1.0"` to the package in `.github/release-please-config.json` in an
 ordinary PR, and remove it again after that release.
 
 ## Reporting bugs

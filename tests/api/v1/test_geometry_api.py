@@ -4,10 +4,10 @@ from datetime import datetime
 
 from fastapi.testclient import TestClient
 
-from app.models.coverage import Coverage, DateRange, ShotRange
-from app.models.dataset import DatasetCreate
-from app.models.policy import AccessLevel
-from app.services.jsonld import map_dataset_to_dcat
+from fds.models.coverage import Coverage, DateRange, ShotRange
+from fds.models.dataset import DatasetCreate
+from fds.models.policy import AccessLevel
+from fds.services.jsonld import map_dataset_to_dcat
 from tests.conftest import resource
 
 THOMSON = Coverage(shot_ranges=[ShotRange(from_shot="150")])

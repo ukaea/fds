@@ -1,10 +1,10 @@
 import pytest
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.source import Source, SourceCreate, SourceKind, SourceUpdate
-from app.services.exceptions import ResourceNotFoundError
-from app.services.source_service import SourceService
+from fds.auth.security import AuthenticatedUser
+from fds.models.source import Source, SourceCreate, SourceKind, SourceUpdate
+from fds.services.exceptions import ResourceNotFoundError
+from fds.services.source_service import SourceService
 
 
 def test_create_source(session: Session, admin_user: AuthenticatedUser):
@@ -59,7 +59,7 @@ def test_create_duplicate_source_fails(session: Session, admin_user: Authenticat
         SourceCreate(name="Unique Source", kind=SourceKind.SOFTWARE), user=admin_user
     )
 
-    from app.services.exceptions import ConflictError
+    from fds.services.exceptions import ConflictError
 
     with pytest.raises(ConflictError):
         service.create(
@@ -163,8 +163,8 @@ def test_get_sources_by_name(session: Session, admin_user: AuthenticatedUser):
 def test_create_source_device_admin(
     session: Session, admin_user: AuthenticatedUser, mast_admin_user: AuthenticatedUser
 ):
-    from app.models.device import DeviceCreate
-    from app.services.device_service import DeviceService
+    from fds.models.device import DeviceCreate
+    from fds.services.device_service import DeviceService
 
     DeviceService(session).create(
         DeviceCreate(name="MAST", type="Test"), user=admin_user
@@ -182,9 +182,9 @@ def test_create_source_device_admin(
 def test_create_source_unauthorized(
     session: Session, admin_user: AuthenticatedUser, mast_admin_user: AuthenticatedUser
 ):
-    from app.models.device import DeviceCreate
-    from app.services.device_service import DeviceService
-    from app.services.exceptions import ForbiddenError
+    from fds.models.device import DeviceCreate
+    from fds.services.device_service import DeviceService
+    from fds.services.exceptions import ForbiddenError
 
     DeviceService(session).create(
         DeviceCreate(name="JET", type="Test"), user=admin_user
@@ -201,8 +201,8 @@ def test_create_source_unauthorized(
 def test_update_source_device_admin(
     session: Session, admin_user: AuthenticatedUser, mast_admin_user: AuthenticatedUser
 ):
-    from app.models.device import DeviceCreate
-    from app.services.device_service import DeviceService
+    from fds.models.device import DeviceCreate
+    from fds.services.device_service import DeviceService
 
     DeviceService(session).create(
         DeviceCreate(name="MAST", type="Test"), user=admin_user
@@ -228,8 +228,8 @@ def test_update_source_device_admin(
 def test_delete_source_device_admin(
     session: Session, admin_user: AuthenticatedUser, mast_admin_user: AuthenticatedUser
 ):
-    from app.models.device import DeviceCreate
-    from app.services.device_service import DeviceService
+    from fds.models.device import DeviceCreate
+    from fds.services.device_service import DeviceService
 
     DeviceService(session).create(
         DeviceCreate(name="MAST", type="Test"), user=admin_user

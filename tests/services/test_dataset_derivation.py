@@ -1,26 +1,26 @@
 import pytest
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.activity import Activity, ActivityCreate, ActivityType
-from app.models.dataset import (
+from fds.auth.security import AuthenticatedUser
+from fds.models.activity import Activity, ActivityCreate, ActivityType
+from fds.models.dataset import (
     Dataset,
     DatasetCreate,
     DatasetDerivation,
     DatasetDerivationCreate,
 )
-from app.models.policy import AccessLevel
-from app.models.source import SourceCreate, SourceKind
-from app.services.activity_service import ActivityService
-from app.services.dataset_service import DatasetService
-from app.services.exceptions import (
+from fds.models.policy import AccessLevel
+from fds.models.source import SourceCreate, SourceKind
+from fds.services.activity_service import ActivityService
+from fds.services.dataset_service import DatasetService
+from fds.services.exceptions import (
     ConflictError,
     FDSValidationError,
     ForbiddenError,
     ResourceNotFoundError,
 )
-from app.services.jsonld import map_dataset_to_dcat
-from app.services.source_service import SourceService
+from fds.services.jsonld import map_dataset_to_dcat
+from fds.services.source_service import SourceService
 from tests.conftest import resource
 
 admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))

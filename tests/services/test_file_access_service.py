@@ -3,24 +3,24 @@ from datetime import datetime
 import pytest
 from sqlmodel import Session, select
 
-from app.core.config import AzureStorageProvider, S3StorageProvider
-from app.core.storage.azure_provider import AzureCredentialProvider
-from app.core.storage.s3_provider import S3CredentialProvider
-from app.models.dataset import Dataset
-from app.models.device import Device
-from app.models.distribution import Distribution
-from app.models.file_access import AzureCredentials, CredentialRequest, S3Credentials
-from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
-from app.models.policy import AccessLevel
-from app.models.shot import Shot
-from app.models.storage_options import (
+from fds.core.config import AzureStorageProvider, S3StorageProvider
+from fds.core.storage.azure_provider import AzureCredentialProvider
+from fds.core.storage.s3_provider import S3CredentialProvider
+from fds.models.dataset import Dataset
+from fds.models.device import Device
+from fds.models.distribution import Distribution
+from fds.models.file_access import AzureCredentials, CredentialRequest, S3Credentials
+from fds.models.identity import ANONYMOUS_USER, AuthenticatedUser
+from fds.models.policy import AccessLevel
+from fds.models.shot import Shot
+from fds.models.storage_options import (
     FsspecS3StorageOptions,
     IcechunkS3StorageOptions,
     StorageLocation,
     StorageOptionsType,
 )
-from app.services.exceptions import ForbiddenError
-from app.services.file_access_service import FileAccessService, ResolvedDistribution
+from fds.services.exceptions import ForbiddenError
+from fds.services.file_access_service import FileAccessService, ResolvedDistribution
 
 
 @pytest.fixture
@@ -189,7 +189,7 @@ def test_providers_sharing_an_endpoint_each_get_their_own_urls(
     """AWS S3 and Azure both leave ``endpoint_url`` unset, so the URL's scheme
     has to pick between them, whichever is listed first."""
     mocker.patch(
-        "app.core.storage.providers.config.STORAGE_PROVIDERS",
+        "fds.core.storage.providers.config.STORAGE_PROVIDERS",
         [
             S3StorageProvider(endpoint_url=None, region="r", sts_role_arn="arn:test"),
             AzureStorageProvider(storage_account="acct"),
@@ -355,7 +355,7 @@ def test_generate_session_credentials_integration(session, admin_user, mocker):
 
     # Replace the provider interaction
     mocker.patch(
-        "app.services.file_access_service.get_provider_for_endpoint",
+        "fds.services.file_access_service.get_provider_for_endpoint",
         return_value=mock_provider,
     )
 

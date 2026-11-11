@@ -3,10 +3,10 @@ from sqlalchemy import JSON, Column
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Session, SQLModel, col, select
 
-import app.models  # noqa: F401  (registers every table)
-from app.auth.security import AuthenticatedUser
-from app.models.device import Device, DeviceCreate
-from app.services.device_service import DeviceService
+import fds.models  # noqa: F401  (registers every table)
+from fds.auth.security import AuthenticatedUser
+from fds.models.device import Device, DeviceCreate
+from fds.services.device_service import DeviceService
 
 JSON_COLUMNS = [
     column

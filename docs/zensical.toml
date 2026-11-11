@@ -1,0 +1,74 @@
+[project]
+site_name = "Fusion Data Service"
+site_description = "Scalable, FAIR-compliant access to fusion experiment metadata and data"
+site_url = "https://ukaea.github.io/fds/"
+repo_url = "https://github.com/ukaea/fds"
+docs_dir = "content"
+extra_css = ["stylesheets/extra.css"]
+
+nav = [
+  { Home = "index.md" },
+  { "Access Control" = "access-control.md" },
+  { "Logging & Auditing" = "logging.md" },
+  { Operations = "operations.md" },
+  { "Data Model" = [
+    "data-model/index.md",
+    { "Device" = "data-model/device.md" },
+    { "Shot" = "data-model/shot.md" },
+    { "Dataset & Distribution" = "data-model/dataset.md" },
+    { "Collection" = "data-model/collection.md" },
+    { "Source" = "data-model/source.md" },
+    { "Activity" = "data-model/activity.md" },
+    { "Reference Datasets" = "data-model/reference-datasets.md" },
+    { "Changes & Versions" = "data-model/versions.md" },
+    { "Scientific Metadata" = "data-model/scientific-metadata.md" },
+  ]},
+  { "Semantic Metadata (DCAT & JSON-LD)" = "dcat-jsonld.md" },
+  { "Searching Other Catalogues" = "federation.md" },
+  { "Provenance" = "provenance.md" },
+]
+
+# content.tabs.link syncs content tabs by label across the whole site: pick a language
+# once and every code example follows. navigation.footer adds previous/next links so the
+# pages read as an ordered sequence.
+[project.theme]
+features = ["content.tabs.link", "navigation.footer", "navigation.indexes"]
+custom_dir = "overrides"
+# The header shows the navy mark or its reversed version to suit the colour scheme
+# (overrides/partials/logo.html).
+logo = "assets/fds-mark.svg"
+favicon = "assets/fds-favicon.svg"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"
+
+# Callout blocks (!!! warning "…"), used where a page has to flag a consequence
+# the reader must not skim past.
+[project.markdown_extensions.admonition]
+
+# Content tabs (=== "Label") for the per-language API examples. superfences lets a
+# tab hold a fenced code block; tabbed renders the tab strip.
+[project.markdown_extensions.pymdownx.superfences]
+
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true

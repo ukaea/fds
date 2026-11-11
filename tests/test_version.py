@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app import __version__
+from fds import __version__
 
 
 def test_health_reports_version(test_client: TestClient):

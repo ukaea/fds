@@ -1,21 +1,21 @@
-from app.auth.security import AuthenticatedUser
-from app.models.activity import (
+from fds.auth.security import AuthenticatedUser
+from fds.models.activity import (
     ActivityAgentInput,
     ActivityCreate,
     ActivityDelegationInput,
     AgentRole,
 )
-from app.models.dataset import DatasetCreate
-from app.models.policy import AccessLevel
-from app.models.source import Source, SourceCreate, SourceKind
-from app.services.activity_service import ActivityService
-from app.services.dataset_service import DatasetService
-from app.services.jsonld import (
+from fds.models.dataset import DatasetCreate
+from fds.models.policy import AccessLevel
+from fds.models.source import Source, SourceCreate, SourceKind
+from fds.services.activity_service import ActivityService
+from fds.services.dataset_service import DatasetService
+from fds.services.jsonld import (
     FUEL_ORCHESTRATOR_ROLE,
     map_dataset_to_dcat,
     map_source_to_dcat,
 )
-from app.services.source_service import SourceService
+from fds.services.source_service import SourceService
 from tests.conftest import resource
 
 admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))

@@ -1,6 +1,6 @@
 from fastapi.routing import APIRoute
 
-from app.main import app
+from fds.main import app
 
 
 def test_no_route_updates_with_put():

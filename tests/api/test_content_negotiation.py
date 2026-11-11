@@ -4,18 +4,18 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.api.negotiation import Answer
-from app.main import app
-from app.models.collection import CollectionCreate
-from app.models.dataset import DatasetCreate
-from app.models.device import Device, DeviceCreate
-from app.models.identity import AuthenticatedUser
-from app.models.policy import AccessLevel
-from app.models.shot import ShotCreate
-from app.services.collection_service import CollectionService
-from app.services.dataset_service import DatasetService
-from app.services.device_service import DeviceService
-from app.services.shot_service import ShotService
+from fds.api.negotiation import Answer
+from fds.main import app
+from fds.models.collection import CollectionCreate
+from fds.models.dataset import DatasetCreate
+from fds.models.device import Device, DeviceCreate
+from fds.models.identity import AuthenticatedUser
+from fds.models.policy import AccessLevel
+from fds.models.shot import ShotCreate
+from fds.services.collection_service import CollectionService
+from fds.services.dataset_service import DatasetService
+from fds.services.device_service import DeviceService
+from fds.services.shot_service import ShotService
 from tests.conftest import resource
 
 

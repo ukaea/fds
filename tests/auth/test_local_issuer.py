@@ -12,9 +12,9 @@ from fastapi import HTTPException
 from jwt.algorithms import RSAAlgorithm
 from pydantic import ValidationError
 
-from app.auth.jwks import JwksClient
-from app.auth.security import get_token_claims
-from app.core.config import TrustedIdP
+from fds.auth.jwks import JwksClient
+from fds.auth.security import get_token_claims
+from fds.core.config import TrustedIdP
 
 LOCAL_ISSUER = "urn:fds:local"
 AUDIENCE = "fds-client"
@@ -70,7 +70,7 @@ def mint(
 @pytest.fixture
 def local_idp(mocker, jwks_file: Path):
     """Trust the local issuer, and fail loudly if anything tries the network."""
-    from app.auth import security
+    from fds.auth import security
 
     mocker.patch.object(
         security.config,
@@ -201,7 +201,7 @@ async def test_a_key_regenerated_by_the_script_is_accepted_at_once(
 @pytest.mark.asyncio
 async def test_missing_key_file_is_a_server_error(mocker, tmp_path, key_pair):
     """A deployment mistake, not something the caller did."""
-    from app.auth import security
+    from fds.auth import security
 
     private_key, _ = key_pair
     mocker.patch.object(
@@ -232,7 +232,7 @@ async def test_configured_jwks_uri_skips_discovery(mocker, key_pair):
     issuer = "https://idp.example.org"
     keys_url = "http://idp-internal:8080/keys"
 
-    from app.auth import security
+    from fds.auth import security
 
     mocker.patch.object(
         security.config,

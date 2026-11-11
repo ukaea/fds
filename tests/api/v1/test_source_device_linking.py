@@ -2,9 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.device import DeviceCreate
-from app.services.device_service import DeviceService
+from fds.auth.security import AuthenticatedUser
+from fds.models.device import DeviceCreate
+from fds.services.device_service import DeviceService
 
 
 @pytest.fixture(name="setup_device")

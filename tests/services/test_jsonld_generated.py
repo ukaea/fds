@@ -1,9 +1,9 @@
 from datetime import UTC, datetime
 
-from app.models.activity import Activity
-from app.models.collection import Collection
-from app.models.dataset import Dataset
-from app.services.jsonld import map_collection_to_dcat, map_dataset_to_dcat
+from fds.models.activity import Activity
+from fds.models.collection import Collection
+from fds.models.dataset import Dataset
+from fds.services.jsonld import map_collection_to_dcat, map_dataset_to_dcat
 from tests.conftest import resource
 
 BASE = "http://testserver"

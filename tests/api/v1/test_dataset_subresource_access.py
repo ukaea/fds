@@ -2,18 +2,18 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.activity import ActivityCreate, ActivityType
-from app.models.dataset import DatasetCreate
-from app.models.device import DeviceCreate
-from app.models.distribution import DistributionCreate
-from app.models.policy import AccessLevel
-from app.models.source import SourceCreate, SourceKind
-from app.services.activity_service import ActivityService
-from app.services.dataset_service import DatasetService
-from app.services.device_service import DeviceService
-from app.services.distribution_service import DistributionService
-from app.services.source_service import SourceService
+from fds.auth.security import AuthenticatedUser
+from fds.models.activity import ActivityCreate, ActivityType
+from fds.models.dataset import DatasetCreate
+from fds.models.device import DeviceCreate
+from fds.models.distribution import DistributionCreate
+from fds.models.policy import AccessLevel
+from fds.models.source import SourceCreate, SourceKind
+from fds.services.activity_service import ActivityService
+from fds.services.dataset_service import DatasetService
+from fds.services.device_service import DeviceService
+from fds.services.distribution_service import DistributionService
+from fds.services.source_service import SourceService
 
 
 @pytest.fixture(name="restricted_dataset_id")

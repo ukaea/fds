@@ -1,22 +1,22 @@
 import pytest
 from sqlmodel import Session, select
 
-from app.auth.access_control import check_read
-from app.core.context import ReadTier, drain_restricted_access, request_context
-from app.models.activity import ActivityCreate, ActivityType
-from app.models.collection import Collection, CollectionCreate
-from app.models.dataset import Dataset, DatasetCreate
-from app.models.device import Device, DeviceCreate
-from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
-from app.models.policy import AccessLevel
-from app.models.shot import Shot, ShotCreate
-from app.services.activity_service import ActivityService
-from app.services.collection_service import CollectionService
-from app.services.dataset_service import DatasetService
-from app.services.device_service import DeviceService
-from app.services.exceptions import ForbiddenError
-from app.services.shot_service import ShotService
-from app.services.visibility import Listed, readable_only
+from fds.auth.access_control import check_read
+from fds.core.context import ReadTier, drain_restricted_access, request_context
+from fds.models.activity import ActivityCreate, ActivityType
+from fds.models.collection import Collection, CollectionCreate
+from fds.models.dataset import Dataset, DatasetCreate
+from fds.models.device import Device, DeviceCreate
+from fds.models.identity import ANONYMOUS_USER, AuthenticatedUser
+from fds.models.policy import AccessLevel
+from fds.models.shot import Shot, ShotCreate
+from fds.services.activity_service import ActivityService
+from fds.services.collection_service import CollectionService
+from fds.services.dataset_service import DatasetService
+from fds.services.device_service import DeviceService
+from fds.services.exceptions import ForbiddenError
+from fds.services.shot_service import ShotService
+from fds.services.visibility import Listed, readable_only
 
 TEAM = AuthenticatedUser(id="member", scopes=("dev_team",))
 PUBLIC = AccessLevel.PUBLIC

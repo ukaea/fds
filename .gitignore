@@ -22,7 +22,3 @@ local-issuer.jwks.json
 # Docs build output
 site/
 .zensical/
-
-# Demo artifacts
-__marimo__/
-minio-data/

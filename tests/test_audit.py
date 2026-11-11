@@ -1,18 +1,18 @@
 import pytest
 from sqlmodel import Session
 
-from app.core.audit import ACTIONS
-from app.core.context import request_context, set_actor
-from app.models.collection import CollectionCreate
-from app.models.dataset import DatasetCreate, DatasetUpdate
-from app.models.device import Device, DeviceCreate, DeviceUpdate
-from app.models.identity import AuthenticatedUser
-from app.models.policy import AccessLevel
-from app.models.shot import ShotCreate
-from app.services.collection_service import CollectionService
-from app.services.dataset_service import DatasetService
-from app.services.device_service import DeviceService
-from app.services.shot_service import ShotService
+from fds.core.audit import ACTIONS
+from fds.core.context import request_context, set_actor
+from fds.models.collection import CollectionCreate
+from fds.models.dataset import DatasetCreate, DatasetUpdate
+from fds.models.device import Device, DeviceCreate, DeviceUpdate
+from fds.models.identity import AuthenticatedUser
+from fds.models.policy import AccessLevel
+from fds.models.shot import ShotCreate
+from fds.services.collection_service import CollectionService
+from fds.services.dataset_service import DatasetService
+from fds.services.device_service import DeviceService
+from fds.services.shot_service import ShotService
 
 
 def audit_lines(lines: list[dict], action: str | None = None) -> list[dict]:

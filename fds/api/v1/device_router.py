@@ -1,0 +1,138 @@
+from fastapi import APIRouter, status
+
+from fds.api.deps import (
+    DEFAULT_PAGE_SIZE,
+    AnswerDep,
+    CurrentUserDep,
+    DeviceServiceDep,
+    Limit,
+    Offset,
+    SourceServiceDep,
+)
+from fds.api.negotiation import (
+    JSONLD_ALTERNATIVE,
+    JSONLDResponse,
+)
+from fds.models.device import DeviceCreate, DeviceRead, DeviceUpdate
+from fds.models.source import SourceCreate, SourceRead
+from fds.services.jsonld import map_device_to_dcat
+
+router = APIRouter()
+
+
+@router.post("/", response_model=DeviceRead, status_code=status.HTTP_201_CREATED)
+def create_device(
+    *,
+    device_service: DeviceServiceDep,
+    device_in: DeviceCreate,
+    user: CurrentUserDep,
+) -> DeviceRead:
+    """
+    Create a new device.
+    """
+    device = device_service.create(device_in, user)
+    return device_service.to_read_model(device)
+
+
+@router.get("/", response_model=list[DeviceRead])
+def read_devices(
+    *,
+    device_service: DeviceServiceDep,
+    user: CurrentUserDep,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
+) -> list[DeviceRead]:
+    """
+    Retrieve all devices.
+    """
+    devices = device_service.get_multi(user=user, offset=offset, limit=limit)
+    return [device_service.to_read_model(d) for d in devices]
+
+
+@router.get("/{device_name}", response_model=DeviceRead, responses=JSONLD_ALTERNATIVE)
+def read_device(
+    *,
+    answer: AnswerDep,
+    device_service: DeviceServiceDep,
+    device_name: str,
+    user: CurrentUserDep,
+) -> DeviceRead | JSONLDResponse:
+    """
+    Retrieve a single device by name.
+    Supports Content Negotiation:
+    - Accept: application/ld+json -> Returns DCAT Metadata
+    """
+    device = device_service.get_by_name(device_name, user=user)
+    return answer(
+        json=lambda: device_service.to_read_model(device),
+        jsonld=lambda base: map_device_to_dcat(device, base),
+    )
+
+
+@router.patch("/{device_name}", response_model=DeviceRead)
+def update_device(
+    *,
+    device_service: DeviceServiceDep,
+    device_name: str,
+    device_in: DeviceUpdate,
+    user: CurrentUserDep,
+) -> DeviceRead:
+    """
+    Update a device by name.
+    """
+    device = device_service.update(device_name=device_name, obj_in=device_in, user=user)
+    return device_service.to_read_model(device)
+
+
+@router.delete("/{device_name}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_device(
+    *,
+    device_name: str,
+    device_service: DeviceServiceDep,
+    user: CurrentUserDep,
+) -> None:
+    """
+    Delete a device by name.
+    """
+    device_service.delete(device_name, user)
+
+
+@router.post(
+    "/{device_name}/sources",
+    response_model=SourceRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_source_for_device(
+    *,
+    device_name: str,
+    source_in: SourceCreate,
+    source_service: SourceServiceDep,
+    user: CurrentUserDep,
+) -> SourceRead:
+    """
+    Create a new source linked to a specific device. Requires global admin.
+    """
+    # Force the device_name to match the path
+    source_in.device_name = device_name
+    source = source_service.create(source_in, user)
+    return source_service.to_read_model(source)
+
+
+@router.get(
+    "/{device_name}/sources",
+    response_model=list[SourceRead],
+)
+def read_sources_for_device(
+    *,
+    device_name: str,
+    source_service: SourceServiceDep,
+    offset: Offset = 0,
+    limit: Limit = DEFAULT_PAGE_SIZE,
+) -> list[SourceRead]:
+    """
+    Retrieve sources associated with a specific device.
+    """
+    sources = source_service.get_for_device(
+        device_name=device_name, offset=offset, limit=limit
+    )
+    return source_service.to_read_models(sources)
