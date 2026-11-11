@@ -76,7 +76,7 @@ jobs:
           FDS_DB_URL: postgresql+psycopg://fds:fds@localhost:5432/fds_test
 
   oldest-python:
-    name: Test on Python 3.12
+    name: Test on the oldest supported Python
     runs-on: ubuntu-latest
     # The job above runs the 3.14 that production uses. FDS also supports every
     # Python NumPy does, and only running the tests on the oldest shows that
