@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1](https://github.com/ukaea/fds/compare/v0.1.0...v0.1.1) (2026-11-09)
+
+
+### Performance Improvements
+
+* Read property searches from tables the database keeps ([#279](https://github.com/ukaea/fds/issues/279)) ([db0ac3e](https://github.com/ukaea/fds/commit/db0ac3e5df0ae030df6df61a6a37141155ef5c00))
+* Store JSON as jsonb and halve property summary times ([#277](https://github.com/ukaea/fds/issues/277)) ([fcd1725](https://github.com/ukaea/fds/commit/fcd1725e40e1d5386f15e7e6f07384f66ccbc7ad))
+
 ## [0.1.0](https://github.com/ukaea/fds/compare/v0.0.9...v0.1.0) (2026-11-09)
 
 
