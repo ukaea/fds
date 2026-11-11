@@ -3,17 +3,17 @@ from datetime import UTC, datetime
 import pytest
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.device import DeviceCreate
-from app.models.policy import AccessLevel
-from app.models.shot import Shot, ShotCreate, ShotUpdate
-from app.services.device_service import DeviceService
-from app.services.exceptions import (
+from fds.auth.security import AuthenticatedUser
+from fds.models.device import DeviceCreate
+from fds.models.policy import AccessLevel
+from fds.models.shot import Shot, ShotCreate, ShotUpdate
+from fds.services.device_service import DeviceService
+from fds.services.exceptions import (
     DeviceNotFoundError,
     FDSValidationError,
     ForbiddenError,
 )
-from app.services.shot_service import ShotService
+from fds.services.shot_service import ShotService
 
 IDP_A = "https://idp-a.example.com"
 

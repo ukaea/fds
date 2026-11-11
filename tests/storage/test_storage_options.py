@@ -3,7 +3,7 @@ import json
 import pytest
 from pydantic import TypeAdapter
 
-from app.models.storage_options import (
+from fds.models.storage_options import (
     FsspecS3StorageOptions,
     IcechunkS3StorageOptions,
     StorageLocation,

@@ -2,9 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.core.config import config
-from app.models.device import Device
-from app.models.policy import AccessLevel
+from fds.core.config import config
+from fds.models.device import Device
+from fds.models.policy import AccessLevel
 
 
 def test_metadata_persistence(session: Session):

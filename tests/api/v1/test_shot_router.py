@@ -1,11 +1,11 @@
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.device import DeviceCreate
-from app.models.shot import AccessLevel, ShotCreate
-from app.services.device_service import DeviceService
-from app.services.shot_service import ShotService
+from fds.auth.security import AuthenticatedUser
+from fds.models.device import DeviceCreate
+from fds.models.shot import AccessLevel, ShotCreate
+from fds.services.device_service import DeviceService
+from fds.services.shot_service import ShotService
 
 admin_user = AuthenticatedUser(id="test-admin", scopes=("fds-admin",))
 

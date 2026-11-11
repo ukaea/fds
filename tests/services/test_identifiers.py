@@ -9,8 +9,8 @@ last test here is what keeps that true.
 
 import pytest
 
-from app.api.identifiers import router as identifier_router
-from app.services.identifiers import Identifiers, resolve_base
+from fds.api.identifiers import router as identifier_router
+from fds.services.identifiers import Identifiers, resolve_base
 
 BASE = "https://example.org"
 

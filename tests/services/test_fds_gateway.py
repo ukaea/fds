@@ -2,9 +2,9 @@ import httpx
 import pytest
 from pyld import jsonld
 
-from app.models.activity import ActivityType
-from app.models.federation import DatasetQuery
-from app.services.fds_gateway import UnreadableAnswer, in_fds_context, search
+from fds.models.activity import ActivityType
+from fds.models.federation import DatasetQuery
+from fds.services.fds_gateway import UnreadableAnswer, in_fds_context, search
 
 MEMBER = "https://api.fds.example.org"
 LD = {"content-type": "application/ld+json"}

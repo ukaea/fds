@@ -1,12 +1,12 @@
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.dataset import DatasetCreate, DatasetDerivationCreate
-from app.models.device import DeviceCreate
-from app.models.policy import AccessLevel
-from app.services.dataset_service import DatasetService
-from app.services.device_service import DeviceService
+from fds.auth.security import AuthenticatedUser
+from fds.models.dataset import DatasetCreate, DatasetDerivationCreate
+from fds.models.device import DeviceCreate
+from fds.models.policy import AccessLevel
+from fds.services.dataset_service import DatasetService
+from fds.services.device_service import DeviceService
 from tests.conftest import resource
 
 

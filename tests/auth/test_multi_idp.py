@@ -4,8 +4,8 @@ import jwt
 import pytest
 from fastapi import HTTPException
 
-from app.auth.security import TokenClaims, get_current_user, get_token_claims
-from app.core.config import TrustedIdP
+from fds.auth.security import TokenClaims, get_current_user, get_token_claims
+from fds.core.config import TrustedIdP
 
 # Mock Data
 IDP_JET = "https://idp.jet.org"
@@ -20,8 +20,8 @@ def setup_trusted_idps(mocker):
         TrustedIdP(issuer=IDP_JET, allowed_scopes=["jet:*", "openid"]),
         TrustedIdP(issuer=IDP_MAST, allowed_scopes=["mast:*", "openid"]),
     ]
-    # We use app.auth.security.config because that's where it's imported in the SUT
-    from app.auth.security import config
+    # We use fds.auth.security.config because that's where it's imported in the SUT
+    from fds.auth.security import config
 
     mocker.patch.object(config, "TRUSTED_IDPS", trusted_idps)
     return config

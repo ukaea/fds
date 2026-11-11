@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 from httpx import Request, Response
 
-from app.auth.jwks import JwksClient
+from fds.auth.jwks import JwksClient
 
 MOCK_ISSUER = "https://test-idp.com"
 MOCK_OIDC_DISCOVERY = {

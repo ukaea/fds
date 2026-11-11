@@ -2,10 +2,10 @@ from datetime import date
 
 import pytest
 
-from app.models.collection import Collection
-from app.models.dataset import Dataset
-from app.models.shot import Shot
-from app.services.jsonld import (
+from fds.models.collection import Collection
+from fds.models.dataset import Dataset
+from fds.models.shot import Shot
+from fds.services.jsonld import (
     map_collection_to_dcat,
     map_dataset_to_dcat,
     map_shot_to_dcat,

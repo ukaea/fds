@@ -7,20 +7,20 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+from alembic import command
 from alembic.config import Config as AlembicConfig
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 from sqlmodel import Session
 
-from alembic import command
-from app.auth.security import (
+from fds.auth.security import (
     AuthenticatedUser,
     get_token_claims,
 )
-from app.core.config import TrustedIdP, config
-from app.core.db import get_session, make_engine
-from app.core.logging import setup_logging
-from app.main import app
+from fds.core.config import TrustedIdP, config
+from fds.core.db import get_session, make_engine
+from fds.core.logging import setup_logging
+from fds.main import app
 
 
 @pytest.fixture(scope="session")
@@ -55,7 +55,9 @@ def engine(database_url: str):
     Building it with Alembic rather than `create_all` means every run also
     proves the migrations produce the schema the models expect.
     """
-    alembic_config = AlembicConfig(str(Path(__file__).parent.parent / "alembic.ini"))
+    alembic_config = AlembicConfig(
+        toml_file=str(Path(__file__).parent.parent / "pyproject.toml")
+    )
     alembic_config.set_main_option("sqlalchemy.url", database_url)
     command.upgrade(alembic_config, "head")
 
@@ -211,7 +213,7 @@ def mock_jwks_client(mocker):
 @pytest.fixture
 def mock_jwt_decode(mocker):
     """Global mock for jwt.decode"""
-    return mocker.patch("app.auth.security.jwt.decode")
+    return mocker.patch("fds.auth.security.jwt.decode")
 
 
 @pytest.fixture
@@ -220,7 +222,7 @@ def mock_credential_provider(mocker):
     mock_prov = mocker.Mock()
     mock_prov.generate_credentials.return_value = {}
     mocker.patch(
-        "app.services.file_access_service.get_provider_for_endpoint",
+        "fds.services.file_access_service.get_provider_for_endpoint",
         return_value=mock_prov,
     )
     return mock_prov
@@ -228,7 +230,7 @@ def mock_credential_provider(mocker):
 
 @pytest.fixture
 def mock_check_shot_operator(mocker):
-    return mocker.patch("app.services.file_access_service.check_shot_operator")
+    return mocker.patch("fds.services.file_access_service.check_shot_operator")
 
 
 @pytest.fixture

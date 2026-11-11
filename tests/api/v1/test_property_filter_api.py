@@ -2,17 +2,17 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.collection import CollectionCreate
-from app.models.dataset import DatasetCreate
-from app.models.device import DeviceCreate
-from app.models.policy import AccessLevel
-from app.models.scientific_metadata import ScientificProperty
-from app.models.shot import ShotCreate
-from app.services.collection_service import CollectionService
-from app.services.dataset_service import DatasetService
-from app.services.device_service import DeviceService
-from app.services.shot_service import ShotService
+from fds.auth.security import AuthenticatedUser
+from fds.models.collection import CollectionCreate
+from fds.models.dataset import DatasetCreate
+from fds.models.device import DeviceCreate
+from fds.models.policy import AccessLevel
+from fds.models.scientific_metadata import ScientificProperty
+from fds.models.shot import ShotCreate
+from fds.services.collection_service import CollectionService
+from fds.services.dataset_service import DatasetService
+from fds.services.device_service import DeviceService
+from fds.services.shot_service import ShotService
 
 MAST = "MAST"
 MAST_U = "MAST-U"

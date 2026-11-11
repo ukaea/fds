@@ -1,14 +1,14 @@
 import pytest
 from pydantic import ValidationError
 
-from app.models.activity import (
+from fds.models.activity import (
     ActivityAgentInput,
     ActivityCreate,
     ActivityDelegationInput,
     AgentRole,
 )
-from app.models.dataset import DatasetDerivationCreate
-from app.models.source import SourceCreate, SourceKind
+from fds.models.dataset import DatasetDerivationCreate
+from fds.models.source import SourceCreate, SourceKind
 
 
 class TestActivityAgents:

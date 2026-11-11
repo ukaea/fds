@@ -1,11 +1,11 @@
 import pytest
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.device import Device, DeviceCreate, DeviceUpdate
-from app.models.policy import AccessLevel
-from app.services.device_service import DeviceService
-from app.services.exceptions import (
+from fds.auth.security import AuthenticatedUser
+from fds.models.device import Device, DeviceCreate, DeviceUpdate
+from fds.models.policy import AccessLevel
+from fds.services.device_service import DeviceService
+from fds.services.exceptions import (
     ConflictError,
     DeviceNotFoundError,
     FDSValidationError,

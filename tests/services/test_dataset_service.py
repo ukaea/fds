@@ -3,28 +3,28 @@ from datetime import datetime
 import pytest
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.core.config import AzureStorageProvider
-from app.models.dataset import DatasetCreate, DatasetUpdate
-from app.models.device import DeviceCreate
-from app.models.file_access import (
+from fds.auth.security import AuthenticatedUser
+from fds.core.config import AzureStorageProvider
+from fds.models.dataset import DatasetCreate, DatasetUpdate
+from fds.models.device import DeviceCreate
+from fds.models.file_access import (
     AzureCredentials,
     CredentialManifest,
     GCSCredentials,
     S3Credentials,
 )
-from app.models.policy import AccessLevel
-from app.models.scope import DeviceScope
-from app.models.shot import ShotCreate
-from app.models.storage_options import (
+from fds.models.policy import AccessLevel
+from fds.models.scope import DeviceScope
+from fds.models.shot import ShotCreate
+from fds.models.storage_options import (
     FsspecS3StorageOptions,
     IcechunkS3StorageOptions,
     StorageOptionsType,
 )
-from app.services.dataset_service import DatasetService
-from app.services.device_service import DeviceService
-from app.services.exceptions import ForbiddenError, ResourceNotFoundError
-from app.services.shot_service import ShotService
+from fds.services.dataset_service import DatasetService
+from fds.services.device_service import DeviceService
+from fds.services.exceptions import ForbiddenError, ResourceNotFoundError
+from fds.services.shot_service import ShotService
 
 
 @pytest.fixture(name="device_service")
@@ -638,7 +638,7 @@ def test_enrich_with_storage_options_s3(
     }
 
     mocker.patch(
-        "app.services.file_access_service.get_provider_for_endpoint",
+        "fds.services.file_access_service.get_provider_for_endpoint",
         return_value=mock_provider,
     )
 
@@ -706,7 +706,7 @@ def test_enrich_with_storage_options_azure_and_gcs(
     mock_provider = mocker.MagicMock()
     mock_provider.generate_credentials.return_value = {url: credential}
     mocker.patch(
-        "app.services.file_access_service.get_provider_for_endpoint",
+        "fds.services.file_access_service.get_provider_for_endpoint",
         return_value=mock_provider,
     )
 
@@ -749,11 +749,11 @@ def test_enrich_with_storage_options_public_azure_and_gcs(
     """
     endpoint_url = "https://acct.blob.core.windows.net"
     mocker.patch(
-        "app.services.dataset_service.config.STORAGE_PROVIDERS",
+        "fds.services.dataset_service.config.STORAGE_PROVIDERS",
         [AzureStorageProvider(endpoint_url=endpoint_url, storage_account="acct")],
     )
     mock_provider = mocker.patch(
-        "app.services.file_access_service.get_provider_for_endpoint"
+        "fds.services.file_access_service.get_provider_for_endpoint"
     )
     device_service.create(
         DeviceCreate(name="enrich-anon", type="Test"), user=admin_user
@@ -818,7 +818,7 @@ def test_enrich_with_storage_options_unsupported_protocol(
     )
 
     mocker.patch(
-        "app.services.file_access_service.get_provider_for_endpoint",
+        "fds.services.file_access_service.get_provider_for_endpoint",
         return_value=None,
     )
 
@@ -862,7 +862,7 @@ def test_enrich_with_storage_options_url_absent_from_manifest(
     )
 
     mocker.patch(
-        "app.services.dataset_service.FileAccessService.generate_session_credentials",
+        "fds.services.dataset_service.FileAccessService.generate_session_credentials",
         return_value=CredentialManifest(resource_map={}),
     )
 
@@ -907,7 +907,7 @@ def test_enrich_with_storage_options_public_dataset_no_credentials(
     )
 
     mock_provider = mocker.patch(
-        "app.services.file_access_service.get_provider_for_endpoint"
+        "fds.services.file_access_service.get_provider_for_endpoint"
     )
 
     models = dataset_service.get_datasets_for_shot(
@@ -1037,10 +1037,10 @@ def test_enrich_with_storage_options_distribution_region_override(
     """When a distribution carries an explicit ``region``, the rendered
     storage_options uses that value rather than the provider config default.
     """
-    from app.core.config import S3StorageProvider
+    from fds.core.config import S3StorageProvider
 
     mocker.patch(
-        "app.services.dataset_service.config.STORAGE_PROVIDERS",
+        "fds.services.dataset_service.config.STORAGE_PROVIDERS",
         [
             S3StorageProvider(
                 endpoint_url="http://localhost:9000",

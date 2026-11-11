@@ -72,6 +72,7 @@ dev = [
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = ["-m", "not end_to_end"]
+cache_dir = ".cache/pytest"
 markers = [
     "end_to_end: drives a running FDS over HTTP; start the stack, then 'pytest -m end_to_end'",
 ]
@@ -79,9 +80,10 @@ markers = [
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+cache-dir = ".cache/ruff"
 # Migrations are Alembic's output, kept exactly as generated. force-exclude
 # keeps the hooks off them too: they pass file names, which ruff otherwise checks.
-extend-exclude = ["alembic/versions"]
+extend-exclude = ["fds/migrations/versions"]
 force-exclude = true
 
 [tool.ruff.lint]
@@ -101,5 +103,9 @@ ignore = ["B008"]
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-exclude = ["**/node_modules", "**/__pycache__", "**/.*", "alembic/versions"]
+exclude = ["**/node_modules", "**/__pycache__", "**/.*", "fds/migrations/versions"]
 typeCheckingMode = "standard"
+
+[tool.alembic]
+script_location = "%(here)s/fds/migrations"
+prepend_sys_path = ["."]

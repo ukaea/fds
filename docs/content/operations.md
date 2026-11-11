@@ -1,0 +1,205 @@
+# Operations
+
+How to run FDS outside a development checkout: what it needs, every setting it reads, and how the
+database schema is managed. Nothing here is specific to any one installation.
+
+## Shape of a deployment
+
+FDS is one container image serving HTTP on port 8000. It is stateless: everything it knows is in
+its database or in the object stores it brokers access to. A deployment therefore has three parts,
+and FDS provides only the first.
+
+| Part | Provided by | Notes |
+| --- | --- | --- |
+| The API | the FDS image | Serves `/v1/...`, `/health`, and its OpenAPI explorer at `/docs`. Runs as an unprivileged user inside the container. |
+| PostgreSQL | you | The only supported database. FDS applies its migrations on start. |
+| An identity provider | you | FDS verifies tokens from the issuers listed in `FDS_TRUSTED_IDPS`. It never issues tokens and holds no client secret. |
+
+FDS speaks plain HTTP and does not terminate TLS; how requests reach it is your decision. Two
+things about its behaviour bear on that:
+
+- The identifiers in its JSON-LD output are built from the host the request arrived with, so the
+  hostname clients use becomes part of the catalogue's public identity. Choose one you intend to
+  keep.
+- When something in front of FDS rewrites requests, it believes `X-Forwarded-*` headers only from
+  senders listed in `FORWARDED_ALLOW_IPS`. Setting `FDS_BASE_URL` is the more robust
+  answer, because it stops FDS deriving its own address from requests at all.
+
+Any web front end is a separate deployable that calls the API.
+
+## Container images
+
+Two images are published to the GitHub Container Registry on every push to `main` and on every
+release tag:
+
+| Image | What it is |
+| --- | --- |
+| `ghcr.io/ukaea/fds` | The API. |
+| `ghcr.io/ukaea/fds-ui` | A brand-neutral reference web UI. |
+
+FDS serves JSON, never HTML. A catalogue people can browse, and the readable landing page a DOI
+has to resolve to, come from a web front end running alongside FDS. The reference UI is published
+so that a deployment has one without building it first, and so there is a working example to base
+your own on. Only a deployment serving machines alone can do without it.
+
+Each carries four kinds of tag:
+
+| Tag | Moves? | Use it for |
+| --- | --- | --- |
+| `sha-abc1234` | never | Deployments. It names one build and always will. |
+| `1.4.0` | never | Deployments pinned to a release. |
+| `latest` | with each release tag | Trying the newest release out. |
+| `main` | with every merge | Development only. |
+
+Pin a deployment to `sha-<short>` or a version, never to `main` or `latest`: a rollback is only
+possible if the tag you rolled back from still names the build you were running.
+
+## Database
+
+FDS runs on PostgreSQL and has no other backend. Point it at one with `FDS_DB_HOST` and friends,
+or give it a complete URL in `FDS_DB_URL`.
+
+### Schema migrations
+
+The schema is created and changed only by the Alembic migrations shipped with the code, in
+`fds/migrations/versions/`. A migration describes how the table layout changes from one release to the
+next. It carries no data and nothing about any particular installation; the connection comes from
+the environment at run time. The only per-installation state is a one-row `alembic_version` table
+recording which migration that database has reached.
+
+The image runs `alembic upgrade head` before starting the server, so a new database is built and
+an existing one brought up to date on every start. To run it separately, for example before
+swapping in a new image:
+
+```bash
+alembic upgrade head
+```
+
+Every migration is reversible. Rolling back to an older release that expects an older schema means
+downgrading first, then deploying the older image:
+
+```bash
+alembic downgrade <revision>
+```
+
+Back up the database before either operation on data you care about.
+
+## Moving to a new hostname
+
+FDS stores nothing about its own address. The URLs in its responses, including every JSON-LD
+`@id`, are built from the incoming request's host, and a record created locally carries no
+`origin` (only records ingested from another catalogue do). So a change of hostname needs no
+change to the database. What it does need is outside FDS:
+
+- **Records held elsewhere.** Harvesters, other catalogues and citations hold the old URLs.
+  Keeping the old hostname answering with redirects for as long as you can is the usual remedy.
+- **DOIs.** Update the landing URL on each DOI record at the registrar; that indirection is what a
+  DOI is for.
+
+The same reasoning applies in the other direction. When ingesting records from another catalogue,
+set their `origin` to the most persistent identifier that catalogue has (a re3data record, a DOI,
+an identifier it advertises in its own DCAT catalogue) and use the same value every time; its URL
+is the fallback, and it goes stale if that catalogue moves.
+
+## Settings
+
+Every setting is an environment variable. `.env.example` in the repository lists them all, with
+the values for running FDS from a checkout.
+
+### Application
+
+| Setting | Effect |
+| --- | --- |
+| `FDS_APP_NAME` | Service name in the OpenAPI document and in traces. Default `fds`. |
+| `FDS_BASE_URL` | The address this service is reached at, which every published identifier is a path under. **Set this in any deployment.** Empty (the default) derives it from each request, which is correct only when FDS is reached directly, as in development. See [Identifiers](dcat-jsonld.md#where-identifiers-point). |
+| `FDS_ENVIRONMENT` | `dev` or `prod`. Selects the default log format. |
+| `FDS_DEBUG` | Enables debug behaviour. Off in production. |
+| `FDS_LOG_FORMAT`, `FDS_LOG_LEVEL` | See [Logging](logging.md). |
+
+### Database
+
+| Setting | Effect |
+| --- | --- |
+| `FDS_DB_HOST` | PostgreSQL host. Default `localhost`. |
+| `FDS_DB_PORT` | PostgreSQL port. Default `5432`. |
+| `FDS_DB_NAME` | Database name. Default `fds`. |
+| `FDS_DB_USER`, `FDS_DB_PASSWORD` | Credentials. |
+| `FDS_DB_URL` | A complete SQLAlchemy URL, which overrides the four settings above. |
+
+### Identity
+
+| Setting | Effect |
+| --- | --- |
+| `FDS_TRUSTED_IDPS` | JSON list of issuers whose tokens are accepted, each with the scopes it may grant, and optionally where its keys come from. See [Access Control](access-control.md#where-fds-finds-an-issuers-keys). Empty means no token is accepted and only public metadata is readable. |
+| `FDS_OIDC_AUDIENCE` | The `aud` claim a token must carry. |
+
+### Storage
+
+| Setting | Effect |
+| --- | --- |
+| `FDS_STORAGE_PROVIDERS` | JSON list of object stores FDS can vend credentials for. Empty (the default) vends none. See [Storage providers](#storage-providers). |
+| `FDS_CREDENTIAL_TOKEN_DURATION` | Lifetime in seconds of vended credentials. Default `3600`. |
+
+#### Storage providers
+
+Each entry describes one store. A distribution gets credentials from the entry whose `type` matches
+its URL's scheme and whose `endpoint_url` equals its own. FDS refuses to start if two entries share
+a `type` and `endpoint_url`, since only the first could ever be chosen.
+
+| `type` | Schemes | Fields | Credentials FDS signs with |
+| --- | --- | --- | --- |
+| `s3` | `s3://` | `endpoint_url` (what clients connect to, `null` for AWS), `sts_endpoint_url` (what FDS calls, if different), `region`, `sts_role_arn`, and optionally `sts_access_key_id` / `sts_secret_access_key` | The two keys if given, otherwise the standard AWS credential chain |
+| `gcs` | `gs://`, `gcs://` | `endpoint_url` (optional) | Google Application Default Credentials, such as a key file named by `GOOGLE_APPLICATION_CREDENTIALS` |
+| `azure` | `az://`, `abfs://`, `abfss://` | `storage_account`, `endpoint_url` (optional) | Azure's default credential chain, such as environment variables or a managed identity |
+
+`type` is required in every entry, `s3` included. For `gcs` and `azure`, `endpoint_url` only
+matches distributions: FDS never calls it. An Azure URL that names its account, as in
+`abfs://container@account.dfs.core.windows.net/path`, gets credentials only when that account is
+the provider's `storage_account`.
+
+```json
+[
+  {
+    "type": "s3",
+    "endpoint_url": "https://s3.echo.stfc.ac.uk",
+    "region": "us-east-1",
+    "sts_role_arn": "arn:aws:iam::123456789012:role/fds"
+  },
+  {"type": "gcs", "endpoint_url": null}
+]
+```
+
+### Federation
+
+| Setting | Effect |
+| --- | --- |
+| `FDS_FEDERATION_MEMBERS` | JSON list of the other catalogues FDS asks when someone searches across catalogues. Empty (the default) asks none. See [Searching Other Catalogues](federation.md). |
+| `FDS_FEDERATION_TIMEOUT` | Seconds FDS waits for a member before reporting that it did not answer. Default `5`. |
+
+Each member has an `id`, the most persistent identifier the catalogue has, with its address as the fallback; a `title`, shown with its answers; a `kind`; and a `url`. The only kind so far is `fds`, another FDS, whose `url` is the address of its API without a version: FDS asks it at `/v1`, the version it speaks. FDS refuses to start if two members share an `id`.
+
+```json
+[
+  {
+    "id": "https://fds.example.org",
+    "title": "Example FDS",
+    "kind": "fds",
+    "url": "https://api.fds.example.org"
+  }
+]
+```
+
+### Serving
+
+Read by the web server and the tracing library rather than by FDS itself.
+
+| Setting | Effect |
+| --- | --- |
+| `WEB_CONCURRENCY` | Number of worker processes. Default one. See [Logging](logging.md) for what several workers mean for the log stream. |
+| `FORWARDED_ALLOW_IPS` | Senders whose `X-Forwarded-*` headers are trusted. Default `127.0.0.1`; `*` when nothing but the intended front can reach the container. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Where to send traces. Unset means traces are not exported. Other `OTEL_*` variables are honoured as documented by OpenTelemetry. |
+
+## Health
+
+`GET /health` returns `200` with the running version when the process is up. It does not touch the
+database; use it for container health checks and uptime probes, and monitor the database directly.

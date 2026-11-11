@@ -5,13 +5,13 @@ from datetime import UTC, datetime
 import pytest
 from sqlmodel import Session
 
-from app.models.coverage import Coverage, DateRange, ShotRange
-from app.models.dataset import DatasetCreate, DatasetUpdate
-from app.models.device import DeviceCreate
-from app.models.shot import ShotCreate
-from app.services.device_service import DeviceService
-from app.services.exceptions import ConflictError, FDSValidationError
-from app.services.shot_service import ShotService
+from fds.models.coverage import Coverage, DateRange, ShotRange
+from fds.models.dataset import DatasetCreate, DatasetUpdate
+from fds.models.device import DeviceCreate
+from fds.models.shot import ShotCreate
+from fds.services.device_service import DeviceService
+from fds.services.exceptions import ConflictError, FDSValidationError
+from fds.services.shot_service import ShotService
 from tests.conftest import statements
 
 pytestmark = pytest.mark.usefixtures("device")

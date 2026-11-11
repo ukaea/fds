@@ -2,10 +2,10 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_federation_service
-from app.core.config import FederationMember
-from app.main import app
-from app.services.federation_service import FederationService
+from fds.api.deps import get_federation_service
+from fds.core.config import FederationMember
+from fds.main import app
+from fds.services.federation_service import FederationService
 
 FIRST = FederationMember(
     id="https://first.example.org",

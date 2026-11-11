@@ -2,14 +2,14 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.device import DeviceCreate
-from app.models.policy import AccessLevel
-from app.models.shot import ShotCreate
-from app.models.source import SourceCreate, SourceKind
-from app.services.device_service import DeviceService
-from app.services.shot_service import ShotService
-from app.services.source_service import SourceService
+from fds.auth.security import AuthenticatedUser
+from fds.models.device import DeviceCreate
+from fds.models.policy import AccessLevel
+from fds.models.shot import ShotCreate
+from fds.models.source import SourceCreate, SourceKind
+from fds.services.device_service import DeviceService
+from fds.services.shot_service import ShotService
+from fds.services.source_service import SourceService
 
 # Dummy admin user for test setup
 admin_user = AuthenticatedUser(id="test-admin", scopes=("fds-admin",))

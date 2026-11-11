@@ -1,17 +1,17 @@
 import pytest
 from sqlmodel import Session
 
-from app.auth.access_control import get_effective_policy, validate_policy_fields
-from app.core.config import config
-from app.models.dataset import Dataset, DatasetCreate, DatasetUpdate
-from app.models.device import DeviceCreate
-from app.models.identity import ANONYMOUS_USER, AuthenticatedUser
-from app.models.policy import AccessLevel
-from app.models.shot import ShotCreate
-from app.services.dataset_service import DatasetService
-from app.services.device_service import DeviceService
-from app.services.exceptions import FDSValidationError, ForbiddenError
-from app.services.shot_service import ShotService
+from fds.auth.access_control import get_effective_policy, validate_policy_fields
+from fds.core.config import config
+from fds.models.dataset import Dataset, DatasetCreate, DatasetUpdate
+from fds.models.device import DeviceCreate
+from fds.models.identity import ANONYMOUS_USER, AuthenticatedUser
+from fds.models.policy import AccessLevel
+from fds.models.shot import ShotCreate
+from fds.services.dataset_service import DatasetService
+from fds.services.device_service import DeviceService
+from fds.services.exceptions import FDSValidationError, ForbiddenError
+from fds.services.shot_service import ShotService
 
 pytestmark = pytest.mark.usefixtures("two_idp_config")
 
@@ -320,7 +320,7 @@ def test_read_access_restricted_empty_scopes_anonymous_denied(
 
 
 def test_download_allowed_idp_correct_scope(session, device_service, admin_user):
-    from app.services.file_access_service import FileAccessService
+    from fds.services.file_access_service import FileAccessService
 
     svc = FileAccessService(session)
     device_service.create(
@@ -340,7 +340,7 @@ def test_download_allowed_idp_correct_scope(session, device_service, admin_user)
 
 
 def test_download_correct_scope_wrong_idp_denied(session):
-    from app.services.file_access_service import FileAccessService
+    from fds.services.file_access_service import FileAccessService
 
     svc = FileAccessService(session)
     ds = Dataset(
@@ -355,7 +355,7 @@ def test_download_correct_scope_wrong_idp_denied(session):
 
 
 def test_download_restricted_empty_scopes_anonymous_denied(session):
-    from app.services.file_access_service import FileAccessService
+    from fds.services.file_access_service import FileAccessService
 
     svc = FileAccessService(session)
     ds = Dataset(
@@ -369,7 +369,7 @@ def test_download_restricted_empty_scopes_anonymous_denied(session):
 
 def test_download_embargoed_no_scopes_anonymous_denied(session):
     """Embargoed data should be denied to anonymous users even without required_scopes."""
-    from app.services.file_access_service import FileAccessService
+    from fds.services.file_access_service import FileAccessService
 
     svc = FileAccessService(session)
     ds = Dataset(

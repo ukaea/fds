@@ -1,8 +1,8 @@
 import pytest
 from sqlmodel import Session
 
-from app.auth.security import AuthenticatedUser
-from app.models.activity import (
+from fds.auth.security import AuthenticatedUser
+from fds.models.activity import (
     ActivityAgentInput,
     ActivityCreate,
     ActivityDelegationInput,
@@ -10,16 +10,16 @@ from app.models.activity import (
     ActivityUpdate,
     AgentRole,
 )
-from app.models.dataset import DatasetCreate
-from app.models.device import DeviceCreate
-from app.models.shot import ShotCreate
-from app.models.source import SourceCreate, SourceKind
-from app.services.activity_service import ActivityService
-from app.services.dataset_service import DatasetService
-from app.services.device_service import DeviceService
-from app.services.exceptions import FDSValidationError, ResourceNotFoundError
-from app.services.shot_service import ShotService
-from app.services.source_service import SourceService
+from fds.models.dataset import DatasetCreate
+from fds.models.device import DeviceCreate
+from fds.models.shot import ShotCreate
+from fds.models.source import SourceCreate, SourceKind
+from fds.services.activity_service import ActivityService
+from fds.services.dataset_service import DatasetService
+from fds.services.device_service import DeviceService
+from fds.services.exceptions import FDSValidationError, ResourceNotFoundError
+from fds.services.shot_service import ShotService
+from fds.services.source_service import SourceService
 
 
 @pytest.fixture(name="device_service")

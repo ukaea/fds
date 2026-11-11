@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.core.config import Config
+from fds.core.config import Config
 
 MEMBER = {
     "id": "https://fds.example.org",

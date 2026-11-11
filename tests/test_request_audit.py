@@ -1,9 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.middleware import route_template
-from app.auth.security import _hash_user_id
-from app.main import app
+from fds.api.middleware import route_template
+from fds.auth.security import _hash_user_id
+from fds.main import app
 
 TEST_ISSUER = "https://test-idp.com"
 

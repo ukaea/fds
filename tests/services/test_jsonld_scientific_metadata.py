@@ -1,12 +1,12 @@
 from pyld import jsonld
 
-from app.auth.security import AuthenticatedUser
-from app.models.dataset import DatasetCreate
-from app.models.policy import AccessLevel
-from app.models.scientific_metadata import Extent, ScientificProperty
-from app.models.shot import Shot
-from app.services.dataset_service import DatasetService
-from app.services.jsonld import (
+from fds.auth.security import AuthenticatedUser
+from fds.models.dataset import DatasetCreate
+from fds.models.policy import AccessLevel
+from fds.models.scientific_metadata import Extent, ScientificProperty
+from fds.models.shot import Shot
+from fds.services.dataset_service import DatasetService
+from fds.services.jsonld import (
     _map_scientific_metadata_to_jsonld,
     map_dataset_to_dcat,
     map_shot_to_dcat,

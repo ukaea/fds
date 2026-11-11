@@ -3,8 +3,8 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from app.core.db import _json_serializer
-from app.models.scientific_metadata import Extent, MetadataKind, ScientificProperty
+from fds.core.db import _json_serializer
+from fds.models.scientific_metadata import Extent, MetadataKind, ScientificProperty
 
 
 def _roundtrip(prop: ScientificProperty) -> ScientificProperty:

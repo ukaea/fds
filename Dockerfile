@@ -4,9 +4,7 @@ WORKDIR /fds
 COPY uv.lock pyproject.toml /fds/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev --extra s3 --extra gcs --extra azure --extra otel
-COPY app /fds/app
-COPY alembic /fds/alembic
-COPY alembic.ini README.md /fds/
+COPY fds /fds/fds
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra s3 --extra gcs --extra azure --extra otel
 
@@ -31,4 +29,4 @@ USER fds
 # exec, so uvicorn replaces the shell and becomes PID 1. Without it the shell is
 # PID 1, never forwards SIGTERM, and every stop waits out the timeout and kills
 # uvicorn mid-request instead of letting it drain.
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn fds.main:app --host 0.0.0.0 --port 8000"]
