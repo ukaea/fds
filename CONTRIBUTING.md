@@ -11,7 +11,7 @@ is a decision we have already taken and recorded.
 
 ## Development setup
 
-Prerequisites: Python 3.14+, [uv](https://docs.astral.sh/uv/), and
+Prerequisites: Python 3.12+, [uv](https://docs.astral.sh/uv/), and
 [prek](https://github.com/j178/prek) for the pre-commit hooks.
 
 ```bash

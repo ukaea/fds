@@ -3,7 +3,7 @@ name = "fds"
 version = "0.1.1"
 description = "Fusion Data Service — scalable, FAIR-compliant access to fusion experiment metadata and data"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "UK Atomic Energy Authority" }]
@@ -13,6 +13,8 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Framework :: FastAPI",
     "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Physics",
     "Typing :: Typed",
@@ -79,7 +81,6 @@ markers = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
 cache-dir = ".cache/ruff"
 # Migrations are Alembic's output, kept exactly as generated. force-exclude
 # keeps the hooks off them too: they pass file names, which ruff otherwise checks.
@@ -101,6 +102,9 @@ ignore = ["B008"]
 "tests/**" = ["ARG", "DTZ"]
 
 [tool.pyright]
+# The oldest Python FDS supports, rather than the venv's interpreter, so a newer
+# standard-library API is reported.
+pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"
 exclude = ["**/node_modules", "**/__pycache__", "**/.*", "fds/migrations/versions"]
