@@ -110,6 +110,17 @@ body {
   font-family: Helvetica, Arial, sans-serif;
 }
 
+.prov-graph g.node.selectable {
+  cursor: pointer;
+}
+
+/* The node the details panel is showing. The graph sits on white in both
+   themes, so the navy outline reads in either. */
+.prov-graph g.node.selected > :is(ellipse, polygon, path) {
+  stroke: #0b2545;
+  stroke-width: 3px;
+}
+
 /* Theme-aware sticky header. The orange rule along its top edge echoes the
    band across the logo mark. */
 .glass {
