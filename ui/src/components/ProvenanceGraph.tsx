@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import useSWR from 'swr';
 import { Graphviz } from '@hpcc-js/wasm-graphviz';
 
 import {
   buildCollectionLineage,
   buildLineage,
-  type ProvAttr,
   type ProvEdgeKind,
   type ProvGraph,
   type ProvNodeKind,
@@ -62,28 +62,9 @@ const edgeLabel = (text: string, color: string) =>
   '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" BGCOLOR="white">' +
   `<TR><TD><FONT POINT-SIZE="9" COLOR="${color}">${esc(text)}</FONT></TD></TR></TABLE>>`;
 
-// Attribute note: label column, a spacer, then the value column.
-const noteLabel = (attrs: ProvAttr[]) => {
-  const rows = attrs
-    .map(
-      (a) =>
-        '<TR>' +
-        `<TD ALIGN="LEFT"><FONT COLOR="#888888">${esc(a.label)}</FONT></TD>` +
-        '<TD WIDTH="16"></TD>' +
-        `<TD ALIGN="LEFT">${esc(a.value)}</TD>` +
-        '</TR>',
-    )
-    .join('');
-  return `<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="1">${rows}</TABLE>>`;
-};
-
-const NOTE_DOT = 'shape=note, style=filled, fillcolor="#ffffff", color="#cfcfcf", fontsize=9';
-const CONNECTOR_DOT = 'style=dashed, arrowhead=none, color="#bcbcbc"';
 const EDGE_COLOR = '#555555';
-const edgeRoleOf = (kind: ProvEdgeKind, role?: string) =>
-  kind === 'used' || kind === 'wasAssociatedWith' ? role : undefined;
 
-function toDot(graph: ProvGraph, showAll: boolean): string {
+function toDot(graph: ProvGraph): string {
   const L: string[] = ['digraph prov {'];
   // ranksep is modest because each edge carries an inline label node, which
   // adds an intermediate rank of its own.
@@ -100,27 +81,13 @@ function toDot(graph: ProvGraph, showAll: boolean): string {
   for (const e of graph.edges) {
     // Carry the relation label on an inline node so it sits ON the edge (line
     // running through it), not offset to one side where it reads as belonging
-    // to a neighbouring node. In Show all, the role note hangs off this node.
+    // to a neighbouring node.
     const el = `el:${e.id}`;
     // height=0.02 collapses the node to fit the text; without it the default
     // 0.5" minimum height leaves a big gap between the label and the edge line.
     L.push(`  "${el}" [shape=plaintext, margin=0.01, height=0.02, label=${edgeLabel(EDGE_LABEL[e.kind], EDGE_COLOR)}];`);
     L.push(`  "${e.source}" -> "${el}" [arrowhead=none];`);
     L.push(`  "${el}" -> "${e.target}";`);
-    const role = edgeRoleOf(e.kind, e.label);
-    if (showAll && role) {
-      L.push(`  "enote:${e.id}" [${NOTE_DOT}, label=${noteLabel([{ label: 'prov:hadRole', value: role }])}];`);
-      L.push(`  "${el}" -> "enote:${e.id}" [${CONNECTOR_DOT}];`);
-    }
-  }
-
-  if (showAll) {
-    for (const n of graph.nodes) {
-      if (n.attrs?.length) {
-        L.push(`  "note:${n.id}" [${NOTE_DOT}, label=${noteLabel(n.attrs)}];`);
-        L.push(`  "${n.id}" -> "note:${n.id}" [${CONNECTOR_DOT}];`);
-      }
-    }
   }
 
   L.push('}');
@@ -153,12 +120,108 @@ function Legend() {
       <LegendItem fill="#fffc87" border="#d4c04a" shape="ellipse" label="Entity" />
       <LegendItem fill="#9fb1fc" border="#6b82e6" shape="rect" label="Activity" />
       <LegendItem fill="#fdb266" border="#e08a34" shape="house" label="Agent" />
-      <span className="italic">hover a node for details, or toggle Show all</span>
+      <span className="italic">click a node for its details</span>
     </div>
   );
 }
 
-type Tip = { attrs: ProvAttr[]; x: number; y: number };
+const KIND_NAME: Record<ProvNodeKind, string> = {
+  dataset: 'Dataset',
+  instrument: 'Instrument',
+  collection: 'Collection',
+  activity: 'Activity',
+  agent: 'Agent',
+};
+
+// The node's own page: a path on this site, another site's address, or none
+// for an upstream known only by its description.
+function pageOf(id: string): { href: string; internal: boolean } | null {
+  try {
+    const url = new URL(id);
+    if (url.origin === window.location.origin) return { href: url.pathname, internal: true };
+    return /^https?:$/.test(url.protocol) ? { href: url.href, internal: false } : null;
+  } catch {
+    return null;
+  }
+}
+
+function DetailPanel({
+  graph,
+  nodeId,
+  onSelect,
+}: {
+  graph: ProvGraph;
+  nodeId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const node = nodeId ? graph.nodes.find((n) => n.id === nodeId) : undefined;
+  if (!node) {
+    return <p className="text-sm text-muted-foreground">Click a node to see its details.</p>;
+  }
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const relations = graph.edges
+    .filter((e) => e.source === node.id || e.target === node.id)
+    .map((e) => {
+      const outgoing = e.source === node.id;
+      return { edge: e, outgoing, other: byId.get(outgoing ? e.target : e.source) };
+    });
+  const page = pageOf(node.id);
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div>
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          {KIND_NAME[node.kind]}
+          {node.sub ? ` · ${node.sub}` : ''}
+        </p>
+        <h3 className="font-medium text-foreground break-words">{node.label}</h3>
+      </div>
+      {node.attrs?.length ? (
+        <dl className="space-y-2">
+          {node.attrs.map((a) => (
+            <div key={a.label}>
+              <dt className="text-xs text-muted-foreground">{a.label}</dt>
+              <dd className="font-mono text-xs text-foreground break-all">{a.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {relations.length ? (
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Relations</p>
+          <ul className="space-y-1">
+            {relations.map(({ edge, outgoing, other }) => (
+              <li key={edge.id} className="text-xs">
+                <span className="text-muted-foreground">
+                  {outgoing ? EDGE_LABEL[edge.kind] : `${EDGE_LABEL[edge.kind]} by`}
+                </span>{' '}
+                <button
+                  type="button"
+                  onClick={() => other && onSelect(other.id)}
+                  className="text-foreground underline decoration-dotted underline-offset-2 hover:decoration-solid break-all text-left"
+                >
+                  {other?.label ?? (outgoing ? edge.target : edge.source)}
+                </button>
+                {edge.label ? <span className="text-muted-foreground"> · {edge.label}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {page ? (
+        page.internal ? (
+          <Link href={page.href} className="inline-block text-xs underline underline-offset-2">
+            Open {KIND_NAME[node.kind].toLowerCase()} page
+          </Link>
+        ) : (
+          <a href={page.href} target="_blank" rel="noopener noreferrer" className="inline-block text-xs underline underline-offset-2">
+            Open at its source
+          </a>
+        )
+      ) : null}
+    </div>
+  );
+}
 
 type ProvenanceGraphProps =
   | { datasetId: number; collection?: undefined }
@@ -177,10 +240,23 @@ export default function ProvenanceGraph({ datasetId, collection }: ProvenanceGra
         : buildCollectionLineage(collection as Collection),
   );
 
-  const [showAll, setShowAll] = useState(false);
   const [renderError, setRenderError] = useState(false);
   const holderRef = useRef<HTMLDivElement>(null);
-  const [tip, setTip] = useState<Tip | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const selectedRef = useRef<string | null>(null);
+
+  // Outline the selected node. The SVG is rebuilt only when the data changes,
+  // so this runs again after each render as well as on each selection.
+  const highlight = () => {
+    holderRef.current?.querySelectorAll('g.node').forEach((g) => {
+      g.classList.toggle('selected', g.querySelector('title')?.textContent === selectedRef.current);
+    });
+  };
+  const select = (id: string) => {
+    selectedRef.current = id;
+    setSelected(id);
+    highlight();
+  };
 
   useEffect(() => {
     if (!data || !holderRef.current) return;
@@ -188,6 +264,7 @@ export default function ProvenanceGraph({ datasetId, collection }: ProvenanceGra
     let cancelled = false;
     const cleanups: Array<() => void> = [];
     let dragging = false;
+    let moved = false;
     let px = 0;
     let py = 0;
 
@@ -195,7 +272,7 @@ export default function ProvenanceGraph({ datasetId, collection }: ProvenanceGra
       try {
         const gv = await loadGraphviz();
         if (cancelled) return;
-        holder.innerHTML = gv.dot(toDot(data, showAll));
+        holder.innerHTML = gv.dot(toDot(data));
         const svg = holder.querySelector('svg');
         if (!svg) return;
         svg.setAttribute('width', '100%');
@@ -214,7 +291,10 @@ export default function ProvenanceGraph({ datasetId, collection }: ProvenanceGra
             const mx = x + ((e.clientX - r.left) / r.width) * w;
             const my = y + ((e.clientY - r.top) / r.height) * h;
             const f = e.deltaY < 0 ? 0.9 : 1.1;
-            if (w * f < baseW * 0.1 || w * f > baseW * 2) return;
+            // A large graph is fitted small, so a limit relative to the fit alone
+            // stops short of readable text; also allow up to 4 px per point.
+            const minW = Math.min(baseW * 0.1, r.width / 4);
+            if (w * f < minW || w * f > baseW * 2) return;
             x = mx - (mx - x) * f;
             y = my - (my - y) * f;
             w *= f;
@@ -223,16 +303,17 @@ export default function ProvenanceGraph({ datasetId, collection }: ProvenanceGra
           };
           const onDown = (e: MouseEvent) => {
             dragging = true;
+            moved = false;
             px = e.clientX;
             py = e.clientY;
             svg.style.cursor = 'grabbing';
-            setTip(null);
           };
           const onMove = (e: MouseEvent) => {
             if (!dragging) return;
             const r = svg.getBoundingClientRect();
             x -= ((e.clientX - px) / r.width) * w;
             y -= ((e.clientY - py) / r.height) * h;
+            if (Math.abs(e.clientX - px) + Math.abs(e.clientY - py) > 2) moved = true;
             px = e.clientX;
             py = e.clientY;
             apply();
@@ -253,22 +334,28 @@ export default function ProvenanceGraph({ datasetId, collection }: ProvenanceGra
           });
         }
 
-        // Hover tooltips (compact mode only; Show all already draws the notes).
-        if (!showAll) {
-          const byId = new Map(data.nodes.map((n) => [n.id, n]));
-          holder.querySelectorAll('g.node').forEach((g) => {
-            const id = g.querySelector('title')?.textContent ?? '';
-            const node = byId.get(id);
-            if (!node?.attrs?.length) return;
-            g.addEventListener('mousemove', (ev) => {
-              if (dragging) return;
-              const r = holder.getBoundingClientRect();
-              const me = ev as MouseEvent;
-              setTip({ attrs: node.attrs!, x: me.clientX - r.left, y: me.clientY - r.top });
-            });
-            g.addEventListener('mouseleave', () => setTip(null));
+        // Every PROV node selects on click or Enter; the edge-label nodes do not.
+        const byId = new Map(data.nodes.map((n) => [n.id, n]));
+        holder.querySelectorAll('g.node').forEach((g) => {
+          const id = g.querySelector('title')?.textContent ?? '';
+          const node = byId.get(id);
+          if (!node) return;
+          g.classList.add('selectable');
+          g.setAttribute('tabindex', '0');
+          g.setAttribute('role', 'button');
+          g.setAttribute('aria-label', `${node.label}, show details`);
+          g.addEventListener('click', () => {
+            if (!moved) select(id);
           });
-        }
+          g.addEventListener('keydown', (ev) => {
+            const key = (ev as KeyboardEvent).key;
+            if (key === 'Enter' || key === ' ') {
+              ev.preventDefault();
+              select(id);
+            }
+          });
+        });
+        highlight();
       } catch {
         if (!cancelled) setRenderError(true);
       }
@@ -278,7 +365,9 @@ export default function ProvenanceGraph({ datasetId, collection }: ProvenanceGra
       cancelled = true;
       cleanups.forEach((c) => c());
     };
-  }, [data, showAll]);
+    // highlight and select read refs, so they need not re-run the render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Building provenance graph…</p>;
@@ -292,31 +381,16 @@ export default function ProvenanceGraph({ datasetId, collection }: ProvenanceGra
 
   return (
     <div>
-      <div className="relative overflow-hidden rounded-lg border border-border bg-white" style={{ height: 480 }}>
-        <div ref={holderRef} className="prov-graph h-full w-full" />
-        <button
-          type="button"
-          onClick={() => {
-            setTip(null);
-            setShowAll((v) => !v);
-          }}
-          className="absolute right-3 top-3 rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-xs text-neutral-800 shadow-xs hover:bg-neutral-100"
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="relative overflow-hidden rounded-lg border border-border bg-white" style={{ height: 480 }}>
+          <div ref={holderRef} className="prov-graph h-full w-full" />
+        </div>
+        <aside
+          aria-label="Selected node"
+          className="rounded-lg border border-border p-3 lg:h-[480px] lg:overflow-y-auto"
         >
-          {showAll ? 'Hide all details' : 'Show all details'}
-        </button>
-        {tip ? (
-          <div
-            className="pointer-events-none absolute z-10 rounded-md border border-border bg-white text-xs shadow-lg"
-            style={{ left: tip.x + 14, top: tip.y + 14, minWidth: 150, padding: '6px 9px' }}
-          >
-            {tip.attrs.map((a) => (
-              <div key={a.label} className="flex justify-between gap-3 py-0.5">
-                <span className="text-neutral-500">{a.label}</span>
-                <span className="font-mono text-neutral-800">{a.value}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
+          <DetailPanel graph={data} nodeId={selected} onSelect={select} />
+        </aside>
       </div>
       <Legend />
     </div>

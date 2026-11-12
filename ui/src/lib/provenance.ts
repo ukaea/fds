@@ -28,7 +28,7 @@ export interface ProvNode {
   kind: ProvNodeKind;
   label: string;
   sub?: string;
-  // The node's own statements, shown in the hover-reveal box.
+  // The node's own statements, shown in the details panel.
   attrs?: ProvAttr[];
 }
 
@@ -117,6 +117,12 @@ function isFdsDataset(id: string, from: string): boolean {
 
 function attr(attrs: ProvAttr[], label: string, value: string | undefined) {
   if (value) attrs.push({ label, value });
+}
+
+// A list or object parameter, by its size; the Activity's page lists it in full.
+function sizeOf(value: object): string {
+  const [n, unit] = Array.isArray(value) ? [value.length, 'item'] : [Object.keys(value).length, 'field'];
+  return `${n} ${unit}${n === 1 ? '' : 's'}`;
 }
 
 function createLineageWalker() {
@@ -220,7 +226,9 @@ function createLineageWalker() {
     attr(attrs, 'endedAtTime', text(activity['prov:endedAtTime']));
     const parameters = activity['prov:value'];
     if (parameters && typeof parameters === 'object' && !Array.isArray(parameters)) {
-      for (const [k, v] of Object.entries(parameters)) attr(attrs, k, text(v) ?? JSON.stringify(v));
+      for (const [k, v] of Object.entries(parameters)) {
+        attr(attrs, k, text(v) ?? (v && typeof v === 'object' ? sizeOf(v) : JSON.stringify(v)));
+      }
     }
     putNode({
       id,
