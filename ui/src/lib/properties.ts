@@ -67,9 +67,55 @@ export function splitProperties(properties?: ScientificProperty[]): {
   };
 }
 
+// Annotations sharing a name and value, such as every ELM in a shot, shown as
+// one entry. A group's members are its annotated groups of that name.
+export interface AnnotationSet {
+  name: string;
+  value?: ScientificProperty['value'];
+  description?: string | null;
+  members: ScientificProperty[];
+}
+
+function startOf(property: ScientificProperty): number {
+  return property.extent?.start ?? Number.POSITIVE_INFINITY;
+}
+
+export function groupAnnotations(annotations: ScientificProperty[]): AnnotationSet[] {
+  const sets = new Map<string, AnnotationSet>();
+  for (const property of annotations) {
+    const value = isGroup(property) ? undefined : property.value;
+    const key = JSON.stringify([property.name, value ?? null]);
+    const set = sets.get(key) ?? {
+      name: property.name,
+      value,
+      description: property.description,
+      members: [],
+    };
+    set.members.push(property);
+    sets.set(key, set);
+  }
+  return [...sets.values()]
+    .map((set) => ({ ...set, members: [...set.members].sort((a, b) => startOf(a) - startOf(b)) }))
+    .sort((a, b) => startOf(a.members[0]) - startOf(b.members[0]) || a.name.localeCompare(b.name));
+}
+
+// From the first member's start to the last member's end, when every member
+// sits on the same axis in the same unit.
+export function setSpan(members: ScientificProperty[]): Extent | null {
+  const extents = members.map((member) => member.extent).filter((e): e is Extent => e != null);
+  if (extents.length === 0) return null;
+  const [first] = extents;
+  if (extents.some((e) => e.dimension !== first.dimension || (e.unit ?? '') !== (first.unit ?? ''))) {
+    return null;
+  }
+  const end = Math.max(...extents.map((e) => e.end ?? e.start));
+  const start = Math.min(...extents.map((e) => e.start));
+  return { ...first, start, end: end === start ? null : end };
+}
+
 // Numbers on an axis span many orders of magnitude (0.606 s, 18000 Hz), so keep
 // significant digits rather than a fixed decimal count.
-function formatCoordinate(value: number): string {
+export function formatCoordinate(value: number): string {
   if (value === 0) return '0';
   const magnitude = Math.abs(value);
   if (magnitude >= 1000 || magnitude < 0.001) return value.toExponential(2);
@@ -86,6 +132,12 @@ export function extentSummary(extent?: Extent | null): string | null {
   const start = formatCoordinate(extent.start);
   if (extent.end == null) return `${axis}${start}${unit}`;
   return `${axis}${start} → ${formatCoordinate(extent.end)}${unit}`;
+}
+
+// An extent's coordinates alone, for a list whose heading already gives the unit.
+export function extentRange(extent: Extent): string {
+  const start = formatCoordinate(extent.start);
+  return extent.end == null ? start : `${start} → ${formatCoordinate(extent.end)}`;
 }
 
 // A value is text, a number, a boolean or null.
