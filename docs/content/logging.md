@@ -117,7 +117,8 @@ Something changed:
 A request finished, naming anything restricted it touched:
 
 ```json
-{"method": "GET", "route": "/v1/datasets", "status": 200, "returned": 12,
+{"method": "GET", "route": "/v1/datasets", "status": 200, "duration_ms": 41.3,
+ "db_queries": 3, "db_duration_ms": 12.8, "returned": 12,
  "restricted_listed": {"dataset": [31]}, "actor_id": "f7052ccf...2d4bc",
  "event": "request", "level": "info", "logger": "fds.audit",
  "trace_id": "9360d49cd07c6578aa9e7d3bc5d53a2a", "timestamp": "..."}
@@ -125,6 +126,13 @@ A request finished, naming anything restricted it touched:
 
 Items are grouped by type and named by their id. A shot has no id of its own, so it is named by
 its device and shot number: `"shot": ["mast/30420"]`.
+
+`duration_ms` is how long FDS took to answer, in milliseconds, from receiving the request until
+the last of the response was handed to the web server. `db_queries` is how many database queries
+the request ran, and `db_duration_ms` the time they took in total. When `db_duration_ms` is most
+of `duration_ms`, the request was waiting on the database; when it is a small part, the time went
+on FDS's own work. Grouping request lines by `route` shows which endpoints are slow, and how that
+changes as traffic grows.
 
 The web server said something, formatted exactly like our own lines:
 

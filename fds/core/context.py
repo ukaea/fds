@@ -29,6 +29,8 @@ class RequestContext:
     )
     truncated: bool = False
     returned: int = 0
+    db_queries: int = 0
+    db_seconds: float = 0.0
 
 
 _request_context: ContextVar[RequestContext | None] = ContextVar(
@@ -70,6 +72,14 @@ def record_returned(count: int) -> None:
     ctx = _request_context.get()
     if ctx is not None:
         ctx.returned += count
+
+
+def record_query(seconds: float) -> None:
+    """Add a finished database query, and the time it took, to this request."""
+    ctx = _request_context.get()
+    if ctx is not None:
+        ctx.db_queries += 1
+        ctx.db_seconds += seconds
 
 
 def record_restricted_access(

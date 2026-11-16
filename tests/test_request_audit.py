@@ -1,8 +1,12 @@
+from itertools import count
+
 import pytest
 from fastapi.testclient import TestClient
 
+from fds.api import middleware
 from fds.api.middleware import route_template
 from fds.auth.security import _hash_user_id
+from fds.core import db
 from fds.main import app
 
 TEST_ISSUER = "https://test-idp.com"
@@ -27,6 +31,28 @@ class TestRequestLine:
         assert line["method"] == "GET"
         assert line["status"] == 200
         assert line["path"] == "/v1/devices/"
+
+    def test_line_records_how_long_the_request_took(
+        self, test_client, log_lines, monkeypatch
+    ):
+        monkeypatch.setattr(middleware, "perf_counter", iter([10.0, 10.25]).__next__)
+
+        test_client.get("/v1/devices/")
+
+        (line,) = audit_lines(log_lines())
+        assert line["duration_ms"] == 250.0
+
+    def test_line_records_the_time_spent_on_database_queries(
+        self, test_client, log_lines, monkeypatch
+    ):
+        # Every query appears to take exactly 250 ms.
+        monkeypatch.setattr(db, "perf_counter", count(10.0, 0.25).__next__)
+
+        test_client.get("/v1/devices/")
+
+        (line,) = audit_lines(log_lines())
+        assert line["db_queries"] > 0
+        assert line["db_duration_ms"] == 250.0 * line["db_queries"]
 
     def test_route_is_the_template_not_the_path(self, test_client, log_lines):
         """Templates are what make lines groupable across ids."""

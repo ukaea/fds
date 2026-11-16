@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from time import perf_counter
 from typing import Any
 
 import structlog
@@ -70,6 +71,7 @@ class AuditMiddleware:
             await send(message)
 
         with request_context() as context:
+            started = perf_counter()
             try:
                 await self.app(scope, receive, send_wrapper)
             finally:
@@ -80,6 +82,11 @@ class AuditMiddleware:
                     path=scope.get("path"),
                     # No status means the app raised before responding.
                     status=response.get("status", 500),
+                    # Until the last of the response is handed to the server,
+                    # which for a large body includes waiting on a slow client.
+                    duration_ms=round((perf_counter() - started) * 1000, 1),
+                    db_queries=context.db_queries,
+                    db_duration_ms=round(context.db_seconds * 1000, 1),
                     response_bytes=response.get("bytes"),
                     returned=context.returned,
                     truncated=context.truncated,
