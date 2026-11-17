@@ -1,9 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from fds.auth.security import AuthenticatedUser
-from fds.models.activity import ActivityCreate, ActivityType
+from fds.models.activity import Activity, ActivityCreate, ActivityType
 from fds.models.collection import CollectionCreate
 from fds.models.dataset import DatasetCreate
 from fds.models.device import DeviceCreate
@@ -73,6 +73,7 @@ def test_create_activity(
     assert data["source_id"] == source.id
     assert data["activity_type"] == "simulation"
     assert "id" in data
+    assert data["outputs"] == []
 
 
 def test_create_activity_with_full_metadata(
@@ -219,6 +220,137 @@ def test_create_activity_invalid_input_rejected(
         headers=admin_user_token,
     )
     assert resp.status_code == 404
+
+
+def test_create_activity_with_outputs(
+    test_client: TestClient,
+    source,
+    dataset,
+    admin_user_token: dict[str, str],
+):
+    """The Datasets an Activity generated are created with it, and their ids come
+    back in the order the request listed them."""
+    resp = test_client.post(
+        "/v1/activities/",
+        json={
+            "source_id": source.id,
+            "activity_type": "analysis",
+            "inputs": [dataset.id],
+            "outputs": [
+                {"name": "zeta", "device_name": "inp-device", "shot_id": "inp-shot"},
+                {"name": "alpha", "device_name": "inp-device", "shot_id": "inp-shot"},
+            ],
+        },
+        headers=admin_user_token,
+    )
+    assert resp.status_code == 201
+    activity = resp.json()
+
+    outputs = [
+        test_client.get(f"/v1/datasets/{i}", headers=admin_user_token).json()
+        for i in activity["outputs"]
+    ]
+    assert [d["name"] for d in outputs] == ["zeta", "alpha"]
+    assert [d["activity_id"] for d in outputs] == [activity["id"], activity["id"]]
+
+    listed = test_client.get(
+        f"/v1/datasets/?activity_id={activity['id']}", headers=admin_user_token
+    )
+    assert sorted(d["id"] for d in listed.json()) == sorted(activity["outputs"])
+
+
+def test_an_output_replaces_an_earlier_version(
+    test_client: TestClient,
+    source,
+    dataset,
+    admin_user_token: dict[str, str],
+):
+    """An output can replace a Dataset registered earlier, as a repass does."""
+    resp = test_client.post(
+        "/v1/activities/",
+        json={
+            "source_id": source.id,
+            "activity_type": "analysis",
+            "outputs": [
+                {
+                    "name": "inp-dataset",
+                    "device_name": "inp-device",
+                    "shot_id": "inp-shot",
+                    "version": "1",
+                    "replaces": [dataset.id],
+                }
+            ],
+        },
+        headers=admin_user_token,
+    )
+    assert resp.status_code == 201
+    (output,) = resp.json()["outputs"]
+
+    replacement = test_client.get(f"/v1/datasets/{output}", headers=admin_user_token)
+    assert replacement.json()["replaces"] == [dataset.id]
+
+
+def test_a_refused_output_saves_nothing(
+    test_client: TestClient,
+    session: Session,
+    source,
+    dataset,
+    admin_user_token: dict[str, str],
+):
+    """When one output is refused, neither the Activity nor its other outputs
+    are saved."""
+    activities = len(session.exec(select(Activity)).all())
+
+    resp = test_client.post(
+        "/v1/activities/",
+        json={
+            "source_id": source.id,
+            "inputs": [dataset.id],
+            "outputs": [
+                {"name": "kept", "device_name": "inp-device", "shot_id": "inp-shot"},
+                {"name": "lost", "device_name": "inp-device", "shot_id": "no-shot"},
+            ],
+        },
+        headers=admin_user_token,
+    )
+    assert resp.status_code == 404
+
+    assert len(session.exec(select(Activity)).all()) == activities
+    on_shot = test_client.get(
+        "/v1/devices/inp-device/shots/inp-shot/datasets", headers=admin_user_token
+    )
+    assert [d["name"] for d in on_shot.json()] == ["inp-dataset"]
+
+
+def test_two_outputs_cannot_share_a_name_on_a_shot(
+    test_client: TestClient,
+    session: Session,
+    source,
+    dataset,
+    admin_user_token: dict[str, str],
+):
+    """Outputs of one Activity are told apart by name on a shot, so a repeated
+    name is a conflict and nothing is saved."""
+    activities = len(session.exec(select(Activity)).all())
+
+    resp = test_client.post(
+        "/v1/activities/",
+        json={
+            "source_id": source.id,
+            "outputs": [
+                {"name": "efm", "device_name": "inp-device", "shot_id": "inp-shot"},
+                {"name": "efm", "device_name": "inp-device", "shot_id": "inp-shot"},
+            ],
+        },
+        headers=admin_user_token,
+    )
+    assert resp.status_code == 409
+
+    assert len(session.exec(select(Activity)).all()) == activities
+    on_shot = test_client.get(
+        "/v1/devices/inp-device/shots/inp-shot/datasets", headers=admin_user_token
+    )
+    assert [d["name"] for d in on_shot.json()] == ["inp-dataset"]
 
 
 def test_activity_input_endpoints(

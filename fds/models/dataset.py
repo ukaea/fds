@@ -349,18 +349,14 @@ class DatasetLineageNode(SQLModel):
     derived_from: list["DatasetLineageNode"] = Field(default_factory=list)
 
 
-class DatasetCreate(DatasetBase):
-    """Schema for creating a Dataset.
+class GeneratedDatasetCreate(DatasetBase):
+    """A Dataset to create as an output of a new Activity.
 
-    The fields below the dataset metadata are convenience pass-throughs that
-    describe the initial default ``Distribution`` created alongside the dataset.
-    Supplying ``url`` is optional — a Dataset can be registered without any
-    physical distribution and distributions added later via the distributions
-    sub-resource.
+    It takes every field of ``DatasetCreate`` except ``activity_id``, which is
+    the new Activity's.
     """
 
     shot_id: str | None = None
-    activity_id: int | None = None
     subject_dataset: int | None = None
     origin: str | None = None
     replaces: list[int] = Field(
@@ -383,6 +379,19 @@ class DatasetCreate(DatasetBase):
     format: str | None = None
     storage_options_type: StorageOptionsType | None = None
     derived_from: list[DatasetDerivationCreate] = Field(default_factory=list)
+
+
+class DatasetCreate(GeneratedDatasetCreate):
+    """Schema for creating a Dataset.
+
+    The fields below the dataset metadata are convenience pass-throughs that
+    describe the initial default ``Distribution`` created alongside the dataset.
+    Supplying ``url`` is optional — a Dataset can be registered without any
+    physical distribution and distributions added later via the distributions
+    sub-resource.
+    """
+
+    activity_id: int | None = None
 
 
 class DatasetRead(DatasetBase, TimestampMixin):

@@ -6,6 +6,7 @@ from sqlmodel import Column, Field, Relationship, SQLModel
 
 from fds.core.timeutils import UTCDatetime
 
+from .dataset import GeneratedDatasetCreate
 from .mixins import JSONB_COLUMN
 
 
@@ -129,14 +130,22 @@ class ActivityCreate(ActivityBase):
     ``inputs`` are dataset ids the Activity consumed; ``instruments`` are instrument
     Source ids it used; ``agents`` are additional agents (beyond the primary
     ``source_id`` executor) with their roles; ``delegations`` record which agent
-    acted on behalf of which (``prov:actedOnBehalfOf``). The service builds the
-    join rows.
+    acted on behalf of which (``prov:actedOnBehalfOf``); ``outputs`` are the
+    Datasets it generated, created with it. The service builds the join rows.
+    Everything the request declares is saved together, or nothing is.
     """
 
     inputs: list[int] = Field(default_factory=list)
     instruments: list[int] = Field(default_factory=list)
     agents: list[ActivityAgentInput] = Field(default_factory=list)
     delegations: list[ActivityDelegationInput] = Field(default_factory=list)
+    outputs: list[GeneratedDatasetCreate] = Field(
+        default_factory=list,
+        description=(
+            "The Datasets the Activity generated, each created with the new "
+            "Activity as its activity_id."
+        ),
+    )
 
     @model_validator(mode="after")
     def agents_hold_one_role_each(self) -> Self:
@@ -186,6 +195,13 @@ class ActivityCreate(ActivityBase):
 
 class ActivityRead(ActivityBase):
     id: int
+
+
+class ActivityCreated(ActivityRead):
+    """The response to creating an Activity: the Activity, and the ids of the
+    Datasets created as its outputs, in the order the request listed them."""
+
+    outputs: list[int]
 
 
 class ActivitySummary(SQLModel):

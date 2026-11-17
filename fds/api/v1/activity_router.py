@@ -15,6 +15,7 @@ from fds.models.activity import (
     ActivityAgent,
     ActivityAgentRead,
     ActivityCreate,
+    ActivityCreated,
     ActivityDelegation,
     ActivityDelegationRead,
     ActivityInput,
@@ -31,21 +32,26 @@ from fds.models.source import SourceRead
 router = APIRouter()
 
 
-@router.post("/", response_model=ActivityRead, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ActivityCreated, status_code=status.HTTP_201_CREATED)
 def create_activity(
     *,
     activity_in: ActivityCreate,
     activity_service: ActivityServiceDep,
     user: CurrentUserDep,
-) -> ActivityRead:
+) -> ActivityCreated:
     """
     Create a new Activity and declare its provenance in one request —
-    the inputs it used, the instruments it used, and any additional agents.
-    Each can also be added or removed later via the sub-resources below.
-    Requires global admin.
+    the inputs it used, the instruments it used, any additional agents, and the
+    Datasets it generated, which are created with it. Everything the request
+    declares is saved together, or nothing is. The response lists the new
+    Datasets' ids under ``outputs``, in the order the request gave them.
+    Inputs, instruments, agents and delegations can also be added or removed
+    later via the sub-resources below. Requires global admin.
     """
     activity = activity_service.create(activity_in, user)
-    return ActivityRead.model_validate(activity)
+    return ActivityCreated.model_validate(
+        activity, update={"outputs": activity_service.output_ids(activity, user)}
+    )
 
 
 @router.get("/{activity_id:int}", response_model=ActivityRead)

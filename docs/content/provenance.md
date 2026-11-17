@@ -33,9 +33,9 @@ Coordination, for example a scheduler that triggers analysis codes, lives in the
 
 ## Declaring provenance
 
-An Activity declares its whole provenance in a single request: the datasets it consumed, the instruments it used, the agents involved and any delegation between them. It can equally be built up afterwards, which suits a pipeline that registers a run before it can resolve its inputs. See [Data Model → Activity](data-model/activity.md) for the fields, the sub-resource endpoints and worked examples in four languages, and [Data Model → Source](data-model/source.md) for registering the agents and instruments a run refers to.
+An Activity declares its whole provenance in a single request: the datasets it consumed, the instruments it used, the agents involved, any delegation between them, and the datasets it generated, which are created with it. It can equally be built up afterwards, which suits a pipeline that registers a run before it can resolve its inputs. See [Data Model → Activity](data-model/activity.md) for the fields, the sub-resource endpoints and worked examples in four languages, and [Data Model → Source](data-model/source.md) for registering the agents and instruments a run refers to.
 
-Output datasets and collections join an Activity by setting their `activity_id`. What a dataset was *derived from* is recorded separately, on the dataset itself, since an Activity's inputs and any one output's dependencies are not the same thing. See [Data Model → Dataset](data-model/dataset.md#recording-a-datasets-provenance).
+Output datasets join an Activity either by being created with it, in its `outputs`, or by setting their `activity_id`. Collections set their `activity_id`. What a dataset was *derived from* is recorded separately, on the dataset itself, since an Activity's inputs and any one output's dependencies are not the same thing. See [Data Model → Dataset](data-model/dataset.md#recording-a-datasets-provenance).
 
 ## Kinds vs roles
 

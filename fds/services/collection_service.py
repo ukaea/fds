@@ -31,7 +31,7 @@ from fds.models.device import Device
 from fds.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from fds.models.scope import CatalogueScope, DeviceScope
 from fds.services import replacements
-from fds.services.activity_service import ActivityService
+from fds.services.activity_summaries import activity_summaries
 from fds.services.available_properties import (
     DEFAULT_MAX_VALUES,
     available_properties,
@@ -768,8 +768,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             )
         }
         policies = get_effective_policies(collections, self.session)
-        activities = ActivityService(self.session).get_summaries(
-            c.activity_id for c in collections
+        activities = activity_summaries(
+            self.session, (c.activity_id for c in collections)
         )
         links = replacements.replaces_and_replaced_by(
             self.session, Collection, CollectionReplacement, collections, user
@@ -820,8 +820,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
     ) -> list[CollectionRead]:
         """``CollectionRead`` DTOs without their members, as listed inside a parent."""
         policies = get_effective_policies(collections, self.session)
-        activities = ActivityService(self.session).get_summaries(
-            c.activity_id for c in collections
+        activities = activity_summaries(
+            self.session, (c.activity_id for c in collections)
         )
         links = replacements.replaces_and_replaced_by(
             self.session, Collection, CollectionReplacement, collections, user
