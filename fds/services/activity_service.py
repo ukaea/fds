@@ -1,4 +1,4 @@
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 
 from sqlmodel import Session, col, or_, select
 
@@ -11,16 +11,16 @@ from fds.models.activity import (
     ActivityDelegation,
     ActivityInput,
     ActivityInstrument,
-    ActivitySummary,
     ActivityUpdate,
     AgentRole,
 )
 from fds.models.collection import Collection
-from fds.models.dataset import Dataset
+from fds.models.dataset import Dataset, DatasetCreate
 from fds.models.identity import AuthenticatedUser
 from fds.models.policy import AccessLevel
 from fds.models.source import Source, SourceKind
 from fds.services.base_service import BaseService
+from fds.services.dataset_service import DatasetService
 from fds.services.exceptions import FDSValidationError, ResourceNotFoundError
 from fds.services.jsonld import map_activity_to_dcat
 from fds.services.source_service import SourceService
@@ -32,13 +32,15 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         super().__init__(model=Activity, session=session)
 
     def create(self, obj_in: ActivityCreate, user: AuthenticatedUser) -> Activity:
-        """Create an Activity and the provenance it declares.
+        """Create an Activity, the provenance it declares and the Datasets it generated.
 
         A single request registers the Activity plus its used inputs, the
         instruments it used, any additional agents (beyond the primary
-        ``source_id`` executor), and any delegations between agents
-        (``prov:actedOnBehalfOf``). Each of these can also be added or removed
-        afterwards via the sub-resource methods.
+        ``source_id`` executor), any delegations between agents
+        (``prov:actedOnBehalfOf``), and its outputs: the Datasets it generated,
+        each created with this Activity as its ``activity_id``. All of it is
+        committed together, so if any part is refused nothing is saved. The links
+        can also be added or removed afterwards via the sub-resource methods.
         """
         check_is_admin(user)
 
@@ -59,37 +61,62 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
 
         activity = Activity.model_validate(
             obj_in.model_dump(
-                exclude={"inputs", "instruments", "agents", "delegations"}
+                exclude={"inputs", "instruments", "agents", "delegations", "outputs"}
             )
         )
-        self.session.add(activity)
-        self.session.commit()
-        self.session.refresh(activity)
-        assert activity.id is not None
+        try:
+            self.session.add(activity)
+            self.session.flush()
+            assert activity.id is not None
 
-        for dataset_id in obj_in.inputs:
-            self.session.add(ActivityInput(activity=activity.id, dataset=dataset_id))
-        for source_id in obj_in.instruments:
-            self.session.add(ActivityInstrument(activity=activity.id, source=source_id))
-        for agent in obj_in.agents:
-            self.session.add(
-                ActivityAgent(
-                    activity=activity.id,
-                    source_id=agent.source_id,
-                    role=agent.role,
+            for dataset_id in obj_in.inputs:
+                self.session.add(
+                    ActivityInput(activity=activity.id, dataset=dataset_id)
                 )
-            )
-        for delegation in obj_in.delegations:
-            self.session.add(
-                ActivityDelegation(
-                    activity=activity.id,
-                    subordinate_source=delegation.subordinate_source,
-                    responsible_source=delegation.responsible_source,
+            for source_id in obj_in.instruments:
+                self.session.add(
+                    ActivityInstrument(activity=activity.id, source=source_id)
                 )
-            )
-        self.session.commit()
+            for agent in obj_in.agents:
+                self.session.add(
+                    ActivityAgent(
+                        activity=activity.id,
+                        source_id=agent.source_id,
+                        role=agent.role,
+                    )
+                )
+            for delegation in obj_in.delegations:
+                self.session.add(
+                    ActivityDelegation(
+                        activity=activity.id,
+                        subordinate_source=delegation.subordinate_source,
+                        responsible_source=delegation.responsible_source,
+                    )
+                )
+            self.session.flush()
+
+            datasets = DatasetService(self.session)
+            for output in obj_in.outputs:
+                datasets.add(
+                    DatasetCreate(**output.model_dump(), activity_id=activity.id),
+                    user,
+                )
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         self.session.refresh(activity)
         return activity
+
+    def output_ids(self, activity: Activity, user: AuthenticatedUser) -> list[int]:
+        """The ids of the Datasets ``activity`` generated that ``user`` may read, in
+        the order they were created.
+
+        Ids rise in creation order, so the outputs of a create come back in the
+        order its request listed them.
+        """
+        outputs = readable_only(self.session, activity.datasets, user)
+        return sorted(dataset.id for dataset in outputs if dataset.id is not None)
 
     def _require_activity(self, activity_id: int) -> Activity:
         activity = self.get(activity_id)
@@ -254,33 +281,6 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         check_is_admin(user)
         self._require_activity(id)
         return self.delete_unchecked(id)
-
-    def get_summaries(
-        self, activity_ids: Iterable[int | None]
-    ) -> dict[int, ActivitySummary]:
-        """Summaries of the Activities ``activity_ids`` name, by id, read in one query.
-
-        Callers pass only the ids of records the user may read, so a summary
-        appears only where its record does.
-        """
-        ids = {i for i in activity_ids if i is not None}
-        if not ids:
-            return {}
-        rows = self.session.exec(
-            select(Activity, Source.name)
-            .outerjoin(Source, col(Source.id) == col(Activity.source_id))
-            .where(col(Activity.id).in_(ids))
-        ).all()
-        return {
-            activity.id: ActivitySummary(
-                activity_type=activity.activity_type,
-                source=source,
-                source_version=activity.source_version,
-                started_at=activity.started_at,
-            )
-            for activity, source in rows
-            if activity.id is not None
-        }
 
     def add_input(
         self, *, activity_id: int, dataset_id: int, user: AuthenticatedUser

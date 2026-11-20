@@ -16,6 +16,7 @@ An Activity is whatever process generated the data. It may be a direct measureme
 | `instruments` | list of integer | No | Ids of the `instrument` Sources the Activity used |
 | `agents` | list of object | No | Further agents, each `{source_id, role}` |
 | `delegations` | list of object | No | Which agent acted on behalf of which |
+| `outputs` | list of object | No | Datasets the Activity generated, created with it. Each takes the fields of a new [Dataset](dataset.md) except `activity_id` |
 
 `source_id` is optional. A raw acquisition may name no agent at all, only the instrument it used.
 
@@ -124,7 +125,34 @@ A single request can declare the whole Activity: what it consumed, what it used,
     ).json();
     ```
 
-Each part can also be maintained afterwards, which suits a pipeline that registers an Activity first and resolves its inputs later:
+## Creating its outputs with it
+
+`outputs` creates the Datasets the Activity generated in the same request. Each entry takes the fields of a new Dataset except `activity_id`, which is set to the new Activity. The Activity, its links and its outputs are saved together. If any part is refused, for example an output whose name is already taken on its shot, or a shot that doesn't exist, nothing is saved and the response gives the reason. A pipeline that loses its connection during the request can check whether the outputs exist, and if they don't, send the request again.
+
+```json
+{
+  "source_id": 12,
+  "source_version": "efit-v2.8",
+  "activity_type": "analysis",
+  "inputs": [3, 7],
+  "outputs": [
+    {"name": "equilibrium", "device_name": "mast", "shot_id": "30421",
+     "version": "2", "replaces": [41]}
+  ]
+}
+```
+
+The response is the Activity, with `outputs` listing the new Datasets' ids in the order the request listed them:
+
+```json
+{"id": 88, "source_id": 12, "activity_type": "analysis", "...": "...", "outputs": [512]}
+```
+
+An output that is a new version of an earlier Dataset lists it in `replaces`, as described in [Dataset versions](versions.md).
+
+## Changing an Activity afterwards
+
+Each part except the outputs can also be maintained afterwards, which suits a pipeline that registers an Activity first and resolves its inputs later:
 
 ```http
 POST   /v1/activities/{id}/inputs/{dataset_id}
@@ -136,7 +164,7 @@ DELETE /v1/activities/{id}/inputs/{dataset_id}
 
 `DELETE` works the same way for instruments, agents and delegations. An agent cannot be removed while a delegation still names it; remove the delegation first.
 
-Output Datasets and Collections reference the Activity by setting their `activity_id`, and the listings filter on it:
+A Dataset created on its own, and a Collection, reference the Activity by setting their `activity_id`. The listings filter on it, whichever way the Dataset was created:
 
 ```text
 GET /v1/datasets?activity_id={id}      # the datasets the Activity generated

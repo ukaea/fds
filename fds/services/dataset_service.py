@@ -1,5 +1,6 @@
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -45,7 +46,7 @@ from fds.models.scope import CatalogueScope, DeviceScope
 from fds.models.shot import Shot
 from fds.models.storage_options import derive_storage_options_type
 from fds.services import replacements
-from fds.services.activity_service import ActivityService
+from fds.services.activity_summaries import activity_summaries
 from fds.services.annotation_service import AnnotationService
 from fds.services.base_service import BaseService
 from fds.services.exceptions import (
@@ -338,6 +339,20 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
 
     def create(self, obj_in: DatasetCreate, user: AuthenticatedUser) -> Dataset:
         """Create a new dataset. Handles global, device, or shot context."""
+        dataset = self.add(obj_in, user)
+        with self._unique_violation_as_conflict(obj_in.name):
+            self.session.commit()
+        self.session.refresh(dataset)
+        return dataset
+
+    def add(self, obj_in: DatasetCreate, user: AuthenticatedUser) -> Dataset:
+        """Validate a new dataset and add it to the session without committing.
+
+        Its default distribution, derivations and replacements are added with it.
+        The caller commits, so an Activity and the Datasets it generated are saved
+        together. A dataset that already exists in its context is refused with a
+        409, and the transaction is rolled back.
+        """
         validate_policy_fields(
             obj_in.access_level, obj_in.required_scopes, obj_in.allowed_idps
         )
@@ -363,26 +378,26 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         for derivation in obj_in.derived_from:
             self._validate_derivation(derivation)
 
-        db_obj = Dataset.model_validate(
+        dataset = Dataset.model_validate(
             obj_in, update={"distributions": [], "origin": origin}
         )
         if obj_in.url:
-            db_obj.distributions.append(self._build_distribution(obj_in, obj_in.url))
-        dataset = self._persist(db_obj, obj_in.name)
+            dataset.distributions.append(self._build_distribution(obj_in, obj_in.url))
+        self.session.add(dataset)
+        with self._unique_violation_as_conflict(obj_in.name):
+            self.session.flush()
 
-        if obj_in.derived_from or obj_in.replaces:
-            assert dataset.id is not None
-            for derivation in obj_in.derived_from:
-                self.session.add(
-                    DatasetDerivation.model_validate(
-                        derivation, update={"dataset": dataset.id}
-                    )
+        assert dataset.id is not None
+        for derivation in obj_in.derived_from:
+            self.session.add(
+                DatasetDerivation.model_validate(
+                    derivation, update={"dataset": dataset.id}
                 )
+            )
+        if obj_in.replaces:
             replacements.write_replaces(
                 self.session, DatasetReplacement, dataset.id, set(obj_in.replaces)
             )
-            self.session.commit()
-            self.session.refresh(dataset)
         return dataset
 
     def _resolve_and_authorize_context(
@@ -693,8 +708,17 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     def _persist(self, db_obj: Dataset, name: str) -> Dataset:
         """Add, commit (mapping a uniqueness violation to 409), refresh, and return."""
         self.session.add(db_obj)
-        try:
+        with self._unique_violation_as_conflict(name):
             self.session.commit()
+        self.session.refresh(db_obj)
+        return db_obj
+
+    @contextmanager
+    def _unique_violation_as_conflict(self, name: str) -> Iterator[None]:
+        """Roll back on an integrity error raised inside, and raise a uniqueness
+        violation as a 409 for the dataset ``name``."""
+        try:
+            yield
         except IntegrityError as e:
             self.session.rollback()
             if not isinstance(e.orig, UniqueViolation):
@@ -702,8 +726,6 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             raise ConflictError(
                 f"Dataset '{name}' already exists in this context"
             ) from e
-        self.session.refresh(db_obj)
-        return db_obj
 
     def _authorize_write(
         self, device_name: str | None, user: AuthenticatedUser
@@ -1243,9 +1265,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         distributions = self._distributions_of(datasets)
         policies = get_effective_policies(datasets, self.session)
-        activities = ActivityService(self.session).get_summaries(
-            d.activity_id for d in datasets
-        )
+        activities = activity_summaries(self.session, (d.activity_id for d in datasets))
         links = replacements.replaces_and_replaced_by(
             self.session, Dataset, DatasetReplacement, datasets, user
         )
