@@ -1,8 +1,8 @@
-import httpx
+import httpx2 as httpx
 import jwt
 import pytest
 from fastapi import HTTPException
-from httpx import Request, Response
+from httpx2 import Request, Response
 
 from fds.auth.jwks import JwksClient
 

@@ -1,6 +1,6 @@
 """Tokens are verified, and access is enforced, by the running service."""
 
-import httpx
+import httpx2 as httpx
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 

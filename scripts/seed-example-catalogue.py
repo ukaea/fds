@@ -2,14 +2,14 @@
 # /// script
 # requires-python = ">=3.14"
 # dependencies = [
-#     "httpx==0.27.2",
+#     "httpx2==2.16.2",
 # ]
 # ///
 
 import os
 import time
 
-import httpx
+import httpx2 as httpx
 
 FDS_API_URL_DEFAULT = "http://localhost:8000/v1"
 KC_TOKEN_URL_DEFAULT = "http://localhost:8080/realms/fds/protocol/openid-connect/token"

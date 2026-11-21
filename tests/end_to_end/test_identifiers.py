@@ -14,7 +14,7 @@ from collections.abc import Iterator
 from typing import Any
 from urllib.parse import urlsplit
 
-import httpx
+import httpx2 as httpx
 import pytest
 
 from tests.end_to_end.conftest import FDS_URL

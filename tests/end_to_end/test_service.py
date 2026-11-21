@@ -1,6 +1,6 @@
 """The service is up, serves its API, and round-trips a resource."""
 
-import httpx
+import httpx2 as httpx
 import pytest
 
 from tests.end_to_end.conftest import FDS_URL

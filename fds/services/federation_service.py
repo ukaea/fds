@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from itertools import repeat
 from typing import Any
 
-import httpx
+import httpx2 as httpx
 import structlog
 
 from fds.core.config import FederationMember
