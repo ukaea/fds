@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import Annotated
 
-import httpx
+import httpx2 as httpx
 import jwt
 import structlog
 from cachetools import TTLCache

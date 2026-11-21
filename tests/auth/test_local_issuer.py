@@ -4,7 +4,7 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import httpx
+import httpx2 as httpx
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa

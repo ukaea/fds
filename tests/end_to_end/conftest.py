@@ -39,7 +39,7 @@ from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import httpx
+import httpx2 as httpx
 import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
