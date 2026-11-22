@@ -1,4 +1,5 @@
 from fastapi import APIRouter, FastAPI
+from starlette.routing import Route
 
 from fds import __version__
 from fds.api.exception_handlers import add_exception_handlers
@@ -19,10 +20,13 @@ from fds.core.config import config
 from fds.core.db import engine
 from fds.core.logging import setup_logging
 from fds.core.telemetry import setup_telemetry
+from fds.mcp.server import mcp
 
 setup_logging()
 
-app = FastAPI(title=config.app_name, version=__version__)
+mcp_app = mcp.http_app(path="/mcp", stateless_http=True)
+
+app = FastAPI(title=config.app_name, version=__version__, lifespan=mcp_app.lifespan)
 
 app.add_middleware(AuditMiddleware)
 setup_telemetry(app, engine)
@@ -52,3 +56,6 @@ v1.include_router(federation_router.router, prefix="/federation", tags=["federat
 
 app.include_router(identifier_router)
 app.include_router(v1)
+# A route rather than a mount: a mount answers /mcp with a redirect to /mcp/, which
+# not every MCP client follows.
+app.router.routes.append(Route("/mcp", mcp_app))

@@ -192,6 +192,14 @@ def setup_logging() -> None:
                     "level": level,
                     "propagate": False,
                 },
+                # FastMCP gives `fastmcp` its own console handlers and
+                # propagate=False when it is imported, so its lines would
+                # leave the stream unformatted.
+                "fastmcp": {
+                    "handlers": ["default"],
+                    "level": level,
+                    "propagate": False,
+                },
                 # Named only to pin the level; chatty at INFO.
                 "sqlalchemy.engine": {"level": "WARNING"},
             },

@@ -25,6 +25,7 @@ nav = [
   ]},
   { "Semantic Metadata (DCAT & JSON-LD)" = "dcat-jsonld.md" },
   { "Searching Other Catalogues" = "federation.md" },
+  { "MCP Server" = "mcp.md" },
   { "Provenance" = "provenance.md" },
 ]
 

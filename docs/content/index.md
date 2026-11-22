@@ -86,4 +86,5 @@ Public reads need no token; creating data or reading restricted data does.
 - **[Access Control](access-control.md)**: authenticate (get a `TOKEN`), access levels, and credential vending
 - **[Data Model](data-model/index.md)**: the hierarchy and core entities, and how to register them
 - **[Provenance](provenance.md)**: how FDS tracks the origin of datasets
+- **[MCP Server](mcp.md)**: searching the catalogue from an LLM client such as Claude Code
 - **[Semantic Metadata](dcat-jsonld.md)**: DCAT / PROV-O and content negotiation
