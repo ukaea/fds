@@ -155,24 +155,33 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             device_name=obj_in.device_name,
             shot_id=obj_in.shot_id,
         )
+        members = sorted(set(obj_in.datasets))
+        self._require_datasets(members)
 
-        # 3. Persist
-        origin = obj_in.origin
-        db_obj = Collection.model_validate(obj_in, update={"origin": origin})
-        self.session.add(db_obj)
+        # 3. Persist the Collection, its replacements and its members together
+        db_obj = Collection.model_validate(
+            obj_in.model_dump(exclude={"datasets", "replaces"})
+        )
         try:
+            self.session.add(db_obj)
+            self.session.flush()
+            assert db_obj.id is not None
+            replacements.write_replaces(
+                self.session, CollectionReplacement, db_obj.id, set(obj_in.replaces)
+            )
+            for dataset_id in members:
+                self.session.add(
+                    CollectionDataset(collection=db_obj.id, dataset=dataset_id)
+                )
             self.session.commit()
         except IntegrityError as e:
             self.session.rollback()
             raise ConflictError(
                 f"Collection '{obj_in.name}' already exists in this context"
             ) from e
-        if obj_in.replaces:
-            assert db_obj.id is not None
-            replacements.write_replaces(
-                self.session, CollectionReplacement, db_obj.id, set(obj_in.replaces)
-            )
-            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         self.session.refresh(db_obj)
         return db_obj
 
@@ -278,6 +287,20 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             check_is_admin(user)
 
         return self.delete_unchecked(id)
+
+    def _require_datasets(self, dataset_ids: Sequence[int]) -> None:
+        """Raise ``ResourceNotFoundError`` naming any of ``dataset_ids`` that no
+        Dataset has. Checked in one query."""
+        if not dataset_ids:
+            return
+        found = set(
+            self.session.exec(
+                select(Dataset.id).where(col(Dataset.id).in_(dataset_ids))
+            ).all()
+        )
+        missing = [dataset_id for dataset_id in dataset_ids if dataset_id not in found]
+        if missing:
+            raise ResourceNotFoundError(f"Datasets {missing} not found")
 
     def _require_device(self, device_name: str) -> None:
         name = normalise_device_name(device_name)

@@ -1390,6 +1390,57 @@ def test_replacing_a_missing_collection_is_not_found(
     assert response.status_code == 404
 
 
+def test_a_new_pass_is_created_with_its_datasets(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    efm = _make_dataset(session, "efm", device="MAST", shot_id="30421")
+    amc = _make_dataset(session, "amc", device="MAST", shot_id="30421")
+    old = _register(test_client, admin_user_token, "analysed-pass0").json()
+
+    response = _register(
+        test_client,
+        admin_user_token,
+        "analysed-pass1",
+        replaces=[old["id"]],
+        datasets=[amc, efm],
+    )
+
+    assert response.status_code == 201, response.text
+    created = response.json()
+    assert [d["id"] for d in created["datasets"]] == [efm, amc]
+    assert created["replaces"] == [old["id"]]
+
+
+def test_a_missing_dataset_saves_no_collection(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    efm = _make_dataset(session, "efm", device="MAST", shot_id="30421")
+
+    response = _register(
+        test_client, admin_user_token, "analysed-pass0", datasets=[efm, 999999]
+    )
+
+    assert response.status_code == 404
+    assert "999999" in response.json()["detail"]
+    assert _listed(test_client, admin_user_token, "?include_replaced=true") == []
+
+
+def test_a_dataset_listed_twice_is_added_once(
+    test_client: TestClient, session: Session, admin_user_token: dict
+):
+    _mast_shots(session)
+    efm = _make_dataset(session, "efm", device="MAST", shot_id="30421")
+
+    response = _register(
+        test_client, admin_user_token, "analysed-pass0", datasets=[efm, efm]
+    )
+
+    assert response.status_code == 201, response.text
+    assert [d["id"] for d in response.json()["datasets"]] == [efm]
+
+
 def test_a_collection_cannot_replace_itself(
     test_client: TestClient, session: Session, admin_user_token: dict
 ):
