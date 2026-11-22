@@ -23,6 +23,7 @@ import { PropertyBadges, ScientificMetadata } from '@/components/properties';
 import { RelatedGroup } from '@/components/related-data';
 import { ActivityBadge } from '@/components/activity-label';
 import { MemberAnswers, useFederationMembers } from '@/components/member-datasets';
+import { CollectionTabs } from '@/components/collection-tabs';
 
 // At most this many datasets are shown from each other catalogue.
 const MEMBER_PAGE_SIZE = 50;
@@ -36,7 +37,7 @@ function CollectionSection({ collection }: { collection: Collection }) {
   const datasetCount = collection.datasets?.length ?? 0;
 
   return (
-    <div className="mb-10">
+    <div>
       <div className="flex items-center gap-3 mb-4">
         <div className="bg-muted p-2 rounded-lg text-foreground">
           <Layers className="w-5 h-5" />
@@ -254,11 +255,12 @@ export default function ShotDetail({
           </div>
         )}
 
-        {/* One section per collection */}
-        {propertyTokens.length === 0 &&
-          collections?.map((collection) => (
-            <CollectionSection key={collection.id} collection={collection} />
-          ))}
+        {/* One tab per collection */}
+        {propertyTokens.length === 0 && collections && collections.length > 0 && (
+          <CollectionTabs deviceName={deviceName} collections={collections}>
+            {(collection) => <CollectionSection collection={collection} />}
+          </CollectionTabs>
+        )}
 
         {/* Datasets not in any collection */}
         {propertyTokens.length === 0 && uncollectedDatasets.length > 0 && (
