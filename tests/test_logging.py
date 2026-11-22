@@ -55,6 +55,14 @@ class TestForeignLoggers:
         assert line["logger"] == "uvicorn.error"
         assert line["level"] == "info"
 
+    def test_fastmcp_records_are_json(self, log_lines):
+        """FastMCP sets propagate=False, so this only works if it is named."""
+        logging.getLogger("fastmcp.server.server").warning("Error calling tool")
+
+        (line,) = log_lines()
+        assert line["event"] == "Error calling tool"
+        assert line["logger"] == "fastmcp.server.server"
+
     def test_access_log_is_dropped(self, log_lines):
         """The per-request audit line replaces it, and duplicates are noise."""
         logging.getLogger("uvicorn.access").info("GET /v1/datasets 200 OK")
