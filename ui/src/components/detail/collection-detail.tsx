@@ -163,8 +163,15 @@ export default function CollectionDetail({ id }: { id: string }) {
                         {child.title && (
                           <p className="text-xs text-muted-foreground font-mono mt-0.5">{child.name}</p>
                         )}
-                        {!!child.replaced_by?.length && (
-                          <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border">replaced</span>
+                        {(child.shot_id || !!child.replaced_by?.length) && (
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {child.shot_id && (
+                              <span className="text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border">shot {child.shot_id}</span>
+                            )}
+                            {!!child.replaced_by?.length && (
+                              <span className="text-xs px-2 py-0.5 bg-muted text-foreground rounded-full border border-border">replaced</span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -206,6 +213,12 @@ export default function CollectionDetail({ id }: { id: string }) {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-4">
+                        {ds.shot_id && (
+                          <span className="text-xs px-2 py-0.5 bg-muted rounded-sm text-foreground">shot {ds.shot_id}</span>
+                        )}
+                        {ds.version && (
+                          <span className="text-xs px-2 py-0.5 bg-muted rounded-sm text-foreground">version {ds.version}</span>
+                        )}
                         {!!ds.replaced_by?.length && (
                           <span className="text-xs px-2 py-0.5 bg-muted rounded-sm text-foreground">replaced</span>
                         )}
