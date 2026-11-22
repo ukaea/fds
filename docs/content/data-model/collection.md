@@ -48,21 +48,15 @@ Collections support nesting (a Collection can contain other Collections) and a D
 
 Nest a child with `POST /collections/{parent_id}/collections/{child_id}`. Nesting returns 422 if it would create a cycle: a collection cannot contain itself, directly or through other collections. A child may belong to multiple parents as long as that does not create a cycle.
 
-Create a Collection, then add its member Datasets by id, one bodyless `POST` per dataset:
+Create a Collection with its member Datasets, listed by id in `datasets`. The Collection and its members are saved together: if any id names no Dataset, the request returns 404 and nothing is saved. Add a member later with a bodyless `POST /collections/{id}/datasets/{dataset_id}`, and remove one with `DELETE` on the same path.
 
 === "curl"
 
     ```bash
-    COLLECTION_ID=$(curl -s -X POST "$API/devices/mast/shots/30421/collections" \
+    # 12, 15 and 18 are the ids of the datasets to group
+    curl -X POST "$API/devices/mast/shots/30421/collections" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-      -d '{"name": "experiment-data", "title": "Experiment Data", "access_level": "public"}' \
-      | jq -r .id)
-
-    # 12 15 18 are the ids of the datasets to group
-    for DATASET_ID in 12 15 18; do
-      curl -X POST "$API/collections/$COLLECTION_ID/datasets/$DATASET_ID" \
-        -H "Authorization: Bearer $TOKEN"
-    done
+      -d '{"name": "experiment-data", "title": "Experiment Data", "access_level": "public", "datasets": [12, 15, 18]}'
     ```
 
 === "Python (requests)"
@@ -75,14 +69,9 @@ Create a Collection, then add its member Datasets by id, one bodyless `POST` per
             "name": "experiment-data",
             "title": "Experiment Data",
             "access_level": "public",
+            "datasets": [12, 15, 18],  # the ids of the datasets to group
         },
     ).json()
-
-    # 12, 15, 18 are the ids of the datasets to group
-    for dataset_id in [12, 15, 18]:
-        requests.post(
-            f"{API}/collections/{col['id']}/datasets/{dataset_id}", headers=headers
-        )
     ```
 
 === "Python (httpx)"
@@ -95,12 +84,9 @@ Create a Collection, then add its member Datasets by id, one bodyless `POST` per
             "name": "experiment-data",
             "title": "Experiment Data",
             "access_level": "public",
+            "datasets": [12, 15, 18],  # the ids of the datasets to group
         },
     ).json()
-
-    # 12, 15, 18 are the ids of the datasets to group
-    for dataset_id in [12, 15, 18]:
-        httpx.post(f"{API}/collections/{col['id']}/datasets/{dataset_id}", headers=headers)
     ```
 
 === "JavaScript (fetch)"
@@ -114,17 +100,10 @@ Create a Collection, then add its member Datasets by id, one bodyless `POST` per
           name: "experiment-data",
           title: "Experiment Data",
           access_level: "public",
+          datasets: [12, 15, 18], // the ids of the datasets to group
         }),
       })
     ).json();
-
-    // 12, 15, 18 are the ids of the datasets to group
-    for (const datasetId of [12, 15, 18]) {
-      await fetch(`${API}/collections/${col.id}/datasets/${datasetId}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${TOKEN}` },
-      });
-    }
     ```
 
 ## A pass repeated
@@ -137,11 +116,12 @@ When the chain runs again over the same shot, a repass, register a new collectio
 {
   "name": "analysed-2",
   "title": "MAST-U Shot 50000: Analysed Experimental Data, Second Pass",
-  "replaces": [3]
+  "replaces": [3],
+  "datasets": [41, 42, 17, 18]
 }
 ```
 
-If the repass regenerated only some datasets, add the ones it left unchanged to the new collection as well, so it holds the whole pass.
+If the repass regenerated only some datasets, list the ones it left unchanged in `datasets` as well, so the new collection holds the whole pass. Above, 41 and 42 are the datasets the repass regenerated, and 17 and 18 the ones it left unchanged.
 
 Collection listings and property summaries leave out a collection when you may read a collection that replaces it; add `include_replaced=true` to list it as well. The rules are those for [datasets](versions.md#when-the-data-changes): the replacement is filed in the same device and shot, several collections may replace one and one may replace several, and a collection cannot replace itself or one that already replaces it. A collection that replaces another needs no `activity_id`.
 

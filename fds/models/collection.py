@@ -30,9 +30,9 @@ if TYPE_CHECKING:
 class CollectionDataset(SQLModel, table=True):
     """Join table linking Collections to their member Datasets (``dcat:dataset``).
 
-    A Dataset can belong to multiple Collections simultaneously. Rows in this
-    table are inserted/deleted by ``CollectionService.add_dataset`` and
-    ``CollectionService.remove_dataset``.
+    A Dataset can belong to multiple Collections simultaneously. Rows are
+    inserted by ``CollectionService.create`` and ``CollectionService.add_dataset``,
+    and deleted by ``CollectionService.remove_dataset``.
     """
 
     collection: int = Field(foreign_key="collection.id", primary_key=True)
@@ -203,6 +203,7 @@ class CollectionCreate(CollectionBase):
 
     ``shot_id`` and ``activity_id`` are optional. A Collection can exist at
     Global, Device, or Shot scope, and does not require a provenance activity.
+    ``datasets`` are the ids of its member Datasets, added with it.
     """
 
     shot_id: str | None = None
@@ -213,6 +214,13 @@ class CollectionCreate(CollectionBase):
         description=(
             "The Collections this one replaces, such as the bundle of an earlier "
             "pass of the same processing chain, filed in the same device and shot."
+        ),
+    )
+    datasets: list[int] = Field(
+        default_factory=list,
+        description=(
+            "The ids of the Datasets the Collection holds, added with it. More can "
+            "be added afterwards, one at a time."
         ),
     )
 
