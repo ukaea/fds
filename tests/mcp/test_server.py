@@ -1,7 +1,9 @@
+import json
 from typing import Any
 
 import httpx2 as httpx
 import pytest
+from fastapi.testclient import TestClient
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 from fastmcp.exceptions import ToolError
@@ -19,7 +21,6 @@ from mcp_types import (
 )
 from sqlmodel import Session
 
-from fds.auth.jwks import get_jwks_client
 from fds.auth.security import AuthenticatedUser
 from fds.main import app
 from fds.mcp.catalogue import Catalogue
@@ -471,9 +472,7 @@ async def test_the_server_at_mcp_reads_with_the_token_sent_to_it(
         user=admin_user,
     )
     session.commit()
-    monkeypatch.setitem(
-        app.dependency_overrides, get_jwks_client, lambda: mock_jwks_client
-    )
+    monkeypatch.setattr("fds.auth.jwks._jwks_client_instance", mock_jwks_client)
     mock_jwt_decode.return_value = {
         "sub": "test-admin-user",
         "scp": "fds-admin",
@@ -487,8 +486,46 @@ async def test_the_server_at_mcp_reads_with_the_token_sent_to_it(
             admin = await client.call_tool("search_shots", {"device": "JET"})
 
     assert anonymous.data["shots"] == []
+    assert "not_signed_in" in anonymous.data
     assert [s["shot"] for s in admin.data["shots"]] == ["200"]
+    assert "not_signed_in" not in admin.data
     assert mock_jwt_decode.call_args.args[0] == "admin-token"
+
+
+@pytest.mark.usefixtures("test_client")
+async def test_results_read_without_a_token_say_where_to_log_in(
+    session: Session, admin_user: AuthenticatedUser
+):
+    DeviceService(session).create(
+        DeviceCreate(name="MAST", type="Tokamak", access_level=AccessLevel.PUBLIC),
+        user=admin_user,
+    )
+    session.commit()
+
+    async with run_asgi_lifespan(app), mcp_client() as client:
+        result = await client.call_tool("list_devices", {})
+        record = await client.read_resource("fds://devices")
+
+    metadata = "http://fds.example.org/.well-known/oauth-protected-resource/mcp"
+    assert "public records only" in result.data["not_signed_in"]
+    assert metadata in result.data["not_signed_in"]
+    (contents,) = record
+    assert isinstance(contents, TextResourceContents)
+    assert metadata in json.loads(contents.text)["not_signed_in"]
+
+
+def test_the_server_at_mcp_refuses_a_token_fds_would_refuse(test_client: TestClient):
+    response = test_client.post(
+        "/mcp",
+        headers={"Authorization": "Bearer not-a-token"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+    )
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == (
+        'Bearer error="invalid_token", resource_metadata='
+        '"http://testserver/.well-known/oauth-protected-resource/mcp"'
+    )
 
 
 @pytest.mark.usefixtures("admin_user_token", "test_client")

@@ -154,5 +154,5 @@ def test_create_shot_anonymous(
         json={"id": "shot-anon-fail", "access_level": "public"},
     )
 
-    # Assert: Should be Forbidden (403) - NOT Unauthorized (401)
-    assert response.status_code == 403
+    # Assert: Unauthorized (401), since a token would help
+    assert response.status_code == 401

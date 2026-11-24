@@ -112,6 +112,48 @@ sign your own as described below):
 
 FDS validates the token against the IdP's JWKS endpoint and extracts the user's identity and granted scopes.
 
+### How a program finds where to log in
+
+A program that knows only FDS's address can find out where to get a token. When FDS refuses a
+request because it needs a token, it answers `401` and names a document:
+
+```http
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer resource_metadata="https://api.fds.example.org/.well-known/oauth-protected-resource"
+```
+
+The document, in the format of RFC 9728 (OAuth 2.0 Protected Resource Metadata), names the login
+services whose tokens FDS accepts and the scope to ask them for:
+
+```json
+{
+  "resource": "https://api.fds.example.org",
+  "authorization_servers": ["https://login.example.org/realms/fds"],
+  "scopes_supported": ["fds"],
+  "bearer_methods_supported": ["header"]
+}
+```
+
+- `resource` is the address the request was sent to. FDS answers on every address it is reached on
+  with a document naming that address. Behind a proxy that ends TLS, the address starts with
+  `https` only if FDS trusts the proxy's forwarded headers (`FORWARDED_ALLOW_IPS`, see
+  [Operations](operations.md#serving)).
+- `authorization_servers` lists the issuers in `FDS_TRUSTED_IDPS`, in the order they are
+  configured, leaving out any whose keys come from a file: nobody logs in there. A program that is
+  offered several picks one itself, so put the one people log in through first.
+- `scopes_supported` is `FDS_OIDC_SCOPE`, the scope a program asks the login service for to get a
+  token carrying FDS's audience. Some login services put the audience into every token they issue
+  to a program registered for FDS, and need none; others issue a token for an API only to a program
+  that asks for that API's scope. Left empty, the document names no scope.
+
+Every refusal names the document:
+
+| Request | Answer |
+| --- | --- |
+| No token, for a record or an action that needs one | `401`, `WWW-Authenticate: Bearer resource_metadata="…"` |
+| A token FDS does not accept: expired, for another audience, or from an issuer it does not trust | `401`, `WWW-Authenticate: Bearer error="invalid_token", resource_metadata="…"` |
+| A token FDS accepts, without the role the record or action needs | `403`, `WWW-Authenticate: Bearer error="insufficient_scope", resource_metadata="…"` |
+
 ### Where FDS finds an issuer's keys
 
 A token is trusted when it is signed by a key belonging to an issuer in `FDS_TRUSTED_IDPS`, so

@@ -1017,11 +1017,11 @@ def _make_restricted_collection_with_activity(session: Session) -> int:
 def test_restricted_collection_activity_is_not_public(
     test_client: TestClient, session: Session
 ):
-    """The activity sub-resource answers 403, like the collection itself."""
+    """The activity sub-resource is refused, like the collection itself."""
     col_id = _make_restricted_collection_with_activity(session)
 
     response = test_client.get(f"/v1/collections/{col_id}/activity")
-    assert response.status_code == 403, response.text
+    assert response.status_code == 401, response.text
     assert "confidential" not in response.text
 
 

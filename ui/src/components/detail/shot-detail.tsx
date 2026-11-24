@@ -80,7 +80,7 @@ function CollectionSection({ collection }: { collection: Collection }) {
 function shotErrorMessage(error: unknown, deviceLabel: string): string {
   const status = error instanceof FetchError ? error.status : undefined;
   if (status === 404) return `There is no shot with this ID on ${deviceLabel}.`;
-  if (status === 403) return 'This shot is restricted. Sign in with an account that has access to it.';
+  if (status === 401 || status === 403) return 'This shot is restricted. Sign in with an account that has access to it.';
   return 'Something went wrong loading this shot. Try again in a moment.';
 }
 
@@ -154,7 +154,8 @@ export default function ShotDetail({
   // restricted shot can still hold datasets the caller may read, so those stay;
   // the shot's own metadata, annotations included, does not.
   if (shotError) {
-    const restricted = shotError instanceof FetchError && shotError.status === 403;
+    const restricted =
+      shotError instanceof FetchError && (shotError.status === 401 || shotError.status === 403);
     const readable = restricted ? (datasets?.filter((ds) => !ds.annotates) ?? []) : [];
     return (
       <div className="container mx-auto px-4 py-8">

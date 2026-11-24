@@ -64,13 +64,13 @@ def restricted_dataset_id_fixture(
 def test_restricted_dataset_sub_resources_are_not_public(
     test_client: TestClient, restricted_dataset_id: int, sub_resource: str
 ):
-    """Each sub-resource answers 403, matching the dataset's own endpoint."""
-    assert test_client.get(f"/v1/datasets/{restricted_dataset_id}").status_code == 403
+    """Each sub-resource is refused, matching the dataset's own endpoint."""
+    assert test_client.get(f"/v1/datasets/{restricted_dataset_id}").status_code == 401
 
     resp = test_client.get(
         f"/v1/datasets/{restricted_dataset_id}/{sub_resource}",
     )
-    assert resp.status_code == 403, resp.text
+    assert resp.status_code == 401, resp.text
 
 
 def test_restricted_distribution_url_does_not_leak(

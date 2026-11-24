@@ -193,7 +193,7 @@ def test_read_restricted_device_requires_auth(
     )
 
     response = test_client.get("/v1/devices/Restricted Device")
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 def test_read_devices_filters_restricted_for_anonymous(

@@ -495,7 +495,7 @@ def test_run_of_a_restricted_dataset_is_not_public(
     admin_user: AuthenticatedUser,
     path: str,
 ):
-    """Reading an Activity directly answers 403, as reading it through its dataset does."""
+    """Reading an Activity directly is refused, as reading it through its dataset is."""
     DeviceService(session).create(
         DeviceCreate(name="sec-device", type="Test", access_level=AccessLevel.PUBLIC),
         user=admin_user,
@@ -519,7 +519,7 @@ def test_run_of_a_restricted_dataset_is_not_public(
     session.commit()
 
     response = test_client.get(path.format(id=activity.id))
-    assert response.status_code == 403, response.text
+    assert response.status_code == 401, response.text
     assert "confidential" not in response.text
 
 
@@ -576,7 +576,7 @@ def test_activity_with_no_outputs_is_not_public(
     session.commit()
 
     response = test_client.get(f"/v1/activities/{activity.id}")
-    assert response.status_code == 403, response.text
+    assert response.status_code == 401, response.text
 
 
 def test_device_admin_reads_an_activity_through_a_restricted_output(
