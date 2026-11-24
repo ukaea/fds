@@ -1,25 +1,24 @@
 # MCP Server
 
-FDS answers the [Model Context Protocol](https://modelcontextprotocol.io) (MCP) at `/mcp`, so an LLM client such as Claude Code can search the catalogue for you. Ask "which MAST shots reached a plasma current above 900 kA?" and the client looks up which properties the shots record and in which units, searches on them, and lists the shots it found with a link to each.
+FDS answers the [Model Context Protocol](https://modelcontextprotocol.io) (MCP) at `/mcp`, so an LLM client can search the catalogue for you. Ask "which MAST shots reached a plasma current above 900 kA?" and the client looks up which properties the shots record and in which units, searches on them, and lists the shots it found with a link to each.
 
 The server only reads. Its tools call FDS's own API, inside FDS, with the token that came with the client's request. The client sees what the token's holder would see through the API, and only public records when no token comes with the request. Each read a tool makes is logged as an API request under the caller's identity (see [Logging & Auditing](logging.md)).
 
+A result read without a token carries `not_signed_in`, which says the answer covers public records only and where the client can log in. The server's instructions ask the model to pass that on, so a search that left out restricted records does not read as if the catalogue held nothing more.
+
 ## Connecting a client
 
-The server's address is the API's address followed by `/mcp`, such as `https://api.fds.example.org/mcp`. To add it to Claude Code:
+The server's address is the API's address followed by `/mcp`, such as `https://api.fds.example.org/mcp`. Add the server to your MCP client by that address. Without logging in, its tools read public records.
 
-```sh
-claude mcp add --transport http fds https://api.fds.example.org/mcp
-```
+### Logging in
 
-To read restricted records, send a token with every request:
+To read restricted records, log in to the server through your MCP client. The client learns where from the server's own document, `/.well-known/oauth-protected-resource/mcp` (see [Access Control](access-control.md#how-a-program-finds-where-to-log-in)), and opens a browser at the login service. Once you have logged in, the client renews the token itself.
 
-```sh
-claude mcp add --transport http fds https://api.fds.example.org/mcp \
-  --header "Authorization: Bearer $FDS_TOKEN"
-```
+The login service may ask the client for a client ID: the name under which that login service knows MCP clients. Whoever runs your FDS tells you which, and you give it to your client once, when you add the server.
 
-The client keeps the token in its configuration. It does not log you in or renew the token: when the token expires, add the server again with a new one. Tokens come from a login service FDS trusts (see [Access Control](access-control.md#authentication)).
+When a token comes with a request, the server checks it first. A token FDS would not accept, such as one that has expired, is answered `401`, which tells the client to get a fresh one.
+
+A client that cannot log in can instead send a token you already hold, in an `Authorization: Bearer` header with every request. It then has to be replaced by hand when it expires.
 
 ## Tools
 
@@ -42,7 +41,7 @@ When a question does not say which device, `describe_shot_properties` and `searc
 
 ## Resources
 
-A resource is a record the client can add to a conversation. In Claude Code, type `@fds:` to pick one.
+A resource is a record the client can add to a conversation, in clients that offer resources.
 
 | Address | What it holds |
 | --- | --- |
@@ -53,7 +52,7 @@ A resource is a record the client can add to a conversation. In Claude Code, typ
 
 ## Prompts
 
-A prompt is a ready-made request. In Claude Code, type `/fds:` to pick one.
+A prompt is a ready-made request, in clients that offer prompts.
 
 | Prompt | What it asks for |
 | --- | --- |

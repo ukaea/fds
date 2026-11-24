@@ -149,6 +149,10 @@ class Config(BaseSettings):
 
     # OIDC/JWT Settings
     OIDC_AUDIENCE: str = Field(default="", validation_alias="FDS_OIDC_AUDIENCE")
+    # The scope a program asks the login service for, to get a token FDS accepts.
+    # Published so that a program FDS has never met knows what to ask for. Several
+    # are separated by spaces; empty publishes none.
+    OIDC_SCOPE: str = Field(default="", validation_alias="FDS_OIDC_SCOPE")
 
     # Multi-IdP Configuration
     TRUSTED_IDPS: list[TrustedIdP] = Field(

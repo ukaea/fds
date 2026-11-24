@@ -29,6 +29,7 @@ from pydantic import Field
 
 from fds import __version__
 from fds.mcp.catalogue import Catalogue, without_empty
+from fds.mcp.sign_in import NoteWhenNotSignedIn
 
 INSTRUCTIONS = """\
 These tools read a Fusion Data Service (FDS) catalogue: records of fusion
@@ -55,6 +56,10 @@ when you name a record. Listings return one page; `next_offset` means there are
 more, and passing it as `offset` fetches the next page. Answer from what the
 tools return, not from what you know about the device. When a search finds
 nothing, say so rather than guessing.
+
+A result carrying `not_signed_in` holds public records only, because the user is
+not logged in. Say so in your answer, and tell the user how to log in to this
+server with the client you are running in.
 """
 
 
@@ -119,6 +124,7 @@ mcp = FastMCP(
     version=__version__,
     lifespan=connect_to_fds,
     mask_error_details=True,
+    middleware=[NoteWhenNotSignedIn()],
 )
 
 
@@ -689,7 +695,7 @@ async def collection_resource(catalogue: CatalogueDep, id: int) -> dict[str, Any
 @mcp.prompt
 def find_shots(device: str) -> str:
     """Find the shots that answer a question, and list them in a table. Type the
-    question after the device: Claude Code passes one word per argument, so the
+    question after the device: some clients pass one word per argument, so the
     question cannot be an argument of its own.
 
     Args:

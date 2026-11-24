@@ -1,8 +1,11 @@
 import structlog
 from fastapi import Request
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import JSONResponse
 from opentelemetry import trace
+from starlette.exceptions import HTTPException
 
+from fds.api.protected_resource import bearer_challenge, sent_a_token
 from fds.core.logging import mark_logged
 from fds.services.exceptions import (
     ConflictError,
@@ -52,21 +55,49 @@ def add_exception_handlers(app):
             content={"detail": str(exc)},
         )
 
+    # A refusal of a request that came with no token is a 401, so the caller
+    # learns that a token would help and where to get one. With a token, the
+    # caller lacks a role, and the 403 says so in the terms OAuth clients read.
     @app.exception_handler(ForbiddenError)
     async def forbidden_handler(request: Request, exc: ForbiddenError):
+        if not sent_a_token(request):
+            logger.warning("access.unauthenticated", **_context(request, exc))
+            return JSONResponse(
+                status_code=401,
+                content={"detail": str(exc)},
+                headers={"WWW-Authenticate": bearer_challenge(request)},
+            )
         logger.warning("access.denied", **_context(request, exc))
         return JSONResponse(
             status_code=403,
             content={"detail": str(exc)},
+            headers={
+                "WWW-Authenticate": bearer_challenge(request, "insufficient_scope")
+            },
         )
 
     @app.exception_handler(UnauthorizedError)
     async def unauthorized_handler(request: Request, exc: UnauthorizedError):
         logger.warning("access.unauthenticated", **_context(request, exc))
+        error = "invalid_token" if sent_a_token(request) else None
         return JSONResponse(
             status_code=401,
             content={"detail": str(exc)},
+            headers={"WWW-Authenticate": bearer_challenge(request, error)},
         )
+
+    # Every 401 names the document that says where to get a token. The token
+    # checks raise HTTPException, so this is where theirs get it.
+    @app.exception_handler(HTTPException)
+    async def http_error_handler(request: Request, exc: HTTPException):
+        if exc.status_code == 401:
+            error = "invalid_token" if sent_a_token(request) else None
+            exc = HTTPException(
+                status_code=401,
+                detail=exc.detail,
+                headers={"WWW-Authenticate": bearer_challenge(request, error)},
+            )
+        return await http_exception_handler(request, exc)
 
     @app.exception_handler(FDSValidationError)
     async def validation_error_handler(request: Request, exc: FDSValidationError):

@@ -3,11 +3,10 @@ import hashlib
 from typing import NotRequired, TypedDict, cast
 
 import jwt
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import ValidationError
 
-from fds.auth.exceptions import create_unauthorized_exception
 from fds.auth.jwks import JWKSClientDep
 from fds.core.config import config
 from fds.core.context import set_actor
@@ -60,9 +59,8 @@ async def get_token_claims(
         )
         return cast(TokenClaims, claims)
     except (jwt.PyJWTError, ValidationError) as e:
-        raise create_unauthorized_exception(
-            detail=f"Invalid token: {e}",
-            authenticate_header="Bearer",
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e}"
         )
 
 

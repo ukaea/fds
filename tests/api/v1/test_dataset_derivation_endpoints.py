@@ -96,7 +96,7 @@ def test_restricted_dataset_derivations_are_not_public(
     test_client: TestClient, session: Session, admin_user: AuthenticatedUser
 ):
     """Provenance must not be reachable by going straight to the sub-resource of a
-    dataset whose own endpoint returns 403."""
+    dataset whose own endpoint refuses the caller."""
     DeviceService(session).create(
         DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
     )
@@ -117,9 +117,9 @@ def test_restricted_dataset_derivations_are_not_public(
     )
     session.commit()
 
-    assert test_client.get(f"/v1/datasets/{secret.id}").status_code == 403
+    assert test_client.get(f"/v1/datasets/{secret.id}").status_code == 401
     resp = test_client.get(f"/v1/datasets/{secret.id}/derivations")
-    assert resp.status_code == 403, resp.text
+    assert resp.status_code == 401, resp.text
 
 
 def test_jsonld_exposes_derivation(test_client: TestClient, admin_user_token: dict):

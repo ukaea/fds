@@ -58,9 +58,8 @@ def test_read_restricted_shot_anonymous(
     # Act: Read without token
     response = test_client.get(f"/v1/devices/JET/shots/{shot.id}")
 
-    # Assert: Forbidden (403)
-    # Since Service raises ForbiddenError, and global exception handler maps it to 403
-    assert response.status_code == 403
+    # Assert: Unauthorized (401), since the request came with no token
+    assert response.status_code == 401
 
 
 def test_read_restricted_shot_authenticated(

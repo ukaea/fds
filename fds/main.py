@@ -5,6 +5,7 @@ from fds import __version__
 from fds.api.exception_handlers import add_exception_handlers
 from fds.api.identifiers import router as identifier_router
 from fds.api.middleware import AuditMiddleware
+from fds.api.protected_resource import router as protected_resource_router
 from fds.api.v1 import (
     activity_router,
     catalog_router,
@@ -21,6 +22,7 @@ from fds.core.db import engine
 from fds.core.logging import setup_logging
 from fds.core.telemetry import setup_telemetry
 from fds.mcp.server import mcp
+from fds.mcp.sign_in import RefuseInvalidTokens
 
 setup_logging()
 
@@ -55,7 +57,8 @@ v1.include_router(
 v1.include_router(federation_router.router, prefix="/federation", tags=["federation"])
 
 app.include_router(identifier_router)
+app.include_router(protected_resource_router)
 app.include_router(v1)
 # A route rather than a mount: a mount answers /mcp with a redirect to /mcp/, which
 # not every MCP client follows.
-app.router.routes.append(Route("/mcp", mcp_app))
+app.router.routes.append(Route("/mcp", RefuseInvalidTokens(mcp_app)))

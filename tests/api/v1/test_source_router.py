@@ -31,7 +31,7 @@ def test_create_source_unauthorized(test_client: TestClient):
         "/v1/sources/",
         json={"name": "Unauthorized Source", "kind": "software"},
     )
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 def test_read_sources(test_client: TestClient, admin_user_token: dict):

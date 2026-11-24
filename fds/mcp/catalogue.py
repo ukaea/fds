@@ -67,7 +67,8 @@ class Catalogue:
                 )
             return (
                 f"FDS refused access ({status}): {detail}. No token came with the "
-                "request, so only public records can be read."
+                "request, so only public records can be read. To read this one, the "
+                "user has to log in to this server through their MCP client."
             )
         if status == 404:
             return f"Not found: {detail}"
