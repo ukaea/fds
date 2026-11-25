@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.2.0](https://github.com/ukaea/fds/compare/v0.1.1...v0.2.0) (2026-11-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* A request that needs a token and has none now gets 401 instead of 403. A signed-in caller without the role still gets 403. Clients that took 403 to mean "sign in" should treat 401 that way.
+
+### Features
+
+* Create a Collection with its member Datasets in one request ([#311](https://github.com/ukaea/fds/issues/311)) ([d19b125](https://github.com/ukaea/fds/commit/d19b125b9f80ec350fd2945195c07ea960415ec8))
+* Create an Activity's output Datasets in the same request ([#306](https://github.com/ukaea/fds/issues/306)) ([7059c39](https://github.com/ukaea/fds/commit/7059c3969c8fce76b76adb7d757a2a1102d2a1fa))
+* Group repeated annotations and list properties first ([#299](https://github.com/ukaea/fds/issues/299)) ([b33666e](https://github.com/ukaea/fds/commit/b33666e2c4b7b9026d29dfdeccb87385be97b472))
+* Publish protected resource metadata so clients can find where to log in ([#324](https://github.com/ukaea/fds/issues/324)) ([f01c872](https://github.com/ukaea/fds/commit/f01c872bcfe8b4fb9f09008c0057f62036392a86))
+* Record each request's duration and database time in its log line ([#303](https://github.com/ukaea/fds/issues/303)) ([62566bc](https://github.com/ukaea/fds/commit/62566bc21ae04f987210500432dc918f8a6b2e0d))
+* Serve an MCP server at /mcp for LLM clients ([#318](https://github.com/ukaea/fds/issues/318)) ([cb9a2e5](https://github.com/ukaea/fds/commit/cb9a2e543b9e506522e65065fe2874b79773eca4)), closes [#227](https://github.com/ukaea/fds/issues/227)
+* Show a shot's Collections as tabs ([#314](https://github.com/ukaea/fds/issues/314)) ([dee4f3b](https://github.com/ukaea/fds/commit/dee4f3b100b61554ebe88d0908e153b1ea7efae7))
+* Show each member's shot and version on a Collection page ([#312](https://github.com/ukaea/fds/issues/312)) ([16756d2](https://github.com/ukaea/fds/commit/16756d28b6f43c9804af7fd0924db6bb01c4104c))
+
+
+### Bug Fixes
+
+* Show provenance graph details in a side panel ([#294](https://github.com/ukaea/fds/issues/294)) ([5ae6f55](https://github.com/ukaea/fds/commit/5ae6f55bd50db36af7690ebdd5388e4d8e0fb37e))
+
 ## [0.1.1](https://github.com/ukaea/fds/compare/v0.1.0...v0.1.1) (2026-11-09)
 
 
