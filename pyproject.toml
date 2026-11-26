@@ -43,10 +43,10 @@ Issues = "https://github.com/ukaea/fds/issues"
 
 [project.optional-dependencies]
 s3 = [
-    "boto3>=1.44.3",
+    "boto3>=1.44.9",
 ]
 gcs = [
-    "google-auth>=2.62.2",
+    "google-auth>=2.63.1",
     "requests>=2.34.2",
 ]
 azure = [
@@ -65,7 +65,7 @@ dev = [
     "pytest>=9.2.0",
     "pytest-asyncio>=1.5.0",
     "pytest-mock>=3.17.0",
-    "ruff>=0.17.5",
+    "ruff>=0.17.6",
     "pyright>=1.1.414",
     "testcontainers[postgres]>=4.15.0",
     "moto[s3,sts]>=5.2.5",
