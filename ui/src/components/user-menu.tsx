@@ -24,9 +24,10 @@ export function UserMenu() {
     }
   }, []);
 
-  const handleSwitchAccount = async () => {
-    // A clean login form means ending the session at the provider too, not just
-    // here: App -> provider logout -> App(?switch_account=true) -> login.
+  // Signing out here alone leaves the session at the provider, and the next
+  // sign-in goes straight back in without a login form. So both buttons end
+  // that session too: App -> provider logout -> returnTo.
+  const endSession = async (returnTo: string) => {
     const config = await fetch('/api/auth-config')
       .then((response) => response.json() as Promise<{ logoutEndpoint: string | null }>)
       .catch(() => ({ logoutEndpoint: null }));
@@ -37,10 +38,7 @@ export function UserMenu() {
     }
 
     const logoutUrl = new URL(config.logoutEndpoint);
-    logoutUrl.searchParams.set(
-      "post_logout_redirect_uri",
-      `${window.location.origin}/?switch_account=true`,
-    );
+    logoutUrl.searchParams.set("post_logout_redirect_uri", returnTo);
     // Without the hint the provider asks the user to confirm the logout.
     if (session?.idToken) {
       logoutUrl.searchParams.set("id_token_hint", session.idToken);
@@ -49,6 +47,11 @@ export function UserMenu() {
     await signOut({ redirect: false });
     window.location.assign(logoutUrl.toString());
   };
+
+  const handleSwitchAccount = () =>
+    endSession(`${window.location.origin}/?switch_account=true`);
+
+  const handleSignOut = () => endSession(`${window.location.origin}/`);
 
   if (status === "loading") {
     return <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />;
@@ -81,7 +84,7 @@ export function UserMenu() {
           </button>
 
           <button
-            onClick={() => signOut()}
+            onClick={handleSignOut}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 whitespace-nowrap"
             title="Sign Out"
           >
