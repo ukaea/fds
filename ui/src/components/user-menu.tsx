@@ -2,7 +2,7 @@
 
 import { signIn, signOut, useSession } from "next-auth/react";
 import { User, LogOut, Loader2, Users } from "lucide-react";
-import { getUserRole, getRoleColor, getRoleBgColor } from "@/lib/roles";
+import { describeRoles, getRoleBgColor, getRoleColor, holdsAdmin } from "@/lib/roles";
 import { useEffect } from "react";
 
 export function UserMenu() {
@@ -58,9 +58,11 @@ export function UserMenu() {
   }
 
   if (status === "authenticated" && session?.user) {
-    const role = getUserRole(session.roles);
-    const roleColor = getRoleColor(role);
-    const roleBg = getRoleBgColor(role);
+    const admin = holdsAdmin(session.roles);
+    const roleColor = getRoleColor(admin);
+    const roleBg = getRoleBgColor(admin);
+    // A session from before the username was kept has only the name.
+    const username = session.username ?? session.user.name ?? "signed in";
 
     return (
       <div className="flex items-center justify-end gap-4 ml-auto">
@@ -68,8 +70,9 @@ export function UserMenu() {
           <div className={`${roleBg} p-2 rounded-full transition-colors shrink-0`}>
             <User className={`w-4 h-4 ${roleColor}`} />
           </div>
-          <div className={`text-sm font-medium ${roleColor} leading-tight text-left`}>
-            {role}
+          <div className="leading-tight text-left">
+            <div className="text-sm font-medium text-foreground">{username}</div>
+            <div className={`text-xs ${roleColor}`}>{describeRoles(session.roles)}</div>
           </div>
         </div>
 

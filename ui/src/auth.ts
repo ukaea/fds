@@ -33,13 +33,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.roles = profile.roles as string[]
       }
 
+      // The name they signed in with, which tells two accounts of one person apart
+      if (profile && typeof profile.preferred_username === "string") {
+        token.username = profile.preferred_username
+      }
+
       return token
     },
     async session({ session, token }) {
-      // Transfer the access token and roles to the session
+      // Transfer the access token, roles and username to the session
       session.accessToken = token.accessToken as string
       session.idToken = token.idToken as string
       session.roles = token.roles as string[] | undefined
+      session.username = token.username as string | undefined
       return session
     },
   },
