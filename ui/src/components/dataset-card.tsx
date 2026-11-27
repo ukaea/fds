@@ -63,7 +63,7 @@ export function DatasetCard({
           {subtitle && (
             <p
               className={`text-muted-foreground mt-0.5 ${
-                dataset.title ? 'text-sm' : 'text-xs font-mono break-all'
+                dataset.title ? 'text-sm break-words' : 'text-xs font-mono break-all'
               }`}
             >
               {subtitle}
