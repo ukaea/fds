@@ -176,7 +176,7 @@ def test_create_collection_unauthorized_global(
     collection_service: CollectionService,
 ):
     """Non-admin users cannot create global Collections."""
-    non_admin = AuthenticatedUser(id="user", scopes=())
+    non_admin = AuthenticatedUser(id="user", roles=())
     with pytest.raises(ForbiddenError):
         collection_service.create(CollectionCreate(name="forbidden"), non_admin)
 
@@ -186,9 +186,9 @@ def test_create_collection_unauthorized_device(
     collection_service: CollectionService,
     admin_user: AuthenticatedUser,
 ):
-    """A user without device-admin scope cannot create a device-scoped Collection."""
+    """A user without the device's write role cannot create a device-scoped Collection."""
     _make_device(device_service, admin_user)
-    wrong_user = AuthenticatedUser(id="other", scopes=("other_admin",))
+    wrong_user = AuthenticatedUser(id="other", roles=("other-write",))
     with pytest.raises(ForbiddenError):
         collection_service.create(
             CollectionCreate(name="nope", device_name="DEV"), wrong_user

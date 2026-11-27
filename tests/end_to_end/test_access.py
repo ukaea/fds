@@ -16,12 +16,12 @@ def test_write_is_rejected_without_a_token(http_client: httpx.Client):
     assert response.status_code in (401, 403)
 
 
-def test_write_is_rejected_without_the_scope(http_client: httpx.Client, signing_key):
-    """A token the service trusts, carrying no administrative scope."""
+def test_write_is_rejected_without_the_role(http_client: httpx.Client, signing_key):
+    """A token the service trusts, carrying no administrative role."""
     if signing_key is None:
         pytest.skip("no signing key available")
 
-    token = sign(signing_key, scope="openid")
+    token = sign(signing_key, roles=[])
     response = http_client.post(
         f"{FDS_URL}/devices/",
         headers={"Authorization": f"Bearer {token}"},
@@ -33,7 +33,7 @@ def test_write_is_rejected_without_the_scope(http_client: httpx.Client, signing_
 def test_token_from_an_untrusted_issuer_is_rejected(http_client: httpx.Client):
     """Signed by a key the service has never heard of."""
     impostor = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    token = sign(impostor, scope="fds-admin", issuer="urn:fds:not-trusted")
+    token = sign(impostor, roles=["fds-admin"], issuer="urn:fds:not-trusted")
 
     response = http_client.post(
         f"{FDS_URL}/devices/",

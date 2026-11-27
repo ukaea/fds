@@ -19,7 +19,6 @@ from fds.models.storage_options import (
     StorageLocation,
     StorageOptionsType,
 )
-from fds.services.exceptions import ForbiddenError
 from fds.services.file_access_service import FileAccessService, ResolvedDistribution
 
 
@@ -36,103 +35,112 @@ def test_access_public_anonymous(access_service):
 
 def test_access_public_authenticated(access_service):
     """Public datasets should be accessible to authenticated users."""
-    user = AuthenticatedUser(id="u1", scopes=())
+    user = AuthenticatedUser(id="u1", roles=())
     dataset = Dataset(name="pub", level=1, access_level=AccessLevel.PUBLIC)
     assert access_service._check_download_permission(user, dataset) is True
 
 
-def test_access_required_scope_allowed(access_service):
-    """Dataset with required_scopes should be accessible to user having all listed scopes."""
-    user = AuthenticatedUser(id="u1", scopes=("special:access",))
+def test_access_required_role_allowed(access_service):
+    """Dataset with read_roles should be accessible to user having all listed roles."""
+    user = AuthenticatedUser(id="u1", roles=("special:access",))
     dataset = Dataset(
-        name="scoped",
+        name="team-only",
         level=1,
         access_level=AccessLevel.RESTRICTED,
-        required_scopes=["special:access"],
+        read_roles=["special:access"],
     )
     assert access_service._check_download_permission(user, dataset) is True
 
 
-def test_access_required_scope_denied(access_service):
-    """Dataset with required_scopes should be DENIED to user lacking any listed scope."""
-    user = AuthenticatedUser(id="u1", scopes=("wrong:scope",))
+def test_access_required_role_denied(access_service):
+    """Dataset with read_roles should be DENIED to user lacking any listed role."""
+    user = AuthenticatedUser(id="u1", roles=("wrong:role",))
     dataset = Dataset(
-        name="scoped",
+        name="team-only",
         level=1,
         access_level=AccessLevel.RESTRICTED,
-        required_scopes=["special:access"],
+        read_roles=["special:access"],
     )
     assert access_service._check_download_permission(user, dataset) is False
 
 
-def test_access_required_scope_overrides_fallback(
-    access_service, mock_check_shot_operator
-):
-    """If required_scopes is set, fallback context check should NOT be called (Specific Overrides General)."""
-    # User HAS shot operator (context), but LACKS required_scope.
-    # Should FAIL.
-    user = AuthenticatedUser(id="u1", scopes=("shot-operator:mast",))
+def test_access_read_role_not_held(access_service):
+    """A role the dataset does not list lets nobody in."""
+    user = AuthenticatedUser(id="u1", roles=("mast-read",))
     dataset = Dataset(
         name="override",
         level=1,
         access_level=AccessLevel.RESTRICTED,
-        required_scopes=["special:top-secret"],
+        read_roles=["special:top-secret"],
         device_name="mast",
     )
 
-    allowed = access_service._check_download_permission(user, dataset)
-    assert allowed is False
-    # Ensure fallback was NOT called (optimization/strictness check)
-    mock_check_shot_operator.assert_not_called()
+    assert access_service._check_download_permission(user, dataset) is False
 
 
-def test_access_empty_required_scopes_auth_only_bypasses_fallback(
-    access_service, mock_check_shot_operator
-):
-    """required_scopes=[] is an explicit auth-only gate and must bypass fallback."""
-    user = AuthenticatedUser(id="u1", scopes=())
+def test_access_any_one_read_role(access_service):
+    user = AuthenticatedUser(id="u1", roles=("jet-collab",))
+    dataset = Dataset(
+        name="shared",
+        level=1,
+        access_level=AccessLevel.RESTRICTED,
+        read_roles=["mast-read", "jet-collab"],
+        device_name="mast",
+    )
+
+    assert access_service._check_download_permission(user, dataset) is True
+
+
+def test_access_write_role_reads_too(access_service):
+    user = AuthenticatedUser(id="u1", roles=("mast-write",))
+    dataset = Dataset(
+        name="written",
+        level=1,
+        access_level=AccessLevel.EMBARGOED,
+        read_roles=["mast-read"],
+        write_roles=["mast-write"],
+        device_name="mast",
+    )
+
+    assert access_service._check_download_permission(user, dataset) is True
+
+
+def test_access_global_admin_passes_read_roles(access_service):
+    user = AuthenticatedUser(id="admin", roles=("fds-admin",))
+    dataset = Dataset(
+        name="team-only",
+        level=1,
+        access_level=AccessLevel.RESTRICTED,
+        read_roles=["special:top-secret"],
+        device_name="mast",
+    )
+
+    assert access_service._check_download_permission(user, dataset) is True
+
+
+def test_access_empty_read_roles_lets_in_anyone_signed_in(access_service):
+    user = AuthenticatedUser(id="u1", roles=())
     dataset = Dataset(
         name="auth-only",
         level=1,
         access_level=AccessLevel.RESTRICTED,
-        required_scopes=[],
+        read_roles=[],
         device_name="mast",
         shot_id="123",
     )
 
     assert access_service._check_download_permission(user, dataset) is True
-    mock_check_shot_operator.assert_not_called()
 
 
-def test_access_fallback_shot_context_allowed(access_service, mock_check_shot_operator):
-    """If no required_scope, should fallback to Shot Context check."""
-    user = AuthenticatedUser(id="u1", scopes=())
+def test_access_no_lists_lets_in_only_fds_admin(access_service):
+    user = AuthenticatedUser(id="u1", roles=("mast-read",))
     dataset = Dataset(
-        name="fallback",
-        level=1,
-        access_level=AccessLevel.RESTRICTED,  # or Embargoed
-        device_name="mast",
-        shot_id="123",
-    )
-    # Mock fallback passing
-    mock_check_shot_operator.return_value = None  # logic returns None on success
-
-    assert access_service._check_download_permission(user, dataset) is True
-    mock_check_shot_operator.assert_called_with(user, "mast")
-
-
-def test_access_fallback_shot_context_denied(access_service, mock_check_shot_operator):
-    """If no required_scope, should fallback to Shot Context check (failing)."""
-    user = AuthenticatedUser(id="u1", scopes=())
-    dataset = Dataset(
-        name="fallback",
+        name="unlisted",
         level=1,
         access_level=AccessLevel.RESTRICTED,
         device_name="mast",
         shot_id="123",
     )
-    # Mock fallback failing
-    mock_check_shot_operator.side_effect = ForbiddenError("Access denied")
 
     assert access_service._check_download_permission(user, dataset) is False
 
@@ -146,7 +154,7 @@ def test_fail_fast_malformed_url(access_service):
 
 
 def test_polyglot_routing_s3(session, access_service, mock_credential_provider):
-    user = AuthenticatedUser(id="user", scopes=())
+    user = AuthenticatedUser(id="user", roles=())
 
     # 1. Setup DB with S3 dataset
     ds1 = Dataset(name="ds1", level=1, access_level=AccessLevel.PUBLIC)
@@ -214,7 +222,7 @@ def test_providers_sharing_an_endpoint_each_get_their_own_urls(
     _public_dataset_with_distribution(session, url="az://container/b")
 
     manifest = access_service.generate_session_credentials(
-        AuthenticatedUser(id="user", scopes=()),
+        AuthenticatedUser(id="user", roles=()),
         CredentialRequest(data_urls=["s3://bucket/a", "az://container/b"]),
     )
 
@@ -223,7 +231,7 @@ def test_providers_sharing_an_endpoint_each_get_their_own_urls(
 
 
 def test_empty_request_returns_empty(access_service, mock_credential_provider):
-    user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    user = AuthenticatedUser(id="admin", roles=("fds-admin",))
 
     # Act
     result = access_service.generate_session_credentials(user, CredentialRequest())
@@ -409,7 +417,7 @@ def test_storage_options_absent_unless_asked(
     session, access_service, mock_credential_provider
 ):
     """The default response is unchanged: the raw credential and nothing more."""
-    user = AuthenticatedUser(id="user", scopes=())
+    user = AuthenticatedUser(id="user", roles=())
     _public_dataset_with_distribution(
         session,
         url="s3://bucket/plain",
@@ -430,7 +438,7 @@ def test_storage_options_fsspec_shape(
     session, access_service, mock_credential_provider
 ):
     """An fsspec distribution renders s3fs kwargs, splat-ready for xarray."""
-    user = AuthenticatedUser(id="user", scopes=())
+    user = AuthenticatedUser(id="user", roles=())
     _public_dataset_with_distribution(
         session,
         url="s3://bucket/zarr",
@@ -469,7 +477,7 @@ def test_storage_options_icechunk_fills_endpoint_defaults(
     hand-written mapping misses them; omitting force_path_style against an
     S3-compatible store gives a connection that resolves but finds no bucket.
     """
-    user = AuthenticatedUser(id="user", scopes=())
+    user = AuthenticatedUser(id="user", roles=())
     _public_dataset_with_distribution(
         session,
         url="s3://bucket/store",
@@ -507,7 +515,7 @@ def test_storage_options_are_per_url_not_shared(
     The S3 provider returns a single credential object for every URL, so
     rendering has to copy rather than mutate.
     """
-    user = AuthenticatedUser(id="user", scopes=())
+    user = AuthenticatedUser(id="user", roles=())
     _public_dataset_with_distribution(
         session,
         url="s3://bucket/as-fsspec",
@@ -546,7 +554,7 @@ def test_storage_options_region_override_from_distribution(
     session, access_service, mock_credential_provider
 ):
     """A Distribution region overrides the provider's, as on the dataset path."""
-    user = AuthenticatedUser(id="user", scopes=())
+    user = AuthenticatedUser(id="user", roles=())
     _public_dataset_with_distribution(
         session,
         url="s3://bucket/regional",
@@ -575,7 +583,7 @@ def test_storage_options_skipped_when_distribution_opts_out(
     session, access_service, mock_credential_provider
 ):
     """A null storage_options_type is an opt-out, same as on the dataset path."""
-    user = AuthenticatedUser(id="user", scopes=())
+    user = AuthenticatedUser(id="user", roles=())
     _public_dataset_with_distribution(
         session, url="s3://bucket/opted-out", storage_options_type=None
     )
@@ -596,7 +604,7 @@ def test_storage_options_skipped_when_distribution_opts_out(
 
 def test_storage_options_azure_entry(session, access_service, mock_credential_provider):
     """Azure has one shape and no target type, so it renders regardless."""
-    user = AuthenticatedUser(id="user", scopes=())
+    user = AuthenticatedUser(id="user", roles=())
     _public_dataset_with_distribution(
         session, url="az://container/blob", storage_options_type=None
     )

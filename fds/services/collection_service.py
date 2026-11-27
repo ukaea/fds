@@ -8,11 +8,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from fds.auth.access_control import (
+    check_activity_change,
+    check_activity_write,
+    check_create,
+    check_policy_update,
     check_read,
+    check_write,
     get_effective_policies,
-    validate_policy_fields,
+    validate_allowed_idps,
 )
-from fds.auth.permissions import check_device_admin, check_is_admin
+from fds.auth.permissions import check_sets_write_roles
 from fds.core.context import ReadTier
 from fds.core.naming import normalise_device_name
 from fds.models.activity import Activity, ActivityType
@@ -62,6 +67,10 @@ from fds.services.jsonld import (
     map_collection_to_dcat,
 )
 from fds.services.shot_service import ShotService
+from fds.services.source_service import (
+    readable_activity_sources,
+    readable_source_clause,
+)
 from fds.services.visibility import (
     read_page,
     read_pages_by_group,
@@ -101,17 +110,13 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
     def create(self, obj_in: CollectionCreate, user: AuthenticatedUser) -> Collection:
         """Create a new Collection at Global, Device, or Shot scope.
 
-        Validates policy invariants, verifies the referenced Shot/Device
+        Validates the issuer list, verifies the referenced Shot/Device
         exists, checks for name collisions within the scope, and enforces
-        tiered write authorization (device admin for Device/Shot scope,
-        global admin for Global scope).
+        the write roles of the Shot or Device it goes on; a Global Collection
+        needs fds-admin. Naming an Activity needs write access to it.
         """
-        # 0. Validate policy invariants before any DB work
-        validate_policy_fields(
-            obj_in.access_level,
-            obj_in.required_scopes,
-            obj_in.allowed_idps,
-        )
+        # 0. Validate the issuer list before any DB work
+        validate_allowed_idps(obj_in.allowed_idps)
         obj_in.device_name = normalise_device_name(obj_in.device_name)
 
         # 1. Determine and validate context
@@ -126,14 +131,12 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 raise ResourceNotFoundError(
                     f"Shot {obj_in.shot_id} not found for device {obj_in.device_name}"
                 )
-            check_device_admin(user, obj_in.device_name)
-
         elif obj_in.device_name:
             self._require_device(obj_in.device_name)
-            check_device_admin(user, obj_in.device_name)
-
-        else:
-            check_is_admin(user)
+        check_create(self.session, user, obj_in.device_name, obj_in.shot_id)
+        check_sets_write_roles(user, obj_in.write_roles)
+        if obj_in.activity_id is not None:
+            check_activity_write(self.session, user, obj_in.activity_id)
 
         # 2. Check for name collisions within scope
         existing = self.get_by_name_in_context(
@@ -199,10 +202,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         if not db_obj:
             raise ResourceNotFoundError(f"Collection {id} not found")
 
-        if db_obj.device_name:
-            check_device_admin(user, db_obj.device_name)
-        else:
-            check_is_admin(user)
+        check_write(db_obj, self.session, user)
 
         if obj_in.device_name is not None:
             obj_in.device_name = normalise_device_name(obj_in.device_name)
@@ -218,15 +218,12 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         update_data = obj_in.model_dump(exclude_unset=True)
         if "name" in update_data and update_data["name"] is None:
             raise FDSValidationError("Collection name cannot be null")
-        effective_access_level = update_data.get("access_level", db_obj.access_level)
-        effective_required_scopes = update_data.get(
-            "required_scopes", db_obj.required_scopes
-        )
-        effective_allowed_idps = update_data.get("allowed_idps", db_obj.allowed_idps)
-        validate_policy_fields(
-            effective_access_level,
-            effective_required_scopes,
-            effective_allowed_idps,
+        check_policy_update(user, db_obj, update_data)
+        check_activity_change(
+            self.session,
+            user,
+            db_obj.activity_id,
+            update_data.get("activity_id", db_obj.activity_id),
         )
 
         name = update_data.get("name", db_obj.name)
@@ -281,10 +278,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         if not db_obj:
             raise ResourceNotFoundError(f"Collection {id} not found")
 
-        if db_obj.device_name:
-            check_device_admin(user, db_obj.device_name)
-        else:
-            check_is_admin(user)
+        check_write(db_obj, self.session, user)
 
         return self.delete_unchecked(id)
 
@@ -345,7 +339,11 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             *shot_id_prefix_clauses(col(Collection.shot_id), shot_id_prefix),
             *property_clauses(Collection, properties),
             *activity_clauses(
-                col(Collection.activity_id), activity_type, source, activity_id
+                col(Collection.activity_id),
+                activity_type,
+                source,
+                activity_id,
+                readable_source_clause(self.session, source, user),
             ),
             *(
                 []
@@ -556,7 +554,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         if not dataset:
             raise ResourceNotFoundError(f"Dataset {dataset_id} not found")
 
-        self._check_write_auth(collection, user)
+        check_write(collection, self.session, user)
 
         existing = self.session.get(CollectionDataset, (collection_id, dataset_id))
         if existing:
@@ -581,7 +579,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         if not collection:
             raise ResourceNotFoundError(f"Collection {collection_id} not found")
 
-        self._check_write_auth(collection, user)
+        check_write(collection, self.session, user)
 
         membership = self.session.get(CollectionDataset, (collection_id, dataset_id))
         if not membership:
@@ -613,7 +611,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         if not child:
             raise ResourceNotFoundError(f"Collection {child_id} not found")
 
-        self._check_write_auth(parent, user)
+        check_write(parent, self.session, user)
 
         existing = self.session.get(CollectionMember, (parent_id, child_id))
         if existing:
@@ -664,7 +662,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         if not parent:
             raise ResourceNotFoundError(f"Collection {parent_id} not found")
 
-        self._check_write_auth(parent, user)
+        check_write(parent, self.session, user)
 
         membership = self.session.get(CollectionMember, (parent_id, child_id))
         if not membership:
@@ -744,6 +742,9 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             self.session, Collection, CollectionReplacement, collections, user
         )
         inputs = readable_activity_inputs(self.session, collections, user)
+        sources = readable_activity_sources(
+            self.session, [c.activity for c in collections], user
+        )
         return {
             "@context": generate_context(),
             "@graph": [
@@ -753,6 +754,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                     datasets=members.get(collection.id, []),
                     child_collections=children.get(collection.id, []),
                     activity_inputs=activity_inputs,
+                    activity_sources=sources,
                     replaces=links.get(collection.id, ([], []))[0],
                     replaced_by=links.get(collection.id, ([], []))[1],
                 )
@@ -792,7 +794,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         }
         policies = get_effective_policies(collections, self.session)
         activities = activity_summaries(
-            self.session, (c.activity_id for c in collections)
+            self.session, (c.activity_id for c in collections), user
         )
         links = replacements.replaces_and_replaced_by(
             self.session, Collection, CollectionReplacement, collections, user
@@ -823,19 +825,6 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
             for collection, policy in zip(collections, policies, strict=True)
         ]
 
-    def _check_write_auth(
-        self, collection: Collection, user: AuthenticatedUser
-    ) -> None:
-        """Assert the user has write access to the given Collection's scope.
-
-        Device-scoped Collections (and Shot-scoped ones, which inherit device
-        context) require Device Admin. Global Collections require global Admin.
-        """
-        if collection.device_name:
-            check_device_admin(user, collection.device_name)
-        else:
-            check_is_admin(user)
-
     def to_summary_read_models(
         self,
         collections: Sequence[Collection],
@@ -844,7 +833,7 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
         """``CollectionRead`` DTOs without their members, as listed inside a parent."""
         policies = get_effective_policies(collections, self.session)
         activities = activity_summaries(
-            self.session, (c.activity_id for c in collections)
+            self.session, (c.activity_id for c in collections), user
         )
         links = replacements.replaces_and_replaced_by(
             self.session, Collection, CollectionReplacement, collections, user
@@ -963,5 +952,8 @@ class CollectionService(BaseService[Collection, CollectionCreate, CollectionUpda
                 readable_only(self.session, collection.activity.input_datasets, user)
                 if collection.activity
                 else []
+            ),
+            activity_sources=readable_activity_sources(
+                self.session, [collection.activity], user
             ),
         )

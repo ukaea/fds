@@ -13,7 +13,7 @@ from fds.services.jsonld import (
 )
 from tests.conftest import resource
 
-admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+admin = AuthenticatedUser(id="admin", roles=("fds-admin",))
 BASE = "http://testserver"
 
 

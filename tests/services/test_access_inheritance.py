@@ -136,8 +136,11 @@ def test_shot_inherits_from_device(
         {},
         {"access_level": AccessLevel.PUBLIC},
         {"access_level": AccessLevel.RESTRICTED},
-        {"access_level": AccessLevel.RESTRICTED, "required_scopes": ["mast_admin"]},
-        {"access_level": AccessLevel.RESTRICTED, "required_scopes": []},
+        {
+            "access_level": AccessLevel.RESTRICTED,
+            "read_roles": ["mast-write"],
+        },
+        {"access_level": AccessLevel.RESTRICTED, "read_roles": []},
         {
             "access_level": AccessLevel.RESTRICTED,
             "allowed_idps": ["https://idp-a.example.com"],
@@ -160,7 +163,7 @@ def test_resolve_policy_agrees_with_get_effective_policy(
             name="EQUIV",
             type="Tokamak",
             access_level=AccessLevel.RESTRICTED,
-            required_scopes=["device_scope"],
+            read_roles=["device_scope"],
             allowed_idps=["https://idp-b.example.com"],
         ),
         admin_user,
@@ -172,7 +175,8 @@ def test_resolve_policy_agrees_with_get_effective_policy(
 
     assert resolve_policy(
         shot.access_level,
-        shot.required_scopes,
+        shot.read_roles,
+        shot.write_roles,
         shot.allowed_idps,
         get_effective_policy(device, session),
     ) == get_effective_policy(shot, session)
@@ -185,7 +189,7 @@ def test_get_effective_policies_resolves_each_record_from_its_own_parents(
 
     Both devices have a shot "1", so a shot found by id alone would hand one
     device's datasets the other's policy. The first dataset takes its
-    access_level from its shot and its required_scopes from its device.
+    access_level from its shot and its read_roles from its device.
     """
     for name, embargoed_shot in (("A", True), ("B", False)):
         DeviceService(session).create(
@@ -193,7 +197,7 @@ def test_get_effective_policies_resolves_each_record_from_its_own_parents(
                 name=name,
                 type="Tokamak",
                 access_level=AccessLevel.RESTRICTED,
-                required_scopes=[f"{name}:read"],
+                read_roles=[f"{name}:read"],
             ),
             admin_user,
         )
@@ -215,7 +219,7 @@ def test_get_effective_policies_resolves_each_record_from_its_own_parents(
 
     policies = get_effective_policies(datasets, session)
 
-    assert [(p.access_level, p.required_scopes) for p in policies] == [
+    assert [(p.access_level, p.read_roles) for p in policies] == [
         (AccessLevel.EMBARGOED, ["A:read"]),
         (AccessLevel.RESTRICTED, ["B:read"]),
         (AccessLevel.RESTRICTED, ["A:read"]),

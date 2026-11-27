@@ -17,7 +17,7 @@ from fds.auth.security import get_token_claims
 from fds.core.config import TrustedIdP
 
 LOCAL_ISSUER = "urn:fds:local"
-AUDIENCE = "fds-client"
+AUDIENCE = "fds"
 KID = "local-1"
 MINT_TOKEN = Path(__file__).parents[2] / "scripts" / "mint-token.py"
 
@@ -47,7 +47,7 @@ def mint(
     *,
     issuer: str = LOCAL_ISSUER,
     audience: str = AUDIENCE,
-    scope: str = "fds-admin",
+    roles: tuple[str, ...] = ("fds-admin",),
     lifetime: timedelta = timedelta(minutes=15),
     kid: str = KID,
 ) -> str:
@@ -57,7 +57,7 @@ def mint(
             "iss": issuer,
             "sub": "operator",
             "aud": audience,
-            "scope": scope,
+            "roles": list(roles),
             "iat": now,
             "exp": now + lifetime,
         },
@@ -100,7 +100,7 @@ async def test_minted_token_is_accepted(local_idp, key_pair, mocker):
     assert claims is not None
     assert claims["iss"] == LOCAL_ISSUER
     assert claims.get("sub") == "operator"
-    assert claims.get("scope") == "fds-admin"
+    assert claims.get("roles") == ["fds-admin"]
 
 
 @pytest.mark.asyncio

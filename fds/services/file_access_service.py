@@ -7,8 +7,8 @@ from sqlmodel import Session, col, select
 from fds.auth.access_control import (
     get_effective_access_level,
     get_effective_policy,
+    holds_read_roles,
 )
-from fds.auth.permissions import check_shot_operator
 from fds.core.audit import record_data_access
 from fds.core.naming import normalise_device_name
 from fds.core.storage.providers import get_provider_for_endpoint
@@ -27,7 +27,6 @@ from fds.models.storage_options import (
     StorageOptionsType,
     parse_storage_url,
 )
-from fds.services.exceptions import ForbiddenError
 
 logger = structlog.get_logger(__name__)
 
@@ -227,17 +226,21 @@ class FileAccessService:
 
         - PUBLIC:  always open (including anonymous).
         - EMBARGOED / RESTRICTED:
-            1. Must be authenticated.
-            2. If effective allowed_idps is set, user issuer must be in list.
-            3. If effective required_scopes is explicitly set (including []):
-               all listed scopes must be present; [] means auth-only gate.
-            4. Otherwise fall back to context-based capability check
-               (shot-operator role).
+            1. fds-admin is always allowed.
+            2. Must be authenticated.
+            3. If effective allowed_idps is set, user issuer must be in list.
+            4. The user holds one of the effective read_roles or write_roles;
+               [] lets in anyone signed in, and with neither set nobody else
+               gets in.
         """
         policy = get_effective_policy(dataset, self.session)
 
-        # 1. PUBLIC is always open
+        # PUBLIC is always open
         if policy.access_level == AccessLevel.PUBLIC:
+            return True
+
+        # 1. fds-admin could change the policy to let itself in, so it is let in
+        if user.is_admin():
             return True
 
         # 2. Must be authenticated for non-public data
@@ -248,25 +251,5 @@ class FileAccessService:
         if policy.allowed_idps is not None and user.issuer not in policy.allowed_idps:
             return False
 
-        # 4. Enforce required scopes if explicitly set at any hierarchy level
-        #    None  → fall through to capability check
-        #    []    → auth-only gate (already satisfied by step 2)
-        #    [..] → all scopes must be present
-        if policy.required_scopes is not None:
-            if len(policy.required_scopes) == 0:
-                return True
-            for scope in policy.required_scopes:
-                if scope not in user.scopes:
-                    return False
-            return True
-
-        # 5. Capability fallback (no explicit required_scopes anywhere in hierarchy)
-        try:
-            if dataset.device_name:
-                check_shot_operator(user, dataset.device_name)
-                return True
-        except ForbiddenError:
-            return False
-
-        # Default deny
-        return False
+        # 4. A role that reads the dataset, or one that writes it
+        return holds_read_roles(user, policy)

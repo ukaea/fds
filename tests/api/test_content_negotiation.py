@@ -76,7 +76,7 @@ def test_creator_in_device_jsonld(test_client: TestClient, session: Session):
 
 
 def test_content_negotiation_shot(test_client: TestClient, session: Session):
-    admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    admin = AuthenticatedUser(id="admin", roles=("fds-admin",))
     DeviceService(session).create(DeviceCreate(name="MAST", type="Tokamak"), user=admin)
     shot = ShotService(session).create(
         ShotCreate(
@@ -115,7 +115,7 @@ def test_content_negotiation_shot_open_period(
     test_client: TestClient, session: Session
 ):
     """A shot with only a start time maps to an open PeriodOfTime (no endDate)."""
-    admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    admin = AuthenticatedUser(id="admin", roles=("fds-admin",))
     DeviceService(session).create(DeviceCreate(name="MAST", type="Tokamak"), user=admin)
     ShotService(session).create(
         ShotCreate(
@@ -144,7 +144,7 @@ def test_content_negotiation_dataset(test_client: TestClient, session: Session):
     Test that the dataset endpoint (by ID) respects the Accept header.
     """
     # Setup
-    admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    admin = AuthenticatedUser(id="admin", roles=("fds-admin",))
     dataset = DatasetService(session).create(
         DatasetCreate(
             name="test-dataset-negotiation",

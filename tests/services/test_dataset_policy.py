@@ -1,9 +1,9 @@
 import pytest
 from sqlmodel import Session
 
-from fds.auth.access_control import get_effective_policy, validate_policy_fields
+from fds.auth.access_control import get_effective_policy, validate_allowed_idps
 from fds.core.config import config
-from fds.models.dataset import Dataset, DatasetCreate, DatasetUpdate
+from fds.models.dataset import Dataset, DatasetCreate
 from fds.models.device import DeviceCreate
 from fds.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from fds.models.policy import AccessLevel
@@ -35,127 +35,99 @@ IDP_A = "https://idp-a.example.com"
 IDP_B = "https://idp-b.example.com"
 
 
-def test_public_with_required_scopes_invalid():
-    with pytest.raises(FDSValidationError, match="PUBLIC"):
-        validate_policy_fields(AccessLevel.PUBLIC, ["some:scope"], None)
-
-
-def test_public_with_allowed_idps_invalid():
-    with pytest.raises(FDSValidationError, match="PUBLIC"):
-        validate_policy_fields(AccessLevel.PUBLIC, None, [IDP_A])
-
-
-def test_null_access_level_with_required_scopes_invalid():
-    with pytest.raises(FDSValidationError, match="required_scopes requires"):
-        validate_policy_fields(None, ["some:scope"], None)
-
-
-def test_null_access_level_with_allowed_idps_invalid():
-    with pytest.raises(FDSValidationError, match="allowed_idps requires"):
-        validate_policy_fields(None, None, [IDP_A])
-
-
 def test_allowed_idps_empty_list_invalid():
     with pytest.raises(FDSValidationError, match="must not be an empty list"):
-        validate_policy_fields(AccessLevel.RESTRICTED, None, [])
+        validate_allowed_idps([])
 
 
 def test_allowed_idps_unknown_issuer_invalid():
     with pytest.raises(FDSValidationError, match="unknown IdP issuer"):
-        validate_policy_fields(
-            AccessLevel.RESTRICTED, None, ["https://not-trusted.com"]
-        )
+        validate_allowed_idps(["https://not-trusted.com"])
 
 
 def test_allowed_idps_fails_when_trusted_idps_missing(monkeypatch):
     monkeypatch.setattr(config, "TRUSTED_IDPS", [])
     with pytest.raises(FDSValidationError, match="TRUSTED_IDPS is missing or empty"):
-        validate_policy_fields(AccessLevel.RESTRICTED, None, [IDP_A])
+        validate_allowed_idps([IDP_A])
 
 
-def test_restricted_with_empty_required_scopes_valid():
-    # Empty list = auth-only gate; should not raise.
-    validate_policy_fields(AccessLevel.RESTRICTED, [], None)
+def test_trusted_allowed_idps_valid():
+    validate_allowed_idps([IDP_A])
 
 
-def test_restricted_with_scopes_and_idps_valid():
-    validate_policy_fields(AccessLevel.RESTRICTED, ["group:scientists"], [IDP_A])
+def test_null_allowed_idps_valid():
+    validate_allowed_idps(None)
 
 
-def test_null_access_null_policy_valid():
-    # Inheritance scenario: no explicit level or scope fields set.
-    validate_policy_fields(None, None, None)
+def test_public_device_names_issuers_its_restricted_datasets_inherit(
+    session, device_service, dataset_service, admin_user
+):
+    device_service.create(
+        DeviceCreate(
+            name="OPEN", access_level=AccessLevel.PUBLIC, allowed_idps=[IDP_A]
+        ),
+        admin_user,
+    )
+    dataset = dataset_service.create(
+        DatasetCreate(
+            name="d", device_name="OPEN", access_level=AccessLevel.RESTRICTED
+        ),
+        admin_user,
+    )
+    assert get_effective_policy(dataset, session).allowed_idps == [IDP_A]
 
 
-def test_create_public_with_required_scopes_rejected(dataset_service, admin_user):
-    with pytest.raises(FDSValidationError, match="PUBLIC"):
-        dataset_service.create(
-            DatasetCreate(
-                name="bad",
-                level=1,
-                url="s3://x",
-                access_level=AccessLevel.PUBLIC,
-                required_scopes=["some:scope"],
-            ),
-            user=admin_user,
-        )
+def test_create_public_with_read_roles_allowed(device_service, admin_user):
+    """A public record may name read roles for the restricted records that
+    inherit them."""
+    device = device_service.create(
+        DeviceCreate(
+            name="OPEN", access_level=AccessLevel.PUBLIC, read_roles=["open-read"]
+        ),
+        user=admin_user,
+    )
+    assert device.read_roles == ["open-read"]
 
 
-def test_create_null_access_with_allowed_idps_rejected(dataset_service, admin_user):
-    with pytest.raises(FDSValidationError, match="allowed_idps requires"):
-        dataset_service.create(
-            DatasetCreate(
-                name="bad",
-                level=1,
-                url="s3://x",
-                allowed_idps=[IDP_A],
-            ),
-            user=admin_user,
-        )
+def test_create_inheriting_level_with_read_roles_allowed(dataset_service, admin_user):
+    ds = dataset_service.create(
+        DatasetCreate(name="own-roles", level=1, url="s3://x", read_roles=["a"]),
+        user=admin_user,
+    )
+    assert ds.read_roles == ["a"]
 
 
-def test_create_restricted_empty_scopes_allowed(dataset_service, admin_user):
+def test_create_inheriting_level_with_allowed_idps_allowed(dataset_service, admin_user):
+    ds = dataset_service.create(
+        DatasetCreate(name="own-issuers", level=1, url="s3://x", allowed_idps=[IDP_A]),
+        user=admin_user,
+    )
+    assert ds.allowed_idps == [IDP_A]
+
+
+def test_create_restricted_empty_roles_allowed(dataset_service, admin_user):
     ds = dataset_service.create(
         DatasetCreate(
             name="auth-only",
             level=1,
             url="s3://x",
             access_level=AccessLevel.RESTRICTED,
-            required_scopes=[],
+            read_roles=[],
         ),
         user=admin_user,
     )
     assert ds.id is not None
-    assert ds.required_scopes == []
+    assert ds.read_roles == []
 
 
-def test_update_transition_to_public_with_scopes_rejected(dataset_service, admin_user):
-    ds = dataset_service.create(
-        DatasetCreate(
-            name="upgrading",
-            level=1,
-            url="s3://x",
-            access_level=AccessLevel.RESTRICTED,
-            required_scopes=["some:scope"],
-        ),
-        user=admin_user,
-    )
-    with pytest.raises(FDSValidationError, match="PUBLIC"):
-        dataset_service.update(
-            id=ds.id,
-            obj_in=DatasetUpdate(access_level=AccessLevel.PUBLIC),
-            user=admin_user,
-        )
-
-
-def test_effective_policy_inherits_required_scopes_from_device(
+def test_effective_policy_inherits_read_roles_from_device(
     session, device_service, dataset_service, admin_user
 ):
     device_service.create(
         DeviceCreate(
             name="LAB-A",
             access_level=AccessLevel.RESTRICTED,
-            required_scopes=["lab:read"],
+            read_roles=["lab:read"],
         ),
         user=admin_user,
     )
@@ -164,18 +136,18 @@ def test_effective_policy_inherits_required_scopes_from_device(
         user=admin_user,
     )
     policy = get_effective_policy(ds, session)
-    assert policy.required_scopes == ["lab:read"]
+    assert policy.read_roles == ["lab:read"]
     assert policy.access_level == AccessLevel.RESTRICTED
 
 
-def test_effective_policy_dataset_overrides_device_required_scopes(
+def test_effective_policy_dataset_overrides_device_read_roles(
     session, device_service, dataset_service, admin_user
 ):
     device_service.create(
         DeviceCreate(
             name="LAB-B",
             access_level=AccessLevel.RESTRICTED,
-            required_scopes=["lab:read"],
+            read_roles=["lab:read"],
         ),
         user=admin_user,
     )
@@ -186,12 +158,12 @@ def test_effective_policy_dataset_overrides_device_required_scopes(
             url="s3://x",
             device_name="LAB-B",
             access_level=AccessLevel.RESTRICTED,
-            required_scopes=["special:top-secret"],
+            read_roles=["special:top-secret"],
         ),
         user=admin_user,
     )
     policy = get_effective_policy(ds, session)
-    assert policy.required_scopes == ["special:top-secret"]
+    assert policy.read_roles == ["special:top-secret"]
 
 
 def test_effective_policy_inherits_allowed_idps_from_shot(
@@ -245,11 +217,11 @@ def test_read_access_allowed_idp_permitted(dataset_service, device_service, admi
             device_name="DEV-D",
             access_level=AccessLevel.RESTRICTED,
             allowed_idps=[IDP_A],
-            required_scopes=[],  # explicit auth-only gate so we don't fall to capability check
+            read_roles=[],  # explicit auth-only gate so we don't fall to capability check
         ),
         user=admin_user,
     )
-    user = AuthenticatedUser(id="u1", scopes=(), issuer=IDP_A)
+    user = AuthenticatedUser(id="u1", roles=(), issuer=IDP_A)
     # Should not raise — correct IdP, auth-only gate satisfied
     dataset_service.check_read_access(ds, user)
 
@@ -267,19 +239,17 @@ def test_read_access_wrong_idp_denied(dataset_service, device_service, admin_use
             device_name="DEV-E",
             access_level=AccessLevel.RESTRICTED,
             allowed_idps=[IDP_A],
-            required_scopes=[],
+            read_roles=[],
         ),
         user=admin_user,
     )
-    user = AuthenticatedUser(id="u2", scopes=(), issuer=IDP_B)
+    user = AuthenticatedUser(id="u2", roles=(), issuer=IDP_B)
     with pytest.raises(ForbiddenError, match="identity provider"):
         dataset_service.check_read_access(ds, user)
 
 
-def test_read_access_restricted_empty_scopes_auth_only_gate(
-    dataset_service, admin_user
-):
-    """RESTRICTED + required_scopes=[] gates on authentication only.
+def test_read_access_restricted_empty_roles_auth_only_gate(dataset_service, admin_user):
+    """RESTRICTED + read_roles=[] gates on authentication only.
 
     Issuer trust is enforced at the token validation boundary (security.py), not
     re-checked at the service layer. An authenticated AuthenticatedUser object
@@ -292,26 +262,26 @@ def test_read_access_restricted_empty_scopes_auth_only_gate(
             level=1,
             url="s3://x",
             access_level=AccessLevel.RESTRICTED,
-            required_scopes=[],
+            read_roles=[],
         ),
         user=admin_user,
     )
-    user = AuthenticatedUser(id="u3", scopes=(), issuer="https://test-idp.com")
+    user = AuthenticatedUser(id="u3", roles=(), issuer="https://test-idp.com")
     # Should not raise — auth-only gate, user is authenticated
     dataset_service.check_read_access(ds, user)
 
 
-def test_read_access_restricted_empty_scopes_anonymous_denied(
+def test_read_access_restricted_empty_roles_anonymous_denied(
     dataset_service, admin_user
 ):
-    """RESTRICTED + required_scopes=[] still blocks anonymous users."""
+    """RESTRICTED + read_roles=[] still blocks anonymous users."""
     ds = dataset_service.create(
         DatasetCreate(
             name="auth-gate-anon",
             level=1,
             url="s3://x",
             access_level=AccessLevel.RESTRICTED,
-            required_scopes=[],
+            read_roles=[],
         ),
         user=admin_user,
     )
@@ -319,7 +289,7 @@ def test_read_access_restricted_empty_scopes_anonymous_denied(
         dataset_service.check_read_access(ds, ANONYMOUS_USER)
 
 
-def test_download_allowed_idp_correct_scope(session, device_service, admin_user):
+def test_download_allowed_idp_correct_role(session, device_service, admin_user):
     from fds.services.file_access_service import FileAccessService
 
     svc = FileAccessService(session)
@@ -332,14 +302,14 @@ def test_download_allowed_idp_correct_scope(session, device_service, admin_user)
         level=1,
         access_level=AccessLevel.RESTRICTED,
         device_name="DEV-F",
-        required_scopes=["read:data"],
+        read_roles=["read:data"],
         allowed_idps=[IDP_A],
     )
-    user = AuthenticatedUser(id="u", scopes=("read:data",), issuer=IDP_A)
+    user = AuthenticatedUser(id="u", roles=("read:data",), issuer=IDP_A)
     assert svc._check_download_permission(user, ds) is True
 
 
-def test_download_correct_scope_wrong_idp_denied(session):
+def test_download_correct_role_wrong_idp_denied(session):
     from fds.services.file_access_service import FileAccessService
 
     svc = FileAccessService(session)
@@ -347,14 +317,14 @@ def test_download_correct_scope_wrong_idp_denied(session):
         name="ds",
         level=1,
         access_level=AccessLevel.RESTRICTED,
-        required_scopes=["read:data"],
+        read_roles=["read:data"],
         allowed_idps=[IDP_A],
     )
-    user = AuthenticatedUser(id="u", scopes=("read:data",), issuer=IDP_B)
+    user = AuthenticatedUser(id="u", roles=("read:data",), issuer=IDP_B)
     assert svc._check_download_permission(user, ds) is False
 
 
-def test_download_restricted_empty_scopes_anonymous_denied(session):
+def test_download_restricted_empty_roles_anonymous_denied(session):
     from fds.services.file_access_service import FileAccessService
 
     svc = FileAccessService(session)
@@ -362,13 +332,13 @@ def test_download_restricted_empty_scopes_anonymous_denied(session):
         name="ds",
         level=1,
         access_level=AccessLevel.RESTRICTED,
-        required_scopes=[],
+        read_roles=[],
     )
     assert svc._check_download_permission(ANONYMOUS_USER, ds) is False
 
 
-def test_download_embargoed_no_scopes_anonymous_denied(session):
-    """Embargoed data should be denied to anonymous users even without required_scopes."""
+def test_download_embargoed_no_roles_anonymous_denied(session):
+    """Embargoed data should be denied to anonymous users even without read_roles."""
     from fds.services.file_access_service import FileAccessService
 
     svc = FileAccessService(session)

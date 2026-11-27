@@ -342,8 +342,8 @@ def test_restricted_values_are_present_for_an_entitled_caller(
     assert "classified" in names(properties)
 
 
-def test_required_scopes_gate_values(
-    session: Session, admin_user: AuthenticatedUser, mast_admin_user: AuthenticatedUser
+def test_read_roles_gate_values(
+    session: Session, admin_user: AuthenticatedUser, mast_writer: AuthenticatedUser
 ) -> None:
     """Exercises the non-null jsonb comparison in the policy clause."""
     seed(
@@ -373,7 +373,7 @@ def test_required_scopes_gate_values(
                 "30421",
                 {
                     "access_level": AccessLevel.RESTRICTED,
-                    "required_scopes": ["mast_admin"],
+                    "read_roles": ["mast-write"],
                     "scientific_metadata": [
                         ScientificProperty(name="campaign", value="GATED")
                     ],
@@ -383,12 +383,12 @@ def test_required_scopes_gate_values(
     )
     service = ShotService(session)
 
-    scopeless = AuthenticatedUser(id="someone", scopes=())
+    scopeless = AuthenticatedUser(id="someone", roles=())
     assert prop(
         service.available_properties(MAST, user=scopeless), "campaign"
     ).values == ["M4", "M5"]
     assert prop(
-        service.available_properties(MAST, user=mast_admin_user), "campaign"
+        service.available_properties(MAST, user=mast_writer), "campaign"
     ).values == ["GATED", "M4", "M5"]
 
 

@@ -18,7 +18,7 @@ from fds.services.jsonld import (
 from fds.services.source_service import SourceService
 from tests.conftest import resource
 
-admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+admin = AuthenticatedUser(id="admin", roles=("fds-admin",))
 BASE = "http://testserver"
 
 
@@ -67,7 +67,9 @@ def test_delegate_agent_serialises_acted_on_behalf_of(session):
     """The delegate (executor) node carries prov:actedOnBehalfOf to the responsible."""
     dataset, code_id, scheduler_id = _dataset_from_delegated_run(session)
 
-    prov = resource(map_dataset_to_dcat(dataset, BASE))["prov:wasGeneratedBy"]
+    prov = resource(
+        map_dataset_to_dcat(dataset, BASE, activity_sources={code_id, scheduler_id})
+    )["prov:wasGeneratedBy"]
     executor = prov["prov:wasAssociatedWith"]
     assert executor["@id"] == f"{BASE}/sources/{code_id}"
     assert executor["prov:actedOnBehalfOf"] == [
@@ -77,15 +79,32 @@ def test_delegate_agent_serialises_acted_on_behalf_of(session):
 
 def test_non_delegate_agent_has_no_acted_on_behalf_of(session):
     """An orchestrator that is not a subordinate carries no prov:actedOnBehalfOf."""
-    dataset, _code_id, _scheduler_id = _dataset_from_delegated_run(session)
+    dataset, code_id, scheduler_id = _dataset_from_delegated_run(session)
 
-    prov = resource(map_dataset_to_dcat(dataset, BASE))["prov:wasGeneratedBy"]
+    prov = resource(
+        map_dataset_to_dcat(dataset, BASE, activity_sources={code_id, scheduler_id})
+    )["prov:wasGeneratedBy"]
     orchestrator = next(
         assoc["prov:agent"]
         for assoc in prov["prov:qualifiedAssociation"]
         if assoc["prov:hadRole"] == {"@id": FUEL_ORCHESTRATOR_ROLE}
     )
     assert "prov:actedOnBehalfOf" not in orchestrator
+
+
+def test_sources_the_caller_may_not_read_are_left_out(session):
+    """Only the Sources named in ``activity_sources`` appear, and a delegation to
+    one left out is dropped with it."""
+    dataset, code_id, _scheduler_id = _dataset_from_delegated_run(session)
+
+    prov = resource(map_dataset_to_dcat(dataset, BASE, activity_sources={code_id}))[
+        "prov:wasGeneratedBy"
+    ]
+    executor = prov["prov:wasAssociatedWith"]
+    assert executor["@id"] == f"{BASE}/sources/{code_id}"
+    assert "prov:actedOnBehalfOf" not in executor
+    agents = [a["prov:agent"]["@id"] for a in prov["prov:qualifiedAssociation"]]
+    assert agents == [f"{BASE}/sources/{code_id}"]
 
 
 def test_instrument_source_document_is_an_entity_not_an_agent():

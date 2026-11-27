@@ -10,11 +10,12 @@ class AuthenticatedUser(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: str = Field(description="Stable pseudonymous user identifier used internally.")
-    scopes: tuple[str, ...] = Field(
+    roles: tuple[str, ...] = Field(
         default_factory=tuple,
         description=(
-            "Trusted and issuer-filtered authorization scopes for the user. Stored "
-            "as an immutable tuple so user identities are safe to reuse."
+            "The user's roles, as their token carried them and their issuer is "
+            "allowed to grant them. Stored as an immutable tuple so user identities "
+            "are safe to reuse."
         ),
     )
     issuer: str | None = Field(
@@ -25,7 +26,7 @@ class AuthenticatedUser(BaseModel):
     )
 
     def is_admin(self) -> bool:
-        return "fds-admin" in self.scopes
+        return "fds-admin" in self.roles
 
     @property
     def is_anonymous(self) -> bool:

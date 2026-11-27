@@ -21,12 +21,11 @@ class TokenClaims(TypedDict):
     """Validated JWT claims consumed by the FDS auth layer.
 
     `iss` is required because issuer validation happens during token decoding and
-    is used later for scope filtering and pseudonymous user ID generation.
+    is used later for role filtering and pseudonymous user ID generation.
 
-    `scp` and `scope` are both supported to accommodate different IdP claim
-    conventions. Either claim may be represented as a space-delimited string or
-    a list of strings. `roles` carries Microsoft Entra ID app roles, which are
-    merged with the scopes.
+    Roles arrive in `scp` or `scope`, whichever the identity provider uses, as a
+    space-delimited string or a list of strings, and in `roles`, which carries
+    Microsoft Entra ID app roles. FDS takes the roles from all of them.
     """
 
     iss: str
@@ -64,37 +63,36 @@ async def get_token_claims(
         )
 
 
-def _extract_scopes(claims: TokenClaims) -> list[str]:
+def _extract_roles(claims: TokenClaims) -> list[str]:
     scope_claim: str | list[str] | None = claims.get("scp")
     if scope_claim is None:
         scope_claim = claims.get("scope", "")
 
-    scopes: list[str] = []
+    roles: list[str] = []
     if isinstance(scope_claim, str):
-        scopes = scope_claim.split()
+        roles = scope_claim.split()
     elif isinstance(scope_claim, list):
-        scopes = [str(item) for item in scope_claim]
+        roles = [str(item) for item in scope_claim]
 
-    roles = claims.get("roles")
-    if isinstance(roles, list):
-        scopes += [str(role) for role in roles]
+    app_roles = claims.get("roles")
+    if isinstance(app_roles, list):
+        roles += [str(role) for role in app_roles]
 
-    return list(dict.fromkeys(scopes))
+    return list(dict.fromkeys(roles))
 
 
-def _filter_scopes(raw_scopes: list[str], issuer: str) -> tuple[str, ...]:
+def _filter_roles(raw_roles: list[str], issuer: str) -> tuple[str, ...]:
     trusted_idp = next((t for t in config.TRUSTED_IDPS if t.issuer == issuer), None)
     if not trusted_idp:
         return ()
 
-    final_scopes: list[str] = []
-    for scope in raw_scopes:
+    final_roles: list[str] = []
+    for role in raw_roles:
         if any(
-            fnmatch.fnmatchcase(scope, pattern)
-            for pattern in trusted_idp.allowed_scopes
+            fnmatch.fnmatchcase(role, pattern) for pattern in trusted_idp.allowed_roles
         ):
-            final_scopes.append(scope)
-    return tuple(final_scopes)
+            final_roles.append(role)
+    return tuple(final_roles)
 
 
 def _hash_user_id(issuer: str, sub: str) -> str:
@@ -107,19 +105,19 @@ async def get_current_user(
 ) -> AuthenticatedUser:
     """
     Dependency that takes decoded JWT claims and returns an AuthenticatedUser model.
-    Applies scope filtering and PII hashing.
+    Applies role filtering and PII hashing.
     """
     if not claims:
         set_actor(ANONYMOUS_USER)
         return ANONYMOUS_USER
 
-    raw_scopes = _extract_scopes(claims)
+    raw_roles = _extract_roles(claims)
     issuer = claims["iss"]
     subject = claims.get("sub", "")
-    final_scopes = _filter_scopes(raw_scopes, issuer)
+    final_roles = _filter_roles(raw_roles, issuer)
     hashed_id = _hash_user_id(issuer, subject)
 
-    user = AuthenticatedUser(id=hashed_id, scopes=final_scopes, issuer=issuer)
+    user = AuthenticatedUser(id=hashed_id, roles=final_roles, issuer=issuer)
     # Publishes the actor to every log line emitted for this request.
     set_actor(user)
     return user

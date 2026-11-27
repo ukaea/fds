@@ -23,7 +23,7 @@ from fds.services.jsonld import map_dataset_to_dcat
 from fds.services.source_service import SourceService
 from tests.conftest import resource
 
-admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+admin = AuthenticatedUser(id="admin", roles=("fds-admin",))
 BASE = "http://testserver"
 
 
@@ -385,7 +385,7 @@ def test_lineage_withholds_an_upstream_the_caller_cannot_read(session: Session):
         derived_from=[DatasetDerivationCreate(source_dataset_id=_id(secret))],
     )
 
-    anonymous = AuthenticatedUser(id="nobody", scopes=())
+    anonymous = AuthenticatedUser(id="nobody", roles=())
     lineage = DatasetService(session).get_lineage(_id(public), anonymous)
 
     withheld = lineage.derived_from[0]
@@ -397,7 +397,7 @@ def test_lineage_withholds_an_upstream_the_caller_cannot_read(session: Session):
 
 def test_lineage_refuses_a_dataset_the_caller_cannot_read(session: Session):
     restricted = _dataset(session, "restricted", access_level=AccessLevel.RESTRICTED)
-    anonymous = AuthenticatedUser(id="nobody", scopes=())
+    anonymous = AuthenticatedUser(id="nobody", roles=())
 
     with pytest.raises(ForbiddenError):
         DatasetService(session).get_lineage(_id(restricted), anonymous)

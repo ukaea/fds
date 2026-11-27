@@ -34,11 +34,14 @@ from fds.models.device import Device
 from fds.models.identity import AuthenticatedUser
 from fds.models.policy import AccessLevel
 from fds.models.shot import Shot
+from fds.models.source import Source
 from fds.services.exceptions import ForbiddenError
 from fds.services.filters import policy_tuple_clause
 
-type Listed = Device | Shot | Dataset | Collection
-type PolicyTuple = tuple[AccessLevel | None, list[str] | None, list[str] | None]
+type Listed = Device | Shot | Dataset | Collection | Source
+type PolicyTuple = tuple[
+    AccessLevel | None, list[str] | None, list[str] | None, list[str] | None
+]
 
 _SHOT = aliased(Shot)
 
@@ -49,7 +52,7 @@ class _Columns:
 
     table: str
     key: tuple[Any, ...]
-    policy: tuple[Any, Any, Any]
+    policy: tuple[Any, Any, Any, Any]
     device_name: Any | None = None
     shot_id: Any | None = None
 
@@ -60,14 +63,20 @@ _COLUMNS: dict[type, _Columns] = {
         (col(Device.id),),
         (
             col(Device.access_level),
-            col(Device.required_scopes),
+            col(Device.read_roles),
+            col(Device.write_roles),
             col(Device.allowed_idps),
         ),
     ),
     Shot: _Columns(
         "shot",
         (col(Shot.device_name), col(Shot.id)),
-        (col(Shot.access_level), col(Shot.required_scopes), col(Shot.allowed_idps)),
+        (
+            col(Shot.access_level),
+            col(Shot.read_roles),
+            col(Shot.write_roles),
+            col(Shot.allowed_idps),
+        ),
         device_name=col(Shot.device_name),
     ),
     Dataset: _Columns(
@@ -75,7 +84,8 @@ _COLUMNS: dict[type, _Columns] = {
         (col(Dataset.id),),
         (
             col(Dataset.access_level),
-            col(Dataset.required_scopes),
+            col(Dataset.read_roles),
+            col(Dataset.write_roles),
             col(Dataset.allowed_idps),
         ),
         device_name=col(Dataset.device_name),
@@ -86,11 +96,28 @@ _COLUMNS: dict[type, _Columns] = {
         (col(Collection.id),),
         (
             col(Collection.access_level),
-            col(Collection.required_scopes),
+            col(Collection.read_roles),
+            col(Collection.write_roles),
             col(Collection.allowed_idps),
         ),
         device_name=col(Collection.device_name),
         shot_id=col(Collection.shot_id),
+    ),
+    Source: _Columns(
+        "source",
+        (col(Source.id),),
+        (
+            col(Source.access_level),
+            col(Source.read_roles),
+            col(Source.write_roles),
+            col(Source.allowed_idps),
+        ),
+        # A Source links to its device by id, so its device's name is looked up.
+        device_name=(
+            select(Device.name)
+            .where(col(Device.id) == col(Source.device_id))
+            .scalar_subquery()
+        ),
     ),
 }
 
@@ -274,8 +301,7 @@ def _readable(
     readable = []
     for combination in combinations:
         policy = _policy(combination, device_policies)
-        in_shot = combination.shot is not None
-        if read_denial(model, policy, user, combination.device_name, in_shot) is None:
+        if read_denial(model, policy, user) is None:
             readable.append((_matching(columns, combination), policy))
     return readable
 
@@ -287,10 +313,11 @@ def _combinations(
     scope: SelectOfScalar[Any],
 ) -> list[_Combination]:
     """The distinct policies among the rows ``scope`` selects."""
-    level, scopes, idps = columns.policy
+    level, read_roles, write_roles, idps = columns.policy
     fields: dict[str, Any] = {
         "level": level,
-        "scopes": scopes,
+        "read_roles": read_roles,
+        "write_roles": write_roles,
         "idps": idps,
     }
     if columns.device_name is not None:
@@ -299,7 +326,8 @@ def _combinations(
         fields |= {
             "in_shot": columns.shot_id.is_not(None),
             "shot_level": _SHOT.access_level,
-            "shot_scopes": _SHOT.required_scopes,
+            "shot_read_roles": _SHOT.read_roles,
+            "shot_write_roles": _SHOT.write_roles,
             "shot_idps": _SHOT.allowed_idps,
         }
 
@@ -315,10 +343,15 @@ def _combinations(
 
     return [
         _Combination(
-            own=(row.level, row.scopes, row.idps),
+            own=(row.level, row.read_roles, row.write_roles, row.idps),
             device_name=getattr(row, "device_name", None),
             shot=(
-                (row.shot_level, row.shot_scopes, row.shot_idps)
+                (
+                    row.shot_level,
+                    row.shot_read_roles,
+                    row.shot_write_roles,
+                    row.shot_idps,
+                )
                 if getattr(row, "in_shot", False)
                 else None
             ),
@@ -338,7 +371,7 @@ def _policy(
 
 def _matching(columns: _Columns, combination: _Combination) -> ColumnElement[bool]:
     """The rows holding ``combination``'s policy."""
-    clauses = [policy_tuple_clause(*columns.policy, *combination.own)]
+    clauses = [policy_tuple_clause(columns.policy, combination.own)]
     if columns.device_name is not None:
         clauses.append(
             columns.device_name.is_(None)
@@ -350,10 +383,13 @@ def _matching(columns: _Columns, combination: _Combination) -> ColumnElement[boo
             clauses.append(columns.shot_id.is_(None))
         else:
             shot_policy = policy_tuple_clause(
-                _SHOT.access_level,
-                _SHOT.required_scopes,
-                _SHOT.allowed_idps,
-                *combination.shot,
+                (
+                    _SHOT.access_level,
+                    _SHOT.read_roles,
+                    _SHOT.write_roles,
+                    _SHOT.allowed_idps,
+                ),
+                combination.shot,
             )
             clauses.append(exists().where(_shot_of(columns), shot_policy))
     return and_(*clauses)

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query, status
 
 from fds.api.deps import (
     DEFAULT_PAGE_SIZE,
+    ActivityServiceDep,
     AnswerDep,
     CollectionServiceDep,
     CurrentUserDep,
@@ -509,12 +510,13 @@ def read_collection_activity(
     *,
     collection_id: int,
     collection_service: CollectionServiceDep,
+    activity_service: ActivityServiceDep,
     user: CurrentUserDep,
 ) -> ActivityRead:
     """Retrieve the Activity that generated this Collection.
 
     Returns 404 if the Collection has no associated activity.
     """
-    return ActivityRead.model_validate(
-        collection_service.get_activity(collection_id, user)
+    return activity_service.to_read_model(
+        collection_service.get_activity(collection_id, user), user
     )

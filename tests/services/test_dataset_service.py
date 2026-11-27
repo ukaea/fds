@@ -411,7 +411,7 @@ def test_create_device_dataset(
 
 
 def test_create_dataset_unauthorized_global(dataset_service: DatasetService):
-    regular_user = AuthenticatedUser(id="user", scopes=())
+    regular_user = AuthenticatedUser(id="user", roles=())
     dataset_create = DatasetCreate(name="global", level=1, url="url")
     with pytest.raises(ForbiddenError):
         dataset_service.create(dataset_create, user=regular_user)
@@ -423,7 +423,7 @@ def test_create_dataset_unauthorized_device(
     admin_user: AuthenticatedUser,
 ):
     device_service.create(DeviceCreate(name="JET", type="Tokamak"), user=admin_user)
-    regular_user = AuthenticatedUser(id="user", scopes=("mast_admin",))
+    regular_user = AuthenticatedUser(id="user", roles=("mast-write",))
     dataset_create = DatasetCreate(
         name="jet_data", level=1, url="url", device_name="JET"
     )

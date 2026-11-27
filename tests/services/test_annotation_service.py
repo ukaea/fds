@@ -58,7 +58,7 @@ def _make_team_dataset(
             name=name,
             device_name="DEV",
             access_level=AccessLevel.RESTRICTED,
-            required_scopes=["dev_team"],
+            read_roles=["dev_team"],
             **fields,
         ),
         user=admin,
@@ -307,6 +307,6 @@ def test_annotations_resolved_only_where_readable(
     team_read = shot_service.to_read_model(
         shot,
         include_annotations=True,
-        user=AuthenticatedUser(id="member", scopes=("dev_team",)),
+        user=AuthenticatedUser(id="member", roles=("dev_team",)),
     )
     assert "elm-review" in {a.name for a in team_read.annotations or []}

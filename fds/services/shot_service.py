@@ -6,11 +6,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, distinct, func, select, tuple_
 
 from fds.auth.access_control import (
+    check_create,
+    check_policy_update,
     check_read,
+    check_write,
     get_effective_policies,
-    validate_policy_fields,
+    validate_allowed_idps,
 )
-from fds.auth.permissions import check_device_admin, check_shot_operator
+from fds.auth.permissions import check_sets_write_roles
 from fds.core.context import ReadTier
 from fds.core.naming import normalise_device_name
 from fds.core.timeutils import as_utc
@@ -102,7 +105,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         expected_device_name: str | None = None,
     ) -> Shot:
         """
-        Create a new shot. Enforces device admin permissions and context consistency.
+        Create a new shot. Enforces the device's write roles and context consistency.
         """
         target_device_name = normalise_device_name(obj_in.device_name)
         expected_device_name = normalise_device_name(expected_device_name)
@@ -117,21 +120,16 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         if not target_device_name:
             raise FDSValidationError("Device name is required for shot creation.")
 
-        # Validate policy fields before any DB work
-        validate_policy_fields(
-            obj_in.access_level,
-            obj_in.required_scopes,
-            obj_in.allowed_idps,
-        )
+        # Validate the issuer list before any DB work
+        validate_allowed_idps(obj_in.allowed_idps)
         validate_temporal_fields(
             obj_in.shot_at,
             obj_in.shot_end,
             obj_in.shot_duration,
         )
 
-        # Permission check
-        # Allow Shot Operators to create shots
-        check_shot_operator(user, target_device_name)
+        check_create(self.session, user, target_device_name)
+        check_sets_write_roles(user, obj_in.write_roles)
 
         # Verify the device exists before creating the shot
         statement = select(Device).where(Device.name == target_device_name)
@@ -357,15 +355,10 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         """
         db_obj = self._resolve_shot(shot_id, device_name)
 
-        # Permission check for the CURRENT device
-        check_shot_operator(user, db_obj.device_name)
+        check_write(db_obj, self.session, user)
 
         update_data = obj_in.model_dump(exclude_unset=True)
-        validate_policy_fields(
-            update_data.get("access_level", db_obj.access_level),
-            update_data.get("required_scopes", db_obj.required_scopes),
-            update_data.get("allowed_idps", db_obj.allowed_idps),
-        )
+        check_policy_update(user, db_obj, update_data)
         validate_temporal_fields(
             update_data.get("shot_at", db_obj.shot_at),
             update_data.get("shot_end", db_obj.shot_end),
@@ -409,7 +402,7 @@ class ShotService(BaseService[Shot, ShotCreate, ShotUpdate]):
         """
         shot = self._resolve_shot(shot_id, device_name)
 
-        check_device_admin(user, shot.device_name)
+        check_write(shot, self.session, user)
 
         # Block deletion of a shot that a reference-resource version depends on.
         for kind in REFERENCE_KINDS:

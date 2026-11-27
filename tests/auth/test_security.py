@@ -7,8 +7,8 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 from fds.auth.security import (
     TokenClaims,
-    _extract_scopes,
-    _filter_scopes,
+    _extract_roles,
+    _filter_roles,
     _hash_user_id,
     get_current_user,
     get_token_claims,
@@ -29,7 +29,7 @@ async def test_get_token_claims_success(mock_jwks_client, mock_jwt_decode):
     mock_jwt_decode.return_value = expected_claims
 
     # Rely on conftest.py's mock_config to set TRUSTED_IDPS and OIDC_AUDIENCE
-    # Default is issuer="https://test-idp.com", allowed_scopes=["*"]
+    # Default is issuer="https://test-idp.com", allowed_roles=["*"]
 
     claims = await get_token_claims(jwks_client=mock_jwks_client, auth=auth)
     assert claims == expected_claims
@@ -71,9 +71,9 @@ async def test_get_current_user_parsing(mocker):
     # The assertions expect "test-idp|..."
 
     # We need to mock config to ensure "iss" matches a trusted IDP
-    # If no trusted IDP matches, scopes are STRIPPED.
+    # If no trusted IDP matches, roles are STRIPPED.
 
-    trusted_idps = [TrustedIdP(issuer="test-idp", allowed_scopes=["*"])]
+    trusted_idps = [TrustedIdP(issuer="test-idp", allowed_roles=["*"])]
     mocker.patch("fds.auth.security.config.TRUSTED_IDPS", trusted_idps)
 
     # Case 1: scope is string
@@ -82,7 +82,7 @@ async def test_get_current_user_parsing(mocker):
 
     expected_id = hashlib.sha256(b"test-idp|123").hexdigest()
     assert user.id == expected_id
-    assert user.scopes == ("A", "B")
+    assert user.roles == ("A", "B")
 
     # Case 2: use 'scp' instead of 'scope', list format
     claims_scp: TokenClaims = {"sub": "456", "scp": ["C", "D"], "iss": "test-idp"}
@@ -90,49 +90,49 @@ async def test_get_current_user_parsing(mocker):
 
     expected_id2 = hashlib.sha256(b"test-idp|456").hexdigest()
     assert user2.id == expected_id2
-    assert user2.scopes == ("C", "D")
+    assert user2.roles == ("C", "D")
 
-    # Case 3: No scopes
+    # Case 3: No roles
     claims_none: TokenClaims = {"sub": "789", "iss": "test-idp"}
     user3 = await get_current_user(claims=claims_none)
 
     expected_id3 = hashlib.sha256(b"test-idp|789").hexdigest()
     assert user3.id == expected_id3
-    assert user3.scopes == ()
+    assert user3.roles == ()
 
 
-def test_extract_scopes_string():
+def test_extract_roles_string():
     claims: TokenClaims = {"iss": "https://test-idp.com", "scope": "read write delete"}
-    assert _extract_scopes(claims) == ["read", "write", "delete"]
+    assert _extract_roles(claims) == ["read", "write", "delete"]
 
 
-def test_extract_scopes_list():
+def test_extract_roles_list():
     claims: TokenClaims = {"iss": "https://test-idp.com", "scope": ["read", "write"]}
-    assert _extract_scopes(claims) == ["read", "write"]
+    assert _extract_roles(claims) == ["read", "write"]
 
 
-def test_extract_scopes_scp_claim():
+def test_extract_roles_scp_claim():
     claims: TokenClaims = {"iss": "https://test-idp.com", "scp": "admin"}
-    assert _extract_scopes(claims) == ["admin"]
+    assert _extract_roles(claims) == ["admin"]
 
 
-def test_extract_scopes_empty():
-    assert _extract_scopes({"iss": "https://test-idp.com"}) == []
+def test_extract_roles_empty():
+    assert _extract_roles({"iss": "https://test-idp.com"}) == []
 
 
-def test_extract_scopes_merges_entra_roles():
+def test_extract_roles_merges_entra_roles():
     claims: TokenClaims = {
         "iss": "https://test-idp.com",
         "scp": "read fds-admin",
-        "roles": ["fds-admin", "mast_admin"],
+        "roles": ["fds-admin", "mast-write"],
     }
-    assert _extract_scopes(claims) == ["read", "fds-admin", "mast_admin"]
+    assert _extract_roles(claims) == ["read", "fds-admin", "mast-write"]
 
 
-def test_extract_scopes_roles_only():
+def test_extract_roles_roles_only():
     """Entra ID app-only tokens carry `roles` and no `scp`."""
     claims: TokenClaims = {"iss": "https://test-idp.com", "roles": ["fds-admin"]}
-    assert _extract_scopes(claims) == ["fds-admin"]
+    assert _extract_roles(claims) == ["fds-admin"]
 
 
 def test_hash_user_id():
@@ -148,57 +148,57 @@ def test_hash_user_id_empty():
     assert _hash_user_id("", "") == expected
 
 
-def test_filter_scopes_no_trusted_idp(mocker):
+def test_filter_roles_no_trusted_idp(mocker):
     # Setup NO trusted IdPs
     mocker.patch.object(config, "TRUSTED_IDPS", [])
 
-    scopes = ["read", "write"]
+    roles = ["read", "write"]
     # Should return empty because issuer is unknown
-    assert _filter_scopes(scopes, "https://unknown.com") == ()
+    assert _filter_roles(roles, "https://unknown.com") == ()
 
 
-def test_filter_scopes_match(mocker):
+def test_filter_roles_match(mocker):
     # Setup Trusted IdP
-    trusted = [TrustedIdP(issuer="https://trust.com", allowed_scopes=["read", "write"])]
+    trusted = [TrustedIdP(issuer="https://trust.com", allowed_roles=["read", "write"])]
     mocker.patch.object(config, "TRUSTED_IDPS", trusted)
 
-    scopes = ["read", "write", "admin"]
-    filtered = _filter_scopes(scopes, "https://trust.com")
+    roles = ["read", "write", "admin"]
+    filtered = _filter_roles(roles, "https://trust.com")
 
     assert "read" in filtered
     assert "write" in filtered
     assert "admin" not in filtered
 
 
-def test_filter_scopes_none_when_allowed_scopes_unset(mocker):
+def test_filter_roles_none_when_allowed_roles_unset(mocker):
     trusted = [TrustedIdP(issuer="https://trust.com")]
     mocker.patch.object(config, "TRUSTED_IDPS", trusted)
 
-    assert _filter_scopes(["fds-admin", "mast:read"], "https://trust.com") == ()
+    assert _filter_roles(["fds-admin", "mast:read"], "https://trust.com") == ()
 
 
-def test_filter_scopes_wildcard(mocker):
+def test_filter_roles_wildcard(mocker):
     # Setup Trusted IdP with wildcard
-    trusted = [TrustedIdP(issuer="https://trust.com", allowed_scopes=["jet:*"])]
+    trusted = [TrustedIdP(issuer="https://trust.com", allowed_roles=["jet:*"])]
     mocker.patch.object(config, "TRUSTED_IDPS", trusted)
 
-    scopes = ["jet:read", "jet:write", "other:read"]
-    filtered = _filter_scopes(scopes, "https://trust.com")
+    roles = ["jet:read", "jet:write", "other:read"]
+    filtered = _filter_roles(roles, "https://trust.com")
 
     assert "jet:read" in filtered
     assert "jet:write" in filtered
     assert "other:read" not in filtered
 
 
-def test_filter_scopes_case_sensitivity(mocker):
-    # Setup Trusted IdP with Verified Scope
-    trusted = [TrustedIdP(issuer="https://trust.com", allowed_scopes=["jet:*"])]
+def test_filter_roles_case_sensitivity(mocker):
+    # Setup Trusted IdP with a role pattern
+    trusted = [TrustedIdP(issuer="https://trust.com", allowed_roles=["jet:*"])]
     mocker.patch.object(config, "TRUSTED_IDPS", trusted)
 
-    # Scopes should be case-sensitive
+    # Roles should be case-sensitive
     # "JET:READ" should NOT match "jet:*"
-    scopes = ["jet:read", "JET:READ"]
-    filtered = _filter_scopes(scopes, "https://trust.com")
+    roles = ["jet:read", "JET:READ"]
+    filtered = _filter_roles(roles, "https://trust.com")
 
     assert "jet:read" in filtered
     assert "JET:READ" not in filtered

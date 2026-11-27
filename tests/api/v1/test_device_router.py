@@ -12,7 +12,7 @@ from fds.services.shot_service import ShotService
 from fds.services.source_service import SourceService
 
 # Dummy admin user for test setup
-admin_user = AuthenticatedUser(id="test-admin", scopes=("fds-admin",))
+admin_user = AuthenticatedUser(id="test-admin", roles=("fds-admin",))
 
 
 def test_create_device(test_client: TestClient, admin_user_token: dict[str, str]):

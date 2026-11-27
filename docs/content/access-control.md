@@ -25,6 +25,56 @@ Device (access_level = public)
 
 This means you can open an entire Device to the public with a single flag while still protecting individual sensitive shots or datasets.
 
+## Roles
+
+FDS reads a caller's roles from their token, keeping those their issuer may grant (see
+[Which roles FDS accepts from an issuer](#which-roles-fds-accepts-from-an-issuer)). It defines one
+role itself, `fds-admin`, which may do everything. Every other role is a name your identity
+provider issues, such as `mast-read` or `jet-collab`, listed on the records it opens.
+
+### Read and write roles
+
+A Device, Shot, Collection, Dataset or Source lists roles in two fields:
+
+| Field | What a listed role allows |
+| --- | --- |
+| `read_roles` | Reading the record where its access level restricts it, and getting storage credentials for its embargoed and restricted data |
+| `write_roles` | Changing or deleting the record and creating records under it, and everything `read_roles` allows |
+
+Holding any one listed role is enough, and an empty list, `[]`, lets in anyone signed in. A record
+that sets no list uses its parent's, as with `access_level`:
+
+```
+Device MAST    read_roles: [mast-read]  write_roles: [mast-write]
+├── Source thomson       (uses MAST's lists)
+└── Shot 30421           (uses MAST's lists)
+    └── Dataset efit     read_roles: [mast-read, jet-collab]  (MAST's write_roles)
+```
+
+With no list anywhere up the chain, only `fds-admin` gets in. A restricted Device or Shot that
+lists no `read_roles` is the exception: anyone signed in may read it. Devices, and Sources,
+Collections and Datasets on no device, have no parent, so `fds-admin` creates them, and can then
+hand one over by setting its `write_roles`.
+
+Anyone who may write a record may change its `access_level`, `read_roles` and `allowed_idps`. Only
+`fds-admin` sets `write_roles`. Either list, and `allowed_idps`, may be set at any access level: a
+public Device can name the `read_roles` and `allowed_idps` its restricted records inherit.
+
+### Sources
+
+A Source has no data to hold back, so `embargoed` on a Source, or on the Device it inherits from,
+reads the same as `public`. Wherever a run names a Source the caller may not read, the Source is
+left out, as the run's unreadable inputs are, and a listing's `source` filter ignores it. Naming a
+Source, or an input Dataset, in an Activity needs read access to it.
+
+### Activities
+
+An Activity has no lists. Changing or deleting one needs write access to every Dataset it
+generated and every Collection that bundles it. Creating one with its Datasets needs write access
+where each Dataset goes. Creating one with no Datasets, or writing one that has none, needs
+`fds-admin`. Naming an Activity in a Dataset's or Collection's `activity_id` needs write access to
+the Activity.
+
 ## Authentication
 
 FDS delegates identity to an external OIDC Identity Provider. Clients obtain a JWT via the standard OIDC flow and include it as a `Bearer` token:
@@ -41,9 +91,9 @@ sign your own as described below):
 
     ```bash
     export TOKEN=$(curl -s http://localhost:8080/realms/fds/protocol/openid-connect/token \
-      -d client_id=fds-client -d client_secret=fds-client-secret \
+      -d client_id=fds-ui -d client_secret=fds-ui-secret \
       -d username=admin -d password=password \
-      -d grant_type=password -d scope='openid profile fds-admin' \
+      -d grant_type=password -d scope='openid profile' \
       | jq -r .access_token)
     ```
 
@@ -55,12 +105,12 @@ sign your own as described below):
     resp = requests.post(
         "http://localhost:8080/realms/fds/protocol/openid-connect/token",
         data={
-            "client_id": "fds-client",
-            "client_secret": "fds-client-secret",
+            "client_id": "fds-ui",
+            "client_secret": "fds-ui-secret",
             "username": "admin",
             "password": "password",
             "grant_type": "password",
-            "scope": "openid profile fds-admin",
+            "scope": "openid profile",
         },
     )
     resp.raise_for_status()
@@ -76,12 +126,12 @@ sign your own as described below):
     resp = httpx.post(
         "http://localhost:8080/realms/fds/protocol/openid-connect/token",
         data={
-            "client_id": "fds-client",
-            "client_secret": "fds-client-secret",
+            "client_id": "fds-ui",
+            "client_secret": "fds-ui-secret",
             "username": "admin",
             "password": "password",
             "grant_type": "password",
-            "scope": "openid profile fds-admin",
+            "scope": "openid profile",
         },
     )
     resp.raise_for_status()
@@ -98,19 +148,19 @@ sign your own as described below):
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
-          client_id: "fds-client",
-          client_secret: "fds-client-secret",
+          client_id: "fds-ui",
+          client_secret: "fds-ui-secret",
           username: "admin",
           password: "password",
           grant_type: "password",
-          scope: "openid profile fds-admin",
+          scope: "openid profile",
         }),
       },
     );
     const TOKEN = (await res.json()).access_token;
     ```
 
-FDS validates the token against the IdP's JWKS endpoint and extracts the user's identity and granted scopes.
+FDS validates the token against the IdP's JWKS endpoint and extracts the user's identity and roles.
 
 ### How a program finds where to log in
 
@@ -170,13 +220,13 @@ the cache makes FDS fetch the keys again, so a new key under a new ID is accepte
 key replaced under its old ID is not used until the cached copy expires.
 `scripts/mint-token.py` names each key by its thumbprint, so a new key pair always has a new ID.
 
-### Which scopes FDS accepts from an issuer
+### Which roles FDS accepts from an issuer
 
-Each issuer lists `allowed_scopes`, the scopes FDS accepts from its tokens, as shell-style
-patterns: `["mast:*", "openid"]`, or `["*"]` for every scope it issues. Any other scope in a
-token is dropped. An issuer with no `allowed_scopes` passes none through: its users are
-authenticated but carry no scopes, so they hold no role and cannot read anything a scope gates.
-Trusting another organisation's identity provider therefore brings in none of its scopes until
+FDS takes roles from the token's `roles` claim, and from its `scope` (or `scp`) claim for login services that put them there. Each issuer lists
+`allowed_roles`, the roles FDS accepts from its tokens, as shell-style patterns:
+`["mast-*"]`, or `["*"]` for every role it issues. Any other role in a token is dropped.
+An issuer with no `allowed_roles` passes none through: its users are authenticated but hold no
+role. Trusting another organisation's identity provider therefore brings in none of its roles until
 you list the ones you accept. Listing `["*"]` for it would let it issue `fds-admin`.
 
 ### Issuing tokens without an identity provider
@@ -191,24 +241,24 @@ short-lived tokens yourself. The repository ships a script for both halves:
 uv run scripts/mint-token.py init --out-dir dev
 
 # then, whenever a token is needed
-uv run scripts/mint-token.py mint --key dev/local-issuer.key --scope fds-admin --minutes 15
+uv run scripts/mint-token.py mint --key dev/local-issuer.key --role fds-admin --minutes 15
 ```
 
 Point FDS at the public half and trust the issuer:
 
 ```bash
-FDS_TRUSTED_IDPS='[{"issuer":"urn:fds:local","jwks_file":"dev/local-issuer.jwks.json","allowed_scopes":["*"]}]'
-FDS_OIDC_AUDIENCE=fds-client
+FDS_TRUSTED_IDPS='[{"issuer":"urn:fds:local","jwks_file":"dev/local-issuer.jwks.json","allowed_roles":["*"]}]'
+FDS_OIDC_AUDIENCE=fds
 ```
 
 Such tokens go through exactly the same checks as any other: signature, audience, expiry, and
-scope filtering. Actions taken with one are recorded in the audit trail with
+role filtering. Actions taken with one are recorded in the audit trail with
 `actor_issuer: urn:fds:local`, so they are distinguishable from actions taken by people who
 signed in.
 
 !!! warning "This is a bootstrap and break-glass path, not a way for people to log in"
 
-    Anyone holding the private key can mint a token for any subject with any scope, bypassing
+    Anyone holding the private key can mint a token for any subject with any role, bypassing
     whatever sign-in controls your organisation applies: no multi-factor authentication, no
     account suspension when somebody leaves. A minted token cannot be withdrawn before it
     expires; revocation means removing the issuer from `FDS_TRUSTED_IDPS` and restarting, which

@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Container, Sequence
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -88,12 +88,16 @@ def generate_context() -> dict[str, Any]:
 
 
 def _build_used(
-    activity: "Activity", base_url: str, inputs: "Sequence[Dataset]"
+    activity: "Activity",
+    base_url: str,
+    inputs: "Sequence[Dataset]",
+    sources: Container[int],
 ) -> tuple[list[Any], list[Any]]:
     """Build the ``prov:used`` shortcut list and ``prov:qualifiedUsage`` detail.
 
     ``inputs`` are the Activity's input datasets the caller may read, as the caller
-    resolved them; the rest are left out.
+    resolved them, and ``sources`` the ids of the Sources the caller may read; the
+    rest are left out.
 
     Two kinds of used entity:
     - input datasets → ``prov:hadRole = fuel:input``
@@ -109,6 +113,8 @@ def _build_used(
     for ds in inputs:
         entries.append((names.dataset(ds.id), FUEL_INPUT_ROLE, ds.title or ds.name))
     for instrument in getattr(activity, "instruments", None) or []:
+        if instrument.id not in sources:
+            continue
         entries.append(
             (names.source(instrument.id), FUEL_INSTRUMENT_ROLE, instrument.name)
         )
@@ -175,16 +181,20 @@ def _instrument_node(source: "Source", base_url: str) -> dict[str, Any]:
 
 
 def _build_associations(
-    activity: "Activity", base_url: str
+    activity: "Activity", base_url: str, sources: Container[int]
 ) -> tuple[dict[str, Any] | None, list[Any]]:
     """Build the executor ``prov:wasAssociatedWith`` node and the full
     ``prov:qualifiedAssociation`` list (executor + additional roled agents),
     threading ``prov:actedOnBehalfOf`` onto any agent that delegated.
+
+    Only Sources whose ids are in ``sources``, those the caller may read, appear.
     """
     names = Identifiers(base_url)
     # subordinate source id -> URIs of the agents it acted on behalf of
     behalf: dict[int, list[str]] = {}
     for link in getattr(activity, "delegation_links", None) or []:
+        if link.responsible_source not in sources:
+            continue
         behalf.setdefault(link.subordinate_source, []).append(
             names.source(link.responsible_source)
         )
@@ -193,7 +203,7 @@ def _build_associations(
     qualified: list[Any] = []
 
     executor: Source | None = getattr(activity, "source", None)
-    if executor is not None:
+    if executor is not None and executor.id is not None and executor.id in sources:
         primary = _agent_node(
             executor,
             base_url,
@@ -217,7 +227,7 @@ def _build_associations(
 
     for link in getattr(activity, "agent_links", None) or []:
         agent = getattr(link, "source", None)
-        if agent is None:
+        if agent is None or agent.id not in sources:
             continue
         qualified.append(
             {
@@ -613,6 +623,7 @@ def map_dataset_to_dcat(
     activity_inputs: "Sequence[Dataset]" = (),
     replaces: Sequence[int] | None = None,
     replaced_by: Sequence[int] | None = None,
+    activity_sources: Container[int] = frozenset(),
 ) -> dict[str, Any]:
     """Maps a Dataset to a ``dcat:Dataset`` document with FDS's record of it."""
     node = dataset_node(
@@ -624,6 +635,7 @@ def map_dataset_to_dcat(
         activity_inputs,
         replaces,
         replaced_by,
+        activity_sources,
     )
     return _with_catalog_record({"@context": METADATA_CONTEXT, **node}, dataset)
 
@@ -637,13 +649,15 @@ def dataset_node(
     activity_inputs: "Sequence[Dataset]" = (),
     replaces: Sequence[int] | None = None,
     replaced_by: Sequence[int] | None = None,
+    activity_sources: Container[int] = frozenset(),
 ) -> dict[str, Any]:
     """
     The Dataset's ``dcat:Dataset`` node alone, for a listing of datasets.
 
     ``activity_inputs`` are the input datasets of the Activity that generated it
-    which the caller may read. The Activity's other inputs are left out of its
-    embedded node.
+    which the caller may read, and ``activity_sources`` the ids of its Sources
+    the caller may read. The Activity's other inputs and Sources are left out
+    of its embedded node.
 
     ``replaces`` are the ids of the datasets it replaces, published as
     ``dct:replaces``, and ``replaced_by`` those replacing it that the caller may
@@ -756,7 +770,7 @@ def dataset_node(
     activity: Activity | None = getattr(dataset, "activity", None)
     if activity:
         data["prov:wasGeneratedBy"] = _build_activity_node(
-            activity, base_url, activity_inputs
+            activity, base_url, activity_inputs, activity_sources
         )
         data["prov:generatedAtTime"] = _generated_at(activity)
 
@@ -832,33 +846,42 @@ def map_source_to_dcat(source: "Source", base_url: str) -> dict[str, Any]:
 
 
 def map_activity_to_dcat(
-    activity: "Activity", base_url: str, *, inputs: "Sequence[Dataset]"
+    activity: "Activity",
+    base_url: str,
+    *,
+    inputs: "Sequence[Dataset]",
+    sources: Container[int],
 ) -> dict[str, Any]:
     """An Activity as a standalone PROV-O activity document.
 
     As with a Source, this is the node embedded elsewhere, given a context and
     its own identifier so the published identifier resolves. ``inputs`` are the
-    input datasets the caller may read.
+    input datasets the caller may read, and ``sources`` the ids of the Sources
+    the caller may read.
     """
     names = Identifiers(base_url)
     return {
         "@context": METADATA_CONTEXT,
         "@id": names.activity(activity.id),
-        **_build_activity_node(activity, base_url, inputs),
+        **_build_activity_node(activity, base_url, inputs, sources),
     }
 
 
 def _build_activity_node(
-    activity: "Activity", base_url: str, inputs: "Sequence[Dataset]"
+    activity: "Activity",
+    base_url: str,
+    inputs: "Sequence[Dataset]",
+    sources: Container[int],
 ) -> dict[str, Any]:
-    """Build the embedded ``prov:Activity`` node, listing ``inputs`` as used."""
+    """Build the embedded ``prov:Activity`` node, listing ``inputs`` as used and
+    only the Sources whose ids are in ``sources``."""
     prov_node: dict[str, Any] = {
         "@type": "prov:Activity",
         "prov:type": activity.activity_type,
     }
     if activity.id:
         prov_node["@id"] = Identifiers(base_url).activity(activity.id)
-    primary, qualified = _build_associations(activity, base_url)
+    primary, qualified = _build_associations(activity, base_url, sources)
     if primary:
         prov_node["prov:wasAssociatedWith"] = primary
     if qualified:
@@ -869,7 +892,7 @@ def _build_activity_node(
         prov_node["prov:endedAtTime"] = activity.ended_at.isoformat()
     if activity.parameters:
         prov_node["prov:value"] = activity.parameters
-    used, qualified_usage = _build_used(activity, base_url, inputs)
+    used, qualified_usage = _build_used(activity, base_url, inputs, sources)
     if used:
         prov_node["prov:used"] = used
         prov_node["prov:qualifiedUsage"] = qualified_usage
@@ -933,6 +956,7 @@ def map_collection_to_dcat(
     datasets: Sequence[Dataset],
     child_collections: Sequence[Collection],
     activity_inputs: Sequence[Dataset] = (),
+    activity_sources: Container[int] = frozenset(),
     replaces: Sequence[int] = (),
     replaced_by: Sequence[int] = (),
 ) -> dict[str, Any]:
@@ -943,6 +967,7 @@ def map_collection_to_dcat(
         datasets=datasets,
         child_collections=child_collections,
         activity_inputs=activity_inputs,
+        activity_sources=activity_sources,
         replaces=replaces,
         replaced_by=replaced_by,
     )
@@ -956,6 +981,7 @@ def collection_node(
     datasets: Sequence[Dataset],
     child_collections: Sequence[Collection],
     activity_inputs: Sequence[Dataset] = (),
+    activity_sources: Container[int] = frozenset(),
     replaces: Sequence[int] = (),
     replaced_by: Sequence[int] = (),
 ) -> dict[str, Any]:
@@ -971,8 +997,8 @@ def collection_node(
     full documents live at their own URIs). Every member is additionally linked
     with ``prov:hadMember``, making the collection a well-formed
     ``prov:Collection``. The Activity the collection bundles, if any, is embedded as
-    a ``prov:wasGeneratedBy`` node whose inputs are ``activity_inputs``: those the
-    caller may read.
+    a ``prov:wasGeneratedBy`` node whose inputs are ``activity_inputs`` and whose
+    Sources are those in ``activity_sources``: those the caller may read.
     """
     names = Identifiers(base_url)
     collection_id = getattr(collection, "id", None)
@@ -1054,7 +1080,7 @@ def collection_node(
     activity: Activity | None = getattr(collection, "activity", None)
     if activity:
         data["prov:wasGeneratedBy"] = _build_activity_node(
-            activity, base_url, activity_inputs
+            activity, base_url, activity_inputs, activity_sources
         )
         data["prov:generatedAtTime"] = _generated_at(activity)
 

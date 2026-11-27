@@ -52,7 +52,7 @@ def test_credentials_include_storage_options(
     The bulk path then matches the single-dataset path: what comes back under
     ``storage_options`` goes straight into ``xr.open_dataset``.
     """
-    admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    admin = AuthenticatedUser(id="admin", roles=("fds-admin",))
     DeviceService(session).create(DeviceCreate(name="BULK", type="Tokamak"), user=admin)
     ShotService(session).create(ShotCreate(id="7", device_name="BULK"), user=admin)
     session.commit()

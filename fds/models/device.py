@@ -21,12 +21,22 @@ class DeviceBase(DescriptiveMixin, PersistentIdentifierMixin, SQLModel):
     began_operations: str | None = None
     status: str | None = Field(default=None, index=True)
     access_level: AccessLevel | None = Field(default=None, index=True)
-    required_scopes: list[str] | None = Field(
+    read_roles: list[str] | None = Field(
         default=None,
         description=(
-            "OAuth scopes required to read resources under this device when access "
-            "is restricted. If null, scope requirements are inherited by narrower "
-            "contexts only when they do not define their own policy."
+            "Roles that may read this device's restricted records and get credentials "
+            "for their embargoed and restricted data. Holding any one is enough; an "
+            "empty list lets in anyone signed in. Records under the device that set no "
+            "list of their own use this one."
+        ),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
+    )
+    write_roles: list[str] | None = Field(
+        default=None,
+        description=(
+            "Roles that may change or delete this device and create, change and delete "
+            "the records under it. Holding any one is enough. Only fds-admin may set it. "
+            "Records under the device that set no list of their own use this one."
         ),
         sa_column=Column(JSONB_COLUMN, nullable=True),
     )
@@ -72,12 +82,21 @@ class DeviceUpdate(SQLModel):
     title: str | None = None
     description: str | None = None
     publisher: str | None = None
-    required_scopes: list[str] | None = Field(
+    read_roles: list[str] | None = Field(
         default=None,
         description=(
-            "OAuth scopes required to read resources under this device when access "
-            "is restricted. If null, scope requirements are inherited by narrower "
-            "contexts only when they do not define their own policy."
+            "Roles that may read this device's restricted records and get credentials "
+            "for their embargoed and restricted data. Holding any one is enough; an "
+            "empty list lets in anyone signed in. Records under the device that set no "
+            "list of their own use this one."
+        ),
+    )
+    write_roles: list[str] | None = Field(
+        default=None,
+        description=(
+            "Roles that may change or delete this device and create, change and delete "
+            "the records under it. Holding any one is enough. Only fds-admin may set it. "
+            "Records under the device that set no list of their own use this one."
         ),
     )
     allowed_idps: list[str] | None = Field(
