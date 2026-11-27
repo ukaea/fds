@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.1](https://github.com/ukaea/fds/compare/v0.3.0...v0.3.1) (2026-11-27)
+
+
+### Features
+
+* Show the signed-in username and roles in the user menu ([#336](https://github.com/ukaea/fds/issues/336)) ([2c3008e](https://github.com/ukaea/fds/commit/2c3008ec7956d914543b8815df52f5c3e94dad72))
+
+
+### Bug Fixes
+
+* End the login service's session when signing out ([#334](https://github.com/ukaea/fds/issues/334)) ([e5bb71a](https://github.com/ukaea/fds/commit/e5bb71a1d533d58928011202319a75aa84d920db))
+
 ## [0.3.0](https://github.com/ukaea/fds/compare/v0.2.0...v0.3.0) (2026-11-27)
 
 
