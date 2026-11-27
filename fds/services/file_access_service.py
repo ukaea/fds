@@ -8,6 +8,7 @@ from fds.auth.access_control import (
     get_effective_access_level,
     get_effective_policy,
     holds_read_roles,
+    issuer_allowed,
 )
 from fds.core.audit import record_data_access
 from fds.core.naming import normalise_device_name
@@ -248,7 +249,7 @@ class FileAccessService:
             return False
 
         # 3. Enforce IdP restriction if specified
-        if policy.allowed_idps is not None and user.issuer not in policy.allowed_idps:
+        if not issuer_allowed(user, policy):
             return False
 
         # 4. A role that reads the dataset, or one that writes it

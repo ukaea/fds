@@ -188,6 +188,16 @@ NO_PARENT = EffectivePolicy(
 )
 
 
+ISSUER_REFUSAL = (
+    "Access denied: your identity provider is not permitted for this resource"
+)
+
+
+def issuer_allowed(user: AuthenticatedUser, policy: EffectivePolicy) -> bool:
+    """Whether ``user``'s token comes from an issuer ``policy`` allows."""
+    return policy.allowed_idps is None or user.issuer in policy.allowed_idps
+
+
 def holds_read_roles(user: AuthenticatedUser, policy: EffectivePolicy) -> bool:
     """Whether ``user`` holds a role that reads a record under ``policy``.
 
@@ -209,10 +219,8 @@ def read_denial(
         return None
     if user.is_anonymous:
         return "Authentication required for this resource"
-    if policy.allowed_idps is not None and user.issuer not in policy.allowed_idps:
-        return (
-            "Access denied: your identity provider is not permitted for this resource"
-        )
+    if not issuer_allowed(user, policy):
+        return ISSUER_REFUSAL
     if holds_read_roles(user, policy):
         return None
     if policy.read_roles is None and kind in (Device, Shot):
@@ -220,9 +228,23 @@ def read_denial(
     return str(role_refusal([*(policy.read_roles or []), *(policy.write_roles or [])]))
 
 
+def _check_write_policy(user: AuthenticatedUser, policy: EffectivePolicy) -> None:
+    """Enforce write access to a record under ``policy``.
+
+    The caller needs one of its write roles, held through an issuer it allows, as
+    a reader does. ``fds-admin`` always may.
+    """
+    if user.is_admin():
+        return
+    # An anonymous caller has no issuer; check_write_roles refuses them as unsigned.
+    if not user.is_anonymous and not issuer_allowed(user, policy):
+        raise ForbiddenError(ISSUER_REFUSAL)
+    check_write_roles(user, policy.write_roles)
+
+
 def check_write(obj: Policied, session: Session, user: AuthenticatedUser) -> None:
     """Enforce write access to ``obj``: changing it, deleting it, or adding to it."""
-    check_write_roles(user, get_effective_policy(obj, session).write_roles)
+    _check_write_policy(user, get_effective_policy(obj, session))
 
 
 def check_create(
@@ -267,7 +289,7 @@ def check_activity_write(
     if not records:
         check_is_admin(user)
     for policy in get_effective_policies(records, session):
-        check_write_roles(user, policy.write_roles)
+        _check_write_policy(user, policy)
 
 
 def check_activity_change(

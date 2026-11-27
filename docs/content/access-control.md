@@ -56,6 +56,10 @@ lists no `read_roles` is the exception: anyone signed in may read it. Devices, a
 Collections and Datasets on no device, have no parent, so `fds-admin` creates them, and can then
 hand one over by setting its `write_roles`.
 
+A record's effective `allowed_idps`, when set, lets in only callers whose token comes from one of
+those issuers. It applies to a reader wherever the record's level restricts, and to a writer at any
+level. `fds-admin` is not limited by it.
+
 Anyone who may write a record may change its `access_level`, `read_roles` and `allowed_idps`. Only
 `fds-admin` sets `write_roles`. Either list, and `allowed_idps`, may be set at any access level: a
 public Device can name the `read_roles` and `allowed_idps` its restricted records inherit.

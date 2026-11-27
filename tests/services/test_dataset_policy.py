@@ -3,11 +3,18 @@ from sqlmodel import Session
 
 from fds.auth.access_control import get_effective_policy, validate_allowed_idps
 from fds.core.config import config
-from fds.models.dataset import Dataset, DatasetCreate
+from fds.models.activity import ActivityCreate, ActivityType
+from fds.models.dataset import (
+    Dataset,
+    DatasetCreate,
+    DatasetUpdate,
+    GeneratedDatasetCreate,
+)
 from fds.models.device import DeviceCreate
 from fds.models.identity import ANONYMOUS_USER, AuthenticatedUser
 from fds.models.policy import AccessLevel
 from fds.models.shot import ShotCreate
+from fds.services.activity_service import ActivityService
 from fds.services.dataset_service import DatasetService
 from fds.services.device_service import DeviceService
 from fds.services.exceptions import FDSValidationError, ForbiddenError
@@ -348,3 +355,69 @@ def test_download_embargoed_no_roles_anonymous_denied(session):
         access_level=AccessLevel.EMBARGOED,
     )
     assert svc._check_download_permission(ANONYMOUS_USER, ds) is False
+
+
+WRITER_FROM_A = AuthenticatedUser(id="writer-a", roles=("mast-write",), issuer=IDP_A)
+WRITER_FROM_B = AuthenticatedUser(id="writer-b", roles=("mast-write",), issuer=IDP_B)
+
+
+def test_a_writer_from_an_excluded_issuer_cannot_update(
+    device_service, dataset_service, admin_user
+):
+    device_service.create(
+        DeviceCreate(name="MAST", write_roles=["mast-write"]), admin_user
+    )
+    ds = dataset_service.create(
+        DatasetCreate(
+            name="d",
+            device_name="MAST",
+            access_level=AccessLevel.RESTRICTED,
+            allowed_idps=[IDP_A],
+        ),
+        admin_user,
+    )
+    assert ds.id is not None
+
+    with pytest.raises(ForbiddenError, match="identity provider"):
+        dataset_service.update(id=ds.id, obj_in=DatasetUpdate(), user=WRITER_FROM_B)
+    with pytest.raises(ForbiddenError, match="identity provider"):
+        dataset_service.delete(id=ds.id, user=WRITER_FROM_B)
+    dataset_service.update(id=ds.id, obj_in=DatasetUpdate(), user=WRITER_FROM_A)
+
+
+def test_a_writer_from_an_excluded_issuer_cannot_create_under_the_device(
+    device_service, dataset_service, admin_user
+):
+    device_service.create(
+        DeviceCreate(name="MAST", write_roles=["mast-write"], allowed_idps=[IDP_A]),
+        admin_user,
+    )
+
+    with pytest.raises(ForbiddenError, match="identity provider"):
+        dataset_service.create(
+            DatasetCreate(name="d", device_name="MAST"), WRITER_FROM_B
+        )
+    dataset_service.create(DatasetCreate(name="d", device_name="MAST"), WRITER_FROM_A)
+
+
+def test_a_writer_from_an_excluded_issuer_cannot_write_the_activity(
+    session, device_service, admin_user
+):
+    device_service.create(
+        DeviceCreate(name="MAST", write_roles=["mast-write"]), admin_user
+    )
+    activity = ActivityService(session).create(
+        ActivityCreate(
+            activity_type=ActivityType.SIMULATION,
+            outputs=[
+                GeneratedDatasetCreate(
+                    name="run", device_name="MAST", allowed_idps=[IDP_A]
+                )
+            ],
+        ),
+        admin_user,
+    )
+    assert activity.id is not None
+
+    with pytest.raises(ForbiddenError, match="identity provider"):
+        ActivityService(session).delete(activity.id, WRITER_FROM_B)
