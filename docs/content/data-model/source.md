@@ -10,7 +10,11 @@ A Source is not one kind of thing in the provenance graph. Its `kind` decides wh
 | `description` | string | No | Extended description of the code or diagnostic |
 | `kind` | enum | Yes | `software`, `instrument`, `person`, or `organization`. See below |
 | `persistent_identifier` | string | No | ORCID for a person, ROR for an organisation, PIDINST for an instrument, a DOI or Software Heritage ID for software. See [Persistent identifiers](../dcat-jsonld.md#persistent-identifiers) |
-| `device_name` | string | No | Optionally scope the source to a device; global if omitted |
+| `device_name` | string | No | Optionally link the source to a device; global if omitted |
+| `access_level` | enum | No | `public`, `embargoed`, or `restricted`. A source has no data, so `embargoed` reads as `public`. Inherits from the linked device if null; a source linked to no device is restricted |
+| `read_roles` | list[string] | No | Roles that may read a restricted source. Inherits from the linked device if null |
+| `write_roles` | list[string] | No | Roles that may change or delete the source; only `fds-admin` sets it. Inherits from the linked device if null |
+| `allowed_idps` | list[string] | No | Trusted identity-provider issuers. Inherits from the linked device if null |
 
 ## Kinds
 
@@ -31,7 +35,7 @@ Register it once; reuse it across every Activity:
     curl -X POST "$API/sources/" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       -d '{"name": "efit", "description": "EFIT equilibrium reconstruction code",
-           "kind": "software"}'
+           "kind": "software", "access_level": "public"}'
     ```
 
 === "Python (requests)"
@@ -44,6 +48,7 @@ Register it once; reuse it across every Activity:
             "name": "efit",
             "description": "EFIT equilibrium reconstruction code",
             "kind": "software",
+            "access_level": "public",
         },
     ).json()
     ```
@@ -58,6 +63,7 @@ Register it once; reuse it across every Activity:
             "name": "efit",
             "description": "EFIT equilibrium reconstruction code",
             "kind": "software",
+            "access_level": "public",
         },
     ).json()
     ```
@@ -73,11 +79,12 @@ Register it once; reuse it across every Activity:
           name: "efit",
           description: "EFIT equilibrium reconstruction code",
           kind: "software",
+          access_level: "public",
         }),
       })
     ).json();
     ```
 
-Read a source with `GET /sources/{id}`. To find one by name, filter the listing: `GET /sources/?name=efit` gives a page holding that source, or an empty page if no source has the name.
+Read a source with `GET /sources/{id}`. A restricted source is shown only to callers holding one of its roles, and is left out of the runs that name it for everyone else; see [Sources](../access-control.md#sources). To find one by name, filter the listing: `GET /sources/?name=efit` gives a page holding that source, or an empty page if no source has the name.
 
 See [Provenance](../provenance.md) for how a Source connects to the Activities and the Datasets they generate.

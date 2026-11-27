@@ -111,7 +111,7 @@ def test_include_geometry_resolves_only_readable_versions(
             geometry_roles=["thomson_fibres"],
             applies_to=THOMSON,
             access_level=AccessLevel.RESTRICTED,
-            required_scopes=["mast_team"],
+            read_roles=["mast_team"],
             url="s3://geometry/draft.nc",
         ),
         admin_user,

@@ -2,7 +2,7 @@ from collections.abc import Sequence
 
 from sqlmodel import Session, select
 
-from fds.auth.permissions import check_device_admin, check_is_admin
+from fds.auth.access_control import check_write
 from fds.models.dataset import Dataset
 from fds.models.distribution import Distribution, DistributionCreate, DistributionUpdate
 from fds.models.identity import AuthenticatedUser
@@ -41,7 +41,7 @@ class DistributionService(
         if not dataset:
             raise ResourceNotFoundError(f"Dataset {dataset_id} not found")
 
-        self._check_write_access(dataset, user)
+        check_write(dataset, self.session, user)
 
         # If this is being set as default, clear the existing default first
         if obj_in.default_distribution:
@@ -69,7 +69,7 @@ class DistributionService(
         if not dataset:
             raise ResourceNotFoundError(f"Dataset {db_obj.dataset_id} not found")
 
-        self._check_write_access(dataset, user)
+        check_write(dataset, self.session, user)
 
         # If promoting this distribution to default, demote the current default first
         if obj_in.default_distribution and db_obj.dataset_id is not None:
@@ -86,7 +86,7 @@ class DistributionService(
         if not dataset:
             raise ResourceNotFoundError(f"Dataset {db_obj.dataset_id} not found")
 
-        self._check_write_access(dataset, user)
+        check_write(dataset, self.session, user)
 
         if db_obj.default_distribution:
             raise ConflictError(
@@ -109,9 +109,3 @@ class DistributionService(
         for dist in self.session.exec(statement).all():
             dist.default_distribution = False
             self.session.add(dist)
-
-    def _check_write_access(self, dataset: Dataset, user: AuthenticatedUser) -> None:
-        if dataset.device_name:
-            check_device_admin(user, dataset.device_name)
-        else:
-            check_is_admin(user)

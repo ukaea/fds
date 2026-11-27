@@ -12,11 +12,16 @@ from sqlalchemy.orm import QueryableAttribute, selectinload
 from sqlmodel import Session, col, select, tuple_
 
 from fds.auth.access_control import (
+    check_activity_change,
+    check_activity_write,
+    check_create,
+    check_policy_update,
     check_read,
+    check_write,
     get_effective_policies,
-    validate_policy_fields,
+    validate_allowed_idps,
 )
-from fds.auth.permissions import check_device_admin, check_is_admin
+from fds.auth.permissions import check_sets_write_roles
 from fds.core.config import AzureStorageProvider, S3StorageProvider, config
 from fds.core.context import ReadTier
 from fds.core.naming import normalise_device_name
@@ -70,6 +75,10 @@ from fds.services.reference_service import (
     REFERENCE_KINDS,
     ReferenceKind,
     ReferenceService,
+)
+from fds.services.source_service import (
+    readable_activity_sources,
+    readable_source_clause,
 )
 from fds.services.visibility import read_page, readable_clause, readable_only
 
@@ -257,7 +266,11 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             *_listed(self.session, include_replaced, user),
             *property_clauses(Dataset, properties),
             *activity_clauses(
-                col(Dataset.activity_id), activity_type, source, activity_id
+                col(Dataset.activity_id),
+                activity_type,
+                source,
+                activity_id,
+                readable_source_clause(self.session, source, user),
             ),
             *shot_id_prefix_clauses(col(Dataset.shot_id), shot_id_prefix),
         )
@@ -338,7 +351,13 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         return activity
 
     def create(self, obj_in: DatasetCreate, user: AuthenticatedUser) -> Dataset:
-        """Create a new dataset. Handles global, device, or shot context."""
+        """Create a new dataset. Handles global, device, or shot context.
+
+        Naming an Activity needs write access to it. An Activity's outputs are
+        created through ``add`` instead, with the Activity they belong to.
+        """
+        if obj_in.activity_id is not None:
+            check_activity_write(self.session, user, obj_in.activity_id)
         dataset = self.add(obj_in, user)
         with self._unique_violation_as_conflict(obj_in.name):
             self.session.commit()
@@ -353,9 +372,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         together. A dataset that already exists in its context is refused with a
         409, and the transaction is rolled back.
         """
-        validate_policy_fields(
-            obj_in.access_level, obj_in.required_scopes, obj_in.allowed_idps
-        )
+        validate_allowed_idps(obj_in.allowed_idps)
         obj_in.device_name = normalise_device_name(obj_in.device_name)
         self._resolve_and_authorize_context(obj_in, user)
 
@@ -404,8 +421,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         self, obj_in: DatasetCreate, user: AuthenticatedUser
     ) -> None:
         """Validate the dataset's context (global / device / shot) and authorize the
-        caller for it. Raises if the shot or device is missing, or the user lacks the
-        required admin capability."""
+        caller for it. Raises if the shot or device is missing, or the user holds
+        none of its write roles."""
         if obj_in.shot_id:
             if not obj_in.device_name:
                 raise FDSValidationError(
@@ -425,7 +442,8 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             stmt = select(Device).where(Device.name == obj_in.device_name)
             if not self.session.exec(stmt).first():
                 raise DeviceNotFoundError(f"Device '{obj_in.device_name}' not found")
-        self._authorize_write(obj_in.device_name, user)
+        check_create(self.session, user, obj_in.device_name, obj_in.shot_id)
+        check_sets_write_roles(user, obj_in.write_roles)
 
     def _reject_duplicate(
         self,
@@ -578,7 +596,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     ) -> DatasetDerivation:
         """Assert an upstream this dataset was derived from. Requires write access."""
         dataset = self._require_dataset(dataset_id)
-        self._authorize_write(dataset.device_name, user)
+        check_write(dataset, self.session, user)
         self._validate_derivation(obj_in, dataset_id=dataset_id)
 
         link = DatasetDerivation.model_validate(obj_in, update={"dataset": dataset_id})
@@ -592,7 +610,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
     ) -> bool:
         """Retract an asserted upstream. Requires write access."""
         dataset = self._require_dataset(dataset_id)
-        self._authorize_write(dataset.device_name, user)
+        check_write(dataset, self.session, user)
 
         link = self.session.get(DatasetDerivation, derivation_id)
         if not link or link.dataset != dataset_id:
@@ -727,15 +745,6 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                 f"Dataset '{name}' already exists in this context"
             ) from e
 
-    def _authorize_write(
-        self, device_name: str | None, user: AuthenticatedUser
-    ) -> None:
-        """Authorize a write: device admin if device-scoped, else global admin."""
-        if device_name:
-            check_device_admin(user, device_name)
-        else:
-            check_is_admin(user)
-
     def _get_or_raise(self, id: int) -> Dataset:
         """Fetch a dataset by id or raise ``ResourceNotFoundError``."""
         db_obj = self.get(id)
@@ -750,7 +759,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         Update a dataset. Resolves by ID internally.
         """
         db_obj = self._get_or_raise(id)
-        self._authorize_write(db_obj.device_name, user)
+        check_write(db_obj, self.session, user)
 
         if obj_in.device_name is not None:
             obj_in.device_name = normalise_device_name(obj_in.device_name)
@@ -767,15 +776,12 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         update_data = obj_in.model_dump(exclude_unset=True)
         if "name" in update_data and update_data["name"] is None:
             raise FDSValidationError("Dataset name cannot be null")
-        effective_access_level = update_data.get("access_level", db_obj.access_level)
-        effective_required_scopes = update_data.get(
-            "required_scopes", db_obj.required_scopes
-        )
-        effective_allowed_idps = update_data.get("allowed_idps", db_obj.allowed_idps)
-        validate_policy_fields(
-            effective_access_level,
-            effective_required_scopes,
-            effective_allowed_idps,
+        check_policy_update(user, db_obj, update_data)
+        check_activity_change(
+            self.session,
+            user,
+            db_obj.activity_id,
+            update_data.get("activity_id", db_obj.activity_id),
         )
 
         self._reject_duplicate(
@@ -845,7 +851,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         Delete a dataset with authorization.
         """
         db_obj = self._get_or_raise(id)
-        self._authorize_write(db_obj.device_name, user)
+        check_write(db_obj, self.session, user)
         self._reject_if_upstream(id)
         return self.delete_unchecked(id)
 
@@ -1033,6 +1039,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             ),
             replaces=enriched.replaces or [],
             replaced_by=enriched.replaced_by or [],
+            activity_sources=readable_activity_sources(
+                self.session, [dataset.activity], user
+            ),
         )
 
     def to_dcat_listing(
@@ -1062,6 +1071,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
             include_annotations=include_annotations,
         )
         inputs = readable_activity_inputs(self.session, datasets, user)
+        sources = readable_activity_sources(
+            self.session, [d.activity for d in datasets], user
+        )
         return {
             "@context": generate_context(),
             "@graph": [
@@ -1074,6 +1086,7 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
                     activity_inputs=activity_inputs,
                     replaces=model.replaces or [],
                     replaced_by=model.replaced_by or [],
+                    activity_sources=sources,
                 )
                 for dataset, model, activity_inputs in zip(
                     datasets, enriched, inputs, strict=True
@@ -1265,7 +1278,9 @@ class DatasetService(BaseService[Dataset, DatasetCreate, DatasetUpdate]):
         """
         distributions = self._distributions_of(datasets)
         policies = get_effective_policies(datasets, self.session)
-        activities = activity_summaries(self.session, (d.activity_id for d in datasets))
+        activities = activity_summaries(
+            self.session, (d.activity_id for d in datasets), user or ANONYMOUS_USER
+        )
         links = replacements.replaces_and_replaced_by(
             self.session, Dataset, DatasetReplacement, datasets, user
         )

@@ -4,9 +4,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, func, select
 
 from fds.auth.access_control import (
+    check_policy_update,
     check_read,
+    check_write,
     get_effective_access_level,
-    validate_policy_fields,
+    validate_allowed_idps,
 )
 from fds.auth.permissions import check_is_admin
 from fds.core.context import ReadTier
@@ -94,13 +96,9 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
 
     def create(self, obj_in: DeviceCreate, user: AuthenticatedUser) -> Device:
         """
-        Create a new device. Requires global admin privileges.
+        Create a new device. Requires fds-admin.
         """
-        validate_policy_fields(
-            obj_in.access_level,
-            obj_in.required_scopes,
-            obj_in.allowed_idps,
-        )
+        validate_allowed_idps(obj_in.allowed_idps)
         check_is_admin(user)
         obj_in.name = cast(str, normalise_device_name(obj_in.name))
         try:
@@ -117,29 +115,25 @@ class DeviceService(BaseService[Device, DeviceCreate, DeviceUpdate]):
         user: AuthenticatedUser,
     ) -> Device:
         """
-        Update a device by name. Requires global admin privileges.
-        Resolves the device internally.
+        Update a device by name. Requires one of its write roles, and
+        fds-admin to change those. Resolves the device internally.
         """
-        check_is_admin(user)
         db_obj = self._get_by_name(device_name)
+        check_write(db_obj, self.session, user)
         if obj_in.name is not None:
             obj_in.name = normalise_device_name(obj_in.name)
         update_data = obj_in.model_dump(exclude_unset=True)
         if "name" in update_data and update_data["name"] != db_obj.name:
             raise ForbiddenError("Cannot rename a device")
-        validate_policy_fields(
-            update_data.get("access_level", db_obj.access_level),
-            update_data.get("required_scopes", db_obj.required_scopes),
-            update_data.get("allowed_idps", db_obj.allowed_idps),
-        )
+        check_policy_update(user, db_obj, update_data)
         return self.update_unchecked(db_obj=db_obj, obj_in=obj_in)
 
     def delete(self, device_name: str, user: AuthenticatedUser) -> bool:
         """
-        Delete a device by name. Requires global admin privileges.
+        Delete a device by name. Requires one of its write roles.
         """
-        check_is_admin(user)
         device = self._get_by_name(device_name)
+        check_write(device, self.session, user)
         self._reject_if_occupied(device)
         self.session.delete(device)
         self.session.commit()

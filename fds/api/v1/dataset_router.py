@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query, status
 
 from fds.api.deps import (
     DEFAULT_PAGE_SIZE,
+    ActivityServiceDep,
     AnswerDep,
     CurrentUserDep,
     DatasetServiceDep,
@@ -523,6 +524,7 @@ def read_dataset_activity(
     *,
     dataset_id: int,
     dataset_service: DatasetServiceDep,
+    activity_service: ActivityServiceDep,
     user: CurrentUserDep,
 ) -> ActivityRead:
     """
@@ -530,7 +532,9 @@ def read_dataset_activity(
     including timestamps, parameters, and source version.
     Returns 404 if the dataset has no associated activity.
     """
-    return ActivityRead.model_validate(dataset_service.get_activity(dataset_id, user))
+    return activity_service.to_read_model(
+        dataset_service.get_activity(dataset_id, user), user
+    )
 
 
 @router.get(

@@ -8,7 +8,6 @@ from fds.services.device_service import DeviceService
 from fds.services.exceptions import (
     ConflictError,
     DeviceNotFoundError,
-    FDSValidationError,
 )
 
 IDP_A = "https://idp-a.example.com"
@@ -161,31 +160,32 @@ def test_delete_device_not_found(session: Session, admin_user: AuthenticatedUser
 
 
 @pytest.mark.usefixtures("idp_config")
-def test_create_device_public_with_required_scopes_rejected(
+def test_create_device_public_with_read_roles_accepted(
     session: Session, admin_user: AuthenticatedUser
 ):
-    service = DeviceService(session)
-    with pytest.raises(FDSValidationError, match="PUBLIC"):
-        service.create(
-            DeviceCreate(
-                name="bad",
-                access_level=AccessLevel.PUBLIC,
-                required_scopes=["some:scope"],
-            ),
-            user=admin_user,
-        )
+    """Its restricted records inherit the read roles."""
+    device = DeviceService(session).create(
+        DeviceCreate(
+            name="open",
+            access_level=AccessLevel.PUBLIC,
+            read_roles=["open-read"],
+        ),
+        user=admin_user,
+    )
+    assert device.read_roles == ["open-read"]
 
 
 @pytest.mark.usefixtures("idp_config")
-def test_create_device_null_access_with_allowed_idps_rejected(
+def test_create_public_device_with_allowed_idps_accepted(
     session: Session, admin_user: AuthenticatedUser
 ):
-    service = DeviceService(session)
-    with pytest.raises(FDSValidationError, match="allowed_idps requires"):
-        service.create(
-            DeviceCreate(name="bad", allowed_idps=[IDP_A]),
-            user=admin_user,
-        )
+    device = DeviceService(session).create(
+        DeviceCreate(
+            name="open", access_level=AccessLevel.PUBLIC, allowed_idps=[IDP_A]
+        ),
+        user=admin_user,
+    )
+    assert device.allowed_idps == [IDP_A]
 
 
 @pytest.mark.usefixtures("idp_config")
@@ -197,32 +197,11 @@ def test_create_device_restricted_with_policy_accepted(
         DeviceCreate(
             name="gated",
             access_level=AccessLevel.RESTRICTED,
-            required_scopes=["lab:read"],
+            read_roles=["lab:read"],
             allowed_idps=[IDP_A],
         ),
         user=admin_user,
     )
     assert device.id is not None
-    assert device.required_scopes == ["lab:read"]
+    assert device.read_roles == ["lab:read"]
     assert device.allowed_idps == [IDP_A]
-
-
-@pytest.mark.usefixtures("idp_config")
-def test_update_device_transition_to_public_with_scopes_rejected(
-    session: Session, admin_user: AuthenticatedUser
-):
-    service = DeviceService(session)
-    device = service.create(
-        DeviceCreate(
-            name="upgrading",
-            access_level=AccessLevel.RESTRICTED,
-            required_scopes=["some:scope"],
-        ),
-        user=admin_user,
-    )
-    with pytest.raises(FDSValidationError, match="PUBLIC"):
-        service.update(
-            device_name=device.name,
-            obj_in=DeviceUpdate(access_level=AccessLevel.PUBLIC),
-            user=admin_user,
-        )

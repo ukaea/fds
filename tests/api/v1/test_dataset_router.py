@@ -19,8 +19,8 @@ from fds.services.source_service import SourceService
 from tests.conftest import resource
 
 # Dummy users for setup
-admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
-mast_admin = AuthenticatedUser(id="mast", scopes=("mast_admin",))
+admin_user = AuthenticatedUser(id="admin", roles=("fds-admin",))
+mast_writer = AuthenticatedUser(id="mast", roles=("mast-write",))
 
 
 def test_create_global_dataset(test_client: TestClient, admin_user_token: dict):
@@ -165,7 +165,7 @@ def test_dataset_same_name_returns_list(
 
 
 def test_unauthorized_device_dataset(
-    test_client: TestClient, session: Session, jet_admin_user_token: dict
+    test_client: TestClient, session: Session, jet_writer_token: dict
 ):
     DeviceService(session).create(
         DeviceCreate(name="MAST", type="Spherical"), user=admin_user
@@ -175,7 +175,7 @@ def test_unauthorized_device_dataset(
     # JET admin trying to create on MAST
     response = test_client.post(
         "/v1/devices/MAST/datasets/",
-        headers=jet_admin_user_token,
+        headers=jet_writer_token,
         json={"name": "illegal", "level": 1, "url": "url"},
     )
     assert response.status_code == 403
@@ -728,7 +728,7 @@ def test_delete_dataset(
 def test_delete_dataset_unauthorized(
     test_client: TestClient,
     session: Session,
-    jet_admin_user_token: dict,
+    jet_writer_token: dict,
 ):
     DeviceService(session).create(
         DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
@@ -748,7 +748,7 @@ def test_delete_dataset_unauthorized(
 
     response = test_client.delete(
         f"/v1/datasets/{dataset.id}",
-        headers=jet_admin_user_token,
+        headers=jet_writer_token,
     )
     assert response.status_code == 403
 
@@ -759,7 +759,7 @@ def test_get_datasets_with_storage_options(
     test_client: TestClient, session: Session, admin_user_token: dict, mocker
 ):
     # Register device, shot, and dataset
-    admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    admin = AuthenticatedUser(id="admin", roles=("fds-admin",))
     DeviceService(session).create(DeviceCreate(name="OPTS", type="Tokamak"), user=admin)
     ShotService(session).create(ShotCreate(id="1", device_name="OPTS"), user=admin)
     session.commit()

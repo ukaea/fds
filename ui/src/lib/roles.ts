@@ -1,58 +1,22 @@
 /**
- * Role hierarchy and utility functions for determining user privileges
- * Based on backend security scopes
- */
-
-export type UserRole = 'Admin' | 'Device Admin' | 'Shot Operator' | 'Viewer';
-
-/**
- * Determines the highest role/privilege level for a user based on their scopes
+ * The label the user menu shows for a signed-in user.
  *
- * Hierarchy (highest to lowest):
- * 1. Admin - has 'fds-admin' scope (global admin, full access)
- * 2. Device Admin - has '{device_name}_admin' scope (admin for specific devices)
- * 3. Shot Operator - has 'shot-operator:{device_name}' scope (can operate shots)
- * 4. Viewer - default for authenticated users (read-only)
+ * FDS defines one role, 'fds-admin'. Every other role is a name the identity
+ * provider issues and records list in their read_roles and write_roles, so a
+ * token alone cannot say what else the user may do.
  */
-export function getUserRole(scopes: string[] | undefined): UserRole {
-  if (!scopes || scopes.length === 0) {
-    return 'Viewer';
-  }
 
-  // Check for global admin
-  if (scopes.includes('fds-admin')) {
-    return 'Admin';
-  }
+export type UserRole = 'Admin' | 'Viewer';
 
-  // Check for device admin (pattern: {device_name}_admin)
-  const hasDeviceAdmin = scopes.some(scope => scope.endsWith('_admin'));
-  if (hasDeviceAdmin) {
-    return 'Device Admin';
-  }
-
-  // Check for shot operator (pattern: shot-operator:{device_name})
-  const hasShotOperator = scopes.some(scope => scope.startsWith('shot-operator:'));
-  if (hasShotOperator) {
-    return 'Shot Operator';
-  }
-
-  return 'Viewer';
+export function getUserRole(roles: string[] | undefined): UserRole {
+  return roles?.includes('fds-admin') ? 'Admin' : 'Viewer';
 }
 
 /**
  * Gets the CSS class for styling based on role
  */
 export function getRoleColor(role: UserRole): string {
-  switch (role) {
-    case 'Admin':
-      return 'text-brand-text font-bold';
-    case 'Device Admin':
-      return 'text-primary font-semibold';
-    case 'Shot Operator':
-      return 'text-primary';
-    case 'Viewer':
-      return 'text-primary';
-  }
+  return role === 'Admin' ? 'text-brand-text font-bold' : 'text-primary';
 }
 
 export function getRoleBgColor(role: UserRole): string {

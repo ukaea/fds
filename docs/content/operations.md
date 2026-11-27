@@ -130,7 +130,7 @@ the values for running FDS from a checkout.
 
 | Setting | Effect |
 | --- | --- |
-| `FDS_TRUSTED_IDPS` | JSON list of issuers whose tokens are accepted, each with the scopes it may grant, and optionally where its keys come from. See [Access Control](access-control.md#where-fds-finds-an-issuers-keys). Empty means no token is accepted and only public metadata is readable. |
+| `FDS_TRUSTED_IDPS` | JSON list of issuers whose tokens are accepted, each with the roles it may grant, and optionally where its keys come from. See [Access Control](access-control.md#where-fds-finds-an-issuers-keys). Empty means no token is accepted and only public metadata is readable. |
 | `FDS_OIDC_AUDIENCE` | The `aud` claim a token must carry. |
 | `FDS_OIDC_SCOPE` | The scope a program asks the login service for to get a token FDS accepts, published so that a program FDS has never met knows what to ask for. Several are separated by spaces. Empty (the default) publishes none. See [Access Control](access-control.md#how-a-program-finds-where-to-log-in). |
 

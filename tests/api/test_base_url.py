@@ -89,7 +89,7 @@ def test_every_route_publishes_the_same_name(test_client, monkeypatch, session):
     from fds.services.device_service import DeviceService
 
     monkeypatch.setattr(config, "base_url", "https://fds.example.org")
-    admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    admin = AuthenticatedUser(id="admin", roles=("fds-admin",))
     DeviceService(session).create(
         DeviceCreate(name="agree", type="tokamak", access_level=AccessLevel.PUBLIC),
         admin,

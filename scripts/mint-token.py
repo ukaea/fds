@@ -17,10 +17,10 @@ you sign tokens yourself:
         writes dev/local-issuer.key (keep this private) and
         dev/local-issuer.jwks.json (give this to FDS)
 
-    FDS_TRUSTED_IDPS='[{"issuer":"urn:fds:local","jwks_file":"dev/local-issuer.jwks.json","allowed_scopes":["*"]}]'
+    FDS_TRUSTED_IDPS='[{"issuer":"urn:fds:local","jwks_file":"dev/local-issuer.jwks.json","allowed_roles":["*"]}]'
 
     uv run scripts/mint-token.py mint --key dev/local-issuer.key
-        prints a token; add --scope, --subject, --minutes as needed
+        prints a token; add --role, --subject, --minutes as needed
 
 This is for bootstrapping a deployment, for automation, and for getting in when
 the identity provider is unavailable. It is not a way for people to log in: it
@@ -112,7 +112,7 @@ def mint(args: argparse.Namespace) -> int:
             "iss": args.issuer,
             "sub": args.subject,
             "aud": args.audience,
-            "scope": " ".join(args.scope),
+            "roles": list(args.role),
             "iat": now,
             "exp": now + timedelta(minutes=args.minutes),
         },
@@ -148,13 +148,13 @@ def main() -> int:
         "pair made before IDs were thumbprints has the ID local-1",
     )
     p_mint.add_argument("--issuer", default=DEFAULT_ISSUER)
-    p_mint.add_argument("--audience", default="fds-client")
+    p_mint.add_argument("--audience", default="fds")
     p_mint.add_argument("--subject", default="local-operator")
     p_mint.add_argument(
-        "--scope",
+        "--role",
         nargs="+",
         default=["fds-admin"],
-        help="scopes to grant, space separated (default: fds-admin)",
+        help="roles to grant, space separated (default: fds-admin)",
     )
     p_mint.add_argument(
         "--minutes", type=int, default=15, help="token lifetime (default: 15)"

@@ -82,7 +82,7 @@ def test_duplicate_dataset_name_allowed_with_different_activities(
     'equilibrium' IDS on the same shot. Dataset identity is the internal id, not
     the name, so the name alone does not have to be unique.
     """
-    admin = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    admin = AuthenticatedUser(id="admin", roles=("fds-admin",))
 
     device = Device(name="dup-ds-device", description="Test", type="tokamak")
     session.add(device)

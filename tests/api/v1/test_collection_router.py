@@ -24,7 +24,7 @@ from fds.services.shot_service import ShotService
 from fds.services.source_service import SourceService
 from tests.conftest import resource
 
-admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+admin_user = AuthenticatedUser(id="admin", roles=("fds-admin",))
 
 
 def _make_device(session: Session, name="DEV"):
@@ -1258,7 +1258,7 @@ def test_collection_members_listed_only_where_readable(
             url="s3://bucket/team-notes",
             device_name="DEV",
             access_level=AccessLevel.RESTRICTED,
-            required_scopes=["dev_team"],
+            read_roles=["dev_team"],
         ),
         user=admin_user,
     )
@@ -1266,7 +1266,7 @@ def test_collection_members_listed_only_where_readable(
         CollectionCreate(
             name="team-col",
             access_level=AccessLevel.RESTRICTED,
-            required_scopes=["dev_team"],
+            read_roles=["dev_team"],
         ),
         user=admin_user,
     )

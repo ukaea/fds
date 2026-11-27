@@ -110,7 +110,8 @@ def create_source_for_device(
     user: CurrentUserDep,
 ) -> SourceRead:
     """
-    Create a new source linked to a specific device. Requires global admin.
+    Create a new source linked to a specific device. Requires one of the
+    device's write roles.
     """
     # Force the device_name to match the path
     source_in.device_name = device_name
@@ -126,13 +127,14 @@ def read_sources_for_device(
     *,
     device_name: str,
     source_service: SourceServiceDep,
+    user: CurrentUserDep,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
 ) -> list[SourceRead]:
     """
-    Retrieve sources associated with a specific device.
+    Retrieve the sources linked to a specific device that the caller may read.
     """
     sources = source_service.get_for_device(
-        device_name=device_name, offset=offset, limit=limit
+        device_name=device_name, user=user, offset=offset, limit=limit
     )
     return source_service.to_read_models(sources)

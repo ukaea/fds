@@ -18,7 +18,7 @@ from fds.services.exceptions import ForbiddenError
 from fds.services.shot_service import ShotService
 from fds.services.visibility import Listed, readable_only
 
-TEAM = AuthenticatedUser(id="member", scopes=("dev_team",))
+TEAM = AuthenticatedUser(id="member", roles=("dev_team",))
 PUBLIC = AccessLevel.PUBLIC
 RESTRICTED = AccessLevel.RESTRICTED
 
@@ -38,7 +38,7 @@ def _setup(session: Session, admin: AuthenticatedUser) -> None:
 
 def _policy(level: AccessLevel) -> dict:
     if level is RESTRICTED:
-        return {"access_level": RESTRICTED, "required_scopes": ["dev_team"]}
+        return {"access_level": RESTRICTED, "read_roles": ["dev_team"]}
     return {"access_level": level}
 
 
@@ -248,7 +248,7 @@ def test_inherited_policy_decides_visibility(session: Session, admin_user):
             id="2",
             device_name="DEV",
             access_level=RESTRICTED,
-            required_scopes=["dev_team"],
+            read_roles=["dev_team"],
         ),
         user=admin_user,
     )
@@ -289,13 +289,13 @@ IDP_B = "https://idp-b.example.com"
     "user",
     [
         ANONYMOUS_USER,
-        AuthenticatedUser(id="a", scopes=("a:read",), issuer=IDP_A),
+        AuthenticatedUser(id="a", roles=("a:read",), issuer=IDP_A),
         AuthenticatedUser(id="b", issuer=IDP_B),
-        AuthenticatedUser(id="operator", scopes=("shot-operator:d",), issuer=IDP_A),
-        AuthenticatedUser(id="d-admin", scopes=("d_admin",), issuer=IDP_A),
-        AuthenticatedUser(id="admin", scopes=("fds-admin",)),
+        AuthenticatedUser(id="d-reader", roles=("d-read",), issuer=IDP_A),
+        AuthenticatedUser(id="d-admin", roles=("d-write",), issuer=IDP_A),
+        AuthenticatedUser(id="admin", roles=("fds-admin",)),
     ],
-    ids=["anonymous", "a-reader", "idp-b", "d-operator", "d-admin", "admin"],
+    ids=["anonymous", "a-reader", "idp-b", "d-reader", "d-admin", "admin"],
 )
 def test_readable_only_filters_as_check_read_does(
     session: Session, admin_user: AuthenticatedUser, user: AuthenticatedUser
@@ -304,7 +304,7 @@ def test_readable_only_filters_as_check_read_does(
     records a ``check_read`` on each would."""
     devices = DeviceService(session)
     devices.create(
-        DeviceCreate(name="A", access_level=RESTRICTED, required_scopes=["a:read"]),
+        DeviceCreate(name="A", access_level=RESTRICTED, read_roles=["a:read"]),
         admin_user,
     )
     devices.create(
@@ -317,12 +317,8 @@ def test_readable_only_filters_as_check_read_does(
     for shot in (
         ShotCreate(id="1", device_name="A"),
         ShotCreate(id="2", device_name="A", access_level=PUBLIC),
-        ShotCreate(
-            id="1", device_name="B", access_level=RESTRICTED, required_scopes=[]
-        ),
-        ShotCreate(
-            id="1", device_name="C", access_level=RESTRICTED, required_scopes=["c"]
-        ),
+        ShotCreate(id="1", device_name="B", access_level=RESTRICTED, read_roles=[]),
+        ShotCreate(id="1", device_name="C", access_level=RESTRICTED, read_roles=["c"]),
         ShotCreate(id="1", device_name="D", access_level=AccessLevel.EMBARGOED),
         ShotCreate(id="2", device_name="D"),
     ):
@@ -331,7 +327,7 @@ def test_readable_only_filters_as_check_read_does(
     for dataset in (
         DatasetCreate(name="a1", device_name="A", shot_id="1"),
         DatasetCreate(name="a2", device_name="A", shot_id="2"),
-        # Level from itself, scopes from its device past a shot that sets none.
+        # Level from itself, roles from its device past a shot that sets none.
         DatasetCreate(
             name="a2-restricted", device_name="A", shot_id="2", access_level=RESTRICTED
         ),

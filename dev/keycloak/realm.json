@@ -3,14 +3,18 @@
     "enabled": true,
     "roles": {
         "client": {
-            "fds-client": [
+            "fds": [
                 {
                     "name": "fds-admin",
                     "description": "Administrator role for fds"
                 },
                 {
-                    "name": "mast_admin",
-                    "description": "Administrator role for MAST device"
+                    "name": "mast-write",
+                    "description": "Example role: the example catalogue lists it in MAST's write_roles"
+                },
+                {
+                    "name": "mast-read",
+                    "description": "Example role for records that list it in read_roles"
                 }
             ]
         }
@@ -31,7 +35,7 @@
                 }
             ],
             "clientRoles": {
-                "fds-client": [
+                "fds": [
                     "fds-admin"
                 ]
             }
@@ -51,11 +55,11 @@
             ]
         },
         {
-            "username": "mast_admin",
+            "username": "mast-writer",
             "enabled": true,
-            "email": "mast_admin@example.com",
+            "email": "mast-writer@example.com",
             "firstName": "MAST",
-            "lastName": "Admin",
+            "lastName": "Writer",
             "credentials": [
                 {
                     "type": "password",
@@ -64,18 +68,31 @@
                 }
             ],
             "clientRoles": {
-                "fds-client": [
-                    "mast_admin"
+                "fds": [
+                    "mast-write"
                 ]
             }
         }
     ],
     "clients": [
         {
-            "clientId": "fds-client",
+            "clientId": "fds",
+            "name": "FDS API",
+            "description": "Holds FDS's roles, and is the audience every token for FDS carries. Nobody logs in through it.",
             "enabled": true,
             "publicClient": false,
-            "secret": "fds-client-secret",
+            "clientAuthenticatorType": "client-secret",
+            "standardFlowEnabled": false,
+            "implicitFlowEnabled": false,
+            "directAccessGrantsEnabled": false,
+            "serviceAccountsEnabled": false,
+            "protocol": "openid-connect"
+        },
+        {
+            "clientId": "fds-ui",
+            "enabled": true,
+            "publicClient": false,
+            "secret": "fds-ui-secret",
             "clientAuthenticatorType": "client-secret",
             "directAccessGrantsEnabled": true,
             "redirectUris": [
@@ -92,9 +109,7 @@
                 "profile",
                 "email"
             ],
-            "optionalClientScopes": [
-                "fds-admin"
-            ],
+            "optionalClientScopes": [],
             "protocolMappers": [
                 {
                     "name": "fds-audience",
@@ -102,19 +117,19 @@
                     "protocolMapper": "oidc-audience-mapper",
                     "consentRequired": false,
                     "config": {
-                        "included.client.audience": "fds-client",
+                        "included.client.audience": "fds",
                         "id.token.claim": "false",
                         "access.token.claim": "true"
                     }
                 },
                 {
-                    "name": "client-roles-to-scope",
+                    "name": "fds-roles",
                     "protocol": "openid-connect",
                     "protocolMapper": "oidc-usermodel-client-role-mapper",
                     "consentRequired": false,
                     "config": {
-                        "uset.client.role.mappings": "true",
-                        "claim.name": "scope",
+                        "usermodel.clientRoleMapping.clientId": "fds",
+                        "claim.name": "roles",
                         "jsonType.label": "String",
                         "multivalued": "true",
                         "access.token.claim": "true",
@@ -125,13 +140,6 @@
         }
     ],
     "clientScopes": [
-        {
-            "name": "fds-admin",
-            "protocol": "openid-connect",
-            "attributes": {
-                "include.in.token.scope": "true"
-            }
-        },
         {
             "name": "profile",
             "protocol": "openid-connect"

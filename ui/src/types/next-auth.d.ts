@@ -4,7 +4,7 @@ declare module "next-auth" {
   interface Session {
     accessToken?: string
     idToken?: string
-    scopes?: string[]
+    roles?: string[]
     user: DefaultSession["user"]
   }
 }
@@ -13,6 +13,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     accessToken?: string
     idToken?: string
-    scopes?: string[]
+    roles?: string[]
   }
 }

@@ -17,8 +17,8 @@ IDP_ROGUE = "https://rogue-idp.com"
 def setup_trusted_idps(mocker):
     # Setup Trusted IdPs
     trusted_idps = [
-        TrustedIdP(issuer=IDP_JET, allowed_scopes=["jet:*", "openid"]),
-        TrustedIdP(issuer=IDP_MAST, allowed_scopes=["mast:*", "openid"]),
+        TrustedIdP(issuer=IDP_JET, allowed_roles=["jet:*", "openid"]),
+        TrustedIdP(issuer=IDP_MAST, allowed_roles=["mast:*", "openid"]),
     ]
     # We use fds.auth.security.config because that's where it's imported in the SUT
     from fds.auth.security import config
@@ -81,8 +81,8 @@ async def test_get_token_claims_untrusted_idp(
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("setup_trusted_idps")
-async def test_scope_filtering_stripped():
-    """Verify unauthorized scopes are stripped based on IdP"""
+async def test_role_filtering_stripped():
+    """Verify roles the IdP may not grant are stripped"""
     # IDP_JET is only allowed ["jet:*", "openid"]
     # Token has "mast:admin" which should be removed
     claims: TokenClaims = {
@@ -93,33 +93,33 @@ async def test_scope_filtering_stripped():
 
     user = await get_current_user(claims=claims)
 
-    assert "jet:read" in user.scopes
-    assert "openid" in user.scopes
-    assert "mast:admin" not in user.scopes
-    assert len(user.scopes) == 2
+    assert "jet:read" in user.roles
+    assert "openid" in user.roles
+    assert "mast:admin" not in user.roles
+    assert len(user.roles) == 2
 
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("setup_trusted_idps")
-async def test_scope_filtering_wildcard():
+async def test_role_filtering_wildcard():
     """Verify wildcard matching"""
     # IDP_JET allowed "jet:*"
     claims: TokenClaims = {
         "iss": IDP_JET,
         "sub": "user1",
-        "scope": "jet:write jet:read custom:scope",
+        "scope": "jet:write jet:read custom:role",
     }
     user = await get_current_user(claims=claims)
 
-    assert "jet:write" in user.scopes
-    assert "jet:read" in user.scopes
-    assert "custom:scope" not in user.scopes
+    assert "jet:write" in user.roles
+    assert "jet:read" in user.roles
+    assert "custom:role" not in user.roles
 
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("setup_trusted_idps")
-async def test_roles_are_filtered_like_scopes():
-    """Entra ID `roles` go through the same per-IdP allow-list as scopes."""
+async def test_entra_roles_are_filtered_like_scope_claim_roles():
+    """Entra ID `roles` go through the same per-IdP allow-list as the scope claim."""
     claims: TokenClaims = {
         "iss": IDP_JET,
         "sub": "user1",
@@ -128,7 +128,7 @@ async def test_roles_are_filtered_like_scopes():
     }
     user = await get_current_user(claims=claims)
 
-    assert user.scopes == ("openid", "jet:admin")
+    assert user.roles == ("openid", "jet:admin")
 
 
 @pytest.mark.asyncio

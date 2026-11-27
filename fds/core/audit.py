@@ -24,7 +24,13 @@ logger = structlog.get_logger("fds.audit")
 # Everything else contributes its name to changed_fields and nothing more, so
 # descriptions and scientific metadata stay out of the log and the line stays a
 # bounded size.
-BEFORE_AFTER_FIELDS = ("access_level", "required_scopes", "allowed_idps", "name")
+BEFORE_AFTER_FIELDS = (
+    "access_level",
+    "read_roles",
+    "write_roles",
+    "allowed_idps",
+    "name",
+)
 
 # The listener sees table writes, not API calls, so link-table rows are named
 # after the operation that produces them. Anything absent falls back to

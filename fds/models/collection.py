@@ -112,9 +112,10 @@ class CollectionBase(
             root. Serialised as ``dcat:accessURL`` on the collection's
             ``dcat:Distribution`` in JSON-LD. ``None`` for collections whose
             members have independent, unrelated physical locations.
-        required_scopes: OAuth scopes required to read this collection when
-            access is restricted. ``None`` inherits from the enclosing
-            Shot/device policy.
+        read_roles: Roles that may read this collection if it is
+            restricted. ``None`` inherits from the enclosing Shot/device policy.
+        write_roles: Roles that may change or delete this collection.
+            ``None`` inherits from the enclosing Shot/device policy.
         allowed_idps: Trusted identity-provider issuer allowlist. ``None``
             inherits from the enclosing Shot/device policy.
     """
@@ -131,12 +132,20 @@ class CollectionBase(
             "to or within this root. Serialised as dcat:accessURL in JSON-LD."
         ),
     )
-    required_scopes: list[str] | None = Field(
+    read_roles: list[str] | None = Field(
         default=None,
         description=(
-            "OAuth scopes required to read this collection when access is restricted. "
-            "If null, scope requirements inherit from the enclosing shot or device "
-            "policy."
+            "Roles that may read this collection if it is restricted. Holding any one is "
+            "enough; an empty list lets in anyone signed in. If null, the shot's or "
+            "device's list applies."
+        ),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
+    )
+    write_roles: list[str] | None = Field(
+        default=None,
+        description=(
+            "Roles that may change or delete this collection. Holding any one is enough. "
+            "Only fds-admin may set it. If null, the shot's or device's list applies."
         ),
         sa_column=Column(JSONB_COLUMN, nullable=True),
     )
@@ -269,12 +278,19 @@ class CollectionUpdate(SQLModel):
     description: str | None = None
     publisher: str | None = None
     scientific_metadata: list[ScientificProperty] | None = None
-    required_scopes: list[str] | None = Field(
+    read_roles: list[str] | None = Field(
         default=None,
         description=(
-            "OAuth scopes required to read this collection when access is restricted. "
-            "If null, scope requirements inherit from the enclosing shot or device "
-            "policy."
+            "Roles that may read this collection if it is restricted. Holding any one is "
+            "enough; an empty list lets in anyone signed in. If null, the shot's or "
+            "device's list applies."
+        ),
+    )
+    write_roles: list[str] | None = Field(
+        default=None,
+        description=(
+            "Roles that may change or delete this collection. Holding any one is enough. "
+            "Only fds-admin may set it. If null, the shot's or device's list applies."
         ),
     )
     allowed_idps: list[str] | None = Field(

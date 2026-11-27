@@ -28,26 +28,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.idToken = account.id_token
       }
 
-      // Extract scopes from the token
-      // Prefer scopes from the ID Token (profile) as it contains our mapped client roles
-      if (profile && 'scope' in profile) {
-        const scope = profile.scope
-        if (Array.isArray(scope)) {
-           token.scopes = scope
-        } else if (typeof scope === 'string') {
-           token.scopes = scope.split(' ')
-        }
-      } else if (account?.scope) {
-        token.scopes = account.scope.split(' ')
+      // The login service puts the user's FDS roles in the ID token's roles claim
+      if (profile && Array.isArray(profile.roles)) {
+        token.roles = profile.roles as string[]
       }
 
       return token
     },
     async session({ session, token }) {
-      // Transfer the access token and scopes to the session
+      // Transfer the access token and roles to the session
       session.accessToken = token.accessToken as string
       session.idToken = token.idToken as string
-      session.scopes = token.scopes as string[] | undefined
+      session.roles = token.roles as string[] | undefined
       return session
     },
   },

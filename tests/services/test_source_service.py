@@ -156,31 +156,34 @@ def test_get_sources_by_name(session: Session, admin_user: AuthenticatedUser):
             SourceCreate(name=name, kind=SourceKind.SOFTWARE), user=admin_user
         )
 
-    assert [s.name for s in service.get_multi(name="UniqueName")] == ["UniqueName"]
-    assert service.get_multi(name="NonExistent") == []
+    assert [s.name for s in service.get_readable(admin_user, name="UniqueName")] == [
+        "UniqueName"
+    ]
+    assert service.get_readable(admin_user, name="NonExistent") == []
 
 
-def test_create_source_device_admin(
-    session: Session, admin_user: AuthenticatedUser, mast_admin_user: AuthenticatedUser
+def test_create_source_as_device_writer(
+    session: Session, admin_user: AuthenticatedUser, mast_writer: AuthenticatedUser
 ):
     from fds.models.device import DeviceCreate
     from fds.services.device_service import DeviceService
 
     DeviceService(session).create(
-        DeviceCreate(name="MAST", type="Test"), user=admin_user
+        DeviceCreate(name="MAST", type="Test", write_roles=["mast-write"]),
+        user=admin_user,
     )
 
     service = SourceService(session)
     source = service.create(
         SourceCreate(name="MastSource", device_name="MAST", kind=SourceKind.SOFTWARE),
-        user=mast_admin_user,
+        user=mast_writer,
     )
     assert source.id is not None
     assert source.name == "MastSource"
 
 
 def test_create_source_unauthorized(
-    session: Session, admin_user: AuthenticatedUser, mast_admin_user: AuthenticatedUser
+    session: Session, admin_user: AuthenticatedUser, mast_writer: AuthenticatedUser
 ):
     from fds.models.device import DeviceCreate
     from fds.services.device_service import DeviceService
@@ -194,18 +197,19 @@ def test_create_source_unauthorized(
     with pytest.raises(ForbiddenError):
         service.create(
             SourceCreate(name="JetSource", device_name="JET", kind=SourceKind.SOFTWARE),
-            user=mast_admin_user,
+            user=mast_writer,
         )
 
 
-def test_update_source_device_admin(
-    session: Session, admin_user: AuthenticatedUser, mast_admin_user: AuthenticatedUser
+def test_update_source_as_device_writer(
+    session: Session, admin_user: AuthenticatedUser, mast_writer: AuthenticatedUser
 ):
     from fds.models.device import DeviceCreate
     from fds.services.device_service import DeviceService
 
     DeviceService(session).create(
-        DeviceCreate(name="MAST", type="Test"), user=admin_user
+        DeviceCreate(name="MAST", type="Test", write_roles=["mast-write"]),
+        user=admin_user,
     )
 
     service = SourceService(session)
@@ -220,19 +224,20 @@ def test_update_source_device_admin(
     updated = service.update(
         id=source.id,
         obj_in=SourceUpdate(name="UpdatedMastSource"),
-        user=mast_admin_user,
+        user=mast_writer,
     )
     assert updated.name == "UpdatedMastSource"
 
 
-def test_delete_source_device_admin(
-    session: Session, admin_user: AuthenticatedUser, mast_admin_user: AuthenticatedUser
+def test_delete_source_as_device_writer(
+    session: Session, admin_user: AuthenticatedUser, mast_writer: AuthenticatedUser
 ):
     from fds.models.device import DeviceCreate
     from fds.services.device_service import DeviceService
 
     DeviceService(session).create(
-        DeviceCreate(name="MAST", type="Test"), user=admin_user
+        DeviceCreate(name="MAST", type="Test", write_roles=["mast-write"]),
+        user=admin_user,
     )
 
     service = SourceService(session)
@@ -244,5 +249,5 @@ def test_delete_source_device_admin(
     )
     assert source.id is not None
 
-    assert service.delete(id=source.id, user=mast_admin_user) is True
+    assert service.delete(id=source.id, user=mast_writer) is True
     assert service.get(source.id) is None

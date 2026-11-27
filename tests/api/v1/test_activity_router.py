@@ -579,16 +579,21 @@ def test_activity_with_no_outputs_is_not_public(
     assert response.status_code == 401, response.text
 
 
-def test_device_admin_reads_an_activity_through_a_restricted_output(
+def test_device_writer_reads_an_activity_through_a_restricted_output(
     test_client: TestClient,
     session: Session,
     admin_user: AuthenticatedUser,
-    mast_admin_user_token: dict,
+    mast_writer_token: dict,
     log_lines,
 ):
     """The read is recorded as a restricted read of the Activity."""
     DeviceService(session).create(
-        DeviceCreate(name="MAST", type="Tokamak", access_level=AccessLevel.PUBLIC),
+        DeviceCreate(
+            name="MAST",
+            type="Tokamak",
+            access_level=AccessLevel.PUBLIC,
+            write_roles=["mast-write"],
+        ),
         user=admin_user,
     )
     activity = ActivityService(session).create(
@@ -608,7 +613,7 @@ def test_device_admin_reads_an_activity_through_a_restricted_output(
     log_lines()
 
     response = test_client.get(
-        f"/v1/activities/{activity.id}", headers=mast_admin_user_token
+        f"/v1/activities/{activity.id}", headers=mast_writer_token
     )
     assert response.status_code == 200, response.text
     (line,) = [

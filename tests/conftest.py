@@ -99,12 +99,13 @@ def client_fixture(session: Session) -> Generator[TestClient, None, None]:
 
 @pytest.fixture(name="admin_user")
 def admin_user_fixture() -> AuthenticatedUser:
-    return AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    return AuthenticatedUser(id="admin", roles=("fds-admin",))
 
 
-@pytest.fixture(name="mast_admin_user")
-def mast_admin_user_fixture() -> AuthenticatedUser:
-    return AuthenticatedUser(id="mast-admin", scopes=("mast_admin",))
+@pytest.fixture(name="mast_writer")
+def mast_writer_fixture() -> AuthenticatedUser:
+    """A user holding ``mast-write``, which writes a Device that lists it."""
+    return AuthenticatedUser(id="mast-writer", roles=("mast-write",))
 
 
 @pytest.fixture
@@ -140,32 +141,34 @@ def non_admin_user_token() -> Generator[dict[str, str], None, None]:
 
 
 @pytest.fixture
-def mast_admin_user_token() -> Generator[dict[str, str], None, None]:
+def mast_writer_token() -> Generator[dict[str, str], None, None]:
     """
-    Fixture to override get_token_claims to return claims for a mast_admin user.
+    Fixture to override get_token_claims to return claims for a user holding
+    ``mast-write``.
     """
     claims = {
-        "sub": "test-mast-admin-user",
-        "scp": "mast_admin",
+        "sub": "test-mast-writer",
+        "scp": "mast-write",
         "iss": "https://test-idp.com",
     }
     app.dependency_overrides[get_token_claims] = lambda: claims
-    yield {"Authorization": "Bearer fake-mast-admin-token"}
+    yield {"Authorization": "Bearer fake-mast-writer-token"}
     app.dependency_overrides.pop(get_token_claims, None)
 
 
 @pytest.fixture
-def jet_admin_user_token() -> Generator[dict[str, str], None, None]:
+def jet_writer_token() -> Generator[dict[str, str], None, None]:
     """
-    Fixture to override get_token_claims to return claims for a jet_admin user.
+    Fixture to override get_token_claims to return claims for a user holding
+    ``jet-write``.
     """
     claims = {
-        "sub": "test-jet-admin-user",
-        "scp": "jet_admin",
+        "sub": "test-jet-writer",
+        "scp": "jet-write",
         "iss": "https://test-idp.com",
     }
     app.dependency_overrides[get_token_claims] = lambda: claims
-    yield {"Authorization": "Bearer fake-jet-admin-token"}
+    yield {"Authorization": "Bearer fake-jet-writer-token"}
     app.dependency_overrides.pop(get_token_claims, None)
 
 
@@ -175,7 +178,7 @@ def mock_config(monkeypatch):
 
     # Initialize TRUSTED_IDPS with a default test IdP that allows all scopes
     # This ensures existing tests (which don't care about IdP) pass by default.
-    default_test_idp = TrustedIdP(issuer="https://test-idp.com", allowed_scopes=["*"])
+    default_test_idp = TrustedIdP(issuer="https://test-idp.com", allowed_roles=["*"])
     monkeypatch.setattr(config, "TRUSTED_IDPS", [default_test_idp])
 
 
@@ -185,7 +188,7 @@ def idp_config(monkeypatch):
     monkeypatch.setattr(
         config,
         "TRUSTED_IDPS",
-        [TrustedIdP(issuer="https://idp-a.example.com", allowed_scopes=["*"])],
+        [TrustedIdP(issuer="https://idp-a.example.com", allowed_roles=["*"])],
     )
 
 
@@ -196,8 +199,8 @@ def two_idp_config(monkeypatch):
         config,
         "TRUSTED_IDPS",
         [
-            TrustedIdP(issuer="https://idp-a.example.com", allowed_scopes=["*"]),
-            TrustedIdP(issuer="https://idp-b.example.com", allowed_scopes=["*"]),
+            TrustedIdP(issuer="https://idp-a.example.com", allowed_roles=["*"]),
+            TrustedIdP(issuer="https://idp-b.example.com", allowed_roles=["*"]),
         ],
     )
 
@@ -226,11 +229,6 @@ def mock_credential_provider(mocker):
         return_value=mock_prov,
     )
     return mock_prov
-
-
-@pytest.fixture
-def mock_check_shot_operator(mocker):
-    return mocker.patch("fds.services.file_access_service.check_shot_operator")
 
 
 @pytest.fixture

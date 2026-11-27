@@ -64,9 +64,11 @@ class DatasetBase(
         license: SPDX identifier or URL for the data licence.
         version: Dataset version string.
         keywords: Comma-separated discovery keywords.
-        required_scopes: OAuth scopes required to read this dataset when access
-            is restricted.  ``None`` inherits from the enclosing Shot/device
-            policy.
+        read_roles: Roles that may read this dataset if it is restricted,
+            and get credentials for its data.  ``None`` inherits from the
+            enclosing Shot/device policy.
+        write_roles: Roles that may change or delete this dataset.  ``None``
+            inherits from the enclosing Shot/device policy.
         allowed_idps: Trusted identity-provider issuer allowlist.  ``None``
             inherits from the enclosing Shot/device policy.
     """
@@ -81,12 +83,22 @@ class DatasetBase(
     license: str | None = Field(default=None)
     version: str | None = Field(default=None, index=True)
     keywords: str | None = Field(default=None)  # Comma-separated list
-    required_scopes: list[str] | None = Field(
+    read_roles: list[str] | None = Field(
         default=None,
         description=(
-            "OAuth scopes required to read this dataset when access is restricted. "
-            "If null, scope requirements inherit from the enclosing shot or device "
-            "policy."
+            "Roles that may read this dataset if it is restricted, and get credentials "
+            "for its data if it is embargoed or restricted. Holding any one is enough; "
+            "an empty list lets in anyone signed in. If null, the shot's or device's "
+            "list applies."
+        ),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
+    )
+    write_roles: list[str] | None = Field(
+        default=None,
+        description=(
+            "Roles that may change or delete this dataset and its distributions. Holding "
+            "any one is enough. Only fds-admin may set it. If null, the shot's or "
+            "device's list applies."
         ),
         sa_column=Column(JSONB_COLUMN, nullable=True),
     )
@@ -451,12 +463,21 @@ class DatasetUpdate(SQLModel):
     license: str | None = None
     version: str | None = None
     keywords: str | None = None
-    required_scopes: list[str] | None = Field(
+    read_roles: list[str] | None = Field(
         default=None,
         description=(
-            "OAuth scopes required to read this dataset when access is restricted. "
-            "If null, scope requirements inherit from the enclosing shot or device "
-            "policy."
+            "Roles that may read this dataset if it is restricted, and get credentials "
+            "for its data if it is embargoed or restricted. Holding any one is enough; "
+            "an empty list lets in anyone signed in. If null, the shot's or device's "
+            "list applies."
+        ),
+    )
+    write_roles: list[str] | None = Field(
+        default=None,
+        description=(
+            "Roles that may change or delete this dataset and its distributions. Holding "
+            "any one is enough. Only fds-admin may set it. If null, the shot's or "
+            "device's list applies."
         ),
     )
     allowed_idps: list[str] | None = Field(

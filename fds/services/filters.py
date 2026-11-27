@@ -25,7 +25,6 @@ from sqlmodel import (
 from fds.models.activity import Activity, ActivityType
 from fds.models.collection import Collection
 from fds.models.dataset import Dataset
-from fds.models.policy import AccessLevel
 from fds.models.property_rows import (
     CollectionProperty,
     DatasetProperty,
@@ -384,14 +383,9 @@ def in_matching_instances(
 
 
 def policy_tuple_clause(
-    access_level_column: Any,
-    scopes_column: Any,
-    idps_column: Any,
-    access_level: AccessLevel | None,
-    required_scopes: list[str] | None,
-    allowed_idps: list[str] | None,
+    columns: Sequence[Any], values: Sequence[Any]
 ) -> ColumnElement[bool]:
-    """Match rows whose stored policy tuple is exactly this one.
+    """Match rows whose stored policy fields, ``columns``, hold exactly ``values``.
 
     Null means "inherit from the parent", not "no value", so a null component
     is matched by absence rather than equality. Equality would never match an
@@ -400,11 +394,7 @@ def policy_tuple_clause(
     return and_(
         *(
             column.is_(None) if value is None else column == value
-            for column, value in (
-                (access_level_column, access_level),
-                (scopes_column, required_scopes),
-                (idps_column, allowed_idps),
-            )
+            for column, value in zip(columns, values, strict=True)
         )
     )
 
@@ -448,6 +438,7 @@ def activity_clauses(
     activity_type: ActivityType | None = None,
     source: str | None = None,
     activity_id: int | None = None,
+    readable_sources: ColumnElement[bool] | None = None,
 ) -> list[ColumnElement[bool]]:
     """Narrow a listing by the Activity each record names in its ``activity_id``.
 
@@ -460,6 +451,9 @@ def activity_clauses(
     it is the Activity the collection bundles, whose members may include datasets
     the Activity did not generate, such as its inputs. Only the collection's own
     ``activity_id`` is matched, not its members'.
+
+    ``readable_sources`` is a clause on Source keeping those the caller may read,
+    so ``source`` names only a Source the caller could find.
     """
     clauses: list[ColumnElement[bool]] = []
     if activity_id is not None:
@@ -473,5 +467,7 @@ def activity_clauses(
             .join(Source, col(Source.id) == col(Activity.source_id))
             .where(Source.name == source)
         )
+        if readable_sources is not None:
+            by_source = by_source.where(readable_sources)
         clauses.append(activity_column.in_(by_source))
     return clauses

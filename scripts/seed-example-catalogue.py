@@ -70,7 +70,13 @@ def get_or_create_source(
     description: str,
     kind: str,
 ) -> int:
-    body = {"name": name, "description": description, "kind": kind}
+    # The example catalogue is public, so its Sources are too.
+    body = {
+        "name": name,
+        "description": description,
+        "kind": kind,
+        "access_level": "public",
+    }
     resp = client.post(f"{base_url}/sources/", json=body)
     if resp.status_code == 201:
         return resp.json()["id"]
@@ -88,6 +94,8 @@ def register_devices_and_shots(client: httpx.Client, base_url: str) -> None:
             "description": "Mega Ampere Spherical Tokamak (MAST)",
             "type": "tokamak",
             "access_level": "public",
+            # The development realm's mast-writer holds this role.
+            "write_roles": ["mast-write"],
         },
         {
             "name": "mastu",
@@ -970,12 +978,12 @@ def get_admin_headers(
     Only used when a token is not supplied directly; see ``admin_headers``.
     """
     token_data = {
-        "client_id": "fds-client",
-        "client_secret": "fds-client-secret",
+        "client_id": "fds-ui",
+        "client_secret": "fds-ui-secret",
         "username": "admin",
         "password": "password",
         "grant_type": "password",
-        "scope": "openid profile fds-admin",
+        "scope": "openid profile",
     }
     for attempt in range(1, retries + 1):
         try:

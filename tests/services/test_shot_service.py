@@ -38,7 +38,7 @@ def test_create_shot_for_device(
     )
     assert device.id is not None
 
-    # Using global admin
+    # Using fds-admin
     shot_create = ShotCreate(id="shot-101", device_name="Test Device")
     shot = shot_service.create(shot_create, admin_user)
     assert shot is not None
@@ -46,32 +46,34 @@ def test_create_shot_for_device(
     assert shot.device_name == "test device"
 
 
-def test_create_shot_with_device_scope(
+def test_create_shot_as_device_writer(
     device_service: DeviceService,
     shot_service: ShotService,
-    mast_admin_user: AuthenticatedUser,
+    mast_writer: AuthenticatedUser,
     admin_user: AuthenticatedUser,
 ):
-    # Device name matches scope "mast_admin"
-    device_service.create(DeviceCreate(name="MAST", type="Test"), user=admin_user)
+    device_service.create(
+        DeviceCreate(name="MAST", type="Test", write_roles=["mast-write"]),
+        user=admin_user,
+    )
 
     shot_create = ShotCreate(id="mast-shot", device_name="MAST")
-    shot = shot_service.create(shot_create, mast_admin_user)
+    shot = shot_service.create(shot_create, mast_writer)
     assert shot.id == "mast-shot"
 
 
 def test_create_shot_unauthorized(
     device_service: DeviceService,
     shot_service: ShotService,
-    mast_admin_user: AuthenticatedUser,
+    mast_writer: AuthenticatedUser,
     admin_user: AuthenticatedUser,
 ):
-    # User has mast_admin but trying to create for JET
+    # The user writes MAST, and JET names no write roles
     device_service.create(DeviceCreate(name="JET", type="Test"), user=admin_user)
 
     shot_create = ShotCreate(id="jet-shot", device_name="JET")
     with pytest.raises(ForbiddenError):
-        shot_service.create(shot_create, mast_admin_user)
+        shot_service.create(shot_create, mast_writer)
 
 
 def test_create_shot_for_nonexistent_device(
@@ -145,7 +147,7 @@ def test_delete_shot(
 def test_delete_shot_unauthorized(
     device_service: DeviceService,
     shot_service: ShotService,
-    mast_admin_user: AuthenticatedUser,
+    mast_writer: AuthenticatedUser,
     admin_user: AuthenticatedUser,
 ):
     device_service.create(DeviceCreate(name="JET", type="Test"), user=admin_user)
@@ -156,40 +158,41 @@ def test_delete_shot_unauthorized(
     assert shot_to_delete is not None
 
     with pytest.raises(ForbiddenError):
-        shot_service.delete(shot_to_delete.id, mast_admin_user, device_name="JET")
+        shot_service.delete(shot_to_delete.id, mast_writer, device_name="JET")
 
 
 @pytest.mark.usefixtures("idp_config")
-def test_create_shot_public_with_required_scopes_rejected(
+def test_create_shot_public_with_read_roles_accepted(
     device_service: DeviceService,
     shot_service: ShotService,
     admin_user: AuthenticatedUser,
 ):
+    """Its restricted records inherit the read roles."""
     device_service.create(DeviceCreate(name="DEV"), user=admin_user)
-    with pytest.raises(FDSValidationError, match="PUBLIC"):
-        shot_service.create(
-            ShotCreate(
-                id="s1",
-                device_name="DEV",
-                access_level=AccessLevel.PUBLIC,
-                required_scopes=["some:scope"],
-            ),
-            user=admin_user,
-        )
+    shot = shot_service.create(
+        ShotCreate(
+            id="s1",
+            device_name="DEV",
+            access_level=AccessLevel.PUBLIC,
+            read_roles=["campaign-read"],
+        ),
+        user=admin_user,
+    )
+    assert shot.read_roles == ["campaign-read"]
 
 
 @pytest.mark.usefixtures("idp_config")
-def test_create_shot_null_access_with_allowed_idps_rejected(
+def test_create_shot_inheriting_level_with_allowed_idps_accepted(
     device_service: DeviceService,
     shot_service: ShotService,
     admin_user: AuthenticatedUser,
 ):
     device_service.create(DeviceCreate(name="DEV2"), user=admin_user)
-    with pytest.raises(FDSValidationError, match="allowed_idps requires"):
-        shot_service.create(
-            ShotCreate(id="s2", device_name="DEV2", allowed_idps=[IDP_A]),
-            user=admin_user,
-        )
+    shot = shot_service.create(
+        ShotCreate(id="s2", device_name="DEV2", allowed_idps=[IDP_A]),
+        user=admin_user,
+    )
+    assert shot.allowed_idps == [IDP_A]
 
 
 @pytest.mark.usefixtures("idp_config")
@@ -210,31 +213,6 @@ def test_create_shot_restricted_with_policy_accepted(
     )
     assert shot.id == "s3"
     assert shot.allowed_idps == [IDP_A]
-
-
-@pytest.mark.usefixtures("idp_config")
-def test_update_shot_transition_to_public_with_scopes_rejected(
-    device_service: DeviceService,
-    shot_service: ShotService,
-    admin_user: AuthenticatedUser,
-):
-    device_service.create(DeviceCreate(name="DEV4"), user=admin_user)
-    shot = shot_service.create(
-        ShotCreate(
-            id="s4",
-            device_name="DEV4",
-            access_level=AccessLevel.RESTRICTED,
-            required_scopes=["some:scope"],
-        ),
-        user=admin_user,
-    )
-    with pytest.raises(FDSValidationError, match="PUBLIC"):
-        shot_service.update(
-            shot_id=shot.id,
-            device_name="DEV4",
-            obj_in=ShotUpdate(access_level=AccessLevel.PUBLIC),
-            user=admin_user,
-        )
 
 
 _T0 = datetime(2024, 3, 15, 14, 32, tzinfo=UTC)

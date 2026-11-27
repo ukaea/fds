@@ -22,7 +22,7 @@ An Activity is whatever process generated the data. It may be a direct measureme
 
 ## Who may read an Activity
 
-An Activity has no access level of its own. Anyone who may read a dataset it generated, or a collection that bundles it, may read the Activity with its instruments, agents and delegations, and is answered 403 otherwise. Only a global admin may read an Activity that has neither yet. An Activity's inputs are listed only as far as the caller may read each one, in its JSON-LD as well as at `GET /v1/activities/{id}/inputs`.
+An Activity has no access level of its own. Anyone who may read a dataset it generated, or a collection that bundles it, may read the Activity with its instruments, agents and delegations, and is answered 403 otherwise. Only `fds-admin` may read an Activity that has neither yet. An Activity's inputs are listed only as far as the caller may read each one, in its JSON-LD as well as at `GET /v1/activities/{id}/inputs`, and its Sources likewise. Writing an Activity follows its records too: see [Activities](../access-control.md#activities).
 
 ## Agents and their roles
 

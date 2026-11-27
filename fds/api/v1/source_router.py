@@ -10,7 +10,6 @@ from fds.api.deps import (
     SourceServiceDep,
 )
 from fds.models.source import SourceCreate, SourceRead, SourceUpdate
-from fds.services.exceptions import ResourceNotFoundError
 
 router = APIRouter()
 
@@ -23,7 +22,8 @@ def create_source(
     user: CurrentUserDep,
 ) -> SourceRead:
     """
-    Create a new source. Requires global admin.
+    Create a new source. A source linked to a device needs one of the device's
+    write roles; one linked to no device needs fds-admin.
     """
     source = source_service.create(source_in, user)
     return source_service.to_read_model(source)
@@ -32,29 +32,31 @@ def create_source(
 @router.get("/", response_model=list[SourceRead])
 def read_sources(
     source_service: SourceServiceDep,
+    user: CurrentUserDep,
     offset: Offset = 0,
     limit: Limit = DEFAULT_PAGE_SIZE,
     name: str | None = None,
 ) -> Sequence[SourceRead]:
     """
-    Retrieve all sources.
+    Retrieve the sources the caller may read.
 
     `name` keeps the source with that name. Source names are unique, so the
-    page holds one source, or none if no source has that name.
+    page holds one source, or none if no source the caller may read has that
+    name.
     """
-    sources = source_service.get_multi(offset=offset, limit=limit, name=name)
+    sources = source_service.get_readable(user, offset=offset, limit=limit, name=name)
     return source_service.to_read_models(sources)
 
 
 @router.get("/{id:int}", response_model=SourceRead)
-def read_source(id: int, source_service: SourceServiceDep) -> SourceRead:
+def read_source(
+    id: int, source_service: SourceServiceDep, user: CurrentUserDep
+) -> SourceRead:
     """Retrieve a single source by its ID.
 
     To find a source by name, filter the listing: `GET /sources/?name=efit`.
     """
-    source = source_service.get(id)
-    if not source:
-        raise ResourceNotFoundError(f"Source {id} not found")
+    source = source_service.get_readable_or_raise(id, user)
     return source_service.to_read_model(source)
 
 
@@ -67,7 +69,8 @@ def update_source(
     user: CurrentUserDep,
 ) -> SourceRead:
     """
-    Update a source. Requires global admin.
+    Update a source. Requires one of its write roles, and fds-admin to change
+    those.
     """
     source = source_service.update(id=id, obj_in=source_in, user=user)
     return source_service.to_read_model(source)
@@ -81,6 +84,6 @@ def delete_source(
     user: CurrentUserDep,
 ) -> None:
     """
-    Delete a source. Requires global admin.
+    Delete a source. Requires one of its write roles.
     """
     source_service.delete(id, user)

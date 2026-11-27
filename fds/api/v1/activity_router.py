@@ -46,7 +46,8 @@ def create_activity(
     declares is saved together, or nothing is. The response lists the new
     Datasets' ids under ``outputs``, in the order the request gave them.
     Inputs, instruments, agents and delegations can also be added or removed
-    later via the sub-resources below. Requires global admin.
+    later via the sub-resources below. Creating one with outputs needs write access to
+    the device or shot of each; creating one without needs fds-admin.
     """
     activity = activity_service.create(activity_in, user)
     return ActivityCreated.model_validate(
@@ -67,7 +68,7 @@ def read_activity(
     collection that bundles it.
     """
     activity = activity_service.get_readable_or_raise(activity_id, user)
-    return ActivityRead.model_validate(activity)
+    return activity_service.to_read_model(activity, user)
 
 
 @router.patch("/{activity_id:int}", response_model=ActivityRead)
@@ -78,9 +79,10 @@ def update_activity(
     activity_service: ActivityServiceDep,
     user: CurrentUserDep,
 ) -> ActivityRead:
-    """Update an Activity. Requires global admin."""
+    """Update an Activity. Requires write access to every dataset it generated and
+    every collection that bundles it; one with neither needs fds-admin."""
     activity = activity_service.update(id=activity_id, obj_in=activity_in, user=user)
-    return ActivityRead.model_validate(activity)
+    return activity_service.to_read_model(activity, user)
 
 
 @router.delete("/{activity_id:int}", status_code=status.HTTP_204_NO_CONTENT)
@@ -90,7 +92,7 @@ def delete_activity(
     activity_service: ActivityServiceDep,
     user: CurrentUserDep,
 ) -> None:
-    """Delete an Activity. Requires global admin."""
+    """Delete an Activity. Requires write access to the Activity."""
     activity_service.delete(activity_id, user)
 
 
@@ -106,7 +108,8 @@ def add_activity_input(
     activity_service: ActivityServiceDep,
     user: CurrentUserDep,
 ) -> ActivityInput:
-    """Add an input dataset the Activity used (prov:used). Requires global admin."""
+    """Add an input dataset the Activity used (prov:used). Requires write access to
+    the Activity and read access to the dataset."""
     return activity_service.add_input(
         activity_id=activity_id, dataset_id=dataset_id, user=user
     )
@@ -143,7 +146,7 @@ def remove_activity_input(
     activity_service: ActivityServiceDep,
     user: CurrentUserDep,
 ) -> None:
-    """Unlink an input dataset from an Activity. Requires global admin."""
+    """Unlink an input dataset from an Activity. Requires write access to the Activity."""
     activity_service.remove_input(
         activity_id=activity_id, dataset_id=dataset_id, user=user
     )
@@ -161,7 +164,8 @@ def add_activity_instrument(
     activity_service: ActivityServiceDep,
     user: CurrentUserDep,
 ) -> ActivityInstrument:
-    """Add an instrument (a kind=instrument Source) the Activity used. Requires admin."""
+    """Add an instrument (a kind=instrument Source) the Activity used. Requires write
+    access to the Activity and read access to the Source."""
     return activity_service.add_instrument(
         activity_id=activity_id, source_id=source_id, user=user
     )
@@ -195,7 +199,7 @@ def remove_activity_instrument(
     activity_service: ActivityServiceDep,
     user: CurrentUserDep,
 ) -> None:
-    """Unlink an instrument from an Activity. Requires global admin."""
+    """Unlink an instrument from an Activity. Requires write access to the Activity."""
     activity_service.remove_instrument(
         activity_id=activity_id, source_id=source_id, user=user
     )
@@ -214,7 +218,8 @@ def add_activity_agent(
     activity_service: ActivityServiceDep,
     user: CurrentUserDep,
 ) -> ActivityAgent:
-    """Associate an additional agent (with a role) with the Activity. Requires admin."""
+    """Associate an additional agent (with a role) with the Activity. Requires write
+    access to the Activity and read access to the Source."""
     return activity_service.add_agent(
         activity_id=activity_id, source_id=source_id, role=role, user=user
     )
@@ -241,7 +246,7 @@ def remove_activity_agent(
     activity_service: ActivityServiceDep,
     user: CurrentUserDep,
 ) -> None:
-    """Unlink an additional agent from an Activity. Requires global admin."""
+    """Unlink an additional agent from an Activity. Requires write access to the Activity."""
     activity_service.remove_agent(
         activity_id=activity_id, source_id=source_id, user=user
     )
@@ -261,7 +266,7 @@ def add_activity_delegation(
     user: CurrentUserDep,
 ) -> ActivityDelegation:
     """Record that one agent acted on behalf of another (prov:actedOnBehalfOf) for
-    this Activity. Both must be agents and must differ. Requires global admin."""
+    this Activity. Both must be agents and must differ. Requires write access to the Activity."""
     return activity_service.add_delegation(
         activity_id=activity_id,
         subordinate_source_id=subordinate_source_id,
@@ -295,7 +300,7 @@ def remove_activity_delegation(
     activity_service: ActivityServiceDep,
     user: CurrentUserDep,
 ) -> None:
-    """Remove a delegation edge from an Activity. Requires global admin."""
+    """Remove a delegation edge from an Activity. Requires write access to the Activity."""
     activity_service.remove_delegation(
         activity_id=activity_id,
         subordinate_source_id=subordinate_source_id,

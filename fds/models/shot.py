@@ -45,11 +45,21 @@ class ShotBase(
     publisher: str | None = Field(default=None, index=True)
     creator: str | None = Field(default=None, index=True)
     access_level: AccessLevel | None = Field(default=None, index=True)
-    required_scopes: list[str] | None = Field(
+    read_roles: list[str] | None = Field(
         default=None,
         description=(
-            "OAuth scopes required to read this shot when access is restricted. "
-            "If null, scope requirements inherit from the enclosing device policy."
+            "Roles that may read this shot's restricted records and get credentials for "
+            "their embargoed and restricted data. Holding any one is enough; an empty "
+            "list lets in anyone signed in. If null, the device's list applies."
+        ),
+        sa_column=Column(JSONB_COLUMN, nullable=True),
+    )
+    write_roles: list[str] | None = Field(
+        default=None,
+        description=(
+            "Roles that may change or delete this shot and create, change and delete the "
+            "records in it. Holding any one is enough. Only fds-admin may set it. If "
+            "null, the device's list applies."
         ),
         sa_column=Column(JSONB_COLUMN, nullable=True),
     )
@@ -117,11 +127,20 @@ class ShotUpdate(SQLModel):
     creator: str | None = None
     access_level: AccessLevel | None = None
     device_name: str | None = None
-    required_scopes: list[str] | None = Field(
+    read_roles: list[str] | None = Field(
         default=None,
         description=(
-            "OAuth scopes required to read this shot when access is restricted. "
-            "If null, scope requirements inherit from the enclosing device policy."
+            "Roles that may read this shot's restricted records and get credentials for "
+            "their embargoed and restricted data. Holding any one is enough; an empty "
+            "list lets in anyone signed in. If null, the device's list applies."
+        ),
+    )
+    write_roles: list[str] | None = Field(
+        default=None,
+        description=(
+            "Roles that may change or delete this shot and create, change and delete the "
+            "records in it. Holding any one is enough. Only fds-admin may set it. If "
+            "null, the device's list applies."
         ),
     )
     allowed_idps: list[str] | None = Field(

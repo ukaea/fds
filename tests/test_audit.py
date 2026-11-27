@@ -179,7 +179,7 @@ class TestActor:
     def test_actor_is_named_when_there_is_a_request(
         self, session, admin_user, log_lines
     ):
-        user = AuthenticatedUser(id="hashed-subject", scopes=("fds-admin",))
+        user = AuthenticatedUser(id="hashed-subject", roles=("fds-admin",))
         with request_context():
             set_actor(user)
             DeviceService(session).create(DeviceCreate(name="mast"), admin_user)

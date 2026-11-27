@@ -1,9 +1,10 @@
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Column, Field, Relationship, SQLModel
 
-from .mixins import PersistentIdentifierMixin
+from .mixins import JSONB_COLUMN, PersistentIdentifierMixin
+from .policy import AccessLevel
 
 if TYPE_CHECKING:
     from .activity import Activity
@@ -27,10 +28,49 @@ class SourceKind(str, Enum):
     ORGANIZATION = "organization"
 
 
+READ_ROLES = (
+    "Roles that may read this source if it is restricted. Holding any one is "
+    "enough; an empty list lets in anyone signed in. If null, the linked "
+    "device's list applies."
+)
+WRITE_ROLES = (
+    "Roles that may change or delete this source. Holding any one is enough. "
+    "Only fds-admin may set it. If null, the linked device's list applies."
+)
+ALLOWED_IDPS = (
+    "Trusted issuer allowlist for this source. If null, the linked device's "
+    "list applies."
+)
+
+
 class SourceBase(PersistentIdentifierMixin, SQLModel):
     name: str = Field(index=True, unique=True)
     description: str | None = None
     kind: SourceKind = Field(index=True)
+    access_level: AccessLevel | None = Field(
+        default=None,
+        index=True,
+        description=(
+            "public, embargoed or restricted. A source has no data to hold back, "
+            "so embargoed reads as public. If null, the linked device's level "
+            "applies, and a source linked to no device is restricted."
+        ),
+    )
+    read_roles: list[str] | None = Field(
+        default=None,
+        description=READ_ROLES,
+        sa_column=Column(JSONB_COLUMN, nullable=True),
+    )
+    write_roles: list[str] | None = Field(
+        default=None,
+        description=WRITE_ROLES,
+        sa_column=Column(JSONB_COLUMN, nullable=True),
+    )
+    allowed_idps: list[str] | None = Field(
+        default=None,
+        description=ALLOWED_IDPS,
+        sa_column=Column(JSONB_COLUMN, nullable=True),
+    )
 
 
 class Source(SourceBase, table=True):
@@ -55,3 +95,7 @@ class SourceUpdate(SQLModel):
     persistent_identifier: str | None = None
     description: str | None = None
     kind: SourceKind | None = None
+    access_level: AccessLevel | None = None
+    read_roles: list[str] | None = Field(default=None, description=READ_ROLES)
+    write_roles: list[str] | None = Field(default=None, description=WRITE_ROLES)
+    allowed_idps: list[str] | None = Field(default=None, description=ALLOWED_IDPS)

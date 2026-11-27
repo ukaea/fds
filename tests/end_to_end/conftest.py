@@ -48,7 +48,7 @@ from jwt.algorithms import RSAAlgorithm
 FDS_URL = os.environ.get("FDS_URL", "http://localhost:8000/v1")
 SIGNING_KEY = Path(os.environ.get("FDS_SIGNING_KEY", "dev/local-issuer.key"))
 ISSUER = os.environ.get("FDS_TOKEN_ISSUER", "urn:fds:local")
-AUDIENCE = os.environ.get("FDS_TOKEN_AUDIENCE", "fds-client")
+AUDIENCE = os.environ.get("FDS_TOKEN_AUDIENCE", "fds")
 
 
 def key_id(public_key) -> str:
@@ -63,14 +63,14 @@ def key_id(public_key) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 
 
-def sign(key, *, scope: str, issuer: str = ISSUER) -> str:
+def sign(key, *, roles: list[str], issuer: str = ISSUER) -> str:
     now = datetime.now(UTC)
     return jwt.encode(
         {
             "iss": issuer,
             "sub": "end-to-end-tests",
             "aud": AUDIENCE,
-            "scope": scope,
+            "roles": roles,
             "iat": now,
             "exp": now + timedelta(minutes=10),
         },
@@ -98,7 +98,7 @@ def admin_token(signing_key) -> str:
             f"no token: set FDS_TOKEN, or FDS_SIGNING_KEY to a key the target "
             f"trusts (looked for {SIGNING_KEY})"
         )
-    return sign(signing_key, scope="fds-admin")
+    return sign(signing_key, roles=["fds-admin"])
 
 
 @pytest.fixture(scope="session")

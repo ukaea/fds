@@ -30,7 +30,7 @@ def test_an_unset_value_is_stored_as_sql_null(
     )
 
     unset = session.exec(
-        select(col(Device.required_scopes).is_(None)).where(Device.name == device.name)
+        select(col(Device.read_roles).is_(None)).where(Device.name == device.name)
     ).one()
 
     assert unset

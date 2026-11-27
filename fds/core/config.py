@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 from urllib.parse import quote
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,13 +23,17 @@ class TrustedIdP(BaseModel):
     matching private key. See the Operations documentation: this is a
     bootstrap, automation and break-glass path, not a way for people to log in.
 
-    ``allowed_scopes`` lists the scopes FDS accepts from this issuer's tokens,
+    ``allowed_roles`` lists the roles FDS accepts from this issuer's tokens,
     as shell-style patterns (``["*"]`` accepts all). Unset, it accepts none:
-    the issuer's users are authenticated but carry no scopes.
+    the issuer's users are authenticated but carry no roles. A field FDS does
+    not know, such as the ``allowed_scopes`` this setting was once called, stops
+    FDS starting, rather than leaving the issuer's users with no roles.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     issuer: str
-    allowed_scopes: list[str] = []
+    allowed_roles: list[str] = []
     jwks_uri: str | None = None
     jwks_file: Path | None = None
 

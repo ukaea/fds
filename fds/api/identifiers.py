@@ -85,11 +85,9 @@ def resolve_collection(
 
 @router.get(SOURCE, summary="The source this URI names")
 def resolve_source(
-    id: int, source_service: SourceServiceDep, base: BaseURLDep
+    id: int, source_service: SourceServiceDep, user: CurrentUserDep, base: BaseURLDep
 ) -> JSONLDResponse:
-    source = source_service.get(id)
-    if not source:
-        raise ResourceNotFoundError(f"Source {id} not found")
+    source = source_service.get_readable_or_raise(id, user)
     return JSONLDResponse(map_source_to_dcat(source, base))
 
 

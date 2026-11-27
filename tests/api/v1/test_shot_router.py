@@ -7,7 +7,7 @@ from fds.models.shot import AccessLevel, ShotCreate
 from fds.services.device_service import DeviceService
 from fds.services.shot_service import ShotService
 
-admin_user = AuthenticatedUser(id="test-admin", scopes=("fds-admin",))
+admin_user = AuthenticatedUser(id="test-admin", roles=("fds-admin",))
 
 
 def test_create_shot_nested_endpoint(
@@ -168,7 +168,7 @@ def test_update_shot_nested_device_change(
 ):
     device_service = DeviceService(session)
     shot_service = ShotService(session)
-    admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    admin_user = AuthenticatedUser(id="admin", roles=("fds-admin",))
 
     mast = device_service.create(
         DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
@@ -206,7 +206,7 @@ def test_update_shot_nested_mismatch_404(
 ):
     device_service = DeviceService(session)
     shot_service = ShotService(session)
-    admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    admin_user = AuthenticatedUser(id="admin", roles=("fds-admin",))
 
     device_service.create(DeviceCreate(name="MAST", type="Tokamak"), user=admin_user)
     jet = device_service.create(
@@ -233,7 +233,7 @@ def test_delete_shot(
 ):
     device_service = DeviceService(session)
     shot_service = ShotService(session)
-    admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    admin_user = AuthenticatedUser(id="admin", roles=("fds-admin",))
 
     mast = device_service.create(
         DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
@@ -257,11 +257,11 @@ def test_delete_shot_unauthorized(
     test_client: TestClient,
     session: Session,
     admin_user_token: dict,
-    jet_admin_user_token: dict,
+    jet_writer_token: dict,
 ):
     device_service = DeviceService(session)
     shot_service = ShotService(session)
-    admin_user = AuthenticatedUser(id="admin", scopes=("fds-admin",))
+    admin_user = AuthenticatedUser(id="admin", roles=("fds-admin",))
 
     mast = device_service.create(
         DeviceCreate(name="MAST", type="Tokamak"), user=admin_user
@@ -273,7 +273,7 @@ def test_delete_shot_unauthorized(
 
     response = test_client.delete(
         f"/v1/devices/{mast.name}/shots/{shot.id}",
-        headers=jet_admin_user_token,
+        headers=jet_writer_token,
     )
     assert response.status_code == 403
 

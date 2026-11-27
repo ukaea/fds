@@ -16,7 +16,8 @@ A single plasma discharge on a Device.
 | `publisher` | string | No | Institution making the data available (`dct:publisher`) |
 | `creator` | string | No | Person or team who conducted the experiment (`dct:creator`) |
 | `access_level` | enum | No | `public`, `embargoed`, or `restricted`; overrides device default if set |
-| `required_scopes` | list[string] | No | OAuth scopes required when access is `restricted` |
+| `read_roles` | list[string] | No | Roles that may read the shot's restricted records, any one being enough; see [Read and write roles](../access-control.md#read-and-write-roles). Inherits from device if null |
+| `write_roles` | list[string] | No | Roles that may change the shot and write the records in it; only `fds-admin` sets it. Inherits from device if null |
 | `allowed_idps` | list[string] | No | Trusted identity-provider issuers; inherits from device if null |
 | `scientific_metadata` | list | No | Experimental conditions, see [Scientific metadata](index.md#scientific-metadata) below |
 

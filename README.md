@@ -75,8 +75,9 @@ UI or to check that a realm's mappers produce tokens FDS accepts:
 docker compose --profile idp up -d --build   # adds Keycloak on :8080
 ```
 
-Keycloak is `admin`/`admin`; its realm users are `admin`, `user` and `mast_admin`, all with
-password `password`.
+Keycloak is `admin`/`admin`; its realm users are `admin`, `user` and `mast-writer`, all with
+password `password`. `admin` holds `fds-admin`; `mast-writer` holds `mast-write`, which the
+example catalogue lists in MAST's `write_roles`.
 
 If you are developing your own UI, run it on `http://localhost:3001` and it can sit beside the
 reference UI against the same stack: the realm accepts logins from either port. A UI running in a

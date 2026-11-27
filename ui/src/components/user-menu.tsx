@@ -55,7 +55,7 @@ export function UserMenu() {
   }
 
   if (status === "authenticated" && session?.user) {
-    const role = getUserRole(session.scopes);
+    const role = getUserRole(session.roles);
     const roleColor = getRoleColor(role);
     const roleBg = getRoleBgColor(role);
 
