@@ -14,6 +14,7 @@
 
 ### Bug Fixes
 
+* Check a writer's issuer against the record's allowed_idps ([GHSA-872j-2j88-hgh3](https://github.com/ukaea/fds/security/advisories/GHSA-872j-2j88-hgh3)) ([33d6d7b](https://github.com/ukaea/fds/commit/33d6d7b9f8ada5e9c5f9c0955b850b673c906032))
 * Wrap long titles on dataset cards ([#325](https://github.com/ukaea/fds/issues/325)) ([efe8f00](https://github.com/ukaea/fds/commit/efe8f0044c131d5f271356418e0b3fd56afe2aa6))
 
 ## [0.2.0](https://github.com/ukaea/fds/compare/v0.1.1...v0.2.0) (2026-11-25)
