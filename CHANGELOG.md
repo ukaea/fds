@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.0](https://github.com/ukaea/fds/compare/v0.2.0...v0.3.0) (2026-11-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* The <device>_admin and shot-operator:<device> roles no longer grant anything, and required_scopes and allowed_scopes are renamed read_roles and allowed_roles. After upgrading, set each Device's read_roles and write_roles; until then only fds-admin writes, or reads restricted records. A required_scopes list naming several roles now lets in anyone holding one of them.
+
+### Features
+
+* Let records name the roles that read and write them ([#331](https://github.com/ukaea/fds/issues/331)) ([8fdb03e](https://github.com/ukaea/fds/commit/8fdb03ec1e24705073ea69efe99b3bccd619d903))
+
+
+### Bug Fixes
+
+* Wrap long titles on dataset cards ([#325](https://github.com/ukaea/fds/issues/325)) ([efe8f00](https://github.com/ukaea/fds/commit/efe8f0044c131d5f271356418e0b3fd56afe2aa6))
+
 ## [0.2.0](https://github.com/ukaea/fds/compare/v0.1.1...v0.2.0) (2026-11-25)
 
 
